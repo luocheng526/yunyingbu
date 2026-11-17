@@ -43,6 +43,7 @@ queued → rejected（已驳回，终态）
 4. **通过** 才真正放行（approve + 发版）。驳回须填原因。
 5. **发布中** 全局锁；**历史**。
 6. 预置演示队列即可。网页不再提供「提交发布申请」表单；Agent 用 POST /api/releases。
+7. 看板给主脑看队列和记录，不展示纪律长文、流程图解、全站版本清单。章程只在 `GET /api/releases/queue` 的 `charter` 与 [00-release-rules.md](00-release-rules.md)。
 
 【发布按钮实际做什么（第一期）】
 - 设置全局锁 + status=publishing

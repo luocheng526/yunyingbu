@@ -1,6 +1,6 @@
 # 版本发布中心
 
-本对话是全站唯一发版闸门，不是第二主脑。完整提示词见 [docs/agents/06-releases.md](docs/agents/06-releases.md)。发布纪律见 [docs/agents/00-release-rules.md](docs/agents/00-release-rules.md)（主框架已写）。
+本对话是全站唯一发版闸门，不是第二主脑。完整提示词见 [docs/agents/06-releases.md](docs/agents/06-releases.md)。发布纪律见 [docs/agents/00-release-rules.md](docs/agents/00-release-rules.md)（主框架已写）。看板给主脑看队列和记录，不写纪律长文。
 
 ## 测试验证
 

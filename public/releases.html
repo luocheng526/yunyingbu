@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
-    <link rel="stylesheet" href="/releases.css?v=sc-ui-21" />
+    <link rel="stylesheet" href="/releases.css?v=sc-ui-22" />
     <style>
       #upgrade-mask,
       html > #upgrade-mask {
@@ -113,23 +113,7 @@
         </button>
       </nav>
       <div id="flash" class="flash" role="status"></div>
-      <section class="rg-block">
-        <h3 class="rg-h">待上线</h3>
-        <p class="hint lead">这是版本发布中心。交单后按提交时间排队，先交先发，不能上移、下移或插队。闸门只允许「通过」第 1 位，避免叠发把进程打崩。版本号由本闸门统一发放，全站一条号 0.1.N-说明，各模块不得自领；同一号段不能跨模块再用。只改页面或测试文件时不重启进程，正在使用的人不会掉线；改到 src 或依赖才会重启。通过后先拍快照再本机落地。整页刷新并读完新数据后才关升级遮罩。有的升级会掉登录：会话还在就自动刷新完结；需要重新登录时遮罩停住，请你登录后再回本页完结，不会自动跳登录。有新单据约 15 秒内自动提示，不会自动点通过。待上线、版本记录、运行日志都分页，每页 20 条。</p>
-        <div class="caps" id="stat-caps"></div>
-        <div class="note banner">发布纪律：本页是唯一发版闸门。只执行交来的单据 + 本页「通过」。按提交时间点第 1 位；一把锁，禁止抢发；下一条不会自动发。「帮我上线」无效。制品没有完整完成不要进本页：须有模块、文件、验收、是否重启，源目录文件要齐，改到的 src 先过语法检查。未完成的单当场拒绝，不会入队，防止系统崩溃卡住。新文件只放源目录，不要先拷到线上；点通过才落地。闸门不读 git，也不拉 Cloud 工作区，交单只登记路径。可带 contents（路径→正文）或 ref（分支/提交），闸门会先写入源目录。源目录与线上相同会失败。</div>
-        <div id="lock-view" class="lock-box idle">当前空闲，没有发布任务。</div>
-      </section>
-      <section class="rg-block">
-        <h3 class="rg-h">版本发布流程</h3>
-        <ol class="rg-steps">
-          <li><span class="rg-step-ico">1</span><b>提交发布申请</b><span>填写更新内容与路径</span></li>
-          <li><span class="rg-step-ico">2</span><b>审核确认</b><span>主管 / 负责人审批</span></li>
-          <li><span class="rg-step-ico">3</span><b>自动构建</b><span>打包与检查</span></li>
-          <li><span class="rg-step-ico">4</span><b>发布上线</b><span>部署并健康检查</span></li>
-          <li><span class="rg-step-ico">5</span><b>结果反馈</b><span>记录状态与日志</span></li>
-        </ol>
-      </section>
+      <div id="lock-view" class="lock-box idle" hidden></div>
       <section class="oc-card panel rg-board">
         <nav class="rg-subnav" aria-label="记录页签">
           <button type="button" class="oc-tab rg-sub active" data-tab="queue"><span class="rg-sub-label">待上线</span></button>
@@ -140,13 +124,11 @@
           <div id="queue-view" class="tickets"></div>
         </div>
         <div class="pane" id="pane-history">
-          <p class="hint">各模块当前版本来自最近一次成功发布。下一号由本闸门发放。版本记录只记每次升级的简要内容，从最新到最老，每页 20 条。上方统计已成功落地的版本数，含已回滚。详细流水在「运行日志」。有升级前快照的单据可以回滚；回滚占用发布锁，不会自动发下一单。</p>
           <div id="history-stats" class="history-stats">已上线发布 <b>0</b> 个版本</div>
           <div id="current-versions" class="caps"></div>
           <div id="history-view"></div>
         </div>
         <div class="pane" id="pane-logs">
-          <p class="hint">每张单上的发版流水 log。记录多时分页查看，每页 20 条。</p>
           <div id="logs-view" class="log-list"></div>
         </div>
       </section>
@@ -747,13 +729,14 @@
         }
         if (!lock.locked) {
           el.className = "lock-box idle";
-          el.textContent = "确认发布后先启动新版本，健康检查通过再切换。当前空闲。一把锁，点一单才发一单。";
+          el.textContent = "";
+          el.setAttribute("hidden", "");
         } else {
           const cur = lock.current || {};
           el.className = "lock-box";
+          el.removeAttribute("hidden");
           el.innerHTML =
-            "<div>锁已被占用，禁止第二下发布。</div>" +
-            "<div>版本号：" + esc(cur.version || "—") + "</div>" +
+            "<div>正在发布 " + esc(cur.version || "—") + "</div>" +
             "<div>开始时间：" + esc(fmt(cur.startedAt)) + "</div>";
         }
         if (ready && ready.version) {
@@ -839,15 +822,7 @@
           return;
         }
         if (!items.length) {
-          const current = ((versions && versions.current) || []).map(function (row) {
-            return esc(row.module) + " " + esc(row.version);
-          }).join(" · ");
-          el.innerHTML =
-            '<div class="empty">' +
-            "<div>待上线是空的，没有等待通过的单据</div>" +
-            "<div>已成功发布的请点上面「版本记录」" +
-            (current ? "。当前：" + current : "") +
-            "</div></div>";
+          el.innerHTML = '<div class="empty">没有等待通过的单据</div>';
           return;
         }
         const paged = paginate(items, "queue");
