@@ -202,7 +202,7 @@ test("同一员工同一天的未交提醒只发一次", async () => {
   }
 });
 
-test("机器人单聊失败时退回工作通知，成功时只发单聊", async () => {
+test("应用内 DING 成功时只发 DING，失败时退回单聊再退回工作通知", async () => {
   resetDingStore();
   process.env.DINGTALK_CLIENT_ID = "dingabc123";
   process.env.DINGTALK_CLIENT_SECRET = "secret-value-1";
@@ -213,7 +213,7 @@ test("机器人单聊失败时退回工作通知，成功时只发单聊", async
     if (String(url).includes("accessToken")) {
       return { json: async () => ({ accessToken: "token", expireIn: 7200 }) };
     }
-    if (String(url).includes("oToMessages")) {
+    if (String(url).includes("robot/ding/send") || String(url).includes("oToMessages")) {
       return { json: async () => ({ code: "invalid.chatbot", message: "无效的机器人" }) };
     }
     return { json: async () => ({ errcode: 0, result: {} }) };
@@ -221,20 +221,30 @@ test("机器人单聊失败时退回工作通知，成功时只发单聊", async
   try {
     const channel = await sendTaskNotice("u4", "新的工作任务", "我的任务「1」，截止 2026-11-17 23:59。", "https://zx.xingmaierp.cc/work?tab=taskMine&task=abc");
     assert.equal(channel, "work");
+    assert.equal(urls.some((url) => url.includes("robot/ding/send")), true);
     assert.equal(urls.some((url) => url.includes("oToMessages")), true);
     assert.equal(urls.some((url) => url.includes("asyncsend_v2")), true);
-    const only = [];
-    setDingTransport(async (url) => {
-      only.push(String(url));
+    const dingOnly = [];
+    setDingTransport(async (url, options) => {
+      dingOnly.push(String(url));
       if (String(url).includes("accessToken")) {
         return { json: async () => ({ accessToken: "token", expireIn: 7200 }) };
+      }
+      if (String(url).includes("robot/ding/send")) {
+        const body = JSON.parse(options.body);
+        assert.equal(body.remindType, 1);
+        assert.equal(body.receiverUserIdList[0], "u4");
+        assert.match(body.content, /新的工作任务/);
+        assert.match(body.content, /tab=taskReview/);
+        return { json: async () => ({ openDingId: "ding-1" }) };
       }
       return { json: async () => ({ processQueryKey: "ok" }) };
     });
     const popped = await sendTaskNotice("u4", "新的工作任务", "第二条单独弹窗。", "https://zx.xingmaierp.cc/work?tab=taskReview&task=abc");
-    assert.equal(popped, "robot");
-    assert.equal(only.some((url) => url.includes("oToMessages")), true);
-    assert.equal(only.some((url) => url.includes("asyncsend_v2")), false);
+    assert.equal(popped, "ding");
+    assert.equal(dingOnly.some((url) => url.includes("robot/ding/send")), true);
+    assert.equal(dingOnly.some((url) => url.includes("oToMessages")), false);
+    assert.equal(dingOnly.some((url) => url.includes("asyncsend_v2")), false);
   } finally {
     delete process.env.DINGTALK_CLIENT_ID;
     delete process.env.DINGTALK_CLIENT_SECRET;

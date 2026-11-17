@@ -716,6 +716,52 @@ function dingFail(message, code) {
   return error;
 }
 
+function dingBody(title, markdown, url, button) {
+  const head = String(title || "工作任务").trim().slice(0, 40);
+  const text = String(markdown || "").replace(/\s+/g, " ").trim().slice(0, 180);
+  const link = url || WORK_URL;
+  const action = button || "去处理";
+  return `${head}\n${text}\n${action}：${link}`.slice(0, 500);
+}
+
+function dingRejected(data) {
+  const list = data && data.failedList;
+  if (Array.isArray(list)) {
+    return list.length ? "DING 没有送到" : "";
+  }
+  if (list && typeof list === "object") {
+    const reason = Object.keys(list)[0] || "";
+    return reason;
+  }
+  return "";
+}
+
+async function sendRobotDing(userid, title, markdown, url, button, robotCode) {
+  const token = await accessToken();
+  const res = await transport("https://api.dingtalk.com/v1.0/robot/ding/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-acs-dingtalk-access-token": token
+    },
+    body: JSON.stringify({
+      robotCode: robotCode || dingConfig().clientId,
+      remindType: 1,
+      receiverUserIdList: [String(userid)],
+      content: dingBody(title, markdown, url, button)
+    }),
+    signal: AbortSignal.timeout(8000)
+  });
+  const data = await res.json();
+  if (res.ok === false || data.code || data.errcode) {
+    throw dingFail(data.message || data.errmsg || "DING 没有发出", data.code || data.errcode);
+  }
+  const rejected = dingRejected(data);
+  if (rejected) {
+    throw dingFail(rejected);
+  }
+}
+
 async function sendRobotCard(userid, title, markdown, url, button, robotCode) {
   const token = await accessToken();
   const res = await transport("https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend", {
@@ -769,13 +815,19 @@ export async function sendTaskNotice(userid, title, markdown, url, button = "去
     return false;
   }
   try {
-    await sendRobotCard(userid, title, markdown, url, button);
-    lastPopup = { channel: "robot", error: "" };
-    return "robot";
-  } catch (error) {
-    lastPopup = { channel: "work", error: error.publicMessage || "机器人消息没有发出" };
-    await sendCorpCard(userid, title, markdown, url, button);
-    return "work";
+    await sendRobotDing(userid, title, markdown, url, button);
+    lastPopup = { channel: "ding", error: "" };
+    return "ding";
+  } catch (dingError) {
+    try {
+      await sendRobotCard(userid, title, markdown, url, button);
+      lastPopup = { channel: "robot", error: dingError.publicMessage || "DING 没有发出" };
+      return "robot";
+    } catch (error) {
+      lastPopup = { channel: "work", error: error.publicMessage || "机器人消息没有发出" };
+      await sendCorpCard(userid, title, markdown, url, button);
+      return "work";
+    }
   }
 }
 
@@ -811,17 +863,18 @@ export async function popupTo(userid) {
     return { ok: false, statusCode: 400, error: "当前账号还没有钉钉" };
   }
   const meta = { appKey: maskId(dingConfig().clientId), agentId: currentAgentId() };
+  const notice = ["工作汇报", "右下角弹窗测试。请看电脑右下角，这一条会显示内容。", workLink("todo"), "去处理"];
   try {
-    await sendRobotCard(userid, "工作汇报", "右下角弹窗测试。请看电脑右下角，点「去处理」打开工作汇报。", workLink("todo"), "去处理");
-    lastPopup = { channel: "robot", error: "" };
-    return { ok: true, channel: "robot", error: "", ...meta };
+    await sendRobotDing(userid, ...notice);
+    lastPopup = { channel: "ding", error: "" };
+    return { ok: true, channel: "ding", error: "", ...meta };
   } catch (error) {
     const agentCode = String(currentAgentId() || "");
     if (agentCode && agentCode !== dingConfig().clientId) {
       try {
-        await sendRobotCard(userid, "工作汇报", "右下角弹窗测试。请看电脑右下角，点「去处理」打开工作汇报。", workLink("todo"), "去处理", agentCode);
-        lastPopup = { channel: "robot", error: "" };
-        return { ok: true, channel: "robot", error: "", ...meta, robotCode: "agent" };
+        await sendRobotDing(userid, ...notice, agentCode);
+        lastPopup = { channel: "ding", error: "" };
+        return { ok: true, channel: "ding", error: "", ...meta, robotCode: "agent" };
       } catch {
         /* AgentId 也不是机器人编号。 */
       }
@@ -830,7 +883,7 @@ export async function popupTo(userid) {
       ok: false,
       statusCode: 502,
       channel: "",
-      error: `${error.publicMessage || "机器人消息没有发出"} 当前 Client ID ${meta.appKey}，AgentId ${meta.agentId}。${await robotState()}`,
+      error: `${error.publicMessage || "DING 没有发出"} 当前 Client ID ${meta.appKey}，AgentId ${meta.agentId}。${await robotState()}`,
       ...meta
     };
   }
