@@ -15,6 +15,7 @@ const passwordPending = new Map();
 let loginQueue = [];
 let loginCursor = { index: 0, total: 0, store: "" };
 let loginEpoch = 0;
+let openingMark = 0;
 const orgCache = new Map();
 let refreshing = false;
 let deskLock = Promise.resolve();
@@ -51,6 +52,7 @@ export function resetJingmaiDeps() {
   }
   passwordPending.clear();
   wipeQueue();
+  openingMark = 0;
   orgCache.forEach(function (shop) {
     shop.password = "";
   });
@@ -197,6 +199,7 @@ export async function jingmaiLive() {
 function publicState(state) {
   return {
     ok: true,
+    build: "clock",
     store: state.store || loginCursor.store,
     status: state.status,
     message: state.message || "",
@@ -260,6 +263,16 @@ async function rememberLogin(store, cookies, expected) {
   return "saved";
 }
 
+function markOpening() {
+  if (!openingMark) {
+    openingMark = Date.now();
+  }
+}
+
+function clearOpening() {
+  openingMark = 0;
+}
+
 function loginInProgress(name) {
   return loginCursor.store === name && loginCursor.failed !== true && (loginCursor.phase === "opening" || loginCursor.phase === "screen");
 }
@@ -282,6 +295,7 @@ async function startQueued(shop, epoch) {
   loginCursor.phase = "opening";
   loginCursor.failed = false;
   loginCursor.startedAt = Date.now();
+  markOpening();
   loginCursor.message = "正在启动浏览器";
   let opened;
   try {
@@ -391,6 +405,7 @@ async function queueShops(shops, epoch) {
     phase: "opening",
     startedAt: Date.now()
   };
+  markOpening();
   const next = loginQueue.shift();
   if (!next) {
     return publicState({ status: "done", message: "全部店铺已连接" });
@@ -419,6 +434,7 @@ export async function beginRelogin(store, cookie) {
     phase: "opening",
     startedAt: Date.now()
   };
+  markOpening();
   const shops = await deps.loadOrg(cookie || "");
   if (epoch !== loginEpoch) {
     return currentLoginState(name);
@@ -506,14 +522,21 @@ export async function reloginState(store) {
   if (loginCursor.failed || loginCursor.phase === "failed") {
     return publicState({ status: "failed", store: name, step: loginCursor.step, message: loginCursor.message || "登录没有打开" });
   }
-  const startLimit = deps.startLimitMs || 55000;
-  if (!idle && loginCursor.phase === "opening" && loginCursor.startedAt && Date.now() - loginCursor.startedAt > startLimit) {
+  if (loginCursor.phase === "opening") {
+    markOpening();
+  } else if (idle || loginCursor.phase === "failed" || loginCursor.phase === "screen") {
+    clearOpening();
+  }
+  const startLimit = deps.startLimitMs || 15000;
+  const openingFor = openingMark ? Date.now() - openingMark : 0;
+  if (!idle && loginCursor.phase === "opening" && openingFor > startLimit) {
     const peeked = await deps.desk.poll(name);
     if (peeked && (peeked.status === "verify" || peeked.status === "screen" || peeked.status === "ok")) {
       /* 浏览器已经开了，交给下面的正常判断 */
     } else {
       const note = peeked && peeked.message && peeked.message !== "正在启动浏览器" ? peeked.message : "";
       loginEpoch += 1;
+      clearOpening();
       loginCursor.failed = true;
       loginCursor.phase = "failed";
       loginCursor.step = "启动浏览器";
@@ -606,6 +629,7 @@ export function jingmaiBrowser() {
 
 export async function cancelRelogin() {
   loginEpoch += 1;
+  clearOpening();
   wipeQueue();
   if (deps.desk && deps.desk.close) {
     await deps.desk.close();
