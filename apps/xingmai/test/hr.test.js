@@ -195,7 +195,9 @@ test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /人员情况趋势/);
   assert.match(client, /人员结构分布/);
   assert.match(client, /待办事项/);
-  assert.match(client, /团队人效TOP5/);
+  assert.match(client, /团队奋斗平均时长/);
+  assert.equal(client.includes("查看全部"), false);
+  assert.equal(client.includes("团队人效"), false);
   assert.match(client, /性别结构/);
   assert.match(client, /年龄结构/);
   assert.match(client, /司龄结构/);
