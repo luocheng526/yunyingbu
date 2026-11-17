@@ -9,6 +9,7 @@ import {
   proposeBinds,
   resetDingStore,
   saveAppConfig,
+  sendTaskNotice,
   setDingTransport,
   shanghaiNow,
   shiftWindow
@@ -198,5 +199,47 @@ test("同一员工同一天的未交提醒只发一次", async () => {
     setDingTransport(globalThis.fetch);
     resetDingStore();
     resetWorkStore();
+  }
+});
+
+test("机器人单聊失败时退回工作通知，成功时只发单聊", async () => {
+  resetDingStore();
+  process.env.DINGTALK_CLIENT_ID = "dingabc123";
+  process.env.DINGTALK_CLIENT_SECRET = "secret-value-1";
+  process.env.DINGTALK_AGENT_ID = "100";
+  const urls = [];
+  setDingTransport(async (url) => {
+    urls.push(String(url));
+    if (String(url).includes("accessToken")) {
+      return { json: async () => ({ accessToken: "token", expireIn: 7200 }) };
+    }
+    if (String(url).includes("oToMessages")) {
+      return { json: async () => ({ code: "invalid.chatbot", message: "无效的机器人" }) };
+    }
+    return { json: async () => ({ errcode: 0, result: {} }) };
+  });
+  try {
+    const channel = await sendTaskNotice("u4", "新的工作任务", "我的任务「1」，截止 2026-11-17 23:59。", "https://zx.xingmaierp.cc/work?tab=taskMine&task=abc");
+    assert.equal(channel, "work");
+    assert.equal(urls.some((url) => url.includes("oToMessages")), true);
+    assert.equal(urls.some((url) => url.includes("asyncsend_v2")), true);
+    const only = [];
+    setDingTransport(async (url) => {
+      only.push(String(url));
+      if (String(url).includes("accessToken")) {
+        return { json: async () => ({ accessToken: "token", expireIn: 7200 }) };
+      }
+      return { json: async () => ({ processQueryKey: "ok" }) };
+    });
+    const popped = await sendTaskNotice("u4", "新的工作任务", "第二条单独弹窗。", "https://zx.xingmaierp.cc/work?tab=taskReview&task=abc");
+    assert.equal(popped, "robot");
+    assert.equal(only.some((url) => url.includes("oToMessages")), true);
+    assert.equal(only.some((url) => url.includes("asyncsend_v2")), false);
+  } finally {
+    delete process.env.DINGTALK_CLIENT_ID;
+    delete process.env.DINGTALK_CLIENT_SECRET;
+    delete process.env.DINGTALK_AGENT_ID;
+    setDingTransport(globalThis.fetch);
+    resetDingStore();
   }
 });

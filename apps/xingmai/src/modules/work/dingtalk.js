@@ -160,7 +160,7 @@ function dayStart(date) {
   return Date.parse(`${date}T00:00:00+08:00`);
 }
 
-async function oapi(path, body) {
+async function accessToken() {
   const cfg = dingConfig();
   if (!cfg.clientId || !cfg.clientSecret) {
     const error = new Error("钉钉企业应用未配置");
@@ -185,7 +185,12 @@ async function oapi(path, body) {
       until: Date.now() + Math.max(60, Number(data.expireIn) || 7200 - 120) * 1000
     };
   }
-  const res = await transport(`https://oapi.dingtalk.com${path}?access_token=${encodeURIComponent(tokenCache.value)}`, {
+  return tokenCache.value;
+}
+
+async function oapi(path, body) {
+  const token = await accessToken();
+  const res = await transport(`https://oapi.dingtalk.com${path}?access_token=${encodeURIComponent(token)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body || {}),
@@ -700,10 +705,51 @@ export function dingUserOf(personId) {
   return binds.get(Number(personId))?.userid || "";
 }
 
-export async function sendTaskNotice(userid, title, markdown, url) {
+let lastPopup = { channel: "", error: "" };
+
+function dingFail(message, code) {
+  const error = new Error("钉钉接口失败");
+  error.publicMessage = message || "钉钉接口失败";
+  if (code) {
+    error.code = Number(code) || code;
+  }
+  return error;
+}
+
+async function sendRobotCard(userid, title, markdown, url, button) {
+  const token = await accessToken();
+  const res = await transport("https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-acs-dingtalk-access-token": token
+    },
+    body: JSON.stringify({
+      robotCode: dingConfig().clientId,
+      userIds: [String(userid)],
+      msgKey: "sampleActionCard",
+      msgParam: JSON.stringify({
+        title: String(title || "工作任务").slice(0, 64),
+        text: String(markdown || "").slice(0, 500),
+        singleTitle: button || "去处理",
+        singleURL: url || WORK_URL
+      })
+    }),
+    signal: AbortSignal.timeout(8000)
+  });
+  const data = await res.json();
+  if (data.code || data.errcode) {
+    throw dingFail(data.message || data.errmsg || "机器人消息没有发出", data.errcode);
+  }
+  if (Array.isArray(data.invalidStaffIdList) && data.invalidStaffIdList.length) {
+    throw dingFail("钉钉没有这个接收人");
+  }
+}
+
+async function sendCorpCard(userid, title, markdown, url, button) {
   const agentId = currentAgentId();
-  if (!agentId || !userid) {
-    return false;
+  if (!agentId) {
+    throw dingFail("待配置工作通知 AgentId");
   }
   await oapi("/topapi/message/corpconversation/asyncsend_v2", {
     agent_id: Number(agentId) || agentId,
@@ -713,34 +759,51 @@ export async function sendTaskNotice(userid, title, markdown, url) {
       action_card: {
         title: String(title || "工作任务").slice(0, 64),
         markdown: String(markdown || "").slice(0, 500),
-        single_title: "去处理",
+        single_title: button || "去处理",
         single_url: url || WORK_URL
       }
     }
   });
-  return true;
+}
+
+export async function sendTaskNotice(userid, title, markdown, url, button = "去处理") {
+  if (!userid) {
+    return false;
+  }
+  try {
+    await sendRobotCard(userid, title, markdown, url, button);
+    lastPopup = { channel: "robot", error: "" };
+    return "robot";
+  } catch (error) {
+    lastPopup = { channel: "work", error: error.publicMessage || "机器人消息没有发出" };
+    await sendCorpCard(userid, title, markdown, url, button);
+    return "work";
+  }
+}
+
+export async function popupTo(userid) {
+  if (!userid) {
+    return { ok: false, statusCode: 400, error: "当前账号还没有钉钉" };
+  }
+  try {
+    const channel = await sendTaskNotice(
+      userid,
+      "工作汇报",
+      "右下角弹窗测试。请看电脑右下角，点「去处理」打开工作汇报。",
+      workLink("todo")
+    );
+    return { ok: true, channel, error: channel === "work" ? lastPopup.error : "" };
+  } catch (error) {
+    return { ok: false, statusCode: 502, error: lastPopup.error || error.publicMessage || "没有发出", channel: "work" };
+  }
 }
 
 export async function sendWorkNotice(userid) {
-  const agentId = currentAgentId();
-  if (!agentId) {
-    const error = new Error("待配置工作通知 AgentId");
-    error.publicMessage = error.message;
-    throw error;
+  if (String(userid) === "0") {
+    await sendCorpCard(userid, "今天的日报还没提交", "今天的工作日报还没交，请在今天提交。", workLink("todo"), "去填日报");
+    return;
   }
-  await oapi("/topapi/message/corpconversation/asyncsend_v2", {
-    agent_id: Number(agentId) || agentId,
-    userid_list: userid,
-    msg: {
-      msgtype: "action_card",
-      action_card: {
-        title: "今天的日报还没提交",
-        markdown: "今天的工作日报还没交，请在今天提交。",
-        single_title: "去填日报",
-        single_url: workLink("todo")
-      }
-    }
-  });
+  await sendTaskNotice(userid, "今天的日报还没提交", "今天的工作日报还没交，请在今天提交。", workLink("todo"), "去填日报");
 }
 
 export function shanghaiNow(now = new Date()) {

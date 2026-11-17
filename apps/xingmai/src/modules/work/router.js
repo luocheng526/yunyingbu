@@ -17,6 +17,7 @@ import {
   syncDingBinds
 } from "./diary.js";
 import { getReport, getSettings, isWorkAdmin, myTodoCount, saveMembers, saveReport, saveTemplate, snapshot } from "./store.js";
+import { dingUserOf, popupTo } from "./dingtalk.js";
 import { actTask, listTasks, publishTask, readTaskFile, taskContext, taskCounts } from "./tasks.js";
 
 export const workRouter = Router();
@@ -264,6 +265,19 @@ workRouter.post(
   "/diary/ding/sync",
   wrap(async (req, res) => {
     sendResult(res, await syncDingBinds(req.user, isWorkAdmin(req.user)), 403);
+  })
+);
+
+workRouter.post(
+  "/diary/ding/popup",
+  wrap(async (req, res) => {
+    if (!isWorkAdmin(req.user)) {
+      sendResult(res, { ok: false, statusCode: 403, error: "只有罗成可以发弹窗" });
+      return;
+    }
+    const snap = await snapshot(req.user);
+    const personId = Number(req.body?.personId) || (snap.me && snap.me.id);
+    sendResult(res, await popupTo(dingUserOf(personId)), 502);
   })
 );
 
