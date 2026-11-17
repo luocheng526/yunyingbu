@@ -6,6 +6,7 @@ const sentKeys = new Set();
 const binds = new Map();
 let attendanceCache = new Map();
 let tokenCache = { value: "", until: 0 };
+let rememberedAgent = "";
 let transport = globalThis.fetch;
 
 export function setDingTransport(fn) {
@@ -18,6 +19,7 @@ export function resetDingStore() {
   binds.clear();
   attendanceCache = new Map();
   tokenCache = { value: "", until: 0 };
+  rememberedAgent = "";
 }
 
 export function dingConfig() {
@@ -33,7 +35,7 @@ export function dingPublic() {
   const cfg = dingConfig();
   return {
     app: Boolean(cfg.clientId && cfg.clientSecret),
-    agent: Boolean(cfg.agentId),
+    agent: Boolean(cfg.agentId || rememberedAgent),
     corp: Boolean(cfg.corpId)
   };
 }
@@ -89,6 +91,13 @@ export function classifyLeave(records, shift) {
 export function proposeBinds(people, users) {
   const byJob = new Map();
   const byName = new Map();
+  const siteNames = new Map();
+  for (const person of people || []) {
+    const name = String(person.name || "").trim();
+    if (name) {
+      siteNames.set(name, (siteNames.get(name) || 0) + 1);
+    }
+  }
   for (const user of users || []) {
     const job = String(user.jobNumber || user.job_number || "").trim();
     const name = String(user.name || "").trim();
@@ -114,6 +123,10 @@ export function proposeBinds(people, users) {
     }
     if (nameHits.length > 1) {
       return { personId: Number(person.id), userid: "", match: "重名待核对", confirmed: false, candidates: publicUsers(nameHits) };
+    }
+    const name = String(person.name || "").trim();
+    if (nameHits.length === 1 && siteNames.get(name) === 1 && !jobHits.length) {
+      return { personId: Number(person.id), userid: nameHits[0].userid, match: "姓名", confirmed: true, candidates: [] };
     }
     if (nameHits.length === 1) {
       return { personId: Number(person.id), userid: "", match: "姓名待核对", confirmed: false, candidates: publicUsers(nameHits) };
@@ -207,6 +220,15 @@ export async function readyDing() {
       confirmed: true
     });
   }
+  const [agentRows] = await query("SELECT body FROM work_report_diary_meta WHERE meta_key = 'ding_agent'");
+  rememberedAgent = "";
+  if (agentRows[0]?.body) {
+    try {
+      rememberedAgent = String(JSON.parse(agentRows[0].body).agentId || "");
+    } catch {
+      rememberedAgent = "";
+    }
+  }
   const [sent] = await query("SELECT person_id, work_date FROM work_report_ding_remind");
   sentKeys.clear();
   for (const row of sent) {
@@ -252,7 +274,7 @@ export async function saveBinds(rows) {
 async function listDingUsers() {
   const departments = [1];
   const queue = [1];
-  while (queue.length && departments.length < 30) {
+  while (queue.length && departments.length < 80) {
     const deptId = queue.shift();
     const result = await oapi("/topapi/v2/department/listsub", { dept_id: deptId });
     const rows = Array.isArray(result) ? result : [];
@@ -469,15 +491,133 @@ export async function releaseReminder(personId, date) {
   }
 }
 
+function currentAgentId() {
+  return dingConfig().agentId || rememberedAgent;
+}
+
+async function rememberAgent(agentId) {
+  rememberedAgent = String(agentId || "");
+  if (!rememberedAgent || dbMode() !== "mysql") {
+    return;
+  }
+  await query(
+    `INSERT INTO work_report_diary_meta (meta_key, body, updated_at)
+     VALUES ('ding_agent', ?, ?)
+     ON DUPLICATE KEY UPDATE body = VALUES(body), updated_at = VALUES(updated_at)`,
+    [JSON.stringify({ agentId: rememberedAgent }), new Date().toISOString().slice(0, 19).replace("T", " ")]
+  );
+}
+
+function appRows(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  return payload?.appList || payload?.apps || [];
+}
+
+export async function discoverAgent() {
+  if (currentAgentId()) {
+    return { ok: true, names: [] };
+  }
+  let names = [];
+  let chosen = "";
+  let chosenName = "";
+  const pick = (list) => {
+    const rows = appRows(list).filter((app) => app && (app.agentId || app.agentid));
+    names = rows.map((app) => String(app.name || app.appName || "未命名"));
+    const enabled = rows.filter((app) => app.appStatus === undefined || Number(app.appStatus) === 1);
+    const pool = enabled.length ? enabled : rows;
+    const prefer = pool.length === 1 ? pool[0] : pool.find((app) => /日报|汇报|考勤|工作/.test(String(app.name || app.appName || "")));
+    if (prefer) {
+      chosen = String(prefer.agentId || prefer.agentid);
+      chosenName = String(prefer.name || prefer.appName || "未命名");
+    }
+  };
+  try {
+    pick(await oapi("/microapp/list", {}));
+  } catch {
+    chosen = "";
+  }
+  if (!chosen) {
+    try {
+      const res = await transport("https://api.dingtalk.com/v1.0/microApp/allInnerApps", {
+        headers: { "x-acs-dingtalk-access-token": tokenCache.value },
+        signal: AbortSignal.timeout(8000)
+      });
+      const data = await res.json();
+      if (!data.code && !data.errcode) {
+        pick(data);
+      }
+    } catch {
+      chosen = "";
+    }
+  }
+  if (!chosen) {
+    return { ok: false, names, error: names.length > 1 ? "有多个企业应用，还不能确定用哪一个发提醒" : "还读不到工作通知 AgentId" };
+  }
+  await rememberAgent(chosen);
+  return { ok: true, names, chosenName };
+}
+
+export async function probeAttendance(people) {
+  const date = shanghaiNow().date;
+  const bound = confirmedBinds();
+  if (!bound.length) {
+    return { ok: false, error: "还没有绑定员工" };
+  }
+  const roleOf = (personId) => String((people || []).find((person) => Number(person.id) === Number(personId))?.role || "");
+  const ordered = [...bound].sort((a, b) => {
+    const rank = (role) => (role === "经理" || role === "总监" ? 0 : role === "主管" ? 1 : 2);
+    return rank(roleOf(a.personId)) - rank(roleOf(b.personId));
+  });
+  const sample = ordered.slice(0, 20).map((row) => row.userid);
+  let opened = null;
+  let last = "钉钉排班接口失败";
+  for (const op of ordered.slice(0, 8)) {
+    try {
+      const result = await oapi("/topapi/attendance/schedule/listbyusers", {
+        op_user_id: op.userid,
+        userids: sample.join(","),
+        from_date_time: dayStart(date),
+        to_date_time: dayStart(date) + 24 * 3600 * 1000 - 1
+      });
+      const rows = Array.isArray(result) ? result : result?.schedules || [];
+      opened = { personId: op.personId, rows: rows.length };
+      if (rows.length) {
+        break;
+      }
+    } catch {
+      last = "钉钉排班接口失败";
+    }
+  }
+  let leaveOk = false;
+  try {
+    await oapi("/topapi/attendance/getleavestatus", {
+      userid_list: sample.slice(0, 20).join(","),
+      start_time: dayStart(date),
+      end_time: dayStart(date) + 24 * 3600 * 1000 - 1,
+      offset: 0,
+      size: 20
+    });
+    leaveOk = true;
+  } catch {
+    leaveOk = false;
+  }
+  if (!opened) {
+    return { ok: false, leaveOk, error: last };
+  }
+  return { ok: true, personId: opened.personId, rows: opened.rows, leaveOk };
+}
+
 export async function sendWorkNotice(userid) {
-  const cfg = dingConfig();
-  if (!cfg.agentId) {
+  const agentId = currentAgentId();
+  if (!agentId) {
     const error = new Error("待配置工作通知 AgentId");
     error.publicMessage = error.message;
     throw error;
   }
   await oapi("/topapi/message/corpconversation/asyncsend_v2", {
-    agent_id: Number(cfg.agentId) || cfg.agentId,
+    agent_id: Number(agentId) || agentId,
     userid_list: userid,
     msg: {
       msgtype: "action_card",

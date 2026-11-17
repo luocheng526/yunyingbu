@@ -10,6 +10,7 @@ import {
   saveDiaryImage,
   saveDiaryRest,
   saveDiarySettings,
+  activateDing,
   saveDingBinds,
   startDiaryReminder,
   syncDingBinds
@@ -201,6 +202,13 @@ workRouter.put(
   "/diary/settings",
   wrap(async (req, res) => {
     sendResult(res, await saveDiarySettings(req.user, req.body || {}, isWorkAdmin(req.user)), 403);
+  })
+);
+
+workRouter.post(
+  "/diary/ding/activate",
+  wrap(async (req, res) => {
+    sendResult(res, await activateDing(req.user, isWorkAdmin(req.user)), 403);
   })
 );
 

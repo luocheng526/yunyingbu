@@ -40,14 +40,16 @@ test("工号一致自动绑定，重名只给出待核对", () => {
   const people = [
     { id: 4, name: "张文静", employeeNo: "SZ002" },
     { id: 8, name: "杨润泽", employeeNo: "NO-MATCH" },
-    { id: 9, name: "崔安琪", employeeNo: "" }
+    { id: 9, name: "崔安琪", employeeNo: "" },
+    { id: 11, name: "高丽男", employeeNo: "" }
   ];
   const users = [
     { userid: "u4", name: "张文静", jobNumber: "SZ002" },
     { userid: "a", name: "杨润泽", jobNumber: "SZ006" },
     { userid: "b", name: "杨润泽", jobNumber: "OTHER" },
     { userid: "c1", name: "崔安琪", jobNumber: "X1" },
-    { userid: "c2", name: "崔安琪", jobNumber: "X2" }
+    { userid: "c2", name: "崔安琪", jobNumber: "X2" },
+    { userid: "g", name: "高丽男", jobNumber: "" }
   ];
   const rows = proposeBinds(people, users);
   assert.equal(rows[0].confirmed, true);
@@ -56,6 +58,8 @@ test("工号一致自动绑定，重名只给出待核对", () => {
   assert.equal(rows[1].match, "重名待核对");
   assert.equal(rows[2].confirmed, false);
   assert.equal(rows[2].candidates.length, 2);
+  assert.equal(rows[3].confirmed, true);
+  assert.equal(rows[3].match, "姓名");
 });
 
 test("钉钉免报、半天假和待核对会写进当天应报状态", async () => {

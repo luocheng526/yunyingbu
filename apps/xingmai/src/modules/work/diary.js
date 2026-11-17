@@ -5,8 +5,10 @@ import {
   claimReminder,
   confirmedBinds,
   dingPublic,
+  discoverAgent,
   inRemindWindow,
   loadAttendance,
+  probeAttendance,
   readyDing,
   releaseReminder,
   resetDingStore,
@@ -1131,6 +1133,57 @@ export async function syncDingBinds(user, isAdmin) {
   }
   const settings = await getDiarySettings(user, true);
   settings.binds = bindRows(bundle.people, proposals);
+  return settings;
+}
+
+export async function activateDing(user, isAdmin) {
+  await readyDiary();
+  if (!isAdmin) {
+    return fail(403, "只有罗成可以改日报设置");
+  }
+  if (!dingPublic().app) {
+    return fail(400, "钉钉企业应用未配置");
+  }
+  const bundle = await orgBundle();
+  let proposals = [];
+  try {
+    proposals = await syncBinds(bundle.people);
+  } catch (error) {
+    return fail(502, error.publicMessage || "钉钉接口失败");
+  }
+  const agent = await discoverAgent();
+  const attendance = await probeAttendance(bundle.people);
+  if (attendance.ok && attendance.rows > 0) {
+    policy.delivery = {
+      ...policy.delivery,
+      revision: policy.delivery.revision + 1,
+      useSchedule: true,
+      operatorPersonId: attendance.personId
+    };
+  } else if (attendance.ok) {
+    policy.delivery = { ...policy.delivery, operatorPersonId: attendance.personId };
+  }
+  if (attendance.leaveOk) {
+    policy.delivery = { ...policy.delivery, useLeave: true };
+  }
+  if (agent.ok) {
+    policy.delivery = { ...policy.delivery, remind: true };
+  }
+  policy.revision += 1;
+  await saveMeta("policy", policy);
+  const settings = await getDiarySettings(user, true);
+  settings.binds = bindRows(bundle.people, proposals);
+  settings.activation = {
+    agent: Boolean(agent.ok),
+    agentNote: agent.error || "",
+    appNames: agent.names || [],
+    appName: agent.chosenName || "",
+    schedule: Boolean(attendance.ok && attendance.rows > 0),
+    scheduleRows: attendance.rows || 0,
+    leave: Boolean(attendance.leaveOk),
+    operator: Boolean(attendance.ok),
+    note: attendance.error || ""
+  };
   return settings;
 }
 
