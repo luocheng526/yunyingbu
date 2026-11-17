@@ -42,13 +42,24 @@ const KEPT_SHOW_DESK =
   "        if (state.desk.status !== \"ok\" && state.desk.status !== \"done\" && state.desk.status !== \"verify\") {\n" +
   "          state.desk.status = \"screen\";\n" +
   "        }\n";
+const OLD_CLICK_POINT =
+  "            y: Math.round((event.clientY - rect.top) * scaleY)\n" +
+  "          }).then(function (st) {";
+const KEPT_CLICK_POINT =
+  "            y: Math.round((event.clientY - rect.top) * scaleY),\n" +
+  "            imageWidth: deskShot.naturalWidth || 0,\n" +
+  "            imageHeight: deskShot.naturalHeight || 0\n" +
+  "          }).then(function (st) {";
 
 export function patchHomeClientSource(text) {
   const source = String(text || "");
   if (source.includes("function applyDesk(st)") || !source.includes(OLD_SHOW_DESK)) {
     return source;
   }
-  return source.replace(OLD_SHOW_DESK, KEPT_SHOW_DESK).replaceAll("0.1.1039-loginpop", "0.1.1043-deskkeep");
+  return source
+    .replace(OLD_SHOW_DESK, KEPT_SHOW_DESK)
+    .replace(OLD_CLICK_POINT, KEPT_CLICK_POINT)
+    .replaceAll("0.1.1039-loginpop", "0.1.1043-deskkeep");
 }
 
 function homeClientSource() {

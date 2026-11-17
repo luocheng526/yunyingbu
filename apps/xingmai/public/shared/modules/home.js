@@ -2994,7 +2994,7 @@
     var status = desk.status;
     var shot =
       status === "screen" || status === "verify"
-        ? '<img id="xm-hm-desk-shot" alt="服务器登录画面" src="/api/home/live-login/screen?store=' +
+        ? '<img id="xm-hm-desk-shot" alt="服务器登录画面" draggable="false" src="/api/home/live-login/screen?store=' +
           encodeURIComponent(desk.store || "") +
           "&t=" +
           Date.now() +
@@ -5295,7 +5295,9 @@
           api("/api/home/live-login/input", {
             store: state.desk && state.desk.store,
             x: Math.round((event.clientX - rect.left) * (nw / rect.width)),
-            y: Math.round((event.clientY - rect.top) * (nh / rect.height))
+            y: Math.round((event.clientY - rect.top) * (nh / rect.height)),
+            imageWidth: nw,
+            imageHeight: nh
           }).then(function (st) {
             applyDesk(st || { status: "screen" });
           });
@@ -6180,13 +6182,6 @@
         }
       }
       var scroller = document.getElementById("xm-content") || root;
-      function onDeskPointerDown(event) {
-        var shot = event.target.closest && event.target.closest("#xm-hm-desk-shot");
-        if (shot) {
-          event.preventDefault();
-        }
-      }
-      root.addEventListener("pointerdown", onDeskPointerDown);
       root.addEventListener("click", onClick);
       root.addEventListener("input", onLiveSearchInput);
       root.addEventListener("change", onChange);
@@ -6241,7 +6236,6 @@
           deskTimer = 0;
         }
         window.clearInterval(poll);
-        root.removeEventListener("pointerdown", onDeskPointerDown);
         root.removeEventListener("click", onClick);
         root.removeEventListener("input", onLiveSearchInput);
         root.removeEventListener("change", onChange);

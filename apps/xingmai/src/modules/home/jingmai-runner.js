@@ -380,7 +380,10 @@ export async function reloginInput(body) {
     await deps.desk.type(name, body.text);
   }
   if (body && body.x != null && body.y != null) {
-    await deps.desk.click(name, Number(body.x), Number(body.y));
+    await deps.desk.click(name, Number(body.x), Number(body.y), {
+      width: Number(body.imageWidth) || 0,
+      height: Number(body.imageHeight) || 0
+    });
   }
   return reloginState(name);
 }
