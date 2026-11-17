@@ -1182,6 +1182,9 @@ test("headless chrome assigns website see/enter/edit for a roster person", async
     assert.match(html, /data-hr="1"/);
     assert.match(html, /智能人事/);
     assert.match(html, /边界数据中心/);
+    assert.match(html, /功能权限/);
+    assert.match(html, /数据权限/);
+    assert.match(html, /复制权限/);
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
