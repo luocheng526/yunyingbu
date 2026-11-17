@@ -166,7 +166,7 @@ async function oapi(path, body) {
     const data = await res.json();
     if (!data.accessToken) {
       const error = new Error("钉钉接口失败");
-      error.publicMessage = error.message;
+      error.publicMessage = "应用凭证没有通过";
       throw error;
     }
     tokenCache = {
@@ -543,8 +543,14 @@ export async function checkWorkNotice() {
     if (USERID_CODES.has(code)) {
       return { ok: true };
     }
+    if (error.publicMessage === "应用凭证没有通过") {
+      return { ok: false, error: "应用凭证没有通过" };
+    }
     if (code === 88 || code === 60011) {
       return { ok: false, error: "这个应用还没有发工作通知的权限" };
+    }
+    if (Number.isFinite(code) && code > 0) {
+      return { ok: false, error: `工作通知还不能用（${code}）` };
     }
     return { ok: false, error: "工作通知还不能用" };
   }

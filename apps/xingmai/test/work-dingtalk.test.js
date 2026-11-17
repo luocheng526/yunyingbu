@@ -35,6 +35,10 @@ test("应用凭证只保存在服务端，返回值里没有密钥", async () =>
     assert.equal(rejected.ok, false);
     const masked = await saveAppConfig({ agentId: "10001", clientId: "dingabc123", clientSecret: "pL83****Ks1Y" });
     assert.equal(masked.ok, false);
+    setDingTransport(async () => ({ json: async () => ({ code: "invalidClientIdOrSecret" }) }));
+    const rejectedSecret = await saveAppConfig({ agentId: "10001", clientId: "dingabc123", clientSecret: "secret-value-1" });
+    assert.equal(rejectedSecret.ok, false);
+    assert.equal(rejectedSecret.error, "应用凭证没有通过");
   } finally {
     resetDingStore();
     setDingTransport(globalThis.fetch);
