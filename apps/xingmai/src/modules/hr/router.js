@@ -34,6 +34,7 @@ import {
   listOnboards,
   listRecruits,
   listStaff,
+  readHrHome,
   listLeaves,
   listOvertime,
   listPunches,
@@ -139,6 +140,15 @@ hrRouter.get("/links", async (_req, res) => {
 hrRouter.get("/roster", async (_req, res) => {
   try {
     res.json({ ok: true, people: await loadRoster() });
+  } catch (err) {
+    sendErr(res, err);
+  }
+});
+
+hrRouter.get("/home", async (req, res) => {
+  try {
+    const range = String(req.query.range || "30");
+    res.json({ ok: true, ...(await readHrHome({ range, viewer: actorName(req) })) });
   } catch (err) {
     sendErr(res, err);
   }

@@ -122,6 +122,7 @@ export const HR_SCHEMA = [
     position_name VARCHAR(64) NOT NULL DEFAULT '',
     phone VARCHAR(32) NOT NULL DEFAULT '',
     joined_on VARCHAR(10) NOT NULL DEFAULT '',
+    birthday VARCHAR(10) NOT NULL DEFAULT '',
     left_on VARCHAR(10) NOT NULL DEFAULT '',
     status_name VARCHAR(16) NOT NULL DEFAULT '在职',
     hometown VARCHAR(64) NOT NULL DEFAULT '',
@@ -219,7 +220,7 @@ export function ensureHrSchema() {
           errors.push(String(err.sqlMessage || err.message || "建表失败"));
         }
       }
-      for (const step of [migratePunchTable, migrateDingUsers, migrateRecruitTable, migrateLeaveTable]) {
+      for (const step of [migratePunchTable, migrateDingUsers, migrateRecruitTable, migrateLeaveTable, migrateStaffTable]) {
         try {
           await step();
         } catch (err) {
@@ -378,6 +379,17 @@ async function migratePunchTable() {
   }
 }
 
+async function migrateStaffTable() {
+  const columns = await rowsOf(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'hr_staff'`
+  );
+  const names = new Set(columns.map((row) => row.COLUMN_NAME));
+  if (!names.has("birthday")) {
+    await query("ALTER TABLE hr_staff ADD COLUMN birthday VARCHAR(10) NOT NULL DEFAULT ''");
+  }
+}
+
 async function migrateDingUsers() {
   const columns = await rowsOf(
     `SELECT COLUMN_NAME FROM information_schema.COLUMNS
@@ -522,16 +534,21 @@ export async function deleteLink(personId) {
   return { id };
 }
 
-export async function listPunches({ month = "", date = "" } = {}) {
+export async function listPunches({ month = "", date = "", from = "", to = "" } = {}) {
   await ensureHrSchema();
   const pickedMonth = mustMonth(month);
   const pickedDate = date ? mustDate(date, "日期") : "";
+  const pickedFrom = from ? mustDate(from, "开始日期") : "";
+  const pickedTo = to ? mustDate(to, "结束日期") : "";
   if (dbMode() === "mysql") {
     const where = [];
     const params = [];
     if (pickedDate) {
       where.push("work_date = ?");
       params.push(pickedDate);
+    } else if (pickedFrom && pickedTo) {
+      where.push("work_date >= ? AND work_date <= ?");
+      params.push(pickedFrom, pickedTo);
     } else if (pickedMonth) {
       where.push("work_date LIKE ?");
       params.push(`${pickedMonth}%`);
@@ -541,7 +558,11 @@ export async function listPunches({ month = "", date = "" } = {}) {
     return rows.map(mapPunch);
   }
   return memory.punches
-    .filter((row) => (pickedDate ? row.workDate === pickedDate : inMonth(row.workDate, pickedMonth)))
+    .filter((row) => {
+      if (pickedDate) return row.workDate === pickedDate;
+      if (pickedFrom && pickedTo) return row.workDate >= pickedFrom && row.workDate <= pickedTo;
+      return inMonth(row.workDate, pickedMonth);
+    })
     .map((row) => ({ ...row }))
     .sort((a, b) => String(b.workDate).localeCompare(String(a.workDate)) || a.personId - b.personId);
 }
@@ -1246,6 +1267,7 @@ function mapStaff(row) {
     position: row.position_name || "",
     phone: row.phone || "",
     joinedOn: row.joined_on || "",
+    birthday: row.birthday || "",
     leftOn: row.left_on || "",
     status: row.status_name || "在职",
     hometown: row.hometown || "",
@@ -1275,6 +1297,7 @@ function staffFrom(input, { requireName = true } = {}) {
     position: clip(input.position, 64),
     phone: optionalPhone(input.phone),
     joinedOn: optionalDate(input.joinedOn, "入职日期"),
+    birthday: optionalDate(input.birthday, "生日"),
     leftOn,
     status,
     hometown: clip(input.hometown, 64),
@@ -1295,6 +1318,7 @@ function staffPatch(input) {
   if (filled(input, "position")) patch.position = clip(input.position, 64);
   if (filled(input, "phone")) patch.phone = optionalPhone(input.phone);
   if (filled(input, "joinedOn")) patch.joinedOn = optionalDate(input.joinedOn, "入职日期");
+  if (filled(input, "birthday")) patch.birthday = optionalDate(input.birthday, "生日");
   if (filled(input, "leftOn")) patch.leftOn = optionalDate(input.leftOn, "离职日期");
   if (filled(input, "status")) patch.status = mustChoice(input.status, STAFF_STATUSES, "状态");
   else if (patch.leftOn) patch.status = "离职";
@@ -1333,9 +1357,9 @@ async function writeStaff(row) {
   if (dbMode() === "mysql") {
     const [result] = await query(
       `INSERT INTO hr_staff
-        (person_name, gender, job_number, department_name, position_name, phone, joined_on, left_on, status_name, hometown, education, emergency_name, emergency_phone, note_text, dingtalk_userid, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.createdBy, row.createdAt, row.updatedAt]
+        (person_name, gender, job_number, department_name, position_name, phone, joined_on, birthday, left_on, status_name, hometown, education, emergency_name, emergency_phone, note_text, dingtalk_userid, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.birthday || "", row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.createdBy, row.createdAt, row.updatedAt]
     );
     row.id = Number(result.insertId);
     return row;
@@ -1351,10 +1375,10 @@ async function saveStaffRow(row) {
     const [result] = await query(
       `UPDATE hr_staff SET
         person_name = ?, gender = ?, job_number = ?, department_name = ?, position_name = ?, phone = ?,
-        joined_on = ?, left_on = ?, status_name = ?, hometown = ?, education = ?, emergency_name = ?,
+        joined_on = ?, birthday = ?, left_on = ?, status_name = ?, hometown = ?, education = ?, emergency_name = ?,
         emergency_phone = ?, note_text = ?, dingtalk_userid = ?, updated_at = ?
        WHERE id = ?`,
-      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.updatedAt, row.id]
+      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.birthday || "", row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.updatedAt, row.id]
     );
     if (!result.affectedRows) throw bad("记录不存在", 404);
     return row;
@@ -1519,6 +1543,269 @@ export async function createTalent(input = {}, actor = "") {
 export async function deleteTalent(id) {
   return removeRow("hr_talents", memory.talents, id, (next) => {
     memory.talents = next;
+  });
+}
+
+function shiftDate(ymd, days) {
+  const [year, month, day] = String(ymd).split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+function eachDay(start, end) {
+  const days = [];
+  let cursor = start;
+  while (cursor && cursor <= end && days.length < 400) {
+    days.push(cursor);
+    cursor = shiftDate(cursor, 1);
+  }
+  return days;
+}
+
+function round1(value) {
+  return Math.round(Number(value) * 10) / 10;
+}
+
+function changePercent(current, previous) {
+  if (!previous) return current ? 100 : 0;
+  return round1(((current - previous) / previous) * 100);
+}
+
+function homeToday(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(now);
+  const bag = {};
+  for (const part of parts) bag[part.type] = part.value;
+  return { today: `${bag.year}-${bag.month}-${bag.day}`, hour: Number(bag.hour) };
+}
+
+function rangeWindow(key, today) {
+  if (key === "7") return { key: "7", start: shiftDate(today, -6), end: today };
+  if (key === "month") return { key: "month", start: `${today.slice(0, 7)}-01`, end: today };
+  if (key === "year") return { key: "year", start: `${today.slice(0, 4)}-01-01`, end: today };
+  return { key: "30", start: shiftDate(today, -29), end: today };
+}
+
+function activeOn(person, date) {
+  if (!person) return false;
+  if (person.leftOn && person.leftOn <= date) return false;
+  if (person.status === "离职") return false;
+  if (person.joinedOn && person.joinedOn > date) return false;
+  return true;
+}
+
+function monthOf(date) {
+  return String(date || "").slice(0, 7);
+}
+
+function countWhere(rows, pred) {
+  return rows.reduce((sum, row) => sum + (pred(row) ? 1 : 0), 0);
+}
+
+function punchKey(row) {
+  return row.dingtalkUserId || row.userName || row.jobNumber || "";
+}
+
+function punchPeople(punches, date) {
+  return new Set(punches.filter((row) => row.workDate === date && punchKey(row)).map(punchKey)).size;
+}
+
+function birthdayParts(person) {
+  const match = String(person.birthday || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return { year: Number(match[1]), month: match[2], day: match[3] };
+}
+
+function ageOn(parts, today) {
+  if (!parts?.year) return null;
+  let age = Number(today.slice(0, 4)) - parts.year;
+  if (today.slice(5) < `${parts.month}-${parts.day}`) age -= 1;
+  return age;
+}
+
+function monthsBetween(start, end) {
+  const [y1, m1, d1] = start.split("-").map(Number);
+  const [y2, m2, d2] = end.split("-").map(Number);
+  let months = (y2 - y1) * 12 + (m2 - m1);
+  if (d2 < d1) months -= 1;
+  return months;
+}
+
+function bandShare(rows, bands) {
+  const total = rows.length || 1;
+  return bands.map((band) => {
+    const count = rows.filter((row) => band.test(row)).length;
+    return { label: band.label, count, ratio: round1((count / total) * 100) };
+  });
+}
+
+export function buildHrHome({
+  staff = [],
+  punches = [],
+  recruits = [],
+  interviews = [],
+  effort = null,
+  today,
+  hour = 9,
+  viewer = "",
+  range = "30"
+} = {}) {
+  const people = Array.isArray(staff) ? staff : [];
+  const window = rangeWindow(range, today);
+  const month = monthOf(today);
+  const previous = shiftDate(`${month}-01`, -1).slice(0, 7);
+  const activeNow = countWhere(people, (row) => activeOn(row, today));
+  const activePrev = countWhere(people, (row) => activeOn(row, shiftDate(`${month}-01`, -1)));
+  const hiredNow = countWhere(people, (row) => monthOf(row.joinedOn) === month);
+  const hiredPrev = countWhere(people, (row) => monthOf(row.joinedOn) === previous);
+  const leftNow = countWhere(people, (row) => monthOf(row.leftOn) === month);
+  const leftPrev = countWhere(people, (row) => monthOf(row.leftOn) === previous);
+  const baseNow = countWhere(people, (row) => activeOn(row, shiftDate(`${month}-01`, -1)));
+  const basePrev = countWhere(people, (row) => activeOn(row, shiftDate(`${previous}-01`, -1)));
+  const rateNow = baseNow ? round1((leftNow / baseNow) * 100) : 0;
+  const ratePrev = basePrev ? round1((leftPrev / basePrev) * 100) : 0;
+  const sparkDays = eachDay(shiftDate(today, -6), today);
+  const birthdays = people
+    .filter((row) => activeOn(row, today))
+    .map((row) => ({ row, parts: birthdayParts(row) }))
+    .filter((item) => item.parts && item.parts.month === today.slice(5, 7))
+    .sort((a, b) => a.parts.day.localeCompare(b.parts.day) || String(a.row.name).localeCompare(String(b.row.name), "zh"));
+  const upcoming = birthdays.find((item) => item.parts.day >= today.slice(8)) || null;
+  const activePeople = people.filter((row) => activeOn(row, today));
+  const deptMap = new Map();
+  for (const row of activePeople) {
+    const name = row.department || "未分部门";
+    deptMap.set(name, (deptMap.get(name) || 0) + 1);
+  }
+  const deptRows = [...deptMap.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "zh"));
+  const head = deptRows.slice(0, 6);
+  const rest = deptRows.slice(6).reduce((sum, row) => sum + row.count, 0);
+  const departments = rest ? head.concat([{ name: "其他", count: rest }]) : head;
+  const deptTotal = activeNow || 1;
+  const days = eachDay(window.start, window.end);
+  const base = countWhere(people, (row) => activeOn(row, shiftDate(window.start, -1)));
+  let leftSoFar = 0;
+  const series = days.map((date) => {
+    const left = countWhere(people, (row) => row.leftOn === date);
+    leftSoFar += left;
+    return {
+      date,
+      active: countWhere(people, (row) => activeOn(row, date)),
+      hired: countWhere(people, (row) => row.joinedOn === date),
+      left,
+      rate: base ? round1((leftSoFar / base) * 100) : 0
+    };
+  });
+  const lateNames = [...new Set(punches.filter((row) => row.workDate === today && (Number(row.lateMinutes) > 0 || /迟到/.test(`${row.label || ""}${row.timeResult || ""}`))).map((row) => row.userName || "未命名"))];
+  const probation = activePeople.filter((row) => row.joinedOn && shiftDate(row.joinedOn, 90) >= today && shiftDate(row.joinedOn, 90) <= shiftDate(today, 7));
+  const pendingJoin = recruits.filter((row) => !row.joined && row.expectedJoin && row.expectedJoin >= today && row.expectedJoin <= shiftDate(today, 7));
+  const todos = [];
+  if (probation.length) todos.push({ kind: "probation", title: `${probation.length} 名员工试用期即将结束`, when: "7天内", names: probation.map((row) => row.name) });
+  if (lateNames.length) todos.push({ kind: "late", title: `${lateNames.length} 条考勤异常待处理`, when: "今天", names: lateNames });
+  if (pendingJoin.length) todos.push({ kind: "recruit", title: `${pendingJoin.length} 个入职流程待审批`, when: "7天内", names: pendingJoin.map((row) => row.name) });
+  const effortTeams = Array.isArray(effort?.teams) ? effort.teams : [];
+  const teams = effortTeams.length
+    ? effortTeams.slice().sort((a, b) => Number(b.average) - Number(a.average)).slice(0, 5).map((team) => ({ name: team.name, value: Number(team.average) || 0, unit: "小时" }))
+    : deptRows.slice(0, 5).map((row) => ({ name: row.name, value: row.count, unit: "人" }));
+  const ages = activePeople.map((row) => ageOn(birthdayParts(row), today)).filter((age) => age != null && age >= 0 && age < 100);
+  const ageBands = [
+    { label: "<24岁", test: (age) => age <= 24 },
+    { label: "25–29岁", test: (age) => age >= 25 && age <= 29 },
+    { label: "30–34岁", test: (age) => age >= 30 && age <= 34 },
+    { label: "35–39岁", test: (age) => age >= 35 && age <= 39 },
+    { label: "≥40岁", test: (age) => age >= 40 }
+  ];
+  const tenureBands = [
+    { label: "<6个月", test: (months) => months < 6 },
+    { label: "6个月–1年", test: (months) => months >= 6 && months < 12 },
+    { label: "1–3年", test: (months) => months >= 12 && months < 36 },
+    { label: "3–5年", test: (months) => months >= 36 && months < 60 },
+    { label: ">5年", test: (months) => months >= 60 }
+  ];
+  const tenures = activePeople.map((row) => (row.joinedOn ? monthsBetween(row.joinedOn, today) : null)).filter((months) => months != null && months >= 0);
+  const movement = (dateKey) => people
+    .filter((row) => row[dateKey] && row[dateKey] >= window.start && row[dateKey] <= window.end)
+    .map((row) => ({
+      name: row.name || "未命名",
+      department: row.department || "",
+      position: row.position || "",
+      date: row[dateKey],
+      probation: row.joinedOn && shiftDate(row.joinedOn, 90) >= today ? "3个月" : "已过",
+      status: dateKey === "leftOn" || row.status === "离职" ? "已离职" : (row.joinedOn && shiftDate(row.joinedOn, 90) >= today ? "试用中" : "已转正")
+    }))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(a.name).localeCompare(String(b.name), "zh"));
+  const monthRecruits = recruits.filter((row) => monthOf(row.recordDate || row.expectedJoin) === month);
+  const monthInterviews = interviews.filter((row) => monthOf(row.interviewAt) === month);
+  const hiredRecruit = monthRecruits.filter((row) => row.joined).length;
+  return {
+    hello: hour < 12 ? "上午好" : hour < 18 ? "下午好" : "晚上好",
+    viewer: clip(viewer, 64),
+    range: window,
+    kpis: {
+      active: { value: activeNow, delta: activeNow - activePrev, percent: changePercent(activeNow, activePrev), spark: sparkDays.map((date) => countWhere(people, (row) => activeOn(row, date))) },
+      hired: { value: hiredNow, delta: hiredNow - hiredPrev, percent: changePercent(hiredNow, hiredPrev), spark: sparkDays.map((date) => countWhere(people, (row) => row.joinedOn === date)) },
+      left: { value: leftNow, rate: rateNow, rateDelta: round1(rateNow - ratePrev), spark: sparkDays.map((date) => countWhere(people, (row) => row.leftOn === date)) },
+      lunch: { value: punchPeople(punches, today), delta: punchPeople(punches, today) - punchPeople(punches, shiftDate(today, -1)), spark: sparkDays.map((date) => punchPeople(punches, date)) },
+      birthday: {
+        value: birthdays.length,
+        next: upcoming ? { name: upcoming.row.name, date: `${upcoming.parts.month}-${upcoming.parts.day}` } : null,
+        spark: sparkDays.map((date) => birthdays.filter((item) => item.parts.day === date.slice(8)).length)
+      }
+    },
+    series,
+    departments: departments.map((row) => ({ ...row, ratio: round1((row.count / deptTotal) * 100) })),
+    todos,
+    teams,
+    teamMetric: effortTeams.length ? "人均奋斗时长" : "在职人数",
+    gender: {
+      male: countWhere(activePeople, (row) => row.gender === "男"),
+      female: countWhere(activePeople, (row) => row.gender === "女")
+    },
+    ageReady: ages.length > 0,
+    ages: bandShare(ages, ageBands),
+    tenureReady: tenures.length > 0,
+    tenures: bandShare(tenures, tenureBands),
+    hiredRows: movement("joinedOn"),
+    leftRows: movement("leftOn"),
+    recruit: {
+      registered: monthRecruits.length,
+      done: hiredRecruit,
+      rate: monthRecruits.length ? round1((hiredRecruit / monthRecruits.length) * 100) : 0,
+      steps: [
+        { label: "简历筛选", count: monthRecruits.length },
+        { label: "初试", count: monthInterviews.length },
+        { label: "复试", count: monthInterviews.filter((row) => row.result === "通过").length },
+        { label: "录用", count: hiredRecruit }
+      ]
+    }
+  };
+}
+
+export async function readHrHome({ range = "30", today, hour, viewer = "" } = {}) {
+  const clock = homeToday();
+  const day = today || clock.today;
+  const [staff, punches, recruits, interviews, effort] = await Promise.all([
+    listStaff(),
+    listPunches({ from: shiftDate(day, -6), to: day }),
+    listRecruits({ month: day.slice(0, 7) }),
+    listInterviews(),
+    readEffortMonth(day.slice(0, 7)).catch(() => null)
+  ]);
+  return buildHrHome({
+    staff,
+    punches,
+    recruits,
+    interviews,
+    effort: effort?.report || null,
+    today: day,
+    hour: hour == null ? clock.hour : hour,
+    viewer,
+    range
   });
 }
 

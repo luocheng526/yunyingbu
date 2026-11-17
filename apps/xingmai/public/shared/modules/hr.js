@@ -139,6 +139,61 @@
       ".hr-team + .hr-team{margin-top:8px;padding-top:16px;border-top:1px solid var(--xm-line);}" +
       ".hr-team-title{margin:0;font-size:16px;font-weight:700;color:var(--xm-ink);}" +
       ".hr-board-sub{margin:4px 0 0;font-size:14px;font-weight:650;color:var(--xm-ink);}" +
+      ".hr-home{display:flex;flex-direction:column;gap:12px;}" +
+      ".hr-home-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}" +
+      ".hr-home-head h2{margin:0;font-size:22px;font-weight:700;}" +
+      ".hr-home-head p{margin:6px 0 0;color:var(--xm-muted);font-size:13px;}" +
+      ".hr-range{display:flex;align-items:center;gap:8px;height:36px;padding:0 10px;border:1px solid var(--xm-line);border-radius:10px;background:var(--xm-card);color:var(--xm-muted);font-size:13px;white-space:nowrap;}" +
+      ".hr-range select{border:0;background:transparent;color:var(--xm-ink);font:inherit;font-weight:650;}" +
+      ".hr-home-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;}" +
+      ".hr-home-kpi{display:flex;align-items:center;gap:10px;padding:14px;border:1px solid var(--xm-line);border-radius:16px;background:var(--xm-card);box-shadow:var(--xm-shadow);min-width:0;}" +
+      ".hr-home-icon{flex:none;width:42px;height:42px;border-radius:14px;display:flex;align-items:center;justify-content:center;}" +
+      ".hr-home-icon svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}" +
+      ".hr-home-kpi-main{min-width:0;flex:1;}" +
+      ".hr-home-kpi-main span{display:block;color:var(--xm-muted);font-size:13px;}" +
+      ".hr-home-kpi-main b{display:block;margin-top:2px;font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums;}" +
+      ".hr-home-kpi-main b small{font-size:13px;font-weight:650;margin-left:2px;}" +
+      ".hr-home-kpi-main em{display:block;margin-top:4px;font-style:normal;font-size:12px;color:var(--xm-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
+      ".hr-home-kpi-main em.is-up{color:#12b36a;}" +
+      ".hr-home-kpi-main em.is-down{color:#f04438;}" +
+      ".hr-spark{width:72px;height:32px;flex:none;}" +
+      ".hr-home-row{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(220px,.8fr) minmax(220px,.75fr);gap:12px;}" +
+      ".hr-home-card{padding:14px 16px 16px;min-width:0;}" +
+      ".hr-home-card h3{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 12px;font-size:15px;font-weight:700;}" +
+      ".hr-seg{display:flex;gap:4px;flex-wrap:wrap;}" +
+      ".hr-seg button{border:0;background:transparent;color:var(--xm-muted);font:inherit;font-size:12px;padding:4px 8px;border-radius:8px;cursor:pointer;}" +
+      ".hr-seg button[aria-selected='true']{background:color-mix(in srgb,var(--xm-primary) 12%,var(--xm-card));color:var(--xm-primary);font-weight:650;}" +
+      ".hr-line{width:100%;height:210px;display:block;}" +
+      ".hr-home-quad{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}" +
+      ".hr-home-split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.8fr);gap:12px;}" +
+      ".hr-legend{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;font-size:13px;}" +
+      ".hr-legend li{display:flex;align-items:center;gap:8px;}" +
+      ".hr-dot{width:8px;height:8px;border-radius:99px;flex:none;}" +
+      ".hr-legend b{margin-left:auto;font-variant-numeric:tabular-nums;}" +
+      ".hr-donut-wrap{display:flex;align-items:center;gap:12px;}" +
+      ".hr-donut{width:132px;height:132px;flex:none;}" +
+      ".hr-todo{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--xm-line);}" +
+      ".hr-todo i{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none;color:#fff;font-style:normal;font-weight:700;}" +
+      ".hr-todo b{display:block;font-size:13px;font-weight:650;}" +
+      ".hr-todo span{color:var(--xm-muted);font-size:12px;}" +
+      ".hr-bar-row{display:grid;grid-template-columns:78px minmax(0,1fr) 42px;gap:8px;align-items:center;margin:8px 0;font-size:12px;}" +
+      ".hr-bar{height:8px;border-radius:99px;background:color-mix(in srgb,var(--xm-ink) 8%,var(--xm-card));overflow:hidden;}" +
+      ".hr-bar i{display:block;height:100%;border-radius:99px;}" +
+      ".hr-rank{margin:10px 0;font-size:13px;}" +
+      ".hr-rank-top{display:flex;justify-content:space-between;gap:8px;}" +
+      ".hr-rank-bar{height:8px;border-radius:99px;background:linear-gradient(90deg,#8eb6ff,#3b82f6);margin-top:6px;}" +
+      ".hr-funnel{display:flex;gap:8px;}" +
+      ".hr-funnel div{flex:1;background:color-mix(in srgb,var(--xm-primary) 8%,var(--xm-card));border-radius:12px;padding:10px 6px;text-align:center;}" +
+      ".hr-funnel b{display:block;font-size:18px;}" +
+      ".hr-funnel span{color:var(--xm-muted);font-size:12px;}" +
+      ".hr-meter{height:8px;border-radius:99px;background:color-mix(in srgb,var(--xm-primary) 12%,var(--xm-card));overflow:hidden;margin:10px 0;}" +
+      ".hr-meter i{display:block;height:100%;background:linear-gradient(90deg,#7cb0ff,#3b82f6);}" +
+      ".hr-pill{border-radius:99px;padding:2px 8px;font-size:12px;white-space:nowrap;}" +
+      ".hr-pill-try{color:#d48806;background:#fff7e6;}" +
+      ".hr-pill-ok{color:#0f9f6e;background:#e8fff3;}" +
+      ".hr-pill-off{color:#8c8c8c;background:#f5f5f5;}" +
+      ".hr-linkish{border:0;background:transparent;color:var(--xm-primary);font:inherit;font-size:12px;cursor:pointer;}" +
+      "@media (max-width:1100px){.hr-home-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}.hr-home-row,.hr-home-quad,.hr-home-split{grid-template-columns:1fr;}}" +
       "@media (max-width:980px){.hr-board-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}.hr-board-grid{grid-template-columns:1fr;}}";
     document.head.appendChild(style);
   }
@@ -219,53 +274,28 @@
     return found ? found.name : "";
   }
 
-  function pairPunches(rows) {
-    var groups = {};
-    rows.forEach(function (row) {
-      var key = (row.dingtalkUserId || row.personId) + "|" + row.workDate;
-      if (!groups[key]) {
-        groups[key] = {
-          personId: row.personId,
-          userName: row.userName || "",
-          department: row.department || "",
-          jobNumber: row.jobNumber || "",
-          workDate: row.workDate,
-          on: "",
-          off: "",
-          labels: [],
-          status: ""
-        };
-      }
-      if (row.department && !groups[key].department) groups[key].department = row.department;
-      if (row.checkType === "OffDuty") groups[key].off = row.checkAt || "";
-      else groups[key].on = row.checkAt || "";
-      if (row.label) groups[key].labels.push(row.label);
-      if (row.status) groups[key].status = row.status;
-    });
-    return Object.keys(groups).map(function (key) { return groups[key]; });
-  }
-
   function paint(root, tab, month, today) {
     var hint = "钉钉是来源，这里只显示已经拉下来的记录。没有就空着。";
     var monthBar = '<div class="hr-toolbar"><span>' + esc(hint) + '</span><label class="hr-month">月份<input type="month" data-month value="' + esc(month) + '" /></label></div>';
     var html = "";
     if (tab === "attendance") {
-      var teams = [
-        { id: "ops", title: "甄选运营团队看板" },
-        { id: "backend", title: "后端团队看板" },
-        { id: "total", title: "总看板" }
-      ];
-      html = '<section class="hr-panel hr-board">' +
-        '<div class="hr-board-head"><p class="hr-msg" data-msg></p>' +
-        '<label class="hr-month">统计日<input type="date" data-day value="' + esc(today) + '" /></label></div>' +
-        teams.map(function (team) {
-          return '<section class="hr-team" data-team="' + team.id + '"><h2 class="hr-team-title">' + esc(team.title) + "</h2>" +
-            '<div class="hr-board-kpis" data-board></div><div class="hr-kpi-list" data-kpi-list></div>' +
-            '<div class="hr-board-grid"><section class="hr-card hr-board-card" data-depts></section>' +
-            '<section class="hr-card hr-board-card" data-days></section></div>' +
-            '<h3 class="hr-board-sub">当日打卡</h3>' +
-            table(["姓名", "部门", "工号", "日期", "上班", "下班", "状态"], emptyRow(7, "还没有打卡")).replace("data-list", "data-punch-list") + "</section>";
-        }).join("") + "</section>";
+      html = '<section class="hr-home" data-home>' +
+        '<header class="hr-home-head"><div><h2 data-hello>上午好</h2><p>这里是智能人事管理中心，助力团队高效协同与人才发展</p></div>' +
+        '<label class="hr-range"><select data-range>' +
+        '<option value="7">近7天</option><option value="30" selected>近30天</option><option value="month">本月</option><option value="year">今年</option>' +
+        '</select><span data-range-text></span></label></header>' +
+        '<div class="hr-home-kpis" data-home-kpis></div>' +
+        '<div class="hr-home-row"><section class="hr-card hr-home-card" data-trend-card></section>' +
+        '<section class="hr-card hr-home-card" data-structure></section>' +
+        '<section class="hr-card hr-home-card" data-todos></section></div>' +
+        '<div class="hr-home-quad"><section class="hr-card hr-home-card" data-teams></section>' +
+        '<section class="hr-card hr-home-card" data-gender></section>' +
+        '<section class="hr-card hr-home-card" data-age></section>' +
+        '<section class="hr-card hr-home-card" data-tenure></section></div>' +
+        '<div class="hr-home-split"><section class="hr-card hr-home-card" data-moves></section>' +
+        '<section class="hr-card hr-home-card" data-recruit-progress></section></div>' +
+        '<p class="hr-msg" data-msg></p></section>';
+      void today;
     } else if (tab === "overtime") {
       html = '<section class="hr-panel hr-effort"><div class="hr-toolbar"><span>运营部门，18:00 之后的下班打卡。角色从组织中心对齐。</span>' +
         '<span class="hr-link"><button type="button" class="hr-mini" data-act="download">下载表格</button>' +
@@ -326,6 +356,7 @@
         field("岗位", '<input name="position" maxlength="64" autocomplete="off" />') +
         field("联系电话", '<input name="phone" maxlength="32" autocomplete="off" />') +
         field("入职日期", '<input name="joinedOn" type="date" />') +
+        field("生日", '<input name="birthday" type="date" />') +
         field("离职日期", '<input name="leftOn" type="date" />') +
         field("状态", '<select name="status">' + options(["在职", "离职"], "在职") + "</select>") +
         field("籍贯", '<input name="hometown" maxlength="64" autocomplete="off" />') +
@@ -337,7 +368,7 @@
         '<p class="hr-msg" data-msg></p>' +
         '<div class="hr-toolbar"><h2 class="hr-team-title">甄选员工详细名单</h2>' +
         '<label class="hr-month">搜索<input type="search" data-staff-search placeholder="姓名、工号、部门、电话" /></label></div>' +
-        table(["姓名", "性别", "工号", "部门", "岗位", "联系电话", "入职日期", "离职日期", "状态", "籍贯", "学历", "紧急联系人", "紧急电话", "备注", ""], emptyRow(15, "还没有花名册")) +
+        table(["姓名", "性别", "工号", "部门", "岗位", "联系电话", "入职日期", "生日", "离职日期", "状态", "籍贯", "学历", "紧急联系人", "紧急电话", "备注", ""], emptyRow(16, "还没有花名册")) +
         "</section>";
     }
     root.querySelector(".hr-body").innerHTML = html;
@@ -355,170 +386,209 @@
     return "<i>" + '<svg viewBox="0 0 16 16" aria-hidden="true">' + (paths[kind] || "") + "</svg></i>";
   }
 
-  function fillTeam(section, view) {
-    if (!section) return;
-    var board = (view && view.board) || { staff: 0, expected: 0, punched: 0, late: 0, leave: 0, date: "", departments: [] };
-    var prefix = board.date && board.date === shanghaiToday() ? "今日" : "当日";
-    var open = section.getAttribute("data-open") || "";
-    var cards = [
-      { key: "staff", tone: "staff", icon: "staff", label: "员工人数", value: board.staff || 0 },
-      { key: "due", tone: "due", icon: "due", label: prefix + "应到人数", value: board.expected || 0 },
-      { key: "punch", tone: "punch", icon: "punch", label: prefix + "打卡人数", value: board.punched || 0 },
-      { key: "late", tone: "late", icon: "late", label: prefix + "迟到人数", value: board.late || 0 },
-      { key: "leave", tone: "leave", icon: "leave", label: prefix + "请假人数", value: board.leave || 0 }
-    ];
-    var box = section.querySelector("[data-board]");
-    if (box) {
-      box.innerHTML = cards.map(function (card) {
-        return '<button type="button" class="hr-board-kpi hr-tone-' + card.tone + (open === card.key ? " is-on" : "") +
-          '" data-kpi="' + card.key + '">' + boardIcon(card.icon) +
-          "<b>" + esc(card.value) + "</b><span>" + esc(card.label) + "</span></button>";
-      }).join("");
-    }
-    fillKpiList(section, (view && view.roster) || []);
-    var depts = board.departments || [];
-    var deptBox = section.querySelector("[data-depts]");
-    if (deptBox) {
-      deptBox.innerHTML = "<h3>" + esc(prefix) + "部门人数</h3>" + deptColumns(depts);
-    }
-    var series = (view && view.days) || [];
-    var maxPunch = series.reduce(function (max, row) { return Math.max(max, row.punched || 0); }, 0) || 1;
-    var dayBox = section.querySelector("[data-days]");
-    if (dayBox) {
-      var cols = series.length ? series.map(function (row) {
-        var height = Math.max(8, Math.round(((row.punched || 0) / maxPunch) * 96));
-        var label = String(row.date || "").slice(5);
-        return '<div class="hr-day-col"><b>' + esc(row.punched || 0) + '</b><span class="hr-day-fill" style="height:' + height +
-          'px"></span><span>' + esc(label) + "</span></div>";
-      }).join("") : '<div class="hr-empty">还没有每日统计。</div>';
-      dayBox.innerHTML = "<h3>近 7 日打卡人数</h3>" + (series.length ? '<div class="hr-day-cols">' + cols + "</div>" : cols);
-    }
-    var roster = (view && view.roster) || [];
-    var days = pairPunches((view && view.punches) || []).sort(function (a, b) {
-      return String(a.department).localeCompare(String(b.department), "zh") || String(a.userName).localeCompare(String(b.userName), "zh");
+  function homeIcon(kind) {
+    var paths = {
+      staff: '<circle cx="8" cy="5" r="2.2"/><path d="M3.2 13c.5-2.2 2.2-3.3 4.8-3.3s4.3 1.1 4.8 3.3"/>',
+      hired: '<path d="M8 3.2v6.2"/><path d="M5.6 7.2L8 9.6l2.4-2.4"/><path d="M3.4 12.8h9.2"/>',
+      left: '<path d="M8 9.6V3.4"/><path d="M5.6 5.6L8 3.2l2.4 2.4"/><path d="M3.4 12.8h9.2"/>',
+      lunch: '<path d="M3.6 7.2h8.8v1.6a4.4 4.4 0 0 1-8.8 0z"/><path d="M6 4.4V7.2"/><path d="M8 3.6V7.2"/><path d="M10 4.4V7.2"/>',
+      cake: '<path d="M3.4 12.8h9.2V8H3.4z"/><path d="M8 3.6v4.4"/><path d="M6.4 4.6c.4.9 2.8.9 3.2 0"/><path d="M3.4 10.4h9.2"/>'
+    };
+    return '<svg viewBox="0 0 16 16" aria-hidden="true">' + (paths[kind] || paths.staff) + "</svg>";
+  }
+
+  function signed(value) {
+    var num = Number(value) || 0;
+    return (num > 0 ? "+" : "") + num;
+  }
+
+  function sparkLine(values, color) {
+    var nums = (values || []).map(function (item) { return Number(item) || 0; });
+    if (!nums.length) nums = [0];
+    var max = Math.max.apply(null, nums.concat([1]));
+    var min = Math.min.apply(null, nums);
+    var span = max - min || 1;
+    var width = 88;
+    var height = 36;
+    var points = nums.map(function (num, index) {
+      var x = nums.length === 1 ? width : (index / (nums.length - 1)) * width;
+      var y = height - ((num - min) / span) * (height - 6) - 3;
+      return x.toFixed(1) + "," + y.toFixed(1);
+    }).join(" ");
+    return '<svg class="hr-spark" viewBox="0 0 ' + width + " " + height + '" aria-hidden="true"><polyline points="' + points + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+
+  function homeKpi(card) {
+    var tone = card.good == null ? "" : card.good ? " is-up" : " is-down";
+    return '<article class="hr-home-kpi"><i class="hr-home-icon" style="background:' + card.bg + ";color:" + card.color + '">' + homeIcon(card.icon) + "</i>" +
+      '<div class="hr-home-kpi-main"><span>' + esc(card.label) + "</span><b>" + esc(card.value) + " <small>" + esc(card.unit || "") + "</small></b>" +
+      '<em class="' + tone.trim() + '">' + esc(card.hint) + "</em></div>" + sparkLine(card.spark, card.color) + "</article>";
+  }
+
+  function lineChart(series, key) {
+    var rows = series || [];
+    if (!rows.length) return '<div class="hr-empty">这个范围还没有数据</div>';
+    var values = rows.map(function (row) { return Number(row[key]) || 0; });
+    var max = Math.max.apply(null, values.concat([1]));
+    var width = 640;
+    var height = 210;
+    var pad = 28;
+    var points = values.map(function (num, index) {
+      var x = values.length === 1 ? pad : pad + (index / (values.length - 1)) * (width - pad * 2);
+      var y = height - pad - (num / max) * (height - pad * 2);
+      return [x, y];
     });
-    var body = days.length ? days.map(function (row) {
-      var status = showStatus(row, roster);
-      return "<tr><td>" + esc(row.userName || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.jobNumber) +
-        "</td><td>" + esc(row.workDate) + "</td><td>" + esc(row.on) + "</td><td>" + esc(row.off) +
-        '</td><td class="' + statusClass(status) + '">' + esc(status) + "</td></tr>";
-    }).join("") : emptyRow(7, "还没有打卡");
-    var list = section.querySelector("[data-punch-list]");
-    if (list) list.outerHTML = table(["姓名", "部门", "工号", "日期", "上班", "下班", "状态"], body).replace("data-list", "data-punch-list");
+    var line = points.map(function (point) { return point[0].toFixed(1) + "," + point[1].toFixed(1); }).join(" ");
+    var last = points[points.length - 1];
+    var lastRow = rows[rows.length - 1];
+    var label = (key === "rate" ? lastRow.rate + "%" : String(lastRow[key] || 0));
+    var area = line + " " + last[0].toFixed(1) + "," + (height - pad) + " " + points[0][0].toFixed(1) + "," + (height - pad);
+    return '<svg class="hr-line" viewBox="0 0 ' + width + " " + height + '" role="img"><polygon points="' + area + '" fill="rgba(59,130,246,.14)"/>' +
+      '<polyline points="' + line + '" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>' +
+      '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="4" fill="#3b82f6"/>' +
+      '<text x="' + Math.max(8, last[0] - 78).toFixed(1) + '" y="' + Math.max(16, last[1] - 10).toFixed(1) + '" font-size="12" fill="#3b82f6">' +
+      esc(String(lastRow.date || "").slice(5)) + " " + esc(label) + "</text></svg>";
   }
 
-  function showStatus(row, roster) {
-    if (row.status) return row.status;
-    var person = (roster || []).filter(function (item) {
-      return item.name && item.name === row.userName && (!row.department || !item.department || item.department === row.department);
-    })[0];
-    if (!person) person = (roster || []).filter(function (item) { return item.name && item.name === row.userName; })[0];
-    if (person && person.onLeave) return person.leaveName || "请假";
-    if (person && person.late) return person.lateLabel || "迟到";
-    if ((person && person.punched) || row.on || row.off) return "上班";
-    var labels = row.labels || [];
-    if (labels.indexOf("严重迟到") >= 0) return "严重迟到";
-    if (labels.indexOf("旷工迟到") >= 0) return "旷工迟到";
-    if (labels.indexOf("迟到") >= 0) return "迟到";
-    if (labels.indexOf("早退") >= 0) return "早退";
-    return "未打卡";
+  var HOME_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899", "#94a3b8"];
+
+  function donut(parts, center) {
+    var total = parts.reduce(function (sum, part) { return sum + (Number(part.count) || 0); }, 0) || 1;
+    var radius = 42;
+    var circ = 2 * Math.PI * radius;
+    var offset = 0;
+    var rings = parts.map(function (part, index) {
+      var len = ((Number(part.count) || 0) / total) * circ;
+      var node = '<circle cx="60" cy="60" r="' + radius + '" fill="none" stroke="' + HOME_COLORS[index % HOME_COLORS.length] + '" stroke-width="14" stroke-dasharray="' +
+        len.toFixed(2) + " " + (circ - len).toFixed(2) + '" stroke-dashoffset="' + (-offset).toFixed(2) + '" transform="rotate(-90 60 60)"/>';
+      offset += len;
+      return node;
+    }).join("");
+    return '<svg class="hr-donut" viewBox="0 0 120 120">' + rings +
+      '<text x="60" y="56" text-anchor="middle" font-size="12" fill="currentColor" opacity="0.65">' + esc(center.label) + "</text>" +
+      '<text x="60" y="76" text-anchor="middle" font-size="20" font-weight="700" fill="currentColor">' + esc(center.value) + "</text></svg>";
   }
 
-  function statusClass(text) {
-    if (text === "上班" || text.indexOf("上班") === 0) return "hr-status-work";
-    if (text === "未打卡") return "hr-status-miss";
-    if (text.indexOf("迟到") >= 0 || text.indexOf("早退") >= 0 || text.indexOf("旷工") >= 0) return "hr-status-late";
-    return "hr-status-leave";
+  function legend(parts) {
+    var total = parts.reduce(function (sum, part) { return sum + (Number(part.count) || 0); }, 0) || 1;
+    return '<ul class="hr-legend">' + parts.map(function (part, index) {
+      var ratio = part.ratio != null ? part.ratio : Math.round((Number(part.count) || 0) / total * 1000) / 10;
+      return "<li><i class=\"hr-dot\" style=\"background:" + HOME_COLORS[index % HOME_COLORS.length] + "\"></i><span>" + esc(part.name || part.label) +
+        "</span><b>" + esc(part.count || 0) + " · " + esc(ratio) + "%</b></li>";
+    }).join("") + "</ul>";
   }
 
-  function deptColumns(depts) {
-    var rows = (depts || []).map(function (row) {
-      return { name: row.name || "未分部门", count: Number(row.count) || 0 };
-    }).filter(function (row) { return row.count > 0; }).sort(function (a, b) {
-      return b.count - a.count || String(a.name).localeCompare(String(b.name), "zh");
-    });
-    if (!rows.length) return '<div class="hr-empty">这个范围还没有部门人数。</div>';
-    var max = rows.reduce(function (peak, row) { return Math.max(peak, row.count); }, 0) || 1;
-    return '<div class="hr-day-cols hr-dept-cols">' + rows.map(function (row) {
-      var height = Math.max(8, Math.round((row.count / max) * 96));
-      return '<div class="hr-day-col" title="' + esc(row.name) + '"><b>' + esc(row.count) +
-        '</b><span class="hr-day-fill" style="height:' + height + 'px"></span><span>' + esc(row.name) + "</span></div>";
-    }).join("") + "</div>";
+  function bars(parts) {
+    var max = parts.reduce(function (peak, part) { return Math.max(peak, Number(part.ratio) || 0); }, 0) || 1;
+    return parts.map(function (part, index) {
+      var width = Math.max(2, Math.round(((Number(part.ratio) || 0) / max) * 100));
+      return '<div class="hr-bar-row"><span>' + esc(part.label) + '</span><span class="hr-bar"><i style="width:' + width + "%;background:" +
+        HOME_COLORS[index % HOME_COLORS.length] + '"></i></span><b>' + esc(part.ratio || 0) + "%</b></div>";
+    }).join("");
   }
 
-  function fillKpiList(section, roster) {
-    var box = section.querySelector("[data-kpi-list]");
-    if (!box) return;
-    var kind = section.getAttribute("data-open") || "";
-    if (!kind) {
-      box.innerHTML = "";
-      return;
+  function fillHome(root, pack) {
+    var data = pack || {};
+    var kpis = data.kpis || {};
+    var active = kpis.active || {};
+    var hired = kpis.hired || {};
+    var left = kpis.left || {};
+    var lunch = kpis.lunch || {};
+    var birthday = kpis.birthday || {};
+    var hello = root.querySelector("[data-hello]");
+    if (hello) hello.textContent = (data.hello || "上午好") + (data.viewer ? "，" + data.viewer : "");
+    var range = data.range || {};
+    var rangeText = root.querySelector("[data-range-text]");
+    if (rangeText) rangeText.textContent = (range.start || "") + " 至 " + (range.end || "");
+    var select = root.querySelector("[data-range]");
+    if (select && range.key) select.value = range.key;
+    var kpiBox = root.querySelector("[data-home-kpis]");
+    if (kpiBox) {
+      var birthdayHint = birthday.next ? "最近 " + birthday.next.name + " " + birthday.next.date : "本月没有即将到来的生日";
+      kpiBox.innerHTML = [
+        homeKpi({ icon: "staff", label: "在职人数", value: active.value || 0, unit: "人", hint: "较上月 " + signed(active.delta) + " 人 " + (Number(active.delta) >= 0 ? "↑ " : "↓ ") + Math.abs(Number(active.percent) || 0) + "%", good: Number(active.delta) >= 0, spark: active.spark, bg: "#e8f1ff", color: "#3b82f6" }),
+        homeKpi({ icon: "hired", label: "本月入职", value: hired.value || 0, unit: "人", hint: "较上月 " + signed(hired.delta) + " 人 " + (Number(hired.delta) >= 0 ? "↑ " : "↓ ") + Math.abs(Number(hired.percent) || 0) + "%", good: Number(hired.delta) >= 0, spark: hired.spark, bg: "#e9fbf1", color: "#12b36a" }),
+        homeKpi({ icon: "left", label: "本月离职", value: left.value || 0, unit: "人", hint: "离职率 " + (left.rate || 0) + "% " + (Number(left.rateDelta) <= 0 ? "↓ " : "↑ ") + Math.abs(Number(left.rateDelta) || 0) + "pct", good: Number(left.rateDelta) <= 0, spark: left.spark, bg: "#fff1f0", color: "#f04438" }),
+        homeKpi({ icon: "lunch", label: "今天午餐人数", value: lunch.value || 0, unit: "人", hint: "较昨日 " + signed(lunch.delta) + " 人", good: null, spark: lunch.spark, bg: "#fff6e8", color: "#f59e0b" }),
+        homeKpi({ icon: "cake", label: "本月生日", value: birthday.value || 0, unit: "人", hint: birthdayHint, good: null, spark: birthday.spark, bg: "#f3e8ff", color: "#8b5cf6" })
+      ].join("");
     }
-    var titles = { staff: "员工明细", due: "应到明细", punch: "打卡明细", late: "迟到明细", leave: "请假明细" };
-    var rows = (roster || []).filter(function (row) {
-      if (kind === "due") return !row.onLeave;
-      if (kind === "punch") return row.punched;
-      if (kind === "late") return row.late;
-      if (kind === "leave") return row.onLeave;
-      return true;
-    }).sort(function (a, b) {
-      return String(a.department).localeCompare(String(b.department), "zh") || String(a.name).localeCompare(String(b.name), "zh");
-    });
-    var headers = ["姓名", "部门", "工号"];
-    var body = "";
-    if (!roster.length) {
-      body = emptyRow(3, "点刷新数据后可以看明细");
-    } else if (!rows.length) {
-      if (kind === "late") headers = ["姓名", "部门", "工号", "应上班", "打卡时间", "迟到"];
-      else if (kind === "leave") headers = ["姓名", "部门", "假期", "开始", "结束", "时长"];
-      else if (kind === "punch") headers = ["姓名", "部门", "工号", "上班", "下班"];
-      body = emptyRow(headers.length, kind === "late" ? "这一天没有迟到的人" : kind === "leave" ? "这一天没有请假的人" : "没有对应的人");
-    } else if (kind === "late") {
-      headers = ["姓名", "部门", "工号", "应上班", "打卡时间", "迟到"];
-      body = rows.map(function (row) {
-        var minutes = row.lateMinutes ? row.lateMinutes + "分钟" : "";
-        var result = [row.lateLabel, minutes].filter(Boolean).join(" ");
-        return "<tr><td>" + esc(row.name || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.jobNumber) +
-          "</td><td>" + esc(String(row.planAt || "").slice(11)) + "</td><td>" + esc(String(row.on || "").slice(11)) + "</td><td>" + esc(result) + "</td></tr>";
-      }).join("");
-    } else if (kind === "leave") {
-      headers = ["姓名", "部门", "假期", "开始", "结束", "时长"];
-      body = rows.map(function (row) {
-        return "<tr><td>" + esc(row.name || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.leaveName || "请假") +
-          "</td><td>" + esc(row.leaveStart) + "</td><td>" + esc(row.leaveEnd) + "</td><td>" + esc(row.leaveDuration) + "</td></tr>";
-      }).join("");
-    } else if (kind === "punch") {
-      headers = ["姓名", "部门", "工号", "上班", "下班"];
-      body = rows.map(function (row) {
-        return "<tr><td>" + esc(row.name || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.jobNumber) +
-          "</td><td>" + esc(String(row.on || "").slice(11)) + "</td><td>" + esc(String(row.off || "").slice(11)) + "</td></tr>";
-      }).join("");
-    } else {
-      body = rows.map(function (row) {
-        return "<tr><td>" + esc(row.name || "未命名") + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.jobNumber) + "</td></tr>";
-      }).join("");
+    var metric = root.getAttribute("data-trend") || "active";
+    var metricNames = { active: "在职人数", hired: "入职人数", left: "离职人数", rate: "离职率" };
+    var trend = root.querySelector("[data-trend-card]");
+    if (trend) {
+      trend.innerHTML = "<h3>人员情况趋势<span class=\"hr-seg\">" + ["7", "30", "month", "year"].map(function (key) {
+        var label = { "7": "近7天", "30": "近30天", month: "本月", year: "今年" }[key];
+        return '<button type="button" data-range-pick="' + key + '" aria-selected="' + (range.key === key ? "true" : "false") + '">' + label + "</button>";
+      }).join("") + "</span></h3><div class=\"hr-seg\">" + ["active", "hired", "left", "rate"].map(function (key) {
+        return '<button type="button" data-trend="' + key + '" aria-selected="' + (metric === key ? "true" : "false") + '">' + metricNames[key] + "</button>";
+      }).join("") + "</div>" + lineChart(data.series, metric);
     }
-    box.innerHTML = "<h3>" + esc(titles[kind] || "明细") + "</h3>" + table(headers, body).replace("data-list", "data-kpi-table");
+    var structure = root.querySelector("[data-structure]");
+    var departments = data.departments || [];
+    if (structure) {
+      structure.innerHTML = "<h3>人员结构分布</h3>" + (departments.length ? '<div class="hr-donut-wrap">' + donut(departments, { label: "在职人数", value: active.value || 0 }) + legend(departments.map(function (row) {
+        return { name: row.name, count: row.count, ratio: row.ratio };
+      })) + "</div>" : '<div class="hr-empty">还没有在职人员</div>');
+    }
+    var todos = data.todos || [];
+    var openTodo = root.getAttribute("data-todo") || "";
+    var todoBox = root.querySelector("[data-todos]");
+    if (todoBox) {
+      var todoColors = { probation: "#f59e0b", late: "#3b82f6", recruit: "#8b5cf6" };
+      todoBox.innerHTML = '<h3>待办事项 (' + todos.length + ')<button type="button" class="hr-linkish" data-act="todo-all">' + (openTodo === "all" ? "收起" : "查看全部") + "</button></h3>" +
+        (todos.length ? todos.map(function (item) {
+          var names = openTodo === "all" && item.names && item.names.length ? '<div class="hr-todo"><span>' + esc(item.names.join("、")) + "</span></div>" : "";
+          return '<div class="hr-todo"><i style="background:' + (todoColors[item.kind] || "#94a3b8") + '">!</i><div><b>' + esc(item.title) + "</b><span>" + esc(item.when) + "</span></div></div>" + names;
+        }).join("") : '<div class="hr-empty">暂无待办</div>');
+    }
+    var teamBox = root.querySelector("[data-teams]");
+    var teams = data.teams || [];
+    var teamMax = teams.reduce(function (peak, team) { return Math.max(peak, Number(team.value) || 0); }, 0) || 1;
+    if (teamBox) {
+      teamBox.innerHTML = "<h3>团队人效TOP5</h3><p class=\"hr-msg\">" + esc(data.teamMetric || "") + "</p>" + (teams.length ? teams.map(function (team, index) {
+        var width = Math.max(8, Math.round(((Number(team.value) || 0) / teamMax) * 100));
+        return '<div class="hr-rank"><div class="hr-rank-top"><span>' + (index + 1) + " " + esc(team.name) + "</span><b>" + esc(team.value) + esc(team.unit || "") +
+          '</b></div><div class="hr-rank-bar" style="width:' + width + '%"></div></div>';
+      }).join("") : '<div class="hr-empty">还没有团队数据</div>');
+    }
+    var gender = data.gender || { male: 0, female: 0 };
+    var genderBox = root.querySelector("[data-gender]");
+    if (genderBox) {
+      var genderParts = [{ name: "男", count: gender.male || 0 }, { name: "女", count: gender.female || 0 }].filter(function (part) { return part.count; });
+      genderBox.innerHTML = "<h3>性别结构</h3>" + (genderParts.length ? '<div class="hr-donut-wrap">' + donut(genderParts, { label: "在职", value: (gender.male || 0) + (gender.female || 0) }) + legend(genderParts) + "</div>" : '<div class="hr-empty">还没有填写性别</div>');
+    }
+    var ageBox = root.querySelector("[data-age]");
+    if (ageBox) ageBox.innerHTML = "<h3>年龄结构</h3>" + (data.ageReady ? bars(data.ages || []) : '<div class="hr-empty">花名册还没填生日</div>');
+    var tenureBox = root.querySelector("[data-tenure]");
+    if (tenureBox) tenureBox.innerHTML = "<h3>司龄结构</h3>" + (data.tenureReady ? bars(data.tenures || []) : '<div class="hr-empty">还没有入职日期</div>');
+    var moveKey = root.getAttribute("data-move") || "hired";
+    var moveBox = root.querySelector("[data-moves]");
+    var hiredRows = data.hiredRows || [];
+    var leftRows = data.leftRows || [];
+    var moveRows = moveKey === "left" ? leftRows : hiredRows;
+    if (moveBox) {
+      var body = moveRows.length ? moveRows.map(function (row) {
+        var pill = row.status === "试用中" ? "hr-pill hr-pill-try" : row.status === "已离职" ? "hr-pill hr-pill-off" : "hr-pill hr-pill-ok";
+        return "<tr><td>" + esc(row.name) + "</td><td>" + esc(row.department) + "</td><td>" + esc(row.position) + "</td><td>" + esc(row.date) +
+          "</td><td>" + esc(row.probation) + '</td><td><span class="' + pill + '">' + esc(row.status) + "</span></td></tr>";
+      }).join("") : emptyRow(6, moveKey === "left" ? "这个范围没有离职" : "这个范围没有入职");
+      moveBox.innerHTML = '<h3>入离职明细<span class="hr-seg"><button type="button" data-move="hired" aria-selected="' + (moveKey !== "left") + '">新入职 (' + hiredRows.length +
+        ')</button><button type="button" data-move="left" aria-selected="' + (moveKey === "left") + '">已离职 (' + leftRows.length + ")</button></span></h3>" +
+        table(["姓名", "部门", "岗位", moveKey === "left" ? "离职日期" : "入职日期", "试用期", "状态"], body).replace("hr-card ", "");
+    }
+    var recruit = data.recruit || { steps: [], registered: 0, done: 0, rate: 0 };
+    var recruitBox = root.querySelector("[data-recruit-progress]");
+    if (recruitBox) {
+      recruitBox.innerHTML = '<h3>招聘进度</h3><p>本月登记 ' + esc(recruit.registered || 0) + " 人，已录用 " + esc(recruit.done || 0) + " 人，录用率 " + esc(recruit.rate || 0) +
+        '%</p><div class="hr-meter"><i style="width:' + Math.max(0, Math.min(100, Number(recruit.rate) || 0)) + '%"></i></div><div class="hr-funnel">' +
+        (recruit.steps || []).map(function (step) {
+          return "<div><b>" + esc(step.count || 0) + "</b><span>" + esc(step.label) + "</span></div>";
+        }).join("") + "</div>";
+    }
+    setMsg(root, "", false);
   }
 
-  function setUpdated(root, value) {
-    var node = root.querySelector("[data-updated]");
-    if (!node) return;
-    node.textContent = value ? "更新于 " + value : "尚未更新";
-  }
-
-  function fillAttendance(root, pack) {
-    var boards = pack.boards || [];
-    ["ops", "backend", "total"].forEach(function (id) {
-      var view = boards.filter(function (item) { return item.id === id; })[0];
-      if (!view && id === "ops" && pack.board) view = { board: pack.board, days: pack.days, punches: pack.punches };
-      fillTeam(root.querySelector('[data-team="' + id + '"]'), view || { board: {}, days: [], punches: [] });
-    });
-    setUpdated(root, pack.updatedAt);
-    if (!pack.configured) setMsg(root, "钉钉还没配置，看板先按空模板放着。", false);
-    else if (!pack.saved) setMsg(root, "这一天还没归档。每天 10 点留档昨天和今天。", false);
-    else setMsg(root, "", false);
-  }
 
   function dayRows(person) {
     return (person.days || []).map(function (day) {
@@ -743,6 +813,7 @@
       position: row.position || "",
       phone: row.phone || "",
       joinedOn: row.joinedOn || "",
+      birthday: row.birthday || "",
       leftOn: row.leftOn || "",
       status: row.status || "在职",
       hometown: row.hometown || "",
@@ -769,7 +840,7 @@
   function staffCells(row) {
     return "<td>" + staffBox(row, "name", "text", 64) + "</td><td>" + staffBox(row, "gender") + "</td><td>" + staffBox(row, "jobNumber") +
       "</td><td>" + staffBox(row, "department") + "</td><td>" + staffBox(row, "position") + "</td><td>" + staffBox(row, "phone", "text", 32) +
-      "</td><td>" + staffBox(row, "joinedOn", "date", 10) + "</td><td>" + staffBox(row, "leftOn", "date", 10) + "</td><td>" +
+      "</td><td>" + staffBox(row, "joinedOn", "date", 10) + "</td><td>" + staffBox(row, "birthday", "date", 10) + "</td><td>" + staffBox(row, "leftOn", "date", 10) + "</td><td>" +
       '<select class="hr-cell" data-staff-status data-id="' + esc(row.id) + '">' + options(["在职", "离职"], row.status || "在职") + "</select></td><td>" +
       staffBox(row, "hometown") + "</td><td>" + staffBox(row, "education", "text", 32) + "</td><td>" + staffBox(row, "emergencyName") +
       "</td><td>" + staffBox(row, "emergencyPhone", "text", 32) + "</td><td>" + staffBox(row, "note", "text", 500) + "</td>";
@@ -797,12 +868,12 @@
           '" data-staff-pick="' + card.status + '">' + boardIcon(card.icon) + "<b>" + esc(card.value) + "</b><span>" + esc(card.label) + "</span></button>";
       }).join("");
     }
-    var headers = ["姓名", "性别", "工号", "部门", "岗位", "联系电话", "入职日期", "离职日期", "状态", "籍贯", "学历", "紧急联系人", "紧急电话", "备注", ""];
+    var headers = ["姓名", "性别", "工号", "部门", "岗位", "联系电话", "入职日期", "生日", "离职日期", "状态", "籍贯", "学历", "紧急联系人", "紧急电话", "备注", ""];
     var body = rows.length ? rows.map(function (row) {
       return "<tr>" + staffCells(row) + "<td>" +
         '<button type="button" class="hr-mini" data-act="staff-edit" data-id="' + esc(row.id) + '">修改</button> ' +
         removeBtn("staff", row.id) + "</td></tr>";
-    }).join("") : emptyRow(15, query ? "没有匹配的人" : picked === "离职" ? "没有离职人员" : picked === "在职" ? "没有在职人员" : "还没有花名册");
+    }).join("") : emptyRow(16, query ? "没有匹配的人" : picked === "离职" ? "没有离职人员" : picked === "在职" ? "没有在职人员" : "还没有花名册");
     setList(root, headers, body);
   }
 
@@ -815,19 +886,19 @@
     var ticket = ++state.ticket;
     var tab = state.tab;
     if (tab === "attendance") {
-      var dayInput = root.querySelector("[data-day]");
-      var day = dayInput && dayInput.value ? dayInput.value : shanghaiToday();
-      state.boards = state.boards || {};
-      var boardReq = state.boards[day]
-        ? Promise.resolve(state.boards[day])
-        : api("/api/hr/board?date=" + encodeURIComponent(day)).then(function (data) {
-          state.boards[day] = data;
+      var rangeInput = root.querySelector("[data-range]");
+      var range = rangeInput && rangeInput.value ? rangeInput.value : "30";
+      state.home = state.home || {};
+      var homeReq = state.home[range]
+        ? Promise.resolve(state.home[range])
+        : api("/api/hr/home?range=" + encodeURIComponent(range)).then(function (data) {
+          state.home[range] = data;
           return data;
         });
-      boardReq.then(function (view) {
+      homeReq.then(function (view) {
         if (!state.alive || ticket !== state.ticket || state.tab !== tab) return;
         state.view = view;
-        fillAttendance(root, view);
+        fillHome(root, view);
       }).catch(function (err) {
         if (!state.alive || ticket !== state.ticket) return;
         if (err.status === 403) {
@@ -885,7 +956,7 @@
       if (!state.alive || ticket !== state.ticket || state.tab !== tab) return;
       var view = Object.assign({ people: pack[0], configured: pack[1].configured }, pack[2]);
       state.view = view;
-      if (tab === "attendance") fillAttendance(root, view);
+      if (tab === "attendance") fillHome(root, view);
       else if (tab === "overtime") fillEffort(root, view);
       else if (tab === "staff") fillStaff(root, view);
       else fillRecruit(root, view);
@@ -918,7 +989,7 @@
     return el ? String(el.value || "").trim() : "";
   }
 
-  var STAFF_HEADERS = ["姓名", "性别", "工号", "部门", "岗位", "联系电话", "入职日期", "离职日期", "状态", "籍贯", "学历", "紧急联系人", "紧急电话", "备注"];
+  var STAFF_HEADERS = ["姓名", "性别", "工号", "部门", "岗位", "联系电话", "入职日期", "生日", "离职日期", "状态", "籍贯", "学历", "紧急联系人", "紧急电话", "备注"];
   var STAFF_KEYS = {
     "姓名": "name",
     "性别": "gender",
@@ -928,6 +999,7 @@
     "联系电话": "phone",
     "电话": "phone",
     "入职日期": "joinedOn",
+    "生日": "birthday",
     "离职日期": "leftOn",
     "状态": "status",
     "在职状态": "status",
@@ -991,7 +1063,7 @@
   }
 
   function fillStaffForm(form, row) {
-    ["name", "gender", "jobNumber", "department", "position", "phone", "joinedOn", "leftOn", "status", "hometown", "education", "emergencyName", "emergencyPhone", "note"].forEach(function (key) {
+    ["name", "gender", "jobNumber", "department", "position", "phone", "joinedOn", "birthday", "leftOn", "status", "hometown", "education", "emergencyName", "emergencyPhone", "note"].forEach(function (key) {
       if (form.elements[key]) form.elements[key].value = row && row[key] ? row[key] : (key === "status" ? "在职" : "");
     });
     var button = form.querySelector("button[type='submit']");
@@ -1016,31 +1088,46 @@
     paint(root, state.tab, shanghaiToday().slice(0, 7), shanghaiToday());
 
     function onClick(event) {
-      var kpi = event.target.closest("[data-kpi]");
-      if (kpi && root.contains(kpi)) {
+      var trend = event.target.closest("[data-trend]");
+      if (trend && root.contains(trend) && state.view) {
         event.preventDefault();
-        var section = kpi.closest("[data-team]");
-        if (!section || !state.view) return;
-        var key = kpi.getAttribute("data-kpi");
-        section.setAttribute("data-open", section.getAttribute("data-open") === key ? "" : key);
-        var teamId = section.getAttribute("data-team");
-        var teamView = ((state.view && state.view.boards) || []).filter(function (item) { return item.id === teamId; })[0];
-        fillTeam(section, teamView || { board: {}, days: [], punches: [], roster: [] });
+        root.setAttribute("data-trend", trend.getAttribute("data-trend"));
+        fillHome(root, state.view);
+        return;
+      }
+      var move = event.target.closest("[data-move]");
+      if (move && root.contains(move) && state.view) {
+        event.preventDefault();
+        root.setAttribute("data-move", move.getAttribute("data-move"));
+        fillHome(root, state.view);
+        return;
+      }
+      var rangePick = event.target.closest("[data-range-pick]");
+      if (rangePick && root.contains(rangePick)) {
+        event.preventDefault();
+        var rangeSelect = root.querySelector("[data-range]");
+        if (rangeSelect) rangeSelect.value = rangePick.getAttribute("data-range-pick");
+        loadTab(root, state);
+        return;
+      }
+      var todoAll = event.target.closest("[data-act='todo-all']");
+      if (todoAll && root.contains(todoAll) && state.view) {
+        event.preventDefault();
+        root.setAttribute("data-todo", root.getAttribute("data-todo") === "all" ? "" : "all");
+        fillHome(root, state.view);
         return;
       }
       var refresh = event.target.closest("[data-act='refresh-board']");
       if (refresh && root.contains(refresh)) {
         event.preventDefault();
         if (refresh.disabled) return;
-        var dayInput = root.querySelector("[data-day]");
-        var day = dayInput && dayInput.value ? dayInput.value : shanghaiToday();
+        var day = shanghaiToday();
         refresh.disabled = true;
         refresh.textContent = "正在拉取";
         api("/api/hr/sync", { method: "POST", body: { date: day } })
           .then(function (data) {
             setUpdated(root, data.updatedAt);
-            state.boards = state.boards || {};
-            delete state.boards[day];
+            state.home = {};
             if (state.tab === "attendance") loadTab(root, state);
             setMsg(root, data.configured === false ? "钉钉还没配置" : "已刷新 " + day, false);
           })
@@ -1182,6 +1269,7 @@
         position: formValue(form, "position"),
         phone: formValue(form, "phone"),
         joinedOn: formValue(form, "joinedOn"),
+        birthday: formValue(form, "birthday"),
         leftOn: formValue(form, "leftOn"),
         status: formValue(form, "status") || "在职",
         hometown: formValue(form, "hometown"),
@@ -1236,7 +1324,7 @@
     root.addEventListener("change", function (event) {
       var target = event.target;
       if (!target || !root.contains(target)) return;
-      if (target.matches("[data-month], [data-day], [data-join-month]")) {
+      if (target.matches("[data-month], [data-range], [data-join-month]")) {
         loadTab(root, state);
         return;
       }

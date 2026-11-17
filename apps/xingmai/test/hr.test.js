@@ -17,6 +17,7 @@ import {
   listOvertime,
   listPunches,
   listQuotas,
+  buildHrHome,
   replaceDayPunches,
   resetHrStore,
   saveDingUsers,
@@ -113,6 +114,50 @@ function jsonResponse(body) {
   };
 }
 
+test("home counts active staff, today's punches, and birthdays this month", () => {
+  const today = "2026-11-17";
+  const home = buildHrHome({
+    today,
+    hour: 9,
+    viewer: "罗成",
+    range: "30",
+    staff: [
+      { name: "甲", status: "在职", gender: "男", department: "运营一组", position: "运营", joinedOn: "2026-11-02", birthday: "1998-11-20" },
+      { name: "乙", status: "在职", gender: "女", department: "运营一组", position: "运营", joinedOn: "2024-01-01", birthday: "1990-03-01" },
+      { name: "丙", status: "离职", gender: "男", department: "技术部", position: "开发", joinedOn: "2025-01-01", leftOn: "2026-11-10" },
+      { name: "丁", status: "在职", gender: "女", department: "人事部", position: "人事", joinedOn: "2026-10-01", birthday: "2000-11-05" }
+    ],
+    punches: [
+      { workDate: "2026-11-17", dingtalkUserId: "u1", userName: "甲", checkType: "OnDuty" },
+      { workDate: "2026-11-17", dingtalkUserId: "u1", userName: "甲", checkType: "OffDuty" },
+      { workDate: "2026-11-16", dingtalkUserId: "u2", userName: "乙", label: "迟到", lateMinutes: 12, checkType: "OnDuty" }
+    ],
+    recruits: [{ name: "周周", recordDate: "2026-11-16", joined: false, expectedJoin: "2026-11-20" }],
+    interviews: [{ interviewAt: "2026-11-12 10:00", result: "通过" }],
+    effort: { teams: [{ name: "运营一组", average: 2.5 }] }
+  });
+  assert.equal(home.hello, "上午好");
+  assert.equal(home.viewer, "罗成");
+  assert.equal(home.kpis.active.value, 3);
+  assert.equal(home.kpis.hired.value, 1);
+  assert.equal(home.kpis.left.value, 1);
+  assert.equal(home.kpis.lunch.value, 1);
+  assert.equal(home.kpis.birthday.value, 2);
+  assert.equal(home.kpis.birthday.next.name, "甲");
+  assert.equal(home.departments.find((row) => row.name === "运营一组").count, 2);
+  assert.equal(home.gender.male, 1);
+  assert.equal(home.gender.female, 2);
+  assert.equal(home.teams[0].name, "运营一组");
+  assert.equal(home.teams[0].value, 2.5);
+  assert.equal(home.teamMetric, "人均奋斗时长");
+  assert.equal(home.todos.some((item) => item.kind === "recruit"), true);
+  assert.equal(home.todos.some((item) => item.kind === "late"), false);
+  assert.deepEqual(home.recruit.steps.map((step) => step.count), [1, 1, 1, 0]);
+  assert.equal(home.series.at(-1).active, 3);
+  assert.equal(home.ageReady, true);
+  assert.equal(JSON.stringify(home).includes("password"), false);
+});
+
 test("hr schema stays in hr_ tables", () => {
   assert.equal(HR_SCHEMA.length, 14);
   for (const sql of HR_SCHEMA) {
@@ -143,36 +188,35 @@ test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /data-theme/);
   assert.match(client, /\/api\/people/);
   assert.match(client, /钉钉还没配置/);
-  assert.match(client, /每天 10 点留档昨天和今天/);
+  assert.match(client, /每天 10 点留档昨天/);
   assert.match(client, /每月 1 号覆盖上个月/);
-  assert.match(client, /data-day value="' \+ esc\(today\)/);
-  assert.match(client, /state\.boards/);
+  assert.match(client, /今天午餐人数/);
+  assert.match(client, /本月生日/);
+  assert.match(client, /人员情况趋势/);
+  assert.match(client, /人员结构分布/);
+  assert.match(client, /待办事项/);
+  assert.match(client, /团队人效TOP5/);
+  assert.match(client, /性别结构/);
+  assert.match(client, /年龄结构/);
+  assert.match(client, /司龄结构/);
+  assert.match(client, /招聘进度/);
+  assert.match(client, /data-range/);
+  assert.match(client, /state\.home/);
   assert.match(client, /刷新数据/);
   assert.match(client, /data-updated/);
   assert.match(client, /data-act="refresh-board"/);
-  assert.match(client, /data-kpi/);
-  assert.match(client, /迟到明细/);
-  assert.match(client, /data-punch-list/);
-  assert.match(client, /data-kpi-table/);
   assert.match(client, /状态/);
   assert.match(client, /hr-recruit-kpis/);
   assert.match(client, /\.hr-board-kpi span\{order:1/);
   assert.match(client, /\.hr-board-kpi b\{order:2/);
   assert.match(client, /\.hr-board-kpi i\{order:3;display:flex;width:52px/);
-  assert.match(client, /\.hr-board-head\{display:flex;justify-content:flex-end/);
-  assert.match(client, /hr-dept-cols/);
-  assert.match(client, /deptColumns/);
   assert.match(client, /甄选员工详细名单/);
   assert.match(client, /data-staff-search/);
   assert.match(client, /data-staff-pick/);
   assert.match(client, /data-staff-field/);
-  const boardTitles = ["甄选运营团队看板", "后端团队看板", "总看板"];
-  let titleAt = 0;
-  for (const title of boardTitles) {
-    const at = client.indexOf(title);
-    assert.ok(at > titleAt, title);
-    titleAt = at;
-  }
+  assert.equal(client.includes("甄选运营团队看板"), false);
+  assert.equal(client.includes("后端团队看板"), false);
+  assert.equal(client.includes("总看板"), false);
   assert.equal(client.includes('class="hr-title"'), false);
   assert.equal(client.includes("每天一张"), false);
 });
@@ -1053,8 +1097,14 @@ test("http keeps attendance read-only and interviews in this module", async () =
     assert.equal(board.data.board.leave, 0);
     assert.equal(board.data.days.length, 7);
     assert.equal(client.includes("入职审批"), false);
-    assert.match(client, /今日应到人数|应到人数/);
-    assert.match(client, /部门人数/);
+    assert.match(client, /今天午餐人数/);
+    assert.match(client, /本月生日/);
+    const dashboard = await request(server, "/api/hr/home?range=30");
+    assert.equal(dashboard.status, 200);
+    assert.equal(dashboard.data.kpis.lunch.value, 0);
+    assert.equal(dashboard.data.kpis.birthday.value, 0);
+    assert.equal(Array.isArray(dashboard.data.series), true);
+    assert.equal(JSON.stringify(dashboard.data).includes("password"), false);
     const synced = await request(server, "/api/hr/sync", { method: "POST" });
     assert.equal(synced.data.configured, false);
     const created = await request(server, "/api/hr/recruits", {
