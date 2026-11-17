@@ -1,4 +1,4 @@
-/* xm-module-people org-board 0.1.238-org-console */
+/* xm-module-people org-board 0.1.239-tabs-up */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.238-org-console";
+    const href = "/people.css?v=0.1.239-tabs-up";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -226,12 +226,6 @@
         '<span class="org-console-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><rect x="4" y="6" width="24" height="20" rx="4"/><path d="M10 16h12"/><path d="M10 12h7"/><path d="M10 20h5"/></svg></span>' +
         "<div><h1>组织中心</h1><p>管理店铺主数据、成员花名册、责权、网站权限和公告，保障组织高效协同</p></div></div>" +
         "</header>" +
-        '<section class="org-console-kpis" id="org-hero-kpis"></section>' +
-        '<section class="org-console-charts">' +
-        '<article class="org-chart-card"><div class="org-chart-head"><strong>组织架构分布</strong><span>按部门人数</span></div><div class="org-chart-body" id="org-chart-org"></div></article>' +
-        '<article class="org-chart-card"><div class="org-chart-head"><strong>店铺运营状态</strong></div><div class="org-chart-body" id="org-chart-stores"></div></article>' +
-        '<article class="org-chart-card"><div class="org-chart-head"><strong>坐席使用情况</strong><span id="org-chart-seats-meta"></span></div><div class="org-chart-body" id="org-chart-seats"></div></article>' +
-        "</section>" +
         '<nav class="org-tabs" id="org-tabs" aria-label="组织中心功能">' +
         '<button type="button" class="org-tab is-active" data-pane="stores">' +
         '<span class="org-tab-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.4"/></svg></span>' +
@@ -253,6 +247,12 @@
         '<span class="org-tab-name">公告中心</span></button>' +
         "</nav>" +
         '<div class="org-pane" data-pane="stores">' +
+        '<section class="org-console-kpis" id="org-hero-kpis"></section>' +
+        '<section class="org-console-charts">' +
+        '<article class="org-chart-card"><div class="org-chart-head"><strong>组织架构分布</strong><span>按部门人数</span></div><div class="org-chart-body" id="org-chart-org"></div></article>' +
+        '<article class="org-chart-card"><div class="org-chart-head"><strong>店铺运营状态</strong></div><div class="org-chart-body" id="org-chart-stores"></div></article>' +
+        '<article class="org-chart-card"><div class="org-chart-head"><strong>坐席使用情况</strong><span id="org-chart-seats-meta"></span></div><div class="org-chart-body" id="org-chart-seats"></div></article>' +
+        "</section>" +
         '<div class="org-toolbar">' +
         '<div class="org-search-form" id="org-search-form">' +
         '<input type="text" id="org-q" placeholder="店铺ID / 商家ID / 店铺名 / 历史店名 / 人员" autocomplete="off" spellcheck="false" />' +
