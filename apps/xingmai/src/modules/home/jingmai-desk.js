@@ -93,6 +93,7 @@ const SONAME_PACKAGES = {
   "libstdc++.so.6": ["libstdc++6"]
 };
 
+let fontConfig = "";
 let current = null;
 let readerDesk = null;
 let readerIdle = null;
@@ -303,6 +304,82 @@ function distroMirrors(distro) {
   return extras.concat(urls.filter(function (url) {
     return extras.indexOf(url) < 0;
   }));
+}
+
+function findFontFile(dir, depth) {
+  if (!dir || depth > 6) {
+    return "";
+  }
+  let names = [];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return "";
+  }
+  for (let i = 0; i < names.length; i += 1) {
+    const full = dir + "/" + names[i];
+    if (/\.(?:ttf|otf|ttc)$/i.test(names[i])) {
+      return full;
+    }
+  }
+  for (let i = 0; i < names.length; i += 1) {
+    const nested = findFontFile(dir + "/" + names[i], depth + 1);
+    if (nested) {
+      return nested;
+    }
+  }
+  return "";
+}
+
+async function ensureLoginFont() {
+  const home = libHome();
+  if (!home) {
+    return "";
+  }
+  const root = home.replace(/\/libs$/, "");
+  let fontDir = "";
+  const existing = findFontFile(root + "/fonts", 0) || findFontFile(home + "/usr/share/fonts", 0);
+  if (existing) {
+    fontDir = existing.slice(0, existing.lastIndexOf("/"));
+  } else {
+    try {
+      const distro = linuxDistro();
+      const index = await loadPackageIndex(distro);
+      const filename = packageFilename(index.text, "fonts-wqy-microhei");
+      if (filename) {
+        mkdirSync(home + "/debs", { recursive: true });
+        const deb = home + "/debs/fonts-wqy-microhei.deb";
+        const response = await fetch(index.mirror.replace(/\/$/, "") + "/" + filename, { signal: AbortSignal.timeout(120000) });
+        if (response.ok) {
+          writeFileSync(deb, Buffer.from(await response.arrayBuffer()));
+          await extractDeb(deb, home);
+          rmSync(deb, { force: true });
+          const saved = findFontFile(home + "/usr/share/fonts", 0);
+          if (saved) {
+            fontDir = saved.slice(0, saved.lastIndexOf("/"));
+          }
+        }
+      }
+    } catch {
+      fontDir = "";
+    }
+  }
+  if (!fontDir) {
+    return "";
+  }
+  const conf = root + "/fonts/fonts.conf";
+  mkdirSync(root + "/fonts/cache", { recursive: true });
+  writeFileSync(conf, [
+    "<?xml version=\"1.0\"?>",
+    "<!DOCTYPE fontconfig SYSTEM \"fonts.dtd\">",
+    "<fontconfig>",
+    "  <include ignore_missing=\"yes\">/etc/fonts/fonts.conf</include>",
+    "  <dir>" + fontDir + "</dir>",
+    "  <cachedir>" + root + "/fonts/cache</cachedir>",
+    "</fontconfig>",
+    ""
+  ].join("\n"));
+  return conf;
 }
 
 function libHome() {
@@ -1009,6 +1086,11 @@ async function launchChrome() {
     error.code = "browser";
     throw error;
   }
+  try {
+    fontConfig = await ensureLoginFont();
+  } catch {
+    fontConfig = "";
+  }
   const tried = new Set();
   let lastError = null;
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -1046,6 +1128,9 @@ async function startChromeProcess(chromePath) {
   const env = Object.assign({}, process.env);
   if (libraryPath) {
     env.LD_LIBRARY_PATH = libraryPath + (env.LD_LIBRARY_PATH ? ":" + env.LD_LIBRARY_PATH : "");
+  }
+  if (fontConfig) {
+    env.FONTCONFIG_FILE = fontConfig;
   }
   const chrome = spawn(chromePath, [
     "--headless=new",
@@ -1118,6 +1203,28 @@ function hasSession(cookies) {
   return cookies.some(function (cookie) {
     return SESSION_NAMES.has(cookie.name) && cookie.value;
   });
+}
+
+export function collectFrameIds(tree) {
+  const ids = [];
+  function walk(node) {
+    if (!node) {
+      return;
+    }
+    if (node.frame && node.frame.id) {
+      ids.push(node.frame.id);
+    }
+    (node.childFrames || []).forEach(walk);
+  }
+  walk(tree && tree.frameTree);
+  return ids.slice(0, 6);
+}
+
+export function sessionReady(href, cookies) {
+  if (!hasSession(cookies || [])) {
+    return false;
+  }
+  return !/passport\.|\/login/i.test(String(href || ""));
 }
 
 async function pageText(ws) {
@@ -1315,12 +1422,13 @@ export async function openDesk({ store, loginName, password }) {
 }
 
 export async function pollDesk(store) {
-  if (!current || current.store !== store || !current.ws) {
-    return { status: "missing", message: "请重新打开登录" };
+  if (!current || current.store !== store || !current.ws || current.ws.readyState !== 1) {
+    return { status: "screen", message: "" };
   }
   try {
     const cookies = await readCookies(current.ws);
-    if (hasSession(cookies)) {
+    const href = await evaluate(current.ws, "location.href");
+    if (sessionReady(href, cookies)) {
       return { status: "ok", cookies: cookies };
     }
   } catch {
@@ -1529,19 +1637,35 @@ export function loginPageAction(doc, action) {
   if (action && action.text) {
     const value = String(action.text).slice(0, 20);
     let input = null;
+    let plain = null;
+    let plainCount = 0;
+    let sawAccount = false;
     docsOf(doc).forEach(function (item) {
       const fields = item.querySelectorAll ? item.querySelectorAll("input, textarea") : [];
       for (let i = 0; i < fields.length; i += 1) {
         const field = fields[i];
-        const hint = String(field.placeholder || "") + String(field.name || "");
-        if (!visible(field) || (/账号|密码/.test(hint) && !/验证码/.test(hint))) {
+        const tag = String(field.tagName || "").toUpperCase();
+        if (tag && tag !== "INPUT" && tag !== "TEXTAREA") {
           continue;
         }
+        const hint = String(field.placeholder || "") + String(field.name || "") + String(field.getAttribute ? field.getAttribute("aria-label") || "" : "");
+        if (!visible(field)) {
+          continue;
+        }
+        if (/账号|密码/.test(hint) && !/验证码/.test(hint)) {
+          sawAccount = true;
+          continue;
+        }
+        plain = field;
+        plainCount += 1;
         if (/验证码|校验码|短信/.test(hint)) {
           input = field;
         }
       }
     });
+    if (!input && !sawAccount && plainCount === 1) {
+      input = plain;
+    }
     if (!input) {
       return { kind: "no-input", x: 0, y: 0 };
     }
@@ -1566,6 +1690,9 @@ export function loginPageAction(doc, action) {
     const button = confirmAround(input);
     if (!button) {
       return { kind: "typed", x: 0, y: 0 };
+    }
+    if (button.click) {
+      button.click();
     }
     return pointOf(button, 0, 0, "button");
   }
@@ -1632,6 +1759,16 @@ export async function clickDesk(store, x, y, image) {
   await mouseClick(current.ws, aim.x, aim.y);
 }
 
+async function frameIds(ws) {
+  try {
+    const tree = await send(ws, "Page.getFrameTree", {}, undefined, 2500);
+    const ids = collectFrameIds(tree);
+    return ids.length ? ids : [""];
+  } catch {
+    return [""];
+  }
+}
+
 export async function typeDesk(store, text) {
   if (!current || current.store !== store || !current.ws) {
     return;
@@ -1640,18 +1777,37 @@ export async function typeDesk(store, text) {
   if (!value) {
     return;
   }
-  let aim = null;
-  try {
-    aim = await evaluate(current.ws, `(${loginPageAction.toString()})(document, ${JSON.stringify({ text: value })})`);
-  } catch {
-    aim = null;
+  const expression = `(${loginPageAction.toString()})(document, ${JSON.stringify({ text: value })})`;
+  let typed = false;
+  const frames = await frameIds(current.ws);
+  for (let i = 0; i < frames.length; i += 1) {
+    try {
+      let contextId = 0;
+      if (frames[i]) {
+        const world = await send(current.ws, "Page.createIsolatedWorld", { frameId: frames[i], grantUniveralAccess: true }, undefined, 2500);
+        contextId = world.executionContextId || 0;
+      }
+      const result = contextId
+        ? await send(current.ws, "Runtime.evaluate", { expression: expression, contextId: contextId, returnByValue: true }, undefined, 2500)
+        : await send(current.ws, "Runtime.evaluate", { expression: expression, returnByValue: true }, undefined, 2500);
+      const hit = result && result.result ? result.result.value : null;
+      if (hit && hit.kind === "button") {
+        holdShots(900);
+        return;
+      }
+      if (hit && hit.kind === "typed") {
+        typed = true;
+      }
+    } catch {
+      /* try the next frame */
+    }
   }
-  if (!aim || aim.kind === "no-input") {
-    await send(current.ws, "Input.insertText", { text: value });
-  }
-  if (aim && aim.kind === "button") {
-    holdShots(900);
-    await mouseClick(current.ws, aim.x, aim.y);
+  if (!typed) {
+    try {
+      await send(current.ws, "Input.insertText", { text: value }, undefined, 2500);
+    } catch {
+      /* the field was not focused */
+    }
   }
 }
 
