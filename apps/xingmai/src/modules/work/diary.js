@@ -99,6 +99,7 @@ export function bindRoster(reader) {
 }
 
 export function resetDiaryStore() {
+  resetOrgMemo();
   ready = false;
   catalog = { revision: 1, nodes: cloneNodes(DEFAULT_NODES) };
   policy = {
@@ -207,12 +208,36 @@ function expandShop(shop, allShops) {
   );
 }
 
+let orgMemo = null;
+let orgUntil = 0;
+
+export function loadOrg() {
+  const now = Date.now();
+  if (orgMemo && now < orgUntil) {
+    return orgMemo;
+  }
+  orgUntil = now + 1500;
+  orgMemo = Promise.all([listPeople(), listShops(), listGrants()])
+    .then(([people, shops, grants]) => ({ people, shops, grants }))
+    .catch((error) => {
+      orgMemo = null;
+      orgUntil = 0;
+      throw error;
+    });
+  return orgMemo;
+}
+
+export function resetOrgMemo() {
+  orgMemo = null;
+  orgUntil = 0;
+}
+
 async function orgBundle() {
-  const [people, shops, grants] = await Promise.all([listPeople(), listShops(), listGrants()]);
+  const packed = await loadOrg();
   return {
-    people: people.filter((person) => person.status !== "离职"),
-    shops,
-    grants
+    people: packed.people.filter((person) => person.status !== "离职"),
+    shops: packed.shops,
+    grants: packed.grants
   };
 }
 
@@ -380,7 +405,7 @@ async function hydrateMysql() {
   }
   images = new Map();
   const [imageRows] = await query(
-    "SELECT id, person_id, work_date, shop_key, field_key, name, mime, data FROM work_report_diary_images"
+    "SELECT id, person_id, work_date, shop_key, field_key, name, mime FROM work_report_diary_images"
   );
   for (const row of imageRows) {
     images.set(String(row.id), {
@@ -391,7 +416,8 @@ async function hydrateMysql() {
       fieldKey: String(row.field_key),
       name: String(row.name || ""),
       mime: String(row.mime || ""),
-      data: String(row.data || "")
+      data: "",
+      loaded: false
     });
   }
   rests = new Map();
@@ -427,16 +453,38 @@ function sharedLabels(labels) {
   return (labels || []).map((item) => String(item || "").trim()).filter((item) => item && names.has(item));
 }
 
-export async function diaryObligation({ person, date, onRoster, templateFilled, templateLabels }) {
+function reportsByPersonOn(date) {
+  const map = new Map();
+  for (const row of reports.values()) {
+    if (row.date !== date || row.shopKey === PERSONAL) {
+      continue;
+    }
+    const id = Number(row.personId);
+    const list = map.get(id);
+    if (list) {
+      list.push(row);
+    } else {
+      map.set(id, [row]);
+    }
+  }
+  return map;
+}
+
+export async function obligationBundle(date) {
   await readyDiary();
+  return { bundle: await orgBundle(), reportsByPerson: reportsByPersonOn(date) };
+}
+
+export async function diaryObligation({ person, date, onRoster, templateFilled, templateLabels, bundle, reportsByPerson }) {
+  await readyDiary();
+  const packed = bundle || (await orgBundle());
   const exempt = Boolean(rests.get(restKey(person.id, date)));
-  const { shops, grants } = await orgBundle();
-  const ownShops = shopsFor(person.id, date, shops, grants);
+  const ownShops = shopsFor(person.id, date, packed.shops, packed.grants);
   const shopRequired = !exempt && onRoster && positionRequired(person) && ownShops.length > 0;
   const templateRequired = !exempt && onRoster;
-  const mine = [...reports.values()].filter(
-    (row) => row.personId === Number(person.id) && row.date === date && row.shopKey !== PERSONAL
-  );
+  const mine = reportsByPerson
+    ? reportsByPerson.get(Number(person.id)) || []
+    : [...reports.values()].filter((row) => row.personId === Number(person.id) && row.date === date && row.shopKey !== PERSONAL);
   const shopDone = mine.some((row) => row.status === "已提交");
   const shopDraft = mine.some((row) => row.status === "草稿");
   let status = "自愿";
@@ -727,7 +775,8 @@ export async function saveDiaryImage(user, input) {
     fieldKey,
     name: String(input?.name || "截图").slice(0, 200),
     mime,
-    data
+    data,
+    loaded: true
   };
   images.set(image.id, image);
   if (dbMode() === "mysql") {
@@ -746,6 +795,11 @@ export async function readDiaryImage(user, id, isAdmin) {
   const image = images.get(String(id || ""));
   if (!image) {
     return fail(404, "找不到这张截图");
+  }
+  if (!image.loaded && dbMode() === "mysql") {
+    const [rows] = await query("SELECT data FROM work_report_diary_images WHERE id = ?", [image.id]);
+    image.data = rows[0] ? String(rows[0].data || "") : "";
+    image.loaded = true;
   }
   const bundle = await orgBundle();
   const me = bundle.people.find((person) => namesMatch(user, person));
@@ -870,6 +924,7 @@ export async function diaryDuty(user, queryInput, isAdmin) {
     return fail(403, "只有负责人可以看提交情况");
   }
   const roster = await rosterReader();
+  const reportsByPerson = reportsByPersonOn(date);
   const rows = [];
   for (const person of bundle.people) {
     const dept = roster.memberDept(person.id);
@@ -881,7 +936,9 @@ export async function diaryDuty(user, queryInput, isAdmin) {
       date,
       onRoster,
       templateFilled: filled,
-      templateLabels: labels
+      templateLabels: labels,
+      bundle,
+      reportsByPerson
     });
     if (!onRoster && !obligation.shopRequired && obligation.status === "自愿" && !obligation.shopDraft && !obligation.shopDone) {
       continue;

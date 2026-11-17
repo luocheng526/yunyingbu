@@ -1,7 +1,6 @@
 /* 工作汇报填报。 */
 import { dbMode, query } from "../profile/auth.js";
-import { listPeople } from "../people/store.js";
-import { bindRoster, diaryObligation, readyDiary, resetDiaryStore } from "./diary.js";
+import { bindRoster, diaryObligation, loadOrg, obligationBundle, readyDiary, resetDiaryStore } from "./diary.js";
 
 export const WORK_DEPTS = [
   { code: "ops", name: "运营部" },
@@ -247,7 +246,8 @@ async function readyStore() {
 }
 
 async function orgPeople() {
-  const list = await listPeople();
+  const packed = await loadOrg();
+  const list = packed.people;
   let usernameById = new Map();
   if (dbMode() === "mysql") {
     try {
@@ -581,13 +581,15 @@ function reportOf(person, deptCode, date) {
   };
 }
 
-async function applyDayStatus(row, person, date) {
+async function applyDayStatus(row, person, date, ctx) {
   const obligation = await diaryObligation({
     person,
     date,
     onRoster: true,
     templateFilled: row.templateFilled,
-    templateLabels: row.items.map((item) => item.label)
+    templateLabels: row.items.map((item) => item.label),
+    bundle: ctx && ctx.bundle,
+    reportsByPerson: ctx && ctx.reportsByPerson
   });
   row.submitted = obligation.status === "已报";
   row.status = obligation.status;
@@ -614,6 +616,7 @@ export async function getReport(user, queryInput) {
   }
   const people = await orgPeople();
   const byId = new Map(people.map((person) => [Number(person.id), person]));
+  const ctx = await obligationBundle(date);
   if (!admin) {
     if (!me || !members.get(Number(me.id))) {
       return {
@@ -627,7 +630,7 @@ export async function getReport(user, queryInput) {
       };
     }
     const deptCode = members.get(Number(me.id));
-    const row = await applyDayStatus(reportOf(me, deptCode, date), me, date);
+    const row = await applyDayStatus(reportOf(me, deptCode, date), me, date, ctx);
     return {
       ok: true,
       date,
@@ -651,7 +654,7 @@ export async function getReport(user, queryInput) {
     if (!person || person.status === "离职") {
       continue;
     }
-    list.push(await applyDayStatus(reportOf(person, deptCode, date), person, date));
+    list.push(await applyDayStatus(reportOf(person, deptCode, date), person, date, ctx));
   }
   list.sort((a, b) => {
     const dept = a.deptCode.localeCompare(b.deptCode);

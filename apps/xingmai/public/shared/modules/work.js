@@ -1735,27 +1735,31 @@
   }
 
   async function reload(root) {
-    state.meta = await api("/api/work");
     if (!state.date) {
-      state.date = state.meta.today;
+      state.date = todayIso();
     }
     var query = "/api/work/report?date=" + encodeURIComponent(state.date);
     if (state.dept) {
       query += "&dept=" + encodeURIComponent(state.dept);
     }
-    state.report = await api(query);
-    var today = state.meta.today || state.date;
-    var todayRows = state.report.rows;
-    if (state.date !== today) {
-      var todayReport = await api("/api/work/report?date=" + encodeURIComponent(today));
-      todayRows = todayReport.rows;
+    var metaPromise = api("/api/work");
+    var reportPromise = api(query);
+    var diaryPromise = api("/api/work/diary?date=" + encodeURIComponent(state.date));
+    var today = todayIso();
+    var todayPromise = state.date !== today ? api("/api/work/report?date=" + encodeURIComponent(today)) : null;
+    var settingsPromise = isAdmin() && state.tab === "settings" ? api("/api/work/settings") : null;
+    state.meta = await metaPromise;
+    if (!state.date) {
+      state.date = state.meta.today;
     }
+    state.report = await reportPromise;
+    state.diary = await diaryPromise;
+    var todayRows = todayPromise ? (await todayPromise).rows : state.report.rows;
     var mine = mineIn(todayRows);
     state.todoOpen = Boolean(mine && mine.status === "未报");
     state.diaryDraftDate = "";
-    state.diary = await api("/api/work/diary?date=" + encodeURIComponent(state.date));
-    if (isAdmin()) {
-      state.settings = await api("/api/work/settings");
+    if (settingsPromise) {
+      state.settings = await settingsPromise;
     }
     if (state.tab === "summary") {
       var summaryDay = state.meta.today || state.date || todayIso();
