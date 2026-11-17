@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.772-bound — 边界数据中心 + 星脉数据中心 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-scroll v0.4.18 — 壳层滚动走工作区，设置跟账号走服务器 */
 (function () {
-  const ASSET_VER = "0.1.772-bound";
+  const ASSET_VER = "0.1.772-scroll";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -869,6 +869,43 @@
   }
 
   const TAB_STORE = "xm-open-tabs";
+  let prefsTimer = 0;
+
+  function bootUser() {
+    return window.__xmBootUser && typeof window.__xmBootUser === "object" ? window.__xmBootUser : {};
+  }
+
+  function bootPrefs() {
+    const prefs = bootUser().prefs;
+    return prefs && typeof prefs === "object" ? prefs : {};
+  }
+
+  function persistPrefsSoon() {
+    const payload = {
+      theme: readTheme(),
+      siderCollapsed: document.documentElement.classList.contains("xm-collapsed"),
+      tabs: { hrefs: openTabs.slice(), active: current }
+    };
+    const user = bootUser();
+    if (!user.prefs || typeof user.prefs !== "object") {
+      user.prefs = {};
+    }
+    user.prefs.theme = payload.theme;
+    user.prefs.siderCollapsed = payload.siderCollapsed;
+    user.prefs.tabs = payload.tabs;
+    window.__xmBootUser = user;
+    window.clearTimeout(prefsTimer);
+    prefsTimer = window.setTimeout(function () {
+      fetch("/api/auth/prefs", {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload)
+      }).catch(function () {
+        /* keep in-memory boot prefs */
+      });
+    }, 240);
+  }
   const PARENT_HOME = {
     "/data": "/data/overview",
     "/data/paid": "/home",
@@ -880,37 +917,17 @@
   let openTabs = [];
   let tabsBooted = false;
 
-  function readTabStoreRaw() {
-    try {
-      const localRaw = localStorage.getItem(TAB_STORE);
-      if (localRaw) {
-        return localRaw;
-      }
-    } catch (_err) {
-      /* ignore */
-    }
-    try {
-      return sessionStorage.getItem(TAB_STORE);
-    } catch (_err2) {
-      return null;
-    }
-  }
-
   function readTabState() {
-    try {
-      const parsed = JSON.parse(readTabStoreRaw() || "null");
-      if (parsed && Array.isArray(parsed.hrefs)) {
-        const hrefs = parsed.hrefs.map(normalize).filter(function (href) {
-          return Boolean(MODULES[href]) && !PARENT_HOME[href];
-        });
-        const active = leafRoute(parsed.active || "");
-        return {
-          hrefs: hrefs,
-          active: MODULES[active] && !PARENT_HOME[active] ? active : ""
-        };
-      }
-    } catch (_err) {
-      /* ignore */
+    const parsed = bootPrefs().tabs;
+    if (parsed && Array.isArray(parsed.hrefs)) {
+      const hrefs = parsed.hrefs.map(normalize).filter(function (href) {
+        return Boolean(MODULES[href]) && !PARENT_HOME[href];
+      });
+      const active = leafRoute(parsed.active || "");
+      return {
+        hrefs: hrefs,
+        active: MODULES[active] && !PARENT_HOME[active] ? active : ""
+      };
     }
     return { hrefs: [], active: "" };
   }
@@ -925,23 +942,15 @@
   }
 
   function writeOpenTabs() {
-    const payload = JSON.stringify({ hrefs: openTabs.slice(), active: current });
-    try {
-      localStorage.setItem(TAB_STORE, payload);
-    } catch (_err) {
-      /* ignore */
-    }
-    try {
-      sessionStorage.setItem(TAB_STORE, payload);
-    } catch (_err2) {
-      /* ignore */
-    }
+    persistPrefsSoon();
   }
 
   function clearOpenTabs() {
     openTabs = [];
     try {
       localStorage.removeItem(TAB_STORE);
+      localStorage.removeItem("xm-theme");
+      localStorage.removeItem("xm-sider-collapsed");
     } catch (_err) {
       /* ignore */
     }
@@ -2783,12 +2792,8 @@
           return;
         }
         if (document.documentElement.classList.contains("xm-collapsed")) {
-          try {
-            localStorage.setItem("xm-sider-collapsed", "0");
-          } catch (_err) {
-            /* ignore */
-          }
           applyCollapsed(false);
+          persistPrefsSoon();
           group.classList.add("is-open");
           btn.setAttribute("aria-expanded", "true");
           return;
@@ -2860,29 +2865,29 @@
   }
 
   function readTheme() {
-    try {
-      const raw = localStorage.getItem("xm-theme");
-      if (raw === "dark" || raw === "pink" || raw === "light") {
-        return raw;
-      }
-    } catch (_err) {
-      /* ignore */
+    const raw = bootPrefs().theme;
+    if (raw === "dark" || raw === "pink" || raw === "light") {
+      return raw;
     }
     return "light";
   }
 
-  function applyTheme(theme) {
+  function applyTheme(theme, save) {
     const next = theme === "dark" || theme === "pink" ? theme : "light";
     document.documentElement.setAttribute("data-theme", next);
     document.documentElement.style.colorScheme = next === "dark" ? "dark" : "light";
-    try {
-      localStorage.setItem("xm-theme", next);
-    } catch (_err) {
-      /* ignore */
+    const user = bootUser();
+    if (!user.prefs || typeof user.prefs !== "object") {
+      user.prefs = {};
     }
+    user.prefs.theme = next;
+    window.__xmBootUser = user;
     Array.prototype.forEach.call(document.querySelectorAll("[data-xm-style]"), function (btn) {
       btn.classList.toggle("is-on", btn.getAttribute("data-xm-style") === next);
     });
+    if (save) {
+      persistPrefsSoon();
+    }
   }
 
   function tickClock() {
@@ -3195,7 +3200,7 @@
     if (nameEl && userLabel) {
       nameEl.textContent = userLabel;
     }
-    applyTheme(readTheme());
+    applyTheme(readTheme(), false);
     startClock();
     const styleBox = document.querySelector(".xm-styles");
     if (styleBox && !styleBox.dataset.bound) {
@@ -3205,7 +3210,7 @@
         if (!btn) {
           return;
         }
-        applyTheme(btn.getAttribute("data-xm-style"));
+        applyTheme(btn.getAttribute("data-xm-style"), true);
       });
     }
     const refreshBtn = document.getElementById("xm-refresh");
@@ -3220,12 +3225,8 @@
       collapseBtn.dataset.bound = "1";
       collapseBtn.addEventListener("click", function () {
         const next = !document.documentElement.classList.contains("xm-collapsed");
-        try {
-          localStorage.setItem("xm-sider-collapsed", next ? "1" : "0");
-        } catch (_err) {
-          /* ignore */
-        }
         applyCollapsed(next);
+        persistPrefsSoon();
       });
     }
     const logoutBtn = document.getElementById("xm-logout");
@@ -3242,11 +3243,7 @@
         });
       });
     }
-    try {
-      applyCollapsed(localStorage.getItem("xm-sider-collapsed") === "1");
-    } catch (_err) {
-      applyCollapsed(false);
-    }
+    applyCollapsed(bootPrefs().siderCollapsed === true);
     bindBrandHome();
     bindMenu(document);
     ensurePhoneChrome();

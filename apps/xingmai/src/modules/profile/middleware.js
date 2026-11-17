@@ -7,10 +7,10 @@ import { currentUser, publicProfile } from "./auth.js";
 import { APP_ICON_PNG } from "./app-icon-png.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.772-bound
+// xm-fast-shell 0.1.772-scroll
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
-export const SHELL_ASSET_VER = "0.1.772-bound";
+export const SHELL_ASSET_VER = "0.1.772-scroll";
 export const WEB_MANIFEST = {
   name: "星脉甄选运营中心",
   short_name: "星脉甄选",
@@ -139,12 +139,24 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
+function bootProfile(user) {
+  const profile = publicProfile(user);
+  if (!profile) {
+    return profile;
+  }
+  profile.prefs =
+    user.prefs && typeof user.prefs === "object"
+      ? user.prefs
+      : { theme: "light", siderCollapsed: false, tabs: { hrefs: [], active: "" } };
+  return profile;
+}
+
 export function injectBootUser(html, user) {
   const text = String(html || "");
   if (!user || !user.username || text.includes("__xmBootUser")) {
     return text;
   }
-  const tag = `    <script>window.__xmBootUser=${JSON.stringify(publicProfile(user))};</script>\n`;
+  const tag = `    <script>window.__xmBootUser=${JSON.stringify(bootProfile(user))};</script>\n`;
   if (text.includes("</head>")) {
     return text.replace("</head>", tag + "  </head>");
   }
@@ -161,7 +173,7 @@ export function renderAppShell(href, user) {
       : "";
   const boot =
     user && user.username
-      ? `    <script>window.__xmBootUser=${JSON.stringify(publicProfile(user))};</script>\n`
+      ? `    <script>window.__xmBootUser=${JSON.stringify(bootProfile(user))};</script>\n`
       : "";
   const userName = escapeHtml((user && (user.displayName || user.username)) || "用户");
   return withSharedShell(`<!DOCTYPE html>
@@ -322,15 +334,18 @@ export function isPublicRequest(req) {
 }
 
 const THEME_BOOT =
+  '    <script>try{var u=window.__xmBootUser;var t=u&&u.prefs&&u.prefs.theme;if(t!=="dark"&&t!=="light"&&t!=="pink")t="light";document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t==="dark"?"dark":"light";}catch(e){}</script>\n';
+const LOGIN_THEME_BOOT =
   '    <script>try{var t=localStorage.getItem("xm-theme");if(t==="dark"||t==="light"||t==="pink"){document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t==="dark"?"dark":"light";}}catch(e){}</script>\n';
 
 export function withThemeBoot(html) {
   const text = String(html || "");
-  if (text.includes('localStorage.getItem("xm-theme")')) {
+  if (text.includes('localStorage.getItem("xm-theme")') || text.includes("u&&u.prefs&&u.prefs.theme")) {
     return text;
   }
+  const boot = isLoginHtml(text) ? LOGIN_THEME_BOOT : THEME_BOOT;
   if (text.includes("</head>")) {
-    return text.replace("</head>", THEME_BOOT + "  </head>");
+    return text.replace("</head>", boot + "  </head>");
   }
   return text;
 }
@@ -606,6 +621,12 @@ async function attachDesk(user) {
     user.desk = await deskOf(user);
   } catch {
     user.desk = user.desk || "";
+  }
+  try {
+    const { loadPrefs } = await import("./prefs.js");
+    user.prefs = await loadPrefs(user.username);
+  } catch {
+    user.prefs = user.prefs || { theme: "light", siderCollapsed: false, tabs: { hrefs: [], active: "" } };
   }
 }
 

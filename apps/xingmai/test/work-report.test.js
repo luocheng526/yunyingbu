@@ -61,7 +61,7 @@ test("侧栏在甄选智能体后面挂工作汇报，不进底部", () => {
 
 test("壳把 /work 交给工作汇报模块", () => {
   assert.equal(APP_MODULES["/work"], "work");
-  assert.equal(SHELL_ASSET_VER, "0.1.772-bound");
+  assert.equal(SHELL_ASSET_VER, "0.1.772-scroll");
   const html = renderAppShell("/work", luocheng);
   assert.equal(html.includes("/shared/modules/work.js"), true);
   assert.equal(html.includes("工作汇报"), true);
@@ -69,7 +69,7 @@ test("壳把 /work 交给工作汇报模块", () => {
 
 test("nav.js 把工作汇报放进主栏而不是底栏", () => {
   const js = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
-  assert.match(js, /0\.1\.772-bound/);
+  assert.match(js, /0\.1\.772-scroll/);
   assert.match(js, /\{ href: "\/work", label: "工作汇报" \}/);
   assert.match(js, /"\/work": "work"/);
   const itemsBlock = js.match(/const items = \[([\s\S]*?)\];/)[1];
