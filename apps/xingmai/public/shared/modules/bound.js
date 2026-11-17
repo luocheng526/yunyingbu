@@ -29,6 +29,7 @@
     matchMode: "exact",
     splitWarehouse: false,
     splitCombo: false,
+    datePop: "",
     comboMode: "whole",
     profilePane: "info",
     shopView: "list",
@@ -67,9 +68,16 @@
       ".bd-filters{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;align-items:center;}",
       ".bd-filters input,.bd-filters select,.bd-tools button,.bd-tools a,.bd-pager button,.bd-panel button,.bd-outline{height:30px;padding:0 10px;border:1px solid #e1e4ea;border-radius:4px;background:#fff;color:#1f2329;font:inherit;font-size:12px;text-decoration:none;line-height:28px;cursor:pointer;}",
       ".bd-outline{margin-left:auto;border-color:#3b6cff;color:#3b6cff;}",
-      ".bd-presets{display:flex;align-items:center;height:30px;padding:0 4px;border-radius:4px;background:#fff;}",
-      ".bd-presets button{height:24px;padding:0 8px;border:0;border-radius:4px;background:transparent;color:#4e5969;cursor:pointer;font:inherit;font-size:12px;}",
-      ".bd-presets button.is-on{background:#e8f1ff;color:#3b6cff;}",
+      ".bd-datepick{position:relative;display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;color:#4e5969;font-size:12px;}",
+      ".bd-stat-time{white-space:nowrap;}",
+      ".bd-presets{display:flex;align-items:center;padding:2px;border-radius:4px;background:#f2f3f5;}",
+      ".bd-presets button{height:26px;min-width:28px;padding:0 8px;border:0;border-radius:4px;background:transparent;color:#4e5969;cursor:pointer;font:inherit;font-size:12px;}",
+      ".bd-presets button.is-on{background:#fff;color:#3b6cff;font-weight:650;}",
+      ".bd-presets button.bd-custom{text-decoration:underline;text-decoration-style:dashed;text-underline-offset:3px;}",
+      ".bd-presets button:disabled{color:#c9cdd4;cursor:not-allowed;}",
+      ".bd-split{width:1px;align-self:stretch;margin:6px 4px;background:#e5e6eb;}",
+      ".bd-picker{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}",
+      ".bd-pop{position:absolute;top:36px;right:0;z-index:3;display:flex;gap:6px;align-items:center;padding:8px;background:#fff;border:1px solid #e5e6eb;border-radius:4px;box-shadow:0 6px 16px rgba(29,33,41,.12);}",
       ".bd-primary{height:30px;padding:0 12px;border:0;border-radius:4px;background:#3b6cff;color:#fff;cursor:pointer;font:inherit;font-size:12px;}",
       ".bd-kpi-head .bd-primary{margin-left:auto;height:28px;}",
       ".bd-kpis{margin:0 0 12px;padding:8px 4px 12px;background:#fff;border:1px solid #eceff5;border-radius:6px;}",
@@ -259,36 +267,139 @@
     return next;
   }
 
-  function presetRange(preset, anchorIso) {
-    var anchor = parseIso(anchorIso);
+  var DATA_START = "2026-09-01";
+
+  function shanghaiToday() {
+    try {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    } catch (error) {
+      return iso(new Date());
+    }
+  }
+
+  function weekStart(value) {
+    var date = parseIso(value);
+    return iso(addDays(date, -((date.getDay() + 6) % 7)));
+  }
+
+  function monthEndIso(startIso) {
+    var date = parseIso(startIso);
+    return iso(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+  }
+
+  function clampRange(from, to) {
+    var today = shanghaiToday();
+    if (to > today) {
+      to = today;
+    }
+    if (from < DATA_START) {
+      from = DATA_START;
+    }
+    if (from > to) {
+      from = to;
+    }
+    return { from: from, to: to };
+  }
+
+  function weekContains(mondayIso, dayIso) {
+    var end = iso(addDays(parseIso(mondayIso), 6));
+    return dayIso >= mondayIso && dayIso <= end;
+  }
+
+  function isoWeekValue(mondayIso) {
+    var monday = parseIso(weekStart(mondayIso));
+    var thursday = addDays(monday, 3);
+    var year = thursday.getFullYear();
+    var jan4 = new Date(year, 0, 4);
+    var week1 = addDays(jan4, -((jan4.getDay() + 6) % 7));
+    var week = Math.floor(Math.round((monday.getTime() - week1.getTime()) / 86400000) / 7) + 1;
+    return year + "-W" + String(week).padStart(2, "0");
+  }
+
+  function mondayFromWeekValue(value) {
+    var match = /^(\d{4})-W(\d{2})$/.exec(String(value || ""));
+    if (!match) {
+      return "";
+    }
+    var year = Number(match[1]);
+    var week = Number(match[2]);
+    var jan4 = new Date(year, 0, 4);
+    var week1 = addDays(jan4, -((jan4.getDay() + 6) % 7));
+    return iso(addDays(week1, (week - 1) * 7));
+  }
+
+  function rollingRange(days) {
+    var today = parseIso(shanghaiToday());
+    var range = clampRange(iso(addDays(today, -days)), iso(addDays(today, -1)));
+    return { from: range.from, to: range.to, daysType: String(days) };
+  }
+
+  function defaultCalendarRange(preset) {
+    var today = shanghaiToday();
     if (preset === "date") {
-      var day = iso(anchor);
-      return { from: day, to: day, daysType: "1" };
-    }
-    if (preset === "day7") {
-      return { from: iso(addDays(anchor, -7)), to: iso(addDays(anchor, -1)), daysType: "7" };
-    }
-    if (preset === "day30") {
-      return { from: iso(addDays(anchor, -30)), to: iso(addDays(anchor, -1)), daysType: "30" };
+      var day = clampRange(iso(addDays(parseIso(today), -1)), iso(addDays(parseIso(today), -1)));
+      return { from: day.from, to: day.to, daysType: "1" };
     }
     if (preset === "week") {
-      var offset = (anchor.getDay() + 6) % 7;
-      var start = addDays(anchor, -offset);
-      return { from: iso(start), to: iso(addDays(start, 6)), daysType: "week" };
+      var monday = iso(addDays(parseIso(weekStart(today)), -7));
+      var range = clampRange(monday, iso(addDays(parseIso(monday), 6)));
+      return { from: range.from, to: range.to, daysType: "week" };
     }
     if (preset === "month") {
-      var monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-      var monthEnd = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
-      return { from: iso(monthStart), to: iso(monthEnd), daysType: "month" };
+      var start = today.slice(0, 7) + "-01";
+      var range = clampRange(start, monthEndIso(start));
+      return { from: range.from, to: range.to, daysType: "month" };
     }
     if (preset === "year") {
-      return { from: anchor.getFullYear() + "-01-01", to: anchor.getFullYear() + "-12-31", daysType: "year" };
+      var range = clampRange(today.slice(0, 4) + "-01-01", today.slice(0, 4) + "-12-31");
+      return { from: range.from, to: range.to, daysType: "year" };
     }
-    return { from: state.from, to: state.to, daysType: state.daysType || "custom" };
+    return null;
+  }
+
+  function shiftRange(delta) {
+    var today = shanghaiToday();
+    var type = state.daysType;
+    if (!state.from || (type !== "1" && type !== "week" && type !== "month" && type !== "year")) {
+      return null;
+    }
+    if (type === "1") {
+      var day = iso(addDays(parseIso(state.from), delta));
+      if (day < DATA_START || day > today) {
+        return null;
+      }
+      return { from: day, to: day, daysType: "1" };
+    }
+    if (type === "week") {
+      var start = iso(addDays(parseIso(weekStart(state.from)), delta * 7));
+      var end = iso(addDays(parseIso(start), 6));
+      if (end < DATA_START || start > today || weekContains(start, today)) {
+        return null;
+      }
+      var range = clampRange(start, end);
+      return { from: range.from, to: range.to, daysType: "week" };
+    }
+    if (type === "month") {
+      var cursor = parseIso(state.from.slice(0, 7) + "-01");
+      cursor.setMonth(cursor.getMonth() + delta);
+      var start = iso(new Date(cursor.getFullYear(), cursor.getMonth(), 1));
+      if (start < DATA_START || start > today) {
+        return null;
+      }
+      var range = clampRange(start, monthEndIso(start));
+      return { from: range.from, to: range.to, daysType: "month" };
+    }
+    var year = Number(state.from.slice(0, 4)) + delta;
+    var start = year + "-01-01";
+    if (year < 2026 || start > today) {
+      return null;
+    }
+    var range = clampRange(start, year + "-12-31");
+    return { from: range.from, to: range.to, daysType: "year" };
   }
 
   function activePreset() {
-    var map = { "1": "date", "7": "day7", "30": "day30", week: "week", month: "month", year: "year" };
+    var map = { "1": "date", "7": "day7", "30": "day30", week: "week", month: "month", year: "year", custom: "custom" };
     return map[state.daysType] || "";
   }
 
@@ -305,6 +416,58 @@
       return "";
     }
     return parts[0] + "年" + Number(parts[1]) + "月" + Number(parts[2]) + "日";
+  }
+
+  function statText(from, to, daysType) {
+    if (!from || !to) {
+      return "（统计时间：）";
+    }
+    var single = daysType === "1" || from === to;
+    if (from.slice(0, 4) !== to.slice(0, 4)) {
+      return "（统计时间：" + cnDate(from) + (single ? "" : "-" + cnDate(to)) + "）";
+    }
+    var text = from.slice(0, 4) + "年" + Number(from.slice(5, 7)) + "月" + Number(from.slice(8, 10)) + "日";
+    if (!single) {
+      text += "-" + Number(to.slice(5, 7)) + "月" + Number(to.slice(8, 10)) + "日";
+    }
+    return "（统计时间：" + text + "）";
+  }
+
+  function yearChoices() {
+    var end = Number(shanghaiToday().slice(0, 4));
+    var years = [];
+    var year = 2026;
+    while (year <= end) {
+      years.push(String(year));
+      year += 1;
+    }
+    return years;
+  }
+
+  function renderDateBar(data) {
+    var daysType = state.daysType || (data.range.from === data.range.to ? "1" : "");
+    var preset = activePreset();
+    var buttons = [["day7", "7天"], ["day30", "30天"], ["date", "日"], ["week", "周"], ["month", "月"], ["year", "年"]].map(function (item) {
+      return '<button type="button" data-act="preset" data-preset="' + item[0] + '" class="' + (preset === item[0] ? "is-on" : "") + '">' + item[1] + "</button>";
+    }).join("");
+    var today = shanghaiToday();
+    var yesterday = iso(addDays(parseIso(today), -1));
+    var dayValue = daysType === "1" && data.range.from ? data.range.from : yesterday;
+    var monday = daysType === "week" && data.range.from ? weekStart(data.range.from) : iso(addDays(parseIso(weekStart(today)), -7));
+    var monthValue = (daysType === "month" && data.range.from ? data.range.from : today).slice(0, 7);
+    var years = yearChoices().map(function (year) {
+      var on = daysType === "year" && data.range.from && data.range.from.slice(0, 4) === year;
+      return '<button type="button" data-act="pick-year" data-year="' + year + '" class="' + (on ? "is-on" : "") + '">' + year + "年</button>";
+    }).join("");
+    return '<div class="bd-datepick"><span class="bd-stat-time">' + esc(statText(data.range.from, data.range.to, daysType)) + '</span><div class="bd-presets">' + buttons +
+      '<i class="bd-split"></i><button type="button" class="bd-arrow" data-act="shift" data-delta="-1" aria-label="上一期"' + (shiftRange(-1) ? "" : " disabled") + '>‹</button><button type="button" class="bd-arrow" data-act="shift" data-delta="1" aria-label="下一期"' + (shiftRange(1) ? "" : " disabled") + '>›</button><i class="bd-split"></i>' +
+      '<button type="button" data-act="preset" data-preset="custom" class="bd-custom' + (preset === "custom" ? " is-on" : "") + '">自定义</button></div>' +
+      '<input class="bd-picker" data-act="pick-date" type="date" min="' + DATA_START + '" max="' + esc(today) + '" value="' + esc(dayValue) + '">' +
+      '<input class="bd-picker" data-act="pick-week" type="week" max="' + esc(isoWeekValue(iso(addDays(parseIso(weekStart(today)), -7)))) + '" value="' + esc(isoWeekValue(monday)) + '">' +
+      '<input class="bd-picker" data-act="pick-month" type="month" min="2026-09" max="' + esc(today.slice(0, 7)) + '" value="' + esc(monthValue) + '">' +
+      (state.datePop === "year" ? '<div class="bd-pop">' + years + "</div>" : "") +
+      (state.datePop === "custom" ? '<div class="bd-pop"><input data-act="range-from" type="date" min="' + DATA_START + '" max="' + esc(today) + '" value="' + esc(data.range.from) + '"><span>至</span><input data-act="range-to" type="date" min="' + DATA_START + '" max="' + esc(today) + '" value="' + esc(data.range.to) + '"></div>' : "") +
+      "</div>";
   }
 
   function metricOf(row, column) {
@@ -807,10 +970,6 @@
     var shops = '<option value="">' + shopPrompt + "</option>" + (data.shops || []).map(function (shop) {
       return '<option value="' + esc(shop) + '"' + (shop === state.shop ? " selected" : "") + ">" + esc(shop) + "</option>";
     }).join("");
-    var preset = activePreset();
-    var presetButtons = [["day7", "7天"], ["day30", "30天"], ["date", "日"], ["week", "周"], ["month", "月"], ["year", "年"]].map(function (item) {
-      return '<button type="button" data-act="preset" data-preset="' + item[0] + '" class="' + (preset === item[0] ? "is-on" : "") + '">' + item[1] + "</button>";
-    }).join("");
     var setting = (data.cards && data.cards.length) ? "cards" : "columns";
     var channelPage = data.page.id === "channelOverview" || data.page.id === "channelAnalysis";
     var tabLabel = data.page.id === "teamSkills" ? "团队成员" : (data.tab && data.tab.label ? data.tab.label : data.page.label);
@@ -829,7 +988,7 @@
     return '<section class="bd-main" data-bound-erp="false" data-page="' + esc(data.page.id) + '" data-coverage="' + esc(data.coverage.status) + '">' +
       '<header class="bd-head"><div><h1>' + esc(data.page.label) + '</h1><p class="bd-sub">' + esc(BLURBS[data.page.id] || "") + "</p>" + renderStatus(data) + "</div>" +
       '<div class="bd-filters">' +
-      (ops.indexOf("date") >= 0 ? '<span class="bd-sub">（统计时间：' + esc(cnDate(data.range.from)) + "-" + esc(cnDate(data.range.to)) + '）</span><div class="bd-presets">' + presetButtons + '<button type="button" data-act="preset" data-preset="custom" class="' + (preset === "" ? "is-on" : "") + '">自定义</button></div><button type="button" data-act="shift" data-delta="-1" aria-label="上一期">‹</button><button type="button" data-act="shift" data-delta="1" aria-label="下一期">›</button><input data-act="from" type="date" value="' + esc(data.range.from) + '"><input data-act="to" type="date" value="' + esc(data.range.to) + '">' : "") +
+      (ops.indexOf("date") >= 0 ? renderDateBar(data) : "") +
       (ops.indexOf("shop") >= 0 ? "<select data-act=\"shop\">" + shops + "</select>" : "") +
       (ops.indexOf("search") >= 0 ? '<input data-act="q" value="' + esc(state.q) + '" placeholder="' + esc(searchPlaceholder(data.page.id)) + '">' : "") +
       (data.cards && data.cards.length ? "" : '<button type="button" class="bd-primary" data-act="panel" data-panel="' + setting + '">设定指标</button>') + "</div></header>" +
@@ -891,7 +1050,7 @@
       if (state.viewData.range) {
         state.from = state.viewData.range.from;
         state.to = state.viewData.range.to;
-        state.daysType = state.viewData.daysType || state.daysType;
+        state.daysType = state.viewData.daysType || (state.from === state.to ? "1" : "custom");
       }
     } else if (view) {
       state.viewData = null;
@@ -900,6 +1059,23 @@
     state.admin = link.ok;
     state.link = link.ok ? await link.json() : null;
     paint(root);
+  }
+
+  function openPicker(root, preset) {
+    var act = { date: "pick-date", week: "pick-week", month: "pick-month" }[preset];
+    if (!act || !root.querySelector) {
+      return false;
+    }
+    var input = root.querySelector("[data-act='" + act + "']");
+    if (!input || typeof input.showPicker !== "function") {
+      return false;
+    }
+    try {
+      input.showPicker();
+      return true;
+    } catch (error) {
+      return false;
+    }
   }
 
   function listen(root, token) {
@@ -974,29 +1150,44 @@
       } else if (act === "page-no") {
         state.pageNo = Math.max(1, state.pageNo + Number(node.getAttribute("data-delta") || 0));
       } else if (act === "preset") {
-        if (node.getAttribute("data-preset") === "custom") {
-          state.daysType = "custom";
+        var presetName = node.getAttribute("data-preset");
+        if (presetName === "custom") {
+          state.datePop = state.datePop === "custom" ? "" : "custom";
           paint(root);
           return;
         }
-        applyRange(presetRange(node.getAttribute("data-preset"), state.to || iso(new Date())));
-      } else if (act === "shift") {
-        var current = state.daysType || "month";
-        var preset = { "1": "date", "7": "day7", "30": "day30", week: "week", month: "month", year: "year" }[current] || "date";
-        var anchor = parseIso(state.to || iso(new Date()));
-        var delta = Number(node.getAttribute("data-delta") || 0);
-        if (preset === "month") {
-          anchor = new Date(anchor.getFullYear(), anchor.getMonth() + delta, 1);
-        } else if (preset === "year") {
-          anchor = new Date(anchor.getFullYear() + delta, 0, 1);
-        } else if (preset === "week" || preset === "day7") {
-          anchor = addDays(anchor, delta * 7);
-        } else if (preset === "day30") {
-          anchor = addDays(anchor, delta * 30);
-        } else {
-          anchor = addDays(anchor, delta);
+        if (presetName === "year") {
+          state.datePop = state.datePop === "year" ? "" : "year";
+          paint(root);
+          return;
         }
-        applyRange(presetRange(preset, iso(anchor)));
+        state.datePop = "";
+        if (presetName === "day7" || presetName === "day30") {
+          applyRange(rollingRange(presetName === "day7" ? 7 : 30));
+        } else if (!openPicker(root, presetName)) {
+          var fallback = defaultCalendarRange(presetName);
+          if (!fallback) {
+            return;
+          }
+          applyRange(fallback);
+        } else {
+          return;
+        }
+      } else if (act === "shift") {
+        if (node.disabled) {
+          return;
+        }
+        var nextRange = shiftRange(Number(node.getAttribute("data-delta") || 0));
+        if (!nextRange) {
+          return;
+        }
+        state.datePop = "";
+        applyRange(nextRange);
+      } else if (act === "pick-year") {
+        var year = node.getAttribute("data-year");
+        var yearRange = clampRange(year + "-01-01", year + "-12-31");
+        state.datePop = "";
+        applyRange({ from: yearRange.from, to: yearRange.to, daysType: "year" });
       } else if (act === "scan") {
         fetch("/api/bound/link/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: node.getAttribute("data-provider") }) }).then(function () {
           return load(root, token);
@@ -1054,13 +1245,51 @@
         paint(root);
         return;
       }
-      if (act === "from" || act === "to" || act === "shop") {
-        state[act === "shop" ? "shop" : act] = node.value;
-        if (act === "from" || act === "to") {
-          state.daysType = "custom";
-        }
+      if (act === "shop") {
+        state.shop = node.value;
         state.pageNo = 1;
         load(root, token);
+        return;
+      }
+      if (act === "pick-date") {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(node.value || "")) {
+          return;
+        }
+        var pickedDay = clampRange(node.value, node.value);
+        state.datePop = "";
+        applyRange({ from: pickedDay.from, to: pickedDay.to, daysType: "1" });
+        load(root, token);
+        return;
+      }
+      if (act === "pick-week") {
+        var monday = mondayFromWeekValue(node.value);
+        if (!monday || weekContains(monday, shanghaiToday())) {
+          return;
+        }
+        var week = clampRange(monday, iso(addDays(parseIso(monday), 6)));
+        state.datePop = "";
+        applyRange({ from: week.from, to: week.to, daysType: "week" });
+        load(root, token);
+        return;
+      }
+      if (act === "pick-month") {
+        if (!/^\d{4}-\d{2}$/.test(node.value || "")) {
+          return;
+        }
+        var monthStart = node.value + "-01";
+        var month = clampRange(monthStart, monthEndIso(monthStart));
+        state.datePop = "";
+        applyRange({ from: month.from, to: month.to, daysType: "month" });
+        load(root, token);
+        return;
+      }
+      if (act === "range-from" || act === "range-to") {
+        state[act === "range-from" ? "from" : "to"] = node.value;
+        state.daysType = "custom";
+        state.pageNo = 1;
+        if (state.from && state.to) {
+          load(root, token);
+        }
       }
       if (act === "mark") {
         var row = (state.viewData.rows || []).filter(function (item) { return item.key === node.getAttribute("data-key"); })[0] || {};

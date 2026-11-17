@@ -122,22 +122,6 @@ function platformLabel(code) {
   return PLATFORM_NAMES[raw.toUpperCase()] || raw;
 }
 
-function latestReadyMonth(all, reportId, dim, today) {
-  let best = null;
-  all.forEach((row) => {
-    if (row.reportId !== reportId || row.dim !== dim || row.pageNo !== 1 || row.status !== "done") {
-      return;
-    }
-    if (!isFullMonth(row.startOn, row.endOn) || row.endOn > today) {
-      return;
-    }
-    if (!best || row.startOn > best.startOn) {
-      best = row;
-    }
-  });
-  return best ? { from: best.startOn, to: best.endOn } : null;
-}
-
 function asNumber(value) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -619,11 +603,10 @@ export async function readView(query) {
   } else if (tab) {
     const trend = view === "period" ? (page.tabs || []).find((item) => item.id.endsWith("_trend")) : null;
     if (!explicitFrom) {
-      const readyMonth = latestReadyMonth(all, (trend || tab).id, dim, shanghaiToday());
-      if (readyMonth) {
-        range = readyMonth;
-        daysType = "month";
-      }
+      const yesterday = addDays(shanghaiToday(), -1);
+      const day = yesterday < START_ON ? START_ON : yesterday;
+      range = { from: day, to: day };
+      daysType = "1";
     }
     const loaded = await loadScope(all, trend || tab, dim, range.from, range.to, daysType);
     coverage = { ...loaded.status, mode: loaded.mode, missing: loaded.missing, failed: loaded.failed, denied: loaded.denied || [] };

@@ -147,10 +147,11 @@ test("没采完的范围汇总留空，采完的整月和当前页分开算", as
     assert.equal(csv.split("十一月").length, 2);
     const opened = await fetch(`${base}/api/bound/view?page=productOverview&tab=sp_zl_list&dim=sku`);
     const openedBody = await opened.json();
-    assert.equal(openedBody.daysType, "month");
-    assert.equal(openedBody.range.from, "2026-09-01");
-    assert.equal(openedBody.range.to, "2026-09-30");
-    assert.equal(openedBody.allSum.payAmount, 140);
+    assert.equal(openedBody.daysType, "1");
+    assert.equal(openedBody.range.from, "2026-11-15");
+    assert.equal(openedBody.range.to, "2026-11-15");
+    assert.equal(openedBody.coverage.status, "missing");
+    assert.equal(openedBody.allSum, null);
     await writeSheet({
       reportId: "sp_zl_list",
       dim: "sku",
@@ -464,6 +465,8 @@ test("页面只请求边界接口，并画出四个模块", async () => {
   };
   const context = vm.createContext({
     window: {},
+    Date,
+    Intl,
     document,
     URLSearchParams,
     setInterval() {
@@ -524,6 +527,11 @@ test("页面只请求边界接口，并画出四个模块", async () => {
   assert.match(root.innerHTML, /全部汇总/);
   assert.match(root.innerHTML, /当前页汇总/);
   assert.match(root.innerHTML, /未采完/);
+  assert.match(root.innerHTML, /统计时间：2026年11月16日/);
+  assert.doesNotMatch(root.innerHTML, /2026年11月16日-/);
+  assert.match(root.innerHTML, />7天</);
+  assert.match(root.innerHTML, /data-preset="custom"/);
+  assert.doesNotMatch(root.innerHTML, /data-act="from"/);
   assert.match(root.innerHTML, /data-bound-erp="false"/);
   assert.equal(calls.includes("/api/bound"), true);
   assert.equal(calls.some((href) => href.startsWith("/api/bound/view")), true);
@@ -592,6 +600,8 @@ test("采集进度只数表头，扫码页标出正在采集的表", async () =>
   };
   const context = vm.createContext({
     window: {},
+    Date,
+    Intl,
     document: {
       getElementById() {
         return null;
@@ -686,5 +696,147 @@ test("采集进度只数表头，扫码页标出正在采集的表", async () =>
   assert.match(root.innerHTML, /正在采/);
   assert.match(root.innerHTML, /渠道列表/);
   assert.doesNotMatch(root.innerHTML, /bd-qr/);
+  stop();
+});
+
+test("日期条的 7 天、30 天截止到昨天，周从周一开始并且不含本周", async () => {
+  const js = readFileSync(clientPath, "utf8");
+  const calls = [];
+  const root = {
+    html: "",
+    set innerHTML(value) {
+      this.html = String(value);
+    },
+    get innerHTML() {
+      return this.html;
+    },
+    addEventListener(type, fn) {
+      if (type === "click") this.onclick = fn;
+      if (type === "change") this.onchange = fn;
+    },
+    removeEventListener() {},
+    querySelector() {
+      return null;
+    }
+  };
+  function click(act, extra) {
+    root.onclick({
+      target: {
+        closest() {
+          return {
+            disabled: false,
+            getAttribute(name) {
+              if (name === "data-act") return act;
+              return extra[name] || "";
+            }
+          };
+        }
+      }
+    });
+  }
+  const context = vm.createContext({
+    window: {},
+    Date,
+    Intl,
+    document: {
+      getElementById() {
+        return null;
+      },
+      createElement() {
+        return { id: "", textContent: "" };
+      },
+      head: { appendChild() {} }
+    },
+    URLSearchParams,
+    setInterval() {
+      return 1;
+    },
+    clearInterval() {},
+    fetch(url) {
+      const href = String(url);
+      calls.push(href);
+      if (href.startsWith("/api/bound/view")) {
+        const query = new URL(href, "http://local").searchParams;
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            page: { id: "channelOverview", label: "渠道总览", ops: ["date", "tabs"] },
+            tab: { id: "qdzl_lb", label: "渠道列表" },
+            tabs: [{ id: "qdzl_lb", label: "渠道列表" }],
+            range: { from: query.get("from") || "2026-11-16", to: query.get("to") || "2026-11-16" },
+            daysType: query.get("daysType") || "1",
+            coverage: { status: "missing", missing: [], failed: [] },
+            columns: [{ key: "name", label: "渠道", on: true }],
+            rows: [],
+            shops: [],
+            total: 0,
+            pageNo: 1
+          })
+        });
+      }
+      if (href.startsWith("/api/bound/catalog")) {
+        return Promise.resolve({ ok: true, json: async () => publicCatalog() });
+      }
+      if (href === "/api/bound") {
+        return Promise.resolve({ ok: true, json: async () => ({ ok: true, module: "bound", source: "crawler", erp: false }) });
+      }
+      if (href.startsWith("/api/bound/link")) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ phase: "idle", deviceId: "device-1", message: "" }) });
+      }
+      return Promise.reject(new Error(href));
+    }
+  });
+  vm.runInContext(js, context);
+  const stop = context.window.XmModules["/bound"].mount(root);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.match(root.innerHTML, /data-preset="date"[^>]*class="is-on"|class="is-on"[^>]*data-preset="date"/);
+  assert.match(root.innerHTML, /统计时间：2026年11月16日/);
+  assert.doesNotMatch(root.innerHTML, /data-act="range-from"/);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  function addDays(iso, delta) {
+    const date = new Date(`${iso}T12:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + delta);
+    return date.toISOString().slice(0, 10);
+  }
+  click("preset", { "data-preset": "day7" });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const seven = calls.filter((href) => href.includes("daysType=7")).pop();
+  const sevenQuery = new URL(seven, "http://local").searchParams;
+  assert.equal(sevenQuery.get("from"), addDays(today, -7));
+  assert.equal(sevenQuery.get("to"), addDays(today, -1));
+  assert.match(root.innerHTML, /data-preset="day7"[^>]*class="is-on"|class="is-on"[^>]*data-preset="day7"/);
+  assert.match(root.innerHTML, /data-delta="1"[^>]*disabled|disabled[^>]*data-delta="1"/);
+  click("preset", { "data-preset": "day30" });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const thirty = calls.filter((href) => href.includes("daysType=30")).pop();
+  const thirtyQuery = new URL(thirty, "http://local").searchParams;
+  assert.equal(thirtyQuery.get("from"), addDays(today, -30));
+  assert.equal(thirtyQuery.get("to"), addDays(today, -1));
+  click("preset", { "data-preset": "week" });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const week = calls.filter((href) => href.includes("daysType=week")).pop();
+  const weekQuery = new URL(week, "http://local").searchParams;
+  const weekStart = new Date(`${weekQuery.get("from")}T12:00:00Z`);
+  const weekEnd = new Date(`${weekQuery.get("to")}T12:00:00Z`);
+  assert.equal(weekStart.getUTCDay(), 1);
+  assert.equal(weekEnd.getUTCDay(), 0);
+  assert.equal(weekQuery.get("to") < today, true);
+  click("preset", { "data-preset": "month" });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const month = calls.filter((href) => href.includes("daysType=month")).pop();
+  const monthQuery = new URL(month, "http://local").searchParams;
+  assert.equal(monthQuery.get("from"), `${today.slice(0, 7)}-01`);
+  assert.equal(monthQuery.get("to"), today);
+  click("shift", { "data-delta": "-1" });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const previous = calls.filter((href) => href.includes("daysType=month")).pop();
+  const previousQuery = new URL(previous, "http://local").searchParams;
+  assert.notEqual(previousQuery.get("from"), `${today.slice(0, 7)}-01`);
+  assert.equal(previousQuery.get("from").endsWith("-01"), true);
+  assert.equal(previousQuery.get("to") < today, true);
+  click("preset", { "data-preset": "custom" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.match(root.innerHTML, /data-act="range-from"/);
+  assert.match(root.innerHTML, /data-act="range-to"/);
   stop();
 });
