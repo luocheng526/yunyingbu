@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit v0.4.18 — 登录进首页，未选中的星脉数据中心不要蓝 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo v0.4.18 — 点一级带子菜单进默认页并标蓝 */
 (function () {
-  const ASSET_VER = "0.1.776-homehit";
+  const ASSET_VER = "0.1.777-parentgo";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -979,6 +979,18 @@
     "/han": "/han/selection",
     "/academy": "/academy/courses"
   };
+
+  function groupHome(prefix) {
+    const key = normalize(prefix);
+    if (PARENT_HOME[key]) {
+      return leafRoute(PARENT_HOME[key]);
+    }
+    const item = items.find(function (row) {
+      return normalize(row.href) === key;
+    });
+    const child = item && item.children && item.children[0];
+    return child ? normalize(child.href) : "";
+  }
   const unmounts = {};
   let openTabs = [];
   let tabsBooted = false;
@@ -2988,11 +3000,22 @@
         if (!group) {
           return;
         }
+        const prefix = group.getAttribute("data-xm-group");
+        const dest = groupHome(prefix);
+        const on = groupOpen(prefix, current);
         if (document.documentElement.classList.contains("xm-collapsed")) {
           applyCollapsed(false);
           persistPrefsSoon();
+          if (dest && !on) {
+            go(dest);
+            return;
+          }
           group.classList.add("is-open");
           btn.setAttribute("aria-expanded", "true");
+          return;
+        }
+        if (dest && !on) {
+          go(dest);
           return;
         }
         const next = !group.classList.contains("is-open");
