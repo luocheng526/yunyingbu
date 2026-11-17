@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { deskUsable, loginOpenReady, loginPageAction, loginScreenState } from "../src/modules/home/jingmai-desk.js";
+import { collectFrameIds, deskUsable, loginOpenReady, loginPageAction, loginScreenState, sessionReady } from "../src/modules/home/jingmai-desk.js";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
 
 const homeJs = readFileSync(new URL("../public/shared/modules/home.js", import.meta.url), "utf8");
@@ -96,6 +96,37 @@ test("a click just outside the confirm button still aims at it", () => {
   assert.equal(aim.kind, "button");
   assert.equal(aim.x, 140);
   assert.equal(aim.y, 216);
+});
+
+test("a captcha frame with one empty field receives the code", () => {
+  const button = node("DIV", { text: "确定", rect: box(40, 80, 60, 28) });
+  const input = node("INPUT", { rect: box(20, 30, 80, 24) });
+  const doc = node("DIV", { kids: [input, button], rect: box(0, 0, 200, 140) });
+  let clicked = false;
+  button.click = function () {
+    clicked = true;
+  };
+  const aim = loginPageAction(doc, { text: "562806" });
+  assert.equal(input.value, "562806");
+  assert.equal(clicked, true);
+  assert.equal(aim.kind, "button");
+});
+
+test("a login page cookie does not count as a finished login", () => {
+  const cookies = [{ name: "thor", value: "abc" }];
+  assert.equal(sessionReady("https://passport.shop.jd.com/login/index", cookies), false);
+  assert.equal(sessionReady("https://shop.jd.com/", cookies), true);
+  assert.equal(sessionReady("https://shop.jd.com/", []), false);
+});
+
+test("captcha frames are included when the code is typed", () => {
+  const ids = collectFrameIds({
+    frameTree: {
+      frame: { id: "main" },
+      childFrames: [{ frame: { id: "captcha" }, childFrames: [] }]
+    }
+  });
+  assert.deepEqual(ids, ["main", "captcha"]);
 });
 
 test("typing the code aims at the confirm button and fills the field", () => {
