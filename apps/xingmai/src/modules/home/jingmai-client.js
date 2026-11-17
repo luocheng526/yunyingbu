@@ -480,7 +480,8 @@ function dealBusy(error) {
   return /601|操作频繁/.test(String((error && error.message) || ""));
 }
 
-let dealGate = Promise.resolve();
+let dealActive = 0;
+const dealWaiters = [];
 
 function dealGateMs() {
   const value = Number(process.env.SHEN_DEAL_GATE_MS);
@@ -488,23 +489,28 @@ function dealGateMs() {
 }
 
 function enqueueDeal(task) {
-  const run = dealGate.then(
-    function () {
-      return withDeadline(task, dealGateMs(), "采集超时");
-    },
-    function () {
-      return withDeadline(task, dealGateMs(), "采集超时");
+  return new Promise(function (resolve, reject) {
+    const run = function () {
+      dealActive += 1;
+      Promise.resolve()
+        .then(function () {
+          return withDeadline(task, dealGateMs(), "采集超时");
+        })
+        .then(resolve, reject)
+        .finally(function () {
+          dealActive -= 1;
+          const next = dealWaiters.shift();
+          if (next) {
+            setTimeout(next, dealGapMs());
+          }
+        });
+    };
+    if (dealActive < 3) {
+      run();
+    } else {
+      dealWaiters.push(run);
     }
-  );
-  dealGate = run.then(
-    function () {
-      return pause(dealGapMs());
-    },
-    function () {
-      return pause(dealGapMs());
-    }
-  );
-  return run;
+  });
 }
 
 async function fetchShopDealOnce(jar, fetchImpl) {

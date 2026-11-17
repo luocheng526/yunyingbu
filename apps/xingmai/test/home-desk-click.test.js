@@ -6,7 +6,7 @@ import { beginRelogin, beginReloginAll, reloginState, resetJingmaiDeps, setJingm
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { collectFrameIds, deskUsable, loginOpenReady, loginPageAction, loginScreenState, sessionReady } from "../src/modules/home/jingmai-desk.js";
+import { collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginScreenState, sessionReady } from "../src/modules/home/jingmai-desk.js";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
 
 const homeJs = readFileSync(new URL("../public/shared/modules/home.js", import.meta.url), "utf8");
@@ -456,6 +456,99 @@ test("opening a shop reports the browser step before the login page is ready", a
     assert.equal(screen.status, "screen");
     assert.equal(screen.store, "飒望生活日用旗舰店");
     assert.equal(screen.step, "京麦登录页");
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
+test("the homepage uses the same host browser as the paid center and does not start it twice", async () => {
+  assert.equal(hostChromePath("/usr/bin/google-chrome"), "/usr/bin/google-chrome");
+  assert.equal(hostChromePath("/tmp/shen-chrome/chrome-headless-shell-linux64/chrome-headless-shell"), "");
+  await resetJingmaiStore();
+  let calls = 0;
+  let release = function () {};
+  setJingmaiDeps({
+    loadOrg: async () => [
+      { store: "飒望生活日用旗舰店", enabled: true, login: "sa", password: "secret", shopId: "13341301" },
+      { store: "DIKTT潮流生活旗舰店", enabled: true, login: "diktt", password: "secret", shopId: "16107402" }
+    ],
+    desk: {
+      open: function (options) {
+        calls += 1;
+        if (options && options.onStep) {
+          options.onStep("正在启动浏览器");
+        }
+        return new Promise(function (resolve) {
+          release = function () {
+            resolve({ status: "verify", message: "登录页已打开" });
+          };
+        });
+      },
+      close: async function () {},
+      poll: async function () {
+        return { status: "screen", message: "登录页已打开" };
+      }
+    }
+  });
+  try {
+    const first = await beginRelogin("飒望生活日用旗舰店", "cookie");
+    const second = await beginRelogin("飒望生活日用旗舰店", "cookie");
+    assert.equal(first.status, "opening");
+    assert.equal(second.status, "opening");
+    assert.equal(second.store, "飒望生活日用旗舰店");
+    assert.equal(calls, 1);
+    release();
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 30);
+    });
+    const screen = await reloginState("飒望生活日用旗舰店");
+    assert.equal(screen.status, "screen");
+    assert.equal(screen.store, "飒望生活日用旗舰店");
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
+test("an older login attempt cannot mark the shop failed after a newer one starts", async () => {
+  await resetJingmaiStore();
+  await saveSession("DIKTT潮流生活旗舰店", {
+    cookies: [{ name: "thor", value: "live" }],
+    authState: "ok",
+    shopId: "16107402"
+  });
+  const releases = [];
+  setJingmaiDeps({
+    loadOrg: async () => [
+      { store: "飒望生活日用旗舰店", enabled: true, login: "sa", password: "secret", shopId: "13341301" },
+      { store: "UUMILO个人洗护旗舰店", enabled: true, login: "uu", password: "secret", shopId: "196509787" }
+    ],
+    desk: {
+      open: function () {
+        return new Promise(function (resolve) {
+          releases.push(resolve);
+        });
+      },
+      close: async function () {},
+      poll: async function () {
+        return { status: "opening", message: "正在启动浏览器" };
+      }
+    }
+  });
+  try {
+    await beginRelogin("飒望生活日用旗舰店", "cookie");
+    await beginRelogin("UUMILO个人洗护旗舰店", "cookie");
+    assert.equal(releases.length, 2);
+    releases[0]({ status: "login", message: "登录已取消" });
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 30);
+    });
+    const state = await reloginState("UUMILO个人洗护旗舰店");
+    assert.equal(state.status, "opening");
+    assert.equal(state.store, "UUMILO个人洗护旗舰店");
+    assert.notEqual(state.message, "登录已取消");
+    const kept = (await listSessions()).find((item) => item.store === "DIKTT潮流生活旗舰店");
+    assert.equal(kept.cookies[0].value, "live");
+    assert.equal(kept.authState, "ok");
   } finally {
     resetJingmaiDeps();
   }

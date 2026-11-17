@@ -14,6 +14,7 @@ const qrPending = new Map();
 const passwordPending = new Map();
 let loginQueue = [];
 let loginCursor = { index: 0, total: 0, store: "" };
+let loginEpoch = 0;
 const orgCache = new Map();
 let refreshing = false;
 let deskLock = Promise.resolve();
@@ -56,6 +57,7 @@ export function resetJingmaiDeps() {
   orgCache.clear();
   refreshing = false;
   deskLock = Promise.resolve();
+  loginEpoch = 0;
 }
 
 function rememberOrg(shops) {
@@ -258,9 +260,25 @@ async function rememberLogin(store, cookies, expected) {
   return "saved";
 }
 
-async function startQueued(shop) {
+function loginInProgress(name) {
+  return loginCursor.store === name && loginCursor.failed !== true && (loginCursor.phase === "opening" || loginCursor.phase === "screen");
+}
+
+function currentLoginState(fallback) {
+  return publicState({
+    status: loginCursor.failed ? "failed" : (loginCursor.phase === "screen" ? "screen" : loginCursor.phase || "opening"),
+    store: loginCursor.store || fallback || "",
+    step: loginCursor.step,
+    message: loginCursor.message || "正在启动浏览器"
+  });
+}
+
+async function startQueued(shop, epoch) {
+  if (epoch != null && epoch !== loginEpoch) {
+    return currentLoginState(shop.store);
+  }
   loginCursor.store = shop.store;
-  loginCursor.step = "打开京麦登录页";
+  loginCursor.step = "启动浏览器";
   loginCursor.phase = "opening";
   loginCursor.failed = false;
   loginCursor.message = "正在启动浏览器";
@@ -272,6 +290,9 @@ async function startQueued(shop) {
       password: shop.password,
       reveal: true,
       onStep: function (message) {
+        if (epoch != null && epoch !== loginEpoch) {
+          return;
+        }
         loginCursor.step = message.indexOf("启动") >= 0 ? "启动浏览器" : "打开京麦登录页";
         loginCursor.message = message;
       }
@@ -281,6 +302,9 @@ async function startQueued(shop) {
   }
   shop.login = "";
   shop.password = "";
+  if (epoch != null && epoch !== loginEpoch) {
+    return currentLoginState(shop.store);
+  }
   if (opened.status === "ok") {
     await deps.desk.close();
     const kept = await rememberLogin(shop.store, opened.cookies || [], { shopId: shop.shopId || "", store: shop.store });
@@ -323,7 +347,7 @@ async function advanceAfterSuccess(store) {
     return publicState({ status: "ok", store: store, message: store + " 已在服务器登录" });
   }
   loginCursor.index += 1;
-  return startQueued(next);
+  return startQueued(next, loginEpoch);
 }
 
 async function advanceAfterFailure(store, message) {
@@ -333,28 +357,34 @@ async function advanceAfterFailure(store, message) {
     return publicState({ status: "login", store: store, message: message });
   }
   loginCursor.index += 1;
-  const started = await startQueued(next);
+  const started = await startQueued(next, loginEpoch);
   if (started.status === "screen") {
     started.message = store + "：" + message;
   }
   return started;
 }
 
-async function queueShops(shops) {
+async function queueShops(shops, epoch) {
+  if (epoch != null && epoch !== loginEpoch) {
+    return currentLoginState();
+  }
   const copies = (shops || []).map(function (shop) {
     const copy = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "" };
     shop.login = "";
     shop.password = "";
     return copy;
   });
-  wipeQueue();
+  loginQueue.forEach(function (shop) {
+    shop.login = "";
+    shop.password = "";
+  });
   loginQueue = copies;
   const first = loginQueue[0];
   loginCursor = {
     index: 1,
     total: loginQueue.length,
     store: first ? first.store : "",
-    step: "打开京麦登录页",
+    step: "启动浏览器",
     message: first ? "正在启动浏览器" : "全部店铺已连接",
     failed: false,
     phase: "opening"
@@ -363,7 +393,7 @@ async function queueShops(shops) {
   if (!next) {
     return publicState({ status: "done", message: "全部店铺已连接" });
   }
-  return startQueued(next);
+  return startQueued(next, epoch);
 }
 
 export async function beginRelogin(store, cookie) {
@@ -373,29 +403,56 @@ export async function beginRelogin(store, cookie) {
     error.statusCode = 400;
     throw error;
   }
+  if (loginInProgress(name)) {
+    return currentLoginState(name);
+  }
+  const epoch = ++loginEpoch;
+  loginCursor = {
+    index: 1,
+    total: 1,
+    store: name,
+    step: "启动浏览器",
+    message: "正在启动浏览器",
+    failed: false,
+    phase: "opening"
+  };
   const shops = await deps.loadOrg(cookie || "");
+  if (epoch !== loginEpoch) {
+    return currentLoginState(name);
+  }
   rememberOrg(shops);
   const shop = shops.find(function (item) {
     return item.store === name;
   });
-  if (!shop || shop.enabled === false) {
-    return { ok: true, store: name, status: "login", message: "这家店已停用" };
-  }
-  if (!shop.login || !shop.password) {
-    return { ok: true, store: name, status: "login", message: "组织中心还没有填写这家店的账号" };
+  if (!shop || shop.enabled === false || !shop.login || !shop.password) {
+    if (epoch === loginEpoch) {
+      loginCursor = { index: 0, total: 0, store: name, step: "", message: "", failed: true, phase: "failed" };
+    }
+    return {
+      ok: true,
+      store: name,
+      status: "login",
+      message: !shop || shop.enabled === false ? "这家店已停用" : "组织中心还没有填写这家店的账号"
+    };
   }
   const sessions = await listSessions();
   const existing = sessions.find(function (item) {
     return item.store === name;
   });
   if (sessionStillValid(existing)) {
+    if (epoch === loginEpoch) {
+      loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
+    }
     return { ok: true, status: "done", store: name, message: "「" + name + "」已连接" };
   }
   const queued = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "" };
   shop.login = "";
   shop.password = "";
-  const job = queueShops([queued]);
+  const job = queueShops([queued], epoch);
   job.catch(function () {
+    if (epoch !== loginEpoch) {
+      return;
+    }
     loginCursor.failed = true;
     loginCursor.phase = "failed";
     loginCursor.step = "打开京麦登录页";
