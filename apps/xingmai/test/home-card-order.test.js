@@ -90,7 +90,7 @@ test("live shop table can filter by duty team or shop", () => {
   assert.match(homeJs, /optgroup label="店铺"/);
   assert.match(homeJs, /function parseLiveFilterValue/);
   assert.match(homeJs, /data-refresh-live/);
-  assert.match(homeJs, /data-live-heads>表头设置/);
+  assert.match(homeJs, /uiButton\("表头设置", "data-live-heads"/);
   assert.match(homeJs, /京准通主账户ID/);
   assert.match(homeJs, /function refreshLive/);
   assert.match(homeJs, /xm-hm-live-refresh/);
@@ -161,7 +161,9 @@ test("live page has fee target, warning and update time", () => {
   assert.match(homeJs, /liveChipHtml\("link", "off", "掉线"/);
   assert.doesNotMatch(homeJs, /liveChipHtml\("jzOk"/);
   assert.match(homeJs, /liveChipHtml\("paid", "no", "未接入店铺"/);
-  assert.match(homeJs, /liveSearchHtml\(\) \+\s*'<div class="xm-hm-panel">/);
+  assert.match(homeJs, /liveSearchHtml\(\) \+/);
+  assert.match(homeJs, /function liveBoardHtml/);
+  assert.match(homeJs, /window\.XmUI\.DataTable/);
   assert.match(homeJs, /label: "费比设置"/);
   assert.match(homeJs, /label: "费比监控"/);
   assert.doesNotMatch(homeJs, /label: "实时利润"/);
