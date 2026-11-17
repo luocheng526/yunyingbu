@@ -9,7 +9,7 @@
   </head>
   <body>
     <div id="site-nav"></div>
-    <main class="xm-page">
+    <main class="xm-page xm-ui-scope">
       <p class="kicker">数据中心</p>
       <h1>占位</h1>
       <nav class="data-subnav" id="data-subnav"></nav>
@@ -18,27 +18,44 @@
         <p class="muted" id="notice">建设中</p>
       </section>
     </main>
+    <script src="/data-xm-ui.js"></script>
     <script src="/data-overview.js?v=xm-module"></script>
     <script src="/shared/nav.js"></script>
     <script src="/data-subnav.js"></script>
     <script>
       (function () {
-        fetch("/api/data/placeholder", {
-          credentials: "same-origin",
-          headers: { Accept: "application/json" }
-        })
-          .then(function (res) {
-            if (!res.ok) throw new Error("接口 " + res.status);
-            return res.json();
-          })
-          .then(function (data) {
-            if (data.notice) {
-              document.getElementById("notice").textContent = data.notice;
+        const box = document.getElementById("placeholder");
+        function paint(notice) {
+          const kit = window.XmUI;
+          if (!kit || !box) {
+            const n = document.getElementById("notice");
+            if (n) {
+              n.textContent = notice || "建设中";
             }
-          })
-          .catch(function () {
-            document.getElementById("notice").textContent = "建设中";
+            return;
+          }
+          box.innerHTML = kit.EmptyState({
+            title: "占位",
+            description: (notice || "建设中") + "。此页为占位，功能尚未接入。不连接业务库。"
           });
+        }
+        window.XmDataUi.ready(function () {
+          paint("建设中");
+          fetch("/api/data/placeholder", {
+            credentials: "same-origin",
+            headers: { Accept: "application/json" }
+          })
+            .then(function (res) {
+              if (!res.ok) throw new Error("接口 " + res.status);
+              return res.json();
+            })
+            .then(function (data) {
+              paint(data.notice || "建设中");
+            })
+            .catch(function () {
+              paint("建设中");
+            });
+        });
       })();
     </script>
   </body>

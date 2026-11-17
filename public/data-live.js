@@ -165,47 +165,61 @@
   }
 
   function liveChartHtml(chart) {
+    const kit = window.XmUI;
+    if (!kit) {
+      return "";
+    }
     const down = Number(chart && chart.delta) < 0;
-    return (
-      '<article class="xm-hm-chart"><div class="xm-hm-card-head"><span>' +
-      escapeHtml((chart && chart.label) || "实时指标") +
-      '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
-      escapeHtml((chart && chart.value) || "—") +
-      '</div><div class="xm-hm-trend ' +
-      (down ? "is-down" : "is-up") +
-      '">环比 ' +
-      (down ? "↘" : "↗") +
-      " " +
-      Math.abs(Number(chart && chart.delta) || 0).toFixed(2) +
-      "%</div>" +
-      compareLineHtml(chart) +
-      "</article>"
-    );
+    return kit.ChartCard({
+      title: (chart && chart.label) || "实时指标",
+      legend: [
+        { label: "昨天", color: "#2f54eb" },
+        { label: "今天", color: "#cf1322" }
+      ],
+      content:
+        kit.StatCard({
+          label: (chart && chart.label) || "实时指标",
+          value: String((chart && chart.value) || "—"),
+          note:
+            "环比 " +
+            (down ? "↘" : "↗") +
+            " " +
+            Math.abs(Number(chart && chart.delta) || 0).toFixed(2) +
+            "%",
+          tone: down ? "orange" : "blue",
+          trend: down ? undefined : "up",
+          icon: "chart"
+        }) +
+        compareLineHtml(chart)
+    });
   }
 
   function liveCardHtml(card) {
-    return (
-      '<article class="xm-hm-card"><div class="xm-hm-card-head"><span>' +
-      escapeHtml(card.label) +
-      '</span></div><div class="xm-hm-value">' +
-      escapeHtml(card.value) +
-      "</div>" +
-      (card.extra ? '<div class="xm-hm-trend">' + escapeHtml(card.extra) + "</div>" : "") +
-      "</article>"
-    );
+    const kit = window.XmUI;
+    if (!kit) {
+      return "";
+    }
+    return kit.StatCard({
+      label: card.label,
+      value: String(card.value),
+      note: card.extra || "",
+      icon: "chart",
+      tone: "blue"
+    });
   }
 
   function rankMark(index) {
+    const kit = window.XmUI;
     if (index === 0) {
-      return '<b class="xm-hm-cup gold">1</b>';
+      return kit ? kit.StatusBadge({ label: "1", tone: "green" }) : "1";
     }
     if (index === 1) {
-      return '<b class="xm-hm-cup silver">2</b>';
+      return kit ? kit.StatusBadge({ label: "2", tone: "blue" }) : "2";
     }
     if (index === 2) {
-      return '<b class="xm-hm-cup bronze">3</b>';
+      return kit ? kit.StatusBadge({ label: "3", tone: "orange" }) : "3";
     }
-    return "<span>" + (index + 1) + "</span>";
+    return String(index + 1);
   }
 
   function liveShopRowHtml(row, index) {
@@ -284,10 +298,16 @@
   function createLiveDashboard(root) {
     ensureCss();
     stripPageChrome(root);
+    if (window.XmDataUi) {
+      window.XmDataUi.markScope(root);
+    }
     let board = root.querySelector("#board");
     if (!board) {
-      root.innerHTML = '<main class="xm-page data-overview-root"><div id="board"></div></main>';
+      root.innerHTML = '<main class="xm-page xm-ui-scope data-overview-root"><div id="board"></div></main>';
       board = root.querySelector("#board");
+    }
+    if (window.XmDataUi) {
+      window.XmDataUi.markScope(board);
     }
     let payload = null;
     let liveAt = "";
@@ -299,55 +319,60 @@
       if (dead || !payload || !board) {
         return;
       }
+      const kit = window.XmUI;
+      const ui = window.XmDataUi;
+      if (!kit || !ui) {
+        return;
+      }
       const shops = payload.shops || [];
       const liveCards = pickLiveCards(payload.cards);
       const shopCount = (payload.summary && payload.summary.shops) || shops.length;
-      const viewBtns = HOME_VIEWS.map(function (item) {
-        const on = item.key === "live" ? " is-on" : "";
-        return (
-          '<a href="' +
-          escapeHtml(item.href) +
-          '" data-view="' +
-          escapeHtml(item.key) +
-          '" class="' +
-          on.trim() +
-          '">' +
-          escapeHtml(item.label) +
-          "</a>"
-        );
-      }).join("");
       board.innerHTML =
-        '<div class="xm-hm" id="xm-hm">' +
-        '<div class="xm-hm-mark" aria-hidden="true">' +
-        new Array(18)
-          .fill(0)
-          .map(function () {
-            return "<span>" + escapeHtml(mark) + "</span>";
-          })
-          .join("") +
-        "</div>" +
-        '<div class="xm-hm-bar"><div class="xm-hm-views">' +
-        viewBtns +
-        "</div></div>" +
-        '<section class="xm-hm-live">' +
-        '<div class="xm-hm-live-clock">每5分钟自动刷新' +
-        (liveAt ? " · 上次 " + escapeHtml(liveAt) : "") +
-        '</div><div class="xm-hm-live-charts">' +
+        kit.PageContentHeader({
+          eyebrow: "数据中心",
+          title: payload.title || "实时看板",
+          description: "每5分钟自动刷新" + (liveAt ? " · 上次 " + liveAt : "")
+        }) +
+        ui.viewTabs(HOME_VIEWS, "live") +
         liveChartHtml(payload.hero) +
         liveChartHtml(payload.paid) +
-        '</div><div class="xm-hm-live-cards">' +
+        '<div class="xm-ui-stat-grid">' +
         liveCards.map(liveCardHtml).join("") +
-        '</div><div class="xm-hm-panel"><h2>店铺 <span>' +
-        escapeHtml(String(shopCount)) +
-        " 店</span></h2>" +
-        '<table class="xm-hm-table"><thead><tr><th>排名</th><th>店铺名称</th><th>实时销售额</th><th>实时付费金额</th><th>实时利润</th><th>实时付费ROI</th><th>实时付费成交额</th><th>实时费比</th></tr></thead><tbody>' +
-        shops
-          .map(function (row, i) {
-            return liveShopRowHtml(row, i);
+        "</div>" +
+        kit.ContentCard({
+          title: "店铺 " + String(shopCount) + " 店",
+          content: kit.DataTable({
+            columns: [
+              {
+                key: "rank",
+                label: "排名",
+                render: function (v) {
+                  return v;
+                }
+              },
+              { key: "shop", label: "店铺名称" },
+              { key: "liveAmount", label: "实时销售额" },
+              { key: "paidAmount", label: "实时付费金额" },
+              { key: "profit", label: "实时利润" },
+              { key: "roi", label: "实时付费ROI" },
+              { key: "paidDeal", label: "实时付费成交额" },
+              { key: "feeRate", label: "实时费比" }
+            ],
+            rows: shops.map(function (row, i) {
+              return {
+                rank: rankMark(i),
+                shop: row.shop,
+                liveAmount: row.liveAmount || "—",
+                paidAmount: row.paidAmount || "—",
+                profit: row.profit || "—",
+                roi: row.roi || "—",
+                paidDeal: row.paidDeal || "—",
+                feeRate: row.feeRate || "—"
+              };
+            })
           })
-          .join("") +
-        "</tbody></table></div></section>" +
-        '<p class="xm-hm-note">实时页每5分钟自动拉一次数。版式与首页实时板块相同。</p></div>';
+        }) +
+        '<p>实时页每5分钟自动拉一次数。</p>';
     }
 
     function applyPayload(data) {
@@ -393,10 +418,26 @@
         })
         .catch(function (err) {
           if (!dead && board) {
-            board.innerHTML = '<p class="data-table error">' + escapeHtml(err.message) + "</p>";
+            board.innerHTML = window.XmUI
+              ? window.XmUI.EmptyState({ title: err.message })
+              : '<p class="data-table error">' + escapeHtml(err.message) + "</p>";
           }
         });
     }
+
+    board.addEventListener("click", function (event) {
+      const tab = event.target.closest("[data-view]");
+      if (!tab) {
+        return;
+      }
+      const key = tab.getAttribute("data-view");
+      const item = HOME_VIEWS.filter(function (view) {
+        return view.key === key;
+      })[0];
+      if (item && item.href && item.key !== "live") {
+        window.location.href = item.href;
+      }
+    });
 
     json("/api/auth/me").then(function (user) {
       if (dead || !user) {
@@ -408,7 +449,15 @@
       }
     });
 
-    load();
+    if (window.XmDataUi) {
+      window.XmDataUi.ready(function () {
+        if (!dead) {
+          load();
+        }
+      });
+    } else {
+      load();
+    }
     poll = window.setInterval(function () {
       if (!dead) {
         load();

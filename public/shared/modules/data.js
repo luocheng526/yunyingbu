@@ -57,8 +57,16 @@
     return false;
   }
 
+  function loadXmUi() {
+    return loadScript("/data-xm-ui.js");
+  }
+
   function loadScript(src) {
     return new Promise(function (resolve) {
+      if (src.indexOf("data-xm-ui.js") !== -1 && window.XmDataUi) {
+        resolve();
+        return;
+      }
       if (factoryReady(src)) {
         resolve();
         return;
@@ -97,12 +105,14 @@
 
   function mountLiveDashboard(root) {
     ensureSheet();
-    return loadScript("/data-live.js?v=home-live1").then(function () {
+    return loadXmUi().then(function () {
+      return loadScript("/data-live.js?v=home-live1");
+    }).then(function () {
       if (typeof window.XmDataCreateLiveDashboard === "function") {
         return window.XmDataCreateLiveDashboard(root);
       }
       root.innerHTML =
-        '<main class="xm-page data-fill data-overview-root"><p class="lead">示例数据，尚未接入店铺。</p></main>';
+        '<main class="xm-page xm-ui-scope data-fill data-overview-root"><p class="lead">示例数据，尚未接入店铺。</p></main>';
       return function unmount() {
         root.innerHTML = "";
       };
@@ -113,14 +123,16 @@
     ensureSheet();
     if (root && !root.querySelector("#board")) {
       root.innerHTML =
-        '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载店铺数据…</p></div></main>';
+        '<main class="xm-page xm-ui-scope data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载店铺数据…</p></div></main>';
     }
-    return loadScript("/data-shops.js?v=shop-wide2").then(function () {
+    return loadXmUi().then(function () {
+      return loadScript("/data-shops.js?v=shop-wide2");
+    }).then(function () {
       if (typeof window.XmDataCreateShopDashboard === "function") {
         return window.XmDataCreateShopDashboard(root);
       }
       root.innerHTML =
-        '<main class="xm-page data-fill data-overview-root"><p class="lead">示例数据，尚未接入店铺。</p></main>';
+        '<main class="xm-page xm-ui-scope data-fill data-overview-root"><p class="lead">示例数据，尚未接入店铺。</p></main>';
       return function unmount() {
         root.innerHTML = "";
       };
@@ -129,12 +141,14 @@
 
   function mountGoodsDashboard(root) {
     ensureSheet();
-    return loadScript("/data-goods.js?v=goods-erp1").then(function () {
+    return loadXmUi().then(function () {
+      return loadScript("/data-goods.js?v=goods-erp1");
+    }).then(function () {
       if (typeof window.XmDataCreateGoodsDashboard === "function") {
         return window.XmDataCreateGoodsDashboard(root);
       }
       root.innerHTML =
-        '<main class="xm-page data-fill data-overview-root"><p class="lead">示例数据，尚未接入店铺。</p></main>';
+        '<main class="xm-page xm-ui-scope data-fill data-overview-root"><p class="lead">示例数据，尚未接入店铺。</p></main>';
       return function unmount() {
         root.innerHTML = "";
       };
@@ -145,14 +159,16 @@
     ensureSheet();
     if (root && !root.querySelector("#board")) {
       root.innerHTML =
-        '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载数据总览…</p></div></main>';
+        '<main class="xm-page xm-ui-scope data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载数据总览…</p></div></main>';
     }
-    return loadScript("/data-overview.js?v=data-ov5").then(function () {
+    return loadXmUi().then(function () {
+      return loadScript("/data-overview.js?v=data-ov5");
+    }).then(function () {
       if (typeof window.XmDataCreateDashboard === "function") {
         return window.XmDataCreateDashboard(root);
       }
           root.innerHTML =
-            '<main class="xm-page data-fill data-overview-root"><p class="lead">示例数据，尚未接入店铺。</p></main>';
+            '<main class="xm-page xm-ui-scope data-fill data-overview-root"><p class="lead">示例数据，尚未接入店铺。</p></main>';
       return function unmount() {
         root.innerHTML = "";
       };
@@ -162,7 +178,7 @@
   function mountList(root, spec) {
     ensureSheet();
     root.innerHTML =
-      '<main class="xm-page data-fill">' +
+      '<main class="xm-page xm-ui-scope data-fill">' +
       "<h1>" +
       escapeHtml(spec.title) +
       "</h1>" +
@@ -170,18 +186,8 @@
       '<p class="lead">' +
       escapeHtml(spec.lead) +
       "</p>" +
-      '<section class="kpi-grid" id="cards"></section>' +
-      '<section class="panel"><h2>' +
-      escapeHtml(spec.tableTitle) +
-      '</h2><table class="data-table"><thead><tr>' +
-      spec.headers
-        .map(function (h) {
-          return "<th>" + escapeHtml(h) + "</th>";
-        })
-        .join("") +
-      '</tr></thead><tbody id="rows"><tr><td colspan="' +
-      spec.headers.length +
-      '">正在加载…</td></tr></tbody></table></section></main>';
+      '<div id="cards"></div>' +
+      '<div id="rows-wrap"></div></main>';
 
     const sub = document.createElement("script");
     sub.src = "/data-subnav.js";
@@ -189,9 +195,11 @@
 
     let dead = false;
     const cardsEl = root.querySelector("#cards");
-    const rowsEl = root.querySelector("#rows");
+    const rowsWrap = root.querySelector("#rows-wrap");
 
-    fetch(spec.api, { credentials: "same-origin", headers: { Accept: "application/json" } })
+    loadXmUi().then(function () {
+      return fetch(spec.api, { credentials: "same-origin", headers: { Accept: "application/json" } });
+    })
       .then(function (res) {
         if (!res.ok) {
           throw new Error("接口 " + res.status);
@@ -202,40 +210,30 @@
         if (dead) {
           return;
         }
-        cardsEl.innerHTML = (data.cards || [])
-          .map(function (card) {
-            return (
-              '<article class="kpi-card"><div class="label">' +
-              escapeHtml(card.label) +
-              '</div><div class="value">' +
-              escapeHtml(card.value) +
-              (card.unit ? '<span class="unit">' + escapeHtml(card.unit) + "</span>" : "") +
-              "</div></article>"
-            );
-          })
-          .join("");
-        rowsEl.innerHTML = (data.rows || [])
-          .map(function (row) {
-            return (
-              "<tr>" +
-              spec.cells(row)
-                .map(function (cell) {
-                  return "<td>" + escapeHtml(cell) + "</td>";
-                })
-                .join("") +
-              "</tr>"
-            );
-          })
-          .join("");
+        const kit = window.XmUI;
+        const ui = window.XmDataUi;
+        if (!kit || !ui) {
+          return;
+        }
+        cardsEl.innerHTML = ui.statGrid(data.cards || []);
+        const columns = spec.headers.map(function (h, i) {
+          return { key: "c" + i, label: h };
+        });
+        const rows = (data.rows || []).map(function (row) {
+          const obj = {};
+          spec.cells(row).forEach(function (cell, i) {
+            obj["c" + i] = cell;
+          });
+          return obj;
+        });
+        rowsWrap.innerHTML = kit.ContentCard({
+          title: spec.tableTitle,
+          content: kit.DataTable({ columns: columns, rows: rows })
+        });
       })
       .catch(function (err) {
-        if (!dead) {
-          rowsEl.innerHTML =
-            '<tr><td colspan="' +
-            spec.headers.length +
-            '" class="error">' +
-            escapeHtml(err.message) +
-            "</td></tr>";
+        if (!dead && window.XmUI) {
+          rowsWrap.innerHTML = window.XmUI.EmptyState({ title: err.message });
         }
       });
 
@@ -256,7 +254,7 @@
             stop = unmount;
           });
         } catch (_err) {
-          root.innerHTML = '<main class="xm-page"><p class="ch-empty">页面加载失败</p></main>';
+          root.innerHTML = '<main class="xm-page xm-ui-scope"><p class="ch-empty">页面加载失败</p></main>';
         }
         return function unmount() {
           if (typeof stop === "function") {

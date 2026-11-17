@@ -694,66 +694,55 @@
           ? '<span class="ch-logo ch-logo-shop" aria-hidden="true"></span>'
           : "";
     return (
-      '<td class="ch-name"><span class="ch-bar"></span>' +
+      '<span class="ch-name"><span class="ch-bar"></span>' +
       mark +
       "<span>" +
       escapeHtml(row.name) +
-      "</span></td>"
+      "</span></span>"
     );
   }
 
   function toolButtons() {
-    return (
-      '<div class="ch-tools">' +
-      '<button type="button" disabled>打标</button>' +
-      '<button type="button" disabled>目标</button>' +
-      '<button type="button" class="is-on" disabled>列表</button>' +
-      '<button type="button" disabled>周期</button>' +
-      '<button type="button" disabled>图表</button>' +
-      '<button type="button" disabled>个人默认视图</button>' +
-      '<button type="button" disabled>更多数据</button>' +
-      '<button type="button" disabled>导出</button></div>'
-    );
+    const ui = window.XmDataUi;
+    if (ui) {
+      return ui.tools(["打标", "目标", "列表", "周期", "图表", "个人默认视图", "更多数据", "导出"], "列表");
+    }
+    return "";
   }
 
   function tableHtml(block, extraLeft) {
-    const head =
-      "<tr>" +
-      (block.columns || [])
-        .map(function (col) {
-          return "<th>" + escapeHtml(col) + " <i></i></th>";
-        })
-        .join("") +
-      "</tr>";
-    const body = (block.rows || [])
-      .map(function (row) {
-        return (
-          "<tr>" +
-          nameCell(row) +
-          (row.cells || [])
-            .map(function (cell) {
-              return "<td>" + escapeHtml(cell) + "</td>";
-            })
-            .join("") +
-          "</tr>"
-        );
-      })
-      .join("");
-    return (
-      '<section class="ch-table">' +
-      '<div class="ch-table-bar"><strong>' +
-      escapeHtml(block.title) +
-      "</strong>" +
-      (extraLeft || "") +
-      '<label class="ch-zero"><input type="checkbox" disabled /> 显示数字</label>' +
-      toolButtons() +
-      "</div>" +
-      '<div class="ch-table-wrap"><table><thead>' +
-      head +
-      "</thead><tbody>" +
-      body +
-      "</tbody></table></div></section>"
-    );
+    const kit = window.XmUI;
+    if (!kit) {
+      return "";
+    }
+    const cols = block.columns || [];
+    const columns = cols.map(function (col, i) {
+      if (i === 0) {
+        return {
+          key: "name",
+          label: col,
+          render: function (_v, row) {
+            return nameCell(row._src || row);
+          }
+        };
+      }
+      return { key: "c" + i, label: col };
+    });
+    const rows = (block.rows || []).map(function (row) {
+      const obj = { name: row.name, _src: row };
+      (row.cells || []).forEach(function (cell, i) {
+        obj["c" + (i + 1)] = cell;
+      });
+      return obj;
+    });
+    return kit.ContentCard({
+      title: block.title,
+      content:
+        (extraLeft || "") +
+        '<label class="ch-zero"><input type="checkbox" disabled /> 显示数字</label>' +
+        toolButtons() +
+        kit.DataTable({ columns: columns, rows: rows })
+    });
   }
 
   function inclusiveDays(from, to) {
@@ -881,12 +870,18 @@
   function createDashboard(root) {
     ensureCss();
     stripPageChrome(root);
+    if (window.XmDataUi) {
+      window.XmDataUi.markScope(root);
+    }
     let board = root.querySelector("#board");
     if (!board) {
-      root.innerHTML = '<main class="xm-page data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载数据总览…</p></div></main>';
+      root.innerHTML = '<main class="xm-page xm-ui-scope data-overview-root ch-root"><div id="board"><p class="ch-empty">正在加载数据总览…</p></div></main>';
       board = root.querySelector("#board");
     } else if (!board.innerHTML.trim()) {
       board.innerHTML = '<p class="ch-empty">正在加载数据总览…</p>';
+    }
+    if (window.XmDataUi) {
+      window.XmDataUi.markScope(board);
     }
     const state = {
       range: "日",
@@ -919,104 +914,89 @@
       if (dead || !state.payload || !board) {
         return;
       }
+      const kit = window.XmUI;
+      const ui = window.XmDataUi;
+      if (!kit || !ui) {
+        return;
+      }
       const payload = filteredPayload();
       const hero = ensureHeroSeries(payload.hero || {});
       const down = Number(hero.delta) < 0;
-      const cards = (payload.cards || [])
-        .map(function (card) {
-          return (
-            '<article class="ch-card"><div class="label">' +
-            escapeHtml(card.label) +
-            '</div><div class="value">' +
-            escapeHtml(/%/.test(String(card.value || "")) ? card.value : fmtInt(card.value)) +
-            "</div>" +
-            (card.extra ? '<div class="extra">' + escapeHtml(card.extra) + "</div>" : "") +
-            "</article>"
-          );
+      const cards = ui.statGrid(
+        (payload.cards || []).map(function (card) {
+          return {
+            label: card.label,
+            value: /%/.test(String(card.value || "")) ? card.value : fmtInt(card.value),
+            extra: card.extra || ""
+          };
         })
-        .join("");
-      const tabs = (payload.sections || SECTIONS)
-        .map(function (name) {
-          return (
-            '<button type="button" data-section="' +
-            escapeHtml(name) +
-            '"' +
-            (name === state.section ? ' class="is-active"' : "") +
-            ">" +
-            escapeHtml(name) +
-            "</button>"
-          );
-        })
-        .join("");
-      const ranges = RANGES.map(function (label) {
-        return (
-          '<button type="button" data-range="' +
-          escapeHtml(label) +
-          '"' +
-          (label === state.range ? ' class="is-active"' : "") +
-          ">" +
-          escapeHtml(label) +
-          "</button>"
-        );
-      }).join("");
-      const shopOpts =
-        '<option value="">请选择店铺</option>' +
-        ((payload.shops || []).map(function (shop) {
-          return (
-            '<option value="' +
-            escapeHtml(shop.shopId) +
-            '"' +
-            (shop.shopId === state.shopId ? " selected" : "") +
-            ">" +
-            escapeHtml(shop.shopName) +
-            "</option>"
-          );
-        }).join(""));
+      );
+      const shopFilter = kit.FilterToolbar({
+        search: false,
+        filters: [
+          {
+            label: "请选择店铺",
+            name: "shop",
+            options: [{ value: "", label: "请选择店铺" }].concat(
+              (payload.shops || []).map(function (shop) {
+                return { value: shop.shopId, label: shop.shopName };
+              })
+            )
+          }
+        ]
+      });
       const lists =
         state.section === "渠道列表"
-          ? tableHtml(payload.channelTable) +
-            tableHtml(
-              payload.shopTable,
-              '<label class="ch-pick"><select data-shop>' + shopOpts + "</select></label>"
-            )
-          : '<p class="ch-empty">「' + escapeHtml(state.section) + "」为示例，尚未接入。</p>";
+          ? tableHtml(payload.channelTable) + tableHtml(payload.shopTable, shopFilter)
+          : ui.empty("「" + state.section + "」为示例，尚未接入。");
       board.innerHTML =
-        '<div class="ch-top"><div class="ch-title">数据总览</div>' +
-        '<div class="ch-right"><span class="ch-time">（统计时间：' +
-        escapeHtml(payload.dateLabel || "") +
-        "）</span>" +
-        '<div class="ch-cal-wrap"><div class="ch-ranges">' +
-        ranges +
-        "</div></div></div></div>" +
-        '<div class="ch-summary"><span class="ch-sum-title">综合指标</span>' +
-        '<span class="ch-pill">渠道' +
-        escapeHtml(String(payload.summary.channels)) +
-        "个</span>" +
-        '<span class="ch-pill">店铺' +
-        escapeHtml(String(payload.summary.shops)) +
-        '个</span><button type="button" class="ch-set" disabled>设定指标</button></div>' +
-        '<div class="ch-metrics"><article class="ch-card ch-hero"><div class="label">' +
-        "实时销售额" +
-        '<span class="ch-clock">' +
-        escapeHtml(shanghaiHms()) +
-        '</span></div><div class="value">' +
-        escapeHtml(fmtInt(hero.value)) +
-        '</div><div class="delta ' +
-        (down ? "is-down" : "is-up") +
-        '">' +
-        escapeHtml(String(Math.abs(Number(hero.delta || 0)).toFixed(2))) +
-        "% " +
-        (down ? "↓" : "↑") +
+        kit.PageContentHeader({
+          eyebrow: "数据中心",
+          title: "数据总览",
+          description: "（统计时间：" + (payload.dateLabel || "") + "）"
+        }) +
+        '<div class="ch-cal-wrap">' +
+        ui.rangeTabs(RANGES, state.range) +
         "</div>" +
-        compareSpark(hero) +
-        '<div class="ch-axis"><span>00</span><span>12</span><span>23</span></div>' +
-        '<div class="ch-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</div></article>' +
+        kit.SectionTitle({ title: "综合指标" }) +
+        '<div class="ch-summary">' +
+        '<span class="ch-pill">' +
+        kit.StatusBadge({ label: "渠道" + String(payload.summary.channels) + "个", tone: "blue" }) +
+        "</span>" +
+        '<span class="ch-pill">' +
+        kit.StatusBadge({ label: "店铺" + String(payload.summary.shops) + "个", tone: "green" }) +
+        "</span>" +
+        kit.button({ label: "设定指标", size: "small", variant: "secondary", disabled: true }) +
+        "</div>" +
+        kit.ChartCard({
+          title: "实时销售额",
+          legend: [
+            { label: "昨天", color: "#2f54eb" },
+            { label: "今天", color: "#cf1322" }
+          ],
+          content:
+            '<span class="ch-clock">' +
+            escapeHtml(shanghaiHms()) +
+            "</span>" +
+            kit.StatCard({
+              label: "实时销售额",
+              value: fmtInt(hero.value),
+              note: String(Math.abs(Number(hero.delta || 0)).toFixed(2)) + "% " + (down ? "↓" : "↑"),
+              tone: down ? "orange" : "blue",
+              trend: down ? undefined : "up",
+              icon: "chart"
+            }) +
+            compareSpark(hero) +
+            '<div class="ch-axis"><span>00</span><span>12</span><span>23</span></div>'
+        }) +
         cards +
-        "</div>" +
-        '<div class="ch-tabs">' +
-        tabs +
-        "</div>" +
+        ui.sectionTabs(payload.sections || SECTIONS, state.section) +
         lists;
+      const shopSel = board.querySelector('select[name="shop"]');
+      if (shopSel) {
+        shopSel.setAttribute("data-shop", "");
+        shopSel.value = state.shopId || "";
+      }
       paintSparkSvg(board.querySelector(".ch-spark"), hero);
       syncCalPop();
     }
@@ -1285,7 +1265,15 @@
       }
     });
 
-    load();
+    if (window.XmDataUi) {
+      window.XmDataUi.ready(function () {
+        if (!dead) {
+          load();
+        }
+      });
+    } else {
+      load();
+    }
 
     return function unmount() {
       dead = true;
