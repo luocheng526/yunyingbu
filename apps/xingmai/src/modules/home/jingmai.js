@@ -535,6 +535,22 @@ function latestDataStamp(samples) {
   return stamp;
 }
 
+function asStamp(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return beijingParts(value).stamp;
+  }
+  const match = String(value || "").trim().match(/(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/);
+  return match ? match[1] + " " + match[2] : "";
+}
+
+function shownStamp(reading, today, loggedStamp, loggedIn) {
+  const dataStamp = asStamp(reading && reading.capturedAt) || asStamp(today && today.capturedAt);
+  if (loggedIn && loggedStamp && (!dataStamp || loggedStamp > dataStamp)) {
+    return loggedStamp;
+  }
+  return dataStamp;
+}
+
 function sampleIsFresh(stamp, now) {
   const sampleMs = stampMs(stamp);
   const nowMs = stampMs(now && now.stamp);
@@ -858,6 +874,7 @@ export function buildLiveView({ shops, samples, now }) {
     const reading = latestDealReading(mine, day);
     const compare = resolveDealCompare(reading || {});
     const hasSession = shop.enabled !== false && Array.isArray(shop.cookies) && shop.cookies.length > 0;
+    const loggedStamp = asStamp(shop.linkedAt);
     const loginExpired = shop.enabled !== false && shop.authState === "login_expired";
     const fresh = sampleIsFresh(latestDataStamp(mine), now);
     const dealMissing = !reading || reading.dealAmount == null;
@@ -899,7 +916,7 @@ export function buildLiveView({ shops, samples, now }) {
       dealComparable: compare.comparable,
       platformUpdatedAt: compare.platformUpdatedAt,
       dealPoints: dealPointsFromSamples(mine, day),
-      capturedAt: reading ? displayStamp(reading.capturedAt) : today ? displayStamp(today.capturedAt) : "",
+      capturedAt: displayStamp(shownStamp(reading, today, loggedStamp, hasSession && !loginExpired)),
       todayHours: hoursFromSamples(mine, day),
       yesterdayHours: hoursFromSamples(mine, yesterday),
       todayPaidHours: hoursFromSamples(mine, day, "paidAmount"),
