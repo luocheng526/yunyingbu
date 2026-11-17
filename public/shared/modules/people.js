@@ -1,4 +1,4 @@
-/* xm-module-people org-board 0.1.232-former-names */
+/* xm-module-people org-board 0.1.233-login-ops */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.232-former-names";
+    const href = "/people.css?v=0.1.233-login-ops";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -254,7 +254,7 @@
         '<div class="org-filter-pop" id="org-filter-pop" hidden></div></div>' +
         '<div class="org-pane" data-pane="members" hidden>' +
         '<section class="panel"><h2>身份名册</h2>' +
-        '<p class="lead">人员是人员，不一定有店铺；新人可以还没分配。表头可筛总监、经理、主管、储备、运营、助理、状态。总监、经理、主管、储备、运营、助理双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。导入按姓名合并：一模一样的名字覆盖原行，对不上的名字当新员工，并落盘，强制刷新还在。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
+        '<p class="lead">人员是人员，不一定有店铺；新人可以还没分配。表头可筛总监、经理、主管、储备、运营、助理、状态。总监、经理、主管、储备、运营、助理双击可改，仅罗成、韩梦凯、沈子晗能改，其他人不能改。账号密码点「登录信息」「设置密码」：罗成看全部，沈子晗/韩梦凯看本组责权，运营只看改自己的。导入按姓名合并：一模一样的名字覆盖原行，对不上的名字当新员工，并落盘，强制刷新还在。勾选后可统一改密码或删除。点新增人员弹出对话框。</p>' +
         '<div class="org-kpis" id="people-kpis"></div>' +
         '<div class="org-toolbar">' +
         '<div class="org-search-form" id="people-search-form">' +
@@ -284,7 +284,7 @@
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="peopleOperator"><span class="org-filter-name">运营</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="peopleAssistant"><span class="org-filter-name">助理</span><span class="org-filter-caret">▾</span></button></th>' +
         '<th class="org-th-filter"><button type="button" class="org-filter-btn" data-filter-key="status"><span class="org-filter-name">状态</span><span class="org-filter-caret">▾</span></button></th>' +
-        '<th>账号</th><th>登录密码</th></tr></thead>' +
+        '<th>账号</th><th>登录密码</th><th>操作</th></tr></thead>' +
         '<tbody id="people-tbody"></tbody></table></div>' +
         '<div class="people-pager" id="people-pager">' +
         '<div class="people-pager-sizes">' +
@@ -371,6 +371,30 @@
         '<div class="org-actions" style="margin-top:12px">' +
         '<button type="submit">保存</button>' +
         '<button type="button" class="ghost" id="people-cancel">取消</button>' +
+        "</div></form></div>" +
+        '<div class="org-modal" id="people-login-modal">' +
+        '<form class="org-dialog people-login-dialog" id="people-login-form">' +
+        '<h3 id="people-login-title">登录信息</h3>' +
+        '<p class="muted" id="people-login-meta"></p>' +
+        '<label>登录账号<input name="username" maxlength="40" autocomplete="off" /></label>' +
+        '<label>当前密码<input name="password" maxlength="128" autocomplete="off" /></label>' +
+        '<p class="muted">罗成可看全部账号和密码。其他人按责权：经理看本组，运营只看自己的。</p>' +
+        '<p class="status error" id="people-login-error" hidden></p>' +
+        '<div class="org-actions" style="margin-top:12px">' +
+        '<button type="submit">保存账号</button>' +
+        '<button type="button" class="ghost" id="people-login-close">关闭</button>' +
+        "</div></form></div>" +
+        '<div class="org-modal" id="people-pass-modal">' +
+        '<form class="org-dialog people-pass-dialog" id="people-pass-form">' +
+        '<h3 id="people-pass-title">设置密码</h3>' +
+        '<p class="muted" id="people-pass-meta"></p>' +
+        '<label>新密码<input name="password" type="password" maxlength="128" autocomplete="new-password" /></label>' +
+        '<label>确认新密码<input name="confirm" type="password" maxlength="128" autocomplete="new-password" /></label>' +
+        '<p class="muted">密码为 6–128 位，不能全为空格。保存后该人员旧登录立即失效。</p>' +
+        '<p class="status error" id="people-pass-error" hidden></p>' +
+        '<div class="org-actions" style="margin-top:12px">' +
+        '<button type="button" class="ghost" id="people-pass-cancel">取消</button>' +
+        '<button type="submit">保存密码</button>' +
         "</div></form></div></main>";
 
       const kpis = root.querySelector("#org-kpis");
@@ -398,6 +422,13 @@
       const peopleForm = root.querySelector("#people-form");
       const peopleModal = root.querySelector("#people-modal");
       const peopleFormError = root.querySelector("#people-form-error");
+      const peopleLoginModal = root.querySelector("#people-login-modal");
+      const peopleLoginForm = root.querySelector("#people-login-form");
+      const peopleLoginError = root.querySelector("#people-login-error");
+      const peoplePassModal = root.querySelector("#people-pass-modal");
+      const peoplePassForm = root.querySelector("#people-pass-form");
+      const peoplePassError = root.querySelector("#people-pass-error");
+      let loginPersonId = "";
       const PEOPLE_HEADERS = ["姓名", "总监", "经理", "主管", "储备", "运营", "助理", "状态", "账号", "登录密码"];
       const PEOPLE_KEYS = ["name", "director", "lineManager", "supervisor", "reserve", "operator", "assistant", "status", "username", "password"];
       if (peopleForm && peopleForm.name && peopleForm.username) {
@@ -408,7 +439,14 @@
       function keepPeopleFormTyping(event) {
         event.stopPropagation();
       }
-      if (peopleForm) {
+      [
+        peopleForm,
+        peopleLoginForm,
+        peoplePassForm
+      ].forEach(function (formEl) {
+        if (!formEl) {
+          return;
+        }
         [
           "pointerdown",
           "mousedown",
@@ -421,9 +459,9 @@
           "compositionupdate",
           "compositionend"
         ].forEach(function (name) {
-          peopleForm.addEventListener(name, keepPeopleFormTyping);
+          formEl.addEventListener(name, keepPeopleFormTyping);
         });
-      }
+      });
       function openPeopleForm() {
         if (!roster.canEdit) {
           return;
@@ -1514,17 +1552,24 @@
             (person.status === "离职" ? " selected" : "") +
             ">离职</option></select></td>" +
             '<td class="people-cell' +
-            (canEdit ? " can-edit" : "") +
+            (person.canEditLogin ? " can-edit" : "") +
             '" data-field="username" title="' +
-            (canEdit ? "双击修改，点别处保存" : "仅罗成、韩梦凯、沈子晗能改") +
+            (person.canEditLogin ? "双击修改，点别处保存" : person.canSeeLogin ? "点登录信息查看" : "按责权不能看他人账号") +
             '">' +
-            escapeHtml(person.username || person.name || "—") +
+            escapeHtml(person.canSeeLogin ? person.username || person.name || "—" : "—") +
             '</td><td class="people-cell' +
-            (canEdit ? " can-edit" : "") +
+            (person.canEditLogin ? " can-edit" : "") +
             '" data-field="password" title="' +
-            (canEdit ? "双击修改，点别处保存" : "仅罗成、韩梦凯、沈子晗能改") +
+            (person.canEditLogin ? "双击修改，点别处保存" : person.canSeeLogin ? "点设置密码修改" : "按责权不能看他人密码") +
             '">' +
-            escapeHtml(person.password || "ChangeMe123!") +
+            escapeHtml(person.canSeeLogin ? person.password || "ChangeMe123!" : "—") +
+            '</td><td class="people-ops">' +
+            (person.canSeeLogin
+              ? '<button type="button" class="people-login-btn" data-login="' + person.id + '">登录信息</button>'
+              : '<span class="muted">—</span>') +
+            (person.canEditLogin
+              ? '<button type="button" class="people-pass-btn" data-pass="' + person.id + '">设置密码</button>'
+              : "") +
             "</td>";
           peopleTbody.append(tr);
         });
@@ -2736,6 +2781,69 @@
           closePeopleForm();
         }
       });
+      if (peopleLoginModal) {
+        root.querySelector("#people-login-close").addEventListener("click", closeLoginModal);
+        peopleLoginModal.addEventListener("click", function (event) {
+          if (event.target === peopleLoginModal) {
+            closeLoginModal();
+          }
+        });
+        peopleLoginForm.addEventListener("submit", function (event) {
+          event.preventDefault();
+          showError(peopleLoginError, "");
+          const person = personById(loginPersonId);
+          if (!person || !person.canEditLogin) {
+            showError(peopleLoginError, "超出责权：只能改自己的账号密码");
+            return;
+          }
+          const username = String(peopleLoginForm.username.value || "").trim();
+          if (!username) {
+            showError(peopleLoginError, "账号不能为空");
+            return;
+          }
+          savePersonField(loginPersonId, "username", username)
+            .then(function () {
+              closeLoginModal();
+            })
+            .catch(function (err) {
+              showError(peopleLoginError, err.message);
+            });
+        });
+      }
+      if (peoplePassModal) {
+        root.querySelector("#people-pass-cancel").addEventListener("click", closePassModal);
+        peoplePassModal.addEventListener("click", function (event) {
+          if (event.target === peoplePassModal) {
+            closePassModal();
+          }
+        });
+        peoplePassForm.addEventListener("submit", function (event) {
+          event.preventDefault();
+          showError(peoplePassError, "");
+          const person = personById(loginPersonId);
+          if (!person || !person.canEditLogin) {
+            showError(peoplePassError, "超出责权：只能改自己的账号密码");
+            return;
+          }
+          const password = String(peoplePassForm.password.value || "").trim();
+          const confirm = String(peoplePassForm.confirm.value || "").trim();
+          if (password.length < 6 || password.length > 128) {
+            showError(peoplePassError, "密码为 6–128 位，不能全为空格");
+            return;
+          }
+          if (password !== confirm) {
+            showError(peoplePassError, "两次输入的密码不一致");
+            return;
+          }
+          savePersonField(loginPersonId, "password", password)
+            .then(function () {
+              closePassModal();
+            })
+            .catch(function (err) {
+              showError(peoplePassError, err.message);
+            });
+        });
+      }
       peopleForm.addEventListener("submit", function (event) {
         event.preventDefault();
         showError(peopleFormError, "");
@@ -2945,14 +3053,16 @@
       }
 
       function startPersonCellEdit(td) {
-        if (!roster.canEdit || !td || td.querySelector("input") || !td.classList.contains("can-edit")) {
-          return;
-        }
-        const id = td.parentElement && td.parentElement.getAttribute("data-id");
-        const field = td.getAttribute("data-field");
+        const id = td && td.parentElement && td.parentElement.getAttribute("data-id");
+        const field = td && td.getAttribute("data-field");
         const person = roster.people.find(function (item) {
           return String(item.id) === String(id);
         });
+        const loginField = field === "username" || field === "password";
+        const allowed = loginField ? person && person.canEditLogin : roster.canEdit;
+        if (!allowed || !td || td.querySelector("input") || !td.classList.contains("can-edit")) {
+          return;
+        }
         if (!id || !field || !person) {
           return;
         }
@@ -2990,6 +3100,73 @@
           }
         );
       }
+
+      function personById(id) {
+        return roster.people.find(function (item) {
+          return String(item.id) === String(id);
+        });
+      }
+
+      function closeLoginModal() {
+        if (peopleLoginModal) {
+          peopleLoginModal.classList.remove("show");
+        }
+      }
+
+      function closePassModal() {
+        if (peoplePassModal) {
+          peoplePassModal.classList.remove("show");
+        }
+      }
+
+      function openLoginModal(id) {
+        const person = personById(id);
+        if (!person || !person.canSeeLogin || !peopleLoginForm) {
+          return;
+        }
+        loginPersonId = String(person.id);
+        root.querySelector("#people-login-title").textContent = "登录信息 · " + (person.name || "");
+        root.querySelector("#people-login-meta").textContent =
+          (person.center || "") + (person.role ? " · " + person.role : "");
+        peopleLoginForm.username.value = person.username || person.name || "";
+        peopleLoginForm.password.value = person.password || "";
+        peopleLoginForm.username.readOnly = !person.canEditLogin;
+        peopleLoginForm.password.readOnly = true;
+        const saveBtn = peopleLoginForm.querySelector('button[type="submit"]');
+        if (saveBtn) {
+          saveBtn.hidden = !person.canEditLogin;
+        }
+        showError(peopleLoginError, "");
+        peopleLoginModal.classList.add("show");
+      }
+
+      function openPassModal(id) {
+        const person = personById(id);
+        if (!person || !person.canEditLogin || !peoplePassForm) {
+          return;
+        }
+        loginPersonId = String(person.id);
+        root.querySelector("#people-pass-title").textContent = "设置密码 · " + (person.name || "");
+        root.querySelector("#people-pass-meta").textContent =
+          (person.name || "") + (person.center ? " · " + person.center : "");
+        peoplePassForm.reset();
+        showError(peoplePassError, "");
+        peoplePassModal.classList.add("show");
+      }
+
+      peopleTbody.addEventListener("click", function (event) {
+        const loginBtn = event.target.closest(".people-login-btn");
+        if (loginBtn) {
+          event.preventDefault();
+          openLoginModal(loginBtn.getAttribute("data-login"));
+          return;
+        }
+        const passBtn = event.target.closest(".people-pass-btn");
+        if (passBtn) {
+          event.preventDefault();
+          openPassModal(passBtn.getAttribute("data-pass"));
+        }
+      });
 
       peopleTbody.addEventListener("change", function (event) {
         const box = event.target.closest(".people-row-check");

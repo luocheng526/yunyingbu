@@ -994,6 +994,78 @@ const SITE_ACL_SMOKE = `<!doctype html>
   </body>
 </html>`;
 
+const LOGIN_OPS_SMOKE = `<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="utf-8" /><link rel="stylesheet" href="/people.css" /></head>
+  <body>
+    <div id="xm-content"></div>
+    <script src="/shared/modules/people.js"></script>
+    <script>
+      (async function () {
+        function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+        window.XmModules["/people"].mount(document.getElementById("xm-content"));
+        await sleep(700);
+        document.querySelector('[data-pane="members"]').click();
+        await sleep(500);
+        const loginBtn = document.querySelector(".people-login-btn");
+        const passBtn = document.querySelector(".people-pass-btn");
+        if (!loginBtn || !passBtn) {
+          document.body.setAttribute("data-ok", "no-btn");
+          return;
+        }
+        loginBtn.click();
+        await sleep(80);
+        const loginModal = document.getElementById("people-login-modal");
+        const loginTitle = (document.getElementById("people-login-title") && document.getElementById("people-login-title").textContent) || "";
+        const loginAccount = document.querySelector('#people-login-form input[name="username"]');
+        const loginPass = document.querySelector('#people-login-form input[name="password"]');
+        const loginOk = loginModal && loginModal.classList.contains("show") && loginTitle.indexOf("登录信息") >= 0 && loginAccount && loginAccount.value && loginPass && loginPass.value;
+        document.getElementById("people-login-close").click();
+        await sleep(40);
+        passBtn.click();
+        await sleep(80);
+        const passModal = document.getElementById("people-pass-modal");
+        const passTitle = (document.getElementById("people-pass-title") && document.getElementById("people-pass-title").textContent) || "";
+        const newPass = document.querySelector('#people-pass-form input[name="password"]');
+        const confirm = document.querySelector('#people-pass-form input[name="confirm"]');
+        const passOk = passModal && passModal.classList.contains("show") && passTitle.indexOf("设置密码") >= 0 && newPass && confirm;
+        document.body.setAttribute("data-login-title", loginTitle);
+        document.body.setAttribute("data-pass-title", passTitle);
+        document.body.setAttribute("data-ok", loginOk && passOk ? "1" : "0");
+      })();
+    </script>
+  </body>
+</html>`;
+
+test("headless chrome opens 登录信息 and 设置密码 from 成员管理", async () => {
+  resetPeopleStore();
+  resetOrgBoard();
+  resetOrgExtra();
+  const app = createApp();
+  const server = http.createServer((req, res) => {
+    if (req.url === "/__login-ops-smoke") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(LOGIN_OPS_SMOKE);
+      return;
+    }
+    app(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const html = await chromeDump(`http://127.0.0.1:${port}/__login-ops-smoke`, 12000);
+    assert.match(
+      html,
+      /data-ok="1"/,
+      html.includes("data-ok=") ? html.slice(html.indexOf("data-ok="), html.indexOf("data-ok=") + 240) : html.slice(-400)
+    );
+    assert.match(html, /data-login-title="登录信息/);
+    assert.match(html, /data-pass-title="设置密码/);
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
 test("headless chrome assigns website see/enter/edit for a roster person", async () => {
   resetPeopleStore();
   resetOrgBoard();
