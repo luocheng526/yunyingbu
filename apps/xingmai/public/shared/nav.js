@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-scroll v0.4.18 — 壳层滚动走工作区，设置跟账号走服务器 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 v0.4.18 — 页签恢复成带叉的原样，去掉空白块 */
 (function () {
-  const ASSET_VER = "0.1.772-scroll";
+  const ASSET_VER = "0.1.772-tab2";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -294,11 +294,13 @@
       .join("");
     return (
       '<div class="xm-menu-group' +
-      (open ? " is-open" : "") +
+      (open ? " is-open is-current" : "") +
       '" data-xm-group="' +
       item.href +
       '">' +
-      '<button type="button" class="xm-menu-item xm-menu-parent" aria-expanded="' +
+      '<button type="button" class="xm-menu-item xm-menu-parent' +
+      (open ? " is-active" : "") +
+      '" aria-expanded="' +
       (open ? "true" : "false") +
       '">' +
       ico(item.href) +

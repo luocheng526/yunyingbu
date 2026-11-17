@@ -1,5 +1,9 @@
 /* xm-sider-narrow 0.1.112 */
 /* xm-shell-scroll 0.1.772-scroll */
+/* xm-nav-hot 0.1.772-navhot */
+/* xm-tabs-restore 0.1.772-tabs */
+/* xm-menu-lite 0.1.772-menulite */
+/* xm-tabs-fig2 0.1.772-tab2 */
 :root,
 html[data-theme="light"] {
   --xm-sider: #ffffff;
@@ -224,6 +228,7 @@ html.xm-collapsed .xm-collapse {
   width: calc(100% - 6px);
   cursor: pointer;
   font-family: inherit;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .xm-ico {
@@ -269,14 +274,38 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
 }
 
 .xm-menu-item.is-active,
-.xm-menu-item[aria-current="page"] {
-  background: var(--xm-primary-soft);
+.xm-menu-item[aria-current="page"],
+.xm-menu-group.is-current > .xm-menu-parent {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--xm-primary) 22%, #ffffff) 0%,
+    var(--xm-primary-soft) 58%,
+    color-mix(in srgb, var(--xm-primary-soft) 55%, #ffffff) 100%
+  );
   color: var(--xm-primary);
   font-weight: 600;
+  box-shadow: none;
+}
+
+.xm-menu-item.is-active:hover,
+.xm-menu-item[aria-current="page"]:hover,
+.xm-menu-group.is-current > .xm-menu-parent:hover,
+.xm-menu-item.is-active:active,
+.xm-menu-item[aria-current="page"]:active,
+.xm-menu-group.is-current > .xm-menu-parent:active {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--xm-primary) 28%, #ffffff) 0%,
+    var(--xm-primary-soft) 52%,
+    color-mix(in srgb, var(--xm-primary-soft) 70%, #ffffff) 100%
+  );
+  color: var(--xm-primary);
+  box-shadow: none;
 }
 
 .xm-menu-item.is-active::before,
-.xm-menu-item[aria-current="page"]::before {
+.xm-menu-item[aria-current="page"]::before,
+.xm-menu-group.is-current > .xm-menu-parent::before {
   content: "";
   position: absolute;
   left: 0;
@@ -285,6 +314,16 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   width: 3px;
   background: var(--xm-primary);
   border-radius: 0 2px 2px 0;
+  box-shadow: none;
+}
+
+.xm-menu-item.is-active .xm-ico,
+.xm-menu-item[aria-current="page"] .xm-ico,
+.xm-menu-group.is-current > .xm-menu-parent .xm-ico,
+.xm-menu-item.is-active .xm-caret,
+.xm-menu-group.is-current > .xm-menu-parent .xm-caret {
+  opacity: 1;
+  color: var(--xm-primary);
 }
 
 .xm-queue-badge {
@@ -388,9 +427,9 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   background: var(--xm-top);
   border-bottom: 2px solid var(--xm-primary);
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 12px;
-  padding: 0 16px;
+  padding: 0 16px 0 12px;
 }
 
 .xm-collapse {
@@ -408,23 +447,37 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   background: #f5f5f5;
 }
 
+.xm-phone-menu,
+.xm-phone-mask {
+  display: none;
+}
+
 .xm-tabs {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
   flex: 1;
   min-width: 0;
+  height: 100%;
+  padding-top: 12px;
 }
 
 .xm-tab {
+  position: relative;
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   height: 28px;
   padding: 0 12px;
+  border: 0;
   border-radius: 4px 4px 0 0;
   background: #f5f5f5;
   color: #595959;
   font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  flex: 0 0 auto;
 }
 
 .xm-tab.is-active {
@@ -433,8 +486,43 @@ body:has(> #site-nav .xm-sider):not(:has(.xm-shell)) > .xm-page {
   font-weight: 600;
 }
 
+.xm-tab-close {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 14px;
+  opacity: 0.45;
+  cursor: pointer;
+}
+
+.xm-tab.is-active .xm-tab-close {
+  opacity: 0.7;
+}
+
+.xm-tab-close:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.xm-tab.is-pinned .xm-tab-close {
+  display: none;
+}
+
 .xm-user {
   margin-left: auto;
+  align-self: center;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -670,6 +758,32 @@ html[data-theme="dark"] .xm-menu-item:active {
   background: #1e3a5f;
 }
 
+html[data-theme="dark"] .xm-menu-item.is-active,
+html[data-theme="dark"] .xm-menu-item[aria-current="page"],
+html[data-theme="dark"] .xm-menu-group.is-current > .xm-menu-parent,
+html[data-theme="dark"] .xm-menu-item.is-active:hover,
+html[data-theme="dark"] .xm-menu-item[aria-current="page"]:hover,
+html[data-theme="dark"] .xm-menu-group.is-current > .xm-menu-parent:hover,
+html[data-theme="dark"] .xm-menu-item.is-active:active,
+html[data-theme="dark"] .xm-menu-item[aria-current="page"]:active,
+html[data-theme="dark"] .xm-menu-group.is-current > .xm-menu-parent:active {
+  color: #93c5fd;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--xm-primary) 36%, #1c1a14) 0%,
+    var(--xm-primary-soft) 100%
+  );
+  box-shadow: none;
+}
+
+html[data-theme="dark"] .xm-menu-item.is-active .xm-ico,
+html[data-theme="dark"] .xm-menu-item[aria-current="page"] .xm-ico,
+html[data-theme="dark"] .xm-menu-group.is-current > .xm-menu-parent .xm-ico,
+html[data-theme="dark"] .xm-menu-item.is-active .xm-caret,
+html[data-theme="dark"] .xm-menu-group.is-current > .xm-menu-parent .xm-caret {
+  color: #93c5fd;
+}
+
 html[data-theme="dark"] .xm-user,
 html[data-theme="dark"] .xm-collapse {
   color: #d8d4c8;
@@ -688,6 +802,63 @@ html[data-theme="dark"] .xm-refresh {
 html[data-theme="dark"] .xm-tab {
   background: #2a2820;
   color: #9a9688;
+}
+
+html[data-theme="dark"] .xm-tab.is-active {
+  background: var(--xm-primary-soft);
+  color: #93c5fd;
+}
+
+html[data-theme="dark"] .xm-tab-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 880px) {
+  .xm-phone-menu {
+    display: inline-flex;
+    align-self: center;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #595959;
+    cursor: pointer;
+    flex: 0 0 32px;
+  }
+
+  .xm-phone-menu-bars,
+  .xm-phone-menu-bars::before,
+  .xm-phone-menu-bars::after {
+    display: block;
+    width: 16px;
+    height: 2px;
+    background: currentColor;
+    border-radius: 1px;
+  }
+
+  .xm-phone-menu-bars {
+    position: relative;
+  }
+
+  .xm-phone-menu-bars::before,
+  .xm-phone-menu-bars::after {
+    content: "";
+    position: absolute;
+    left: 0;
+  }
+
+  .xm-phone-menu-bars::before {
+    top: -5px;
+  }
+
+  .xm-phone-menu-bars::after {
+    top: 5px;
+  }
 }
 
 html[data-theme="dark"] .xm-collapse:hover {
