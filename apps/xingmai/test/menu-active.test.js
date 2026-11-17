@@ -12,7 +12,7 @@ const navJs = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
 const luocheng = { username: "罗成", displayName: "罗成" };
 
 test("选中菜单用浅色渐变，不要投影，暗色粉红不盖掉", () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.785-mever");
+  assert.equal(SHELL_ASSET_VER, "0.1.786-mebust");
   assert.match(layoutCss, /xm-menu-lite 0\.1\.772-menulite/);
   assert.match(layoutCss, /\.xm-menu-item\.is-active/);
   assert.match(layoutCss, /\.xm-menu-group\.is-current > \.xm-menu-parent/);
@@ -29,10 +29,10 @@ test("选中菜单用浅色渐变，不要投影，暗色粉红不盖掉", () =>
   assert.match(layoutCss, /\.xm-topbar \{[\s\S]*height: 48px/);
   assert.match(layoutCss, /\.xm-topbar \{[\s\S]*background: var\(--xm-top\)/);
   assert.match(layoutCss, /--xm-primary: #f8005f/);
-  assert.match(navJs, /ASSET_VER = "0\.1\.785-mever"/);
+  assert.match(navJs, /ASSET_VER = "0\.1\.786-mebust"/);
   const meShell = renderAppShell("/me", luocheng);
-  assert.match(meShell, /\/shared\/modules\/me\.js\?v=0\.1\.785-mever/);
-  assert.match(meShell, /\/shared\/nav\.js\?v=0\.1\.785-mever/);
+  assert.match(meShell, /\/shared\/modules\/me\.js\?v=0\.1\.786-mebust/);
+  assert.match(meShell, /\/shared\/nav\.js\?v=0\.1\.786-mebust/);
   assert.match(navJs, /\/api\/home\/summary/);
   assert.match(navJs, /data-hm-js/);
   assert.match(navJs, /data\.stamp = have/);
@@ -89,6 +89,7 @@ test("顶栏页签是独立表头，不贴蓝线，电脑上不出现空白菜�
   assert.match(layoutCss, /xm-nav-bold 0\.1\.783-navbold/);
   assert.match(layoutCss, /xm-home-loop 0\.1\.784-homeloop/);
   assert.match(layoutCss, /xm-me-ver 0\.1\.785-mever/);
+  assert.match(layoutCss, /xm-me-bust 0\.1\.786-mebust/);
   assert.match(layoutCss, /\.xm-phone-menu,\s*\.xm-phone-mask \{\s*display:\s*none/);
   assert.match(layoutCss, /\.xm-topbar \{[\s\S]*align-items:\s*center/);
   assert.match(layoutCss, /\.xm-tabs \{[\s\S]*align-items:\s*center/);
