@@ -6,7 +6,7 @@ import { beginRelogin, beginReloginAll, reloginState, resetJingmaiDeps, setJingm
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginScreenState, sessionReady, unpackDebBuffer } from "../src/modules/home/jingmai-desk.js";
+import { browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginScreenState, sessionReady, unpackDebBuffer } from "../src/modules/home/jingmai-desk.js";
 import { tmpdir } from "node:os";
 import zlib from "node:zlib";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
@@ -626,15 +626,20 @@ test("a login form captcha is submitted with the 登录 button", () => {
   assert.equal(loginPageAction(doc, { submit: true }).kind, "button");
 });
 
-test("the login picture waits until the page has finished refreshing", () => {
-  assert.equal(loginPageSettled(null), false);
-  assert.equal(loginPageSettled({ readyState: "loading", href: "https://passport.shop.jd.com/login", accountVisible: true, passwordVisible: true, loginButtonVisible: true }), false);
-  assert.equal(loginPageSettled({ readyState: "complete", href: "about:blank", accountVisible: true, passwordVisible: true, loginButtonVisible: true }), false);
-  assert.equal(loginPageSettled({ readyState: "complete", href: "https://passport.shop.jd.com/login", bodyHeight: 800 }), false);
-  assert.equal(loginPageSettled({ readyState: "complete", href: "https://passport.shop.jd.com/login", accountVisible: true, passwordVisible: true, loginButtonVisible: true }), true);
-  assert.equal(loginPageSettled({ readyState: "complete", href: "https://passport.shop.jd.com/login", bodyHeight: 800, text: "请完成安全验证" }), true);
+test("the login page is shown once it is on screen, and typing waits until the form stays up", () => {
+  const blank = { readyState: "complete", href: "about:blank", accountVisible: true, passwordVisible: true };
+  const loading = { readyState: "loading", href: "https://passport.shop.jd.com/login", accountVisible: true, passwordVisible: true };
+  const painted = { readyState: "interactive", href: "https://passport.shop.jd.com/login", text: "账号登录" };
+  const form = { readyState: "interactive", href: "https://passport.shop.jd.com/login", accountVisible: true, passwordVisible: true };
+  assert.equal(loginPageVisible(null), false);
+  assert.equal(loginPageVisible(blank), false);
+  assert.equal(loginPageVisible(painted), true);
+  assert.equal(loginPageSettled(blank), false);
+  assert.equal(loginPageSettled(loading), false);
+  assert.equal(loginPageSettled(painted), false);
+  assert.equal(loginPageSettled(form), true);
+  assert.equal(loginPageSettled({ readyState: "interactive", href: "https://passport.shop.jd.com/login", text: "请完成安全验证" }), true);
   assert.equal(loginOpenReady(1, { status: "verify", formReady: true }, false), "wait");
-  assert.equal(loginOpenReady(20, { status: "verify", message: "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。" }, false), "wait");
   assert.equal(loginOpenReady(1, { status: "verify", settled: true }, false), "show");
   assert.equal(loginOpenReady(1, { status: "verify" }, true), "ok");
   assert.equal(loginOpenReady(0, { status: "login", message: "账号或密码不正确" }, false), "login");

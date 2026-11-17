@@ -913,8 +913,8 @@ function send(ws, method, params, sessionId, timeoutMs) {
   });
 }
 
-function evaluate(ws, expression) {
-  return send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true, awaitPromise: true }).then(function (result) {
+function evaluate(ws, expression, timeoutMs) {
+  return send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true, awaitPromise: true }, undefined, timeoutMs).then(function (result) {
     if (result.exceptionDetails) {
       return null;
     }
@@ -1406,37 +1406,42 @@ const LOGIN_PAGE_EXPR = `(() => {
   function shown(el) {
     if (!el) return false;
     const box = el.getBoundingClientRect();
-    const style = getComputedStyle(el);
-    return box.width > 40 && box.height > 16 && style.visibility !== "hidden" && style.display !== "none" && Number(style.opacity || 1) > 0;
+    return box.width > 20 && box.height > 10;
   }
   const inputs = [...document.querySelectorAll("input")];
   const account = inputs.find((node) => (node.placeholder || "").includes("账号"));
   const password = inputs.find((node) => (node.placeholder || "").includes("密码"));
-  const button = [...document.querySelectorAll("button")].find((node) => (node.innerText || "").includes("立即登录"));
   return {
     readyState: document.readyState,
     href: location.href,
     accountVisible: shown(account),
     passwordVisible: shown(password),
-    loginButtonVisible: shown(button),
-    bodyHeight: document.body ? document.body.scrollHeight : 0,
-    text: document.body ? document.body.innerText.slice(0, 500) : ""
+    text: document.body ? document.body.innerText.slice(0, 300) : ""
   };
 })()`;
 
-export function loginPageSettled(page) {
-  if (!page || page.readyState !== "complete") {
+export function loginPageVisible(page) {
+  if (!page) {
     return false;
   }
   const href = String(page.href || "");
   if (!href || href === "about:blank" || href.startsWith("about:")) {
     return false;
   }
-  if (page.accountVisible && page.passwordVisible && page.loginButtonVisible) {
+  if (page.accountVisible || page.passwordVisible) {
     return true;
   }
-  const text = String(page.text || "");
-  return (page.bodyHeight || 0) > 240 && /滑块|验证码|安全验证|扫码登录/.test(text);
+  return /登录|账号|密码|验证码|安全验证|滑块|扫码/.test(String(page.text || ""));
+}
+
+export function loginPageSettled(page) {
+  if (!loginPageVisible(page) || page.readyState === "loading") {
+    return false;
+  }
+  if (page.accountVisible && page.passwordVisible) {
+    return true;
+  }
+  return /滑块|验证码|安全验证|扫码登录/.test(String(page.text || ""));
 }
 
 export function loginOpenReady(attempt, screen, hasCookie) {
@@ -1582,65 +1587,58 @@ export async function closeDesk() {
 
 async function readLoginPage(ws) {
   try {
-    return await evaluate(ws, LOGIN_PAGE_EXPR);
+    return await evaluate(ws, LOGIN_PAGE_EXPR, 2500);
   } catch {
     return null;
   }
 }
 
-async function waitForSettledPage(desk, ticket) {
-  let streak = 0;
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    if (ticket !== openTicket || current !== desk) {
-      return { status: "login", message: "登录已取消" };
-    }
-    await sleep(700);
-    const page = await readLoginPage(desk.ws);
-    if (loginPageSettled(page)) {
-      streak += 1;
-      if (streak >= 2) {
-        return { status: "ready", page: page };
-      }
-    } else {
-      streak = 0;
-    }
-  }
-  return { status: "login", message: "登录页还没刷新出来" };
-}
-
 async function finishOpen(desk, loginName, password, ticket) {
   try {
-    const waited = await waitForSettledPage(desk, ticket);
-    if (waited.status !== "ready") {
-      if (ticket === openTicket && waited.message !== "登录已取消") {
-        stopCurrent();
-      }
-      return waited;
-    }
-    if (ticket !== openTicket || current !== desk) {
-      return { status: "login", message: "登录已取消" };
-    }
-    const submitted = await fillAndSubmit(desk.ws, loginName, password);
-    password = "";
-    if (!submitted) {
-      if (ticket === openTicket) {
-        stopCurrent();
-      }
-      return { status: "login", message: "服务器没有填上账号" };
-    }
-    loginVisible = false;
-    shotCache = { at: 0, store: "", image: null, ready: false };
     let streak = 0;
-    for (let attempt = 0; attempt < 24; attempt += 1) {
+    let sawPage = false;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
       if (ticket !== openTicket || current !== desk) {
         return { status: "login", message: "登录已取消" };
       }
       await sleep(700);
+      const page = await readLoginPage(desk.ws);
+      if (loginPageVisible(page)) {
+        loginVisible = true;
+        sawPage = true;
+      }
+      if (loginPageSettled(page)) {
+        streak += 1;
+        if (streak >= 2) {
+          break;
+        }
+      } else {
+        streak = 0;
+      }
+    }
+    if (ticket !== openTicket || current !== desk) {
+      return { status: "login", message: "登录已取消" };
+    }
+    if (streak >= 2) {
+      await fillAndSubmit(desk.ws, loginName, password);
+    }
+    password = "";
+    loginVisible = sawPage || loginVisible;
+    if (!loginVisible) {
+      if (ticket === openTicket) {
+        stopCurrent();
+      }
+      return { status: "login", message: "登录页还没刷新出来" };
+    }
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      if (ticket !== openTicket || current !== desk) {
+        return { status: "login", message: "登录已取消" };
+      }
       let cookies = [];
       let href = "";
       try {
         cookies = await readCookies(desk.ws);
-        href = await evaluate(desk.ws, "location.href");
+        href = String(await evaluate(desk.ws, "location.href", 2500) || "");
       } catch {
         cookies = [];
         href = "";
@@ -1649,29 +1647,16 @@ async function finishOpen(desk, loginName, password, ticket) {
         return { status: "ok", cookies: cookies };
       }
       const page = await readLoginPage(desk.ws);
+      if (loginPageVisible(page)) {
+        loginVisible = true;
+      }
       const screen = loginScreenState(page && page.text, Boolean(page && page.accountVisible));
       if (screen.status === "login") {
         return screen;
       }
-      screen.settled = loginPageSettled(page);
-      if (loginOpenReady(attempt, screen, false) === "show") {
-        streak += 1;
-        if (streak >= 2) {
-          loginVisible = true;
-          return {
-            status: "verify",
-            message: screen.message || LOGIN_SCREEN_MESSAGE,
-            formReady: true
-          };
-        }
-      } else {
-        streak = 0;
-      }
+      await sleep(700);
     }
-    if (ticket === openTicket) {
-      stopCurrent();
-    }
-    return { status: "login", message: "登录页还没刷新出来" };
+    return { status: "verify", message: LOGIN_SCREEN_MESSAGE, formReady: true };
   } finally {
     password = "";
   }
@@ -1694,7 +1679,13 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
       return { status: "login", message: "登录已取消" };
     }
     step("正在打开登录页");
-    await send(desk.ws, "Page.navigate", { url: LOGIN_URL }, undefined, 8000);
+    try {
+      await send(desk.ws, "Page.navigate", { url: LOGIN_URL }, undefined, 20000);
+    } catch (error) {
+      if (!String(error && error.message || "").includes("timeout")) {
+        throw error;
+      }
+    }
     const account = loginName;
     const secret = password;
     password = "";
@@ -1729,7 +1720,7 @@ export async function pollDesk(store) {
     if (sessionReady(href, cookies)) {
       return { status: "ok", cookies: cookies };
     }
-    if (!loginVisible || !(await loginSurfaceReady(current.ws))) {
+    if (!loginVisible) {
       return { status: "opening", message: PAGE_WAIT_MESSAGE };
     }
   } catch {
@@ -1767,7 +1758,7 @@ async function captureShot(store) {
   if (!current || current.store !== store || !current.ws || current.ws.readyState !== 1) {
     return shotCache.ready && shotCache.store === store ? shotCache.image : null;
   }
-  if (!loginVisible || !(await loginSurfaceReady(current.ws))) {
+  if (!loginVisible) {
     return shotCache.ready && shotCache.store === store ? shotCache.image : null;
   }
   try {
