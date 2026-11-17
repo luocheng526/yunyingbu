@@ -21,7 +21,7 @@ async function login(base, username, password = "ChangeMe123!") {
 }
 
 test("壳层工作区是唯一滚轮，不靠首页是否挂载", () => {
-  assert.equal(SHELL_ASSET_VER, "0.1.778-nochild");
+  assert.equal(SHELL_ASSET_VER, "0.1.779-watermark");
   assert.match(layoutCss, /\.xm-workspace\s*\{/);
   assert.match(layoutCss, /\.xm-workspace > \.xm-pane\.is-active/);
   assert.match(layoutCss, /overflow:\s*auto/);
@@ -46,7 +46,7 @@ test("组织中心表格由工作区滚，不改 people.js", () => {
   );
   assert.match(navSrc, /id = "xm-org-scroll-css"/);
   assert.match(navSrc, /wrap\.scrollTop \+= event\.deltaY/);
-  assert.match(navSrc, /ASSET_VER = "0\.1\.778-nochild"/);
+  assert.match(navSrc, /ASSET_VER = "0\.1\.779-watermark"/);
   assert.match(peopleSrc, /overflow-y:auto!important/);
   assert.match(peopleSrc, /#xm-content:has\(\.people-page\)\{flex:0 0 auto;height:auto;overflow:visible!important/);
   assert.match(peopleSrc, /\.org-table-wrap\{overflow:visible!important/);
@@ -100,8 +100,8 @@ test("蓝夜粉、侧栏、页签跟账号走服务器，换人不会带走", as
     const peoplePage = await fetch(`${base}/people`, { headers: { cookie: staff.cookie } });
     const peopleHtml = await peoplePage.text();
     assert.equal(peoplePage.status, 200);
-    assert.match(peopleHtml, /layout\.css\?v=0\.1\.778-nochild/);
-    assert.match(peopleHtml, /nav\.js\?v=0\.1\.778-nochild/);
+    assert.match(peopleHtml, /layout\.css\?v=0\.1\.779-watermark/);
+    assert.match(peopleHtml, /nav\.js\?v=0\.1\.779-watermark/);
     assert.match(peopleHtml, /class="xm-workspace"/);
 
     const hrPage = await fetch(`${base}/hr`, { headers: { cookie: other.cookie } });

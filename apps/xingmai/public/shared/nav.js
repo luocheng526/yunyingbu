@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild v0.4.18 — 点一级只展开，不默认选二级 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild 0.1.779-watermark v0.4.18 — 登录后业务页铺「甄选：姓名」水印 */
 (function () {
-  const ASSET_VER = "0.1.778-nochild";
+  const ASSET_VER = "0.1.779-watermark";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -383,6 +383,63 @@
       return user.trim();
     }
     return String(user.displayName || user.name || user.username || "").trim();
+  }
+
+  const WATERMARK_CELLS = 80;
+
+  function viewerLabel(user) {
+    if (!user) {
+      return "";
+    }
+    if (typeof user === "string") {
+      return user.trim();
+    }
+    return String(user.displayName || user.username || user.name || "").trim();
+  }
+
+  function watermarkText(user) {
+    const name = viewerLabel(user);
+    return name ? "甄选：" + name : "";
+  }
+
+  function clearWatermark() {
+    const layer = document.querySelector(".xm-watermark");
+    if (layer) {
+      layer.remove();
+    }
+  }
+
+  function paintWatermark(user) {
+    const label = watermarkText(user);
+    if (!label || !document.body) {
+      return;
+    }
+    let layer = document.querySelector(".xm-watermark");
+    if (
+      layer &&
+      layer.getAttribute("data-xm-watermark") === label &&
+      layer.querySelectorAll(".xm-watermark-sheet span").length >= WATERMARK_CELLS
+    ) {
+      if (layer.parentNode === document.body && layer !== document.body.lastElementChild) {
+        document.body.appendChild(layer);
+      }
+      return;
+    }
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.className = "xm-watermark";
+      layer.setAttribute("aria-hidden", "true");
+    }
+    layer.setAttribute("data-xm-watermark", label);
+    const sheet = document.createElement("div");
+    sheet.className = "xm-watermark-sheet";
+    for (let i = 0; i < WATERMARK_CELLS; i += 1) {
+      const cell = document.createElement("span");
+      cell.textContent = label;
+      sheet.appendChild(cell);
+    }
+    layer.replaceChildren(sheet);
+    document.body.appendChild(layer);
   }
 
   function shopKey(name) {
@@ -2737,6 +2794,7 @@
       window.setTimeout(openOrgNoticesTab, 0);
     });
     refreshQueueBadge();
+    paintWatermark(currentStaffUser() || bootUser());
   }
   window.__xmGo = go;
 
@@ -3199,6 +3257,7 @@
     if (logoutBtn && !logoutBtn.dataset.bound) {
       logoutBtn.dataset.bound = "1";
       logoutBtn.addEventListener("click", function () {
+        clearWatermark();
         clearOpenTabs();
         fetch("/api/auth/logout", {
           method: "POST",
@@ -3224,6 +3283,7 @@
       nextUser.desk = "hr";
     }
     rememberStaffUser(nextUser);
+    paintWatermark(nextUser);
     const next = scopeSignature(nextUser);
     if (!force && next === scopeKey) {
       return;
@@ -3245,6 +3305,7 @@
     fetch("/api/auth/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
       .then(function (res) {
         if (res.status === 401) {
+          clearWatermark();
           window.location.replace("/login");
           return null;
         }
@@ -3503,6 +3564,7 @@
     if (logoutBtn && !logoutBtn.dataset.bound) {
       logoutBtn.dataset.bound = "1";
       logoutBtn.addEventListener("click", function () {
+        clearWatermark();
         clearOpenTabs();
         fetch("/api/auth/logout", {
           method: "POST",
@@ -3516,6 +3578,7 @@
     applyCollapsed(bootPrefs().siderCollapsed === true);
     bindBrandHome();
     bindMenu(document);
+    paintWatermark(user || currentStaffUser() || bootUser());
     ensurePhoneChrome();
     watchHomeAiDiag();
     ensureWorkspace();
@@ -3601,6 +3664,7 @@
     if (boot && (boot.displayName || boot.username)) {
       bindChrome(boot.displayName || boot.username, boot);
     }
+    paintWatermark(boot);
     watchScope();
     readScopeMe();
     if (document.readyState === "loading") {
