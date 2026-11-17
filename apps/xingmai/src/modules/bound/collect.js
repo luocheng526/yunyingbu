@@ -225,7 +225,7 @@ export async function startLink(provider) {
   }
   current.scene = payload.data.scene || "";
   current.qrUrl = payload.data.url || "";
-  current.message = "请用旧站登录页同一个扫码方式确认。扫码前二维码只在这一页显示。";
+  current.message = "请用微信扫这一张二维码。扫旧站网页上的码不会登录这里。";
   await saveSession(current);
   return linkStatus();
 }
@@ -258,7 +258,7 @@ async function finishLogin(current, data) {
 
 export async function pollLink() {
   const current = await session();
-  if (current.phase !== "waiting_scan" || !current.scene) {
+  if (!current.scene || (current.phase !== "waiting_scan" && current.phase !== "needs_scan")) {
     return linkStatus();
   }
   const payload = await callUpstream(current, {
@@ -272,29 +272,37 @@ export async function pollLink() {
     }
   });
   const code = payload && payload.code;
+  const content = String((payload && payload.content) || "");
   if (code === 1000102) {
-    current.message = "等待扫码";
-  } else if (code === 1000103) {
-    current.message = "二维码已过期，正在重新生成";
+    current.phase = "waiting_scan";
+    current.message = "未扫码。请扫这一张二维码，扫旧站网页上的码不会登录这里。";
+  } else if (code === 1000103 || code === -1 || code === -7 || /未登录|登录状态已过期|请重新登录/.test(content)) {
+    current.scene = "";
+    current.qrUrl = "";
+    current.message = "刚才那张二维码已经失效，正在换一张。";
     await saveSession(current);
     return startLink(current.provider);
   } else if (code === 1011) {
-    current.message = payload.content || `浏览器标识未加入登录管理：${current.deviceId}`;
+    current.message = content || `浏览器标识未加入登录管理：${current.deviceId}`;
   } else if (code === 0) {
     const data = payload.data || {};
     if (data.needBind) {
       current.message = data.message || "这个第三方账号还没绑定，请先在旧站用账号绑定后再扫。";
     } else if (data.needSelect && Array.isArray(data.accounts) && data.accounts.length) {
-      current.phase = "choose_account";
       current.loginTicket = data.loginTicket || "";
       current.accounts = data.accounts;
+      if (data.accounts.length === 1) {
+        await saveSession(current);
+        return pickAccount(data.accounts[0].companyId);
+      }
+      current.phase = "choose_account";
       current.message = "扫码成功，请选择要进入的企业账号。";
     } else {
       await finishLogin(current, data);
       return linkStatus();
     }
-  } else if (payload && payload.content) {
-    current.message = String(payload.content);
+  } else if (content) {
+    current.message = content;
   }
   await saveSession(current);
   return linkStatus();

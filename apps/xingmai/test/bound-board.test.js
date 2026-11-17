@@ -6,8 +6,8 @@ import test from "node:test";
 import vm from "node:vm";
 import express from "express";
 import { boundRouter } from "../src/modules/bound/router.js";
-import { resetBoundStore, setBoundClock, setBoundFetch, startLink, tick } from "../src/modules/bound/store.js";
-import { writeSheet } from "../src/modules/bound/persist.js";
+import { pollLink, resetBoundStore, setBoundClock, setBoundFetch, startLink, tick } from "../src/modules/bound/store.js";
+import { readState, writeSheet, writeState } from "../src/modules/bound/persist.js";
 import { publicCatalog } from "../src/modules/bound/catalog.js";
 
 process.env.BOUND_COLLECT_LOOP = "0";
@@ -313,6 +313,40 @@ test("扫码后按进度补采，过期保留断点", async () => {
   await tick();
   await tick();
   assert.equal(september(), 1);
+});
+
+test("过期后仍核对页面上的二维码，扫完就登录", async () => {
+  resetBoundStore();
+  setBoundFetch(async (url) => {
+    const href = String(url);
+    const json = (body) => ({
+      headers: {
+        get(name) {
+          return String(name).toLowerCase() === "content-type" ? "application/json" : null;
+        },
+        getSetCookie() {
+          return ["JSESSIONID=after-scan"];
+        }
+      },
+      json: async () => body,
+      arrayBuffer: async () => new ArrayBuffer(0)
+    });
+    if (href.includes("/auth/qrcode")) {
+      return json({ code: 0, data: { url: "https://biprodapi.ecbis.cn/prod/auth/showQr?scene=s2", scene: "s2" } });
+    }
+    if (href.includes("/auth/checkQrcode")) {
+      return json({ code: 0, data: { nickName: "罗成" } });
+    }
+    return json({ code: 0, data: {} });
+  });
+  await startLink("WECHAT");
+  const saved = await readState("session");
+  saved.phase = "needs_scan";
+  saved.message = "旧站登录已过期。已保留补采进度，扫码后从中断处继续。";
+  await writeState("session", saved);
+  const status = await pollLink();
+  assert.equal(status.phase, "collecting");
+  assert.match(status.message, /已登录/);
 });
 
 test("页面只请求边界接口，并画出四个模块", async () => {
