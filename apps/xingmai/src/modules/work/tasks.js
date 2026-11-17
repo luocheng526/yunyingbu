@@ -239,11 +239,19 @@ function dueText(value) {
   return String(value || "").slice(0, 16).replace("T", " ");
 }
 
+function taskPersonName(person) {
+  const username = String(person.username || "").trim().toLowerCase();
+  if (username === "罗成" || username === "luocheng") {
+    return "罗成";
+  }
+  return person.name;
+}
+
 export async function taskContext(user) {
   await ready();
   const me = await meOf(user);
   const people = [...(await peopleMap()).values()]
-    .map((person) => ({ id: String(person.id), name: person.name }))
+    .map((person) => ({ id: String(person.id), name: taskPersonName(person) }))
     .sort((a, b) => a.name.localeCompare(b.name, "zh"));
   return {
     ok: true,

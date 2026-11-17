@@ -73,9 +73,13 @@
     var formKey = "";
     host.innerHTML = xm().EmptyState({ title: "正在读取任务" });
 
+    function labelOf(person) {
+      return person && person.name === "管理员" ? "罗成" : person.name;
+    }
+
     function name(id) {
       var hit = ctx.people.find(function (person) { return person.id === id; });
-      return hit ? hit.name : id;
+      return hit ? labelOf(hit) : id;
     }
 
     function matches(task, chosen, now) {
@@ -91,7 +95,7 @@
 
     function options(selected) {
       return '<option value="">请选择</option>' + ctx.people.map(function (person) {
-        return '<option value="' + esc(person.id) + '"' + (person.id === selected ? " selected" : "") + ">" + esc(person.name) + "</option>";
+        return '<option value="' + esc(person.id) + '"' + (person.id === selected ? " selected" : "") + ">" + esc(labelOf(person)) + "</option>";
       }).join("");
     }
 

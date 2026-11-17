@@ -1727,7 +1727,7 @@
    return;
   }
   var script = document.createElement("script");
-  script.src = "/shared/modules/work-tasks.js?v=task3";
+  script.src = "/shared/modules/work-tasks.js?v=task4";
   script.setAttribute("data-work-tasks", "");
   script.onload = run;
   script.onerror = function () {

@@ -458,6 +458,43 @@ test("人事按模板填报，免报和移出不计入未报", async () => {
   }
 });
 
+test("发布任务页面把组织里的管理员显示成罗成", () => {
+  const js = readFileSync(join(root, "../public/shared/modules/work-tasks.js"), "utf8");
+  assert.match(js, /person\.name === "管理员" \? "罗成"/);
+});
+
+test("发布任务的检查人和执行人里有罗成", async () => {
+  resetPeopleStore();
+  resetWorkStore();
+  const app = express();
+  app.use(express.json());
+  app.use(withUser(luocheng));
+  app.use("/api/work", workRouter);
+  const { base, close } = await listen(app);
+  try {
+    const ctx = await json(base, "/api/work/tasks/context");
+    assert.equal(ctx.status, 200);
+    const luo = ctx.data.people.find((person) => person.name === "罗成");
+    assert.ok(luo);
+    assert.equal(ctx.data.people.some((person) => person.name === "管理员"), false);
+    const published = await json(base, "/api/work/tasks/publish", {
+      method: "POST",
+      body: {
+        id: "task-luo-review",
+        title: "核对名单",
+        assignee: "1",
+        reviewer: luo.id,
+        start_at: "2026-11-17T09:00",
+        due_at: "2026-11-17T18:00"
+      }
+    });
+    assert.equal(published.status, 200);
+    assert.equal(published.data.task.reviewer, luo.id);
+  } finally {
+    await close();
+  }
+});
+
 test("发布、执行、退回、再提交、检查通过走同一条任务", async () => {
   resetPeopleStore();
   resetWorkStore();
