@@ -1,10 +1,48 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { buildLiveView } from "../src/modules/home/jingmai.js";
 import { collectFrameIds, deskUsable, loginOpenReady, loginPageAction, loginScreenState, sessionReady } from "../src/modules/home/jingmai-desk.js";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
 
 const homeJs = readFileSync(new URL("../public/shared/modules/home.js", import.meta.url), "utf8");
+
+test("a shop that just logged in shows a fresh time before the first deal arrives", () => {
+  const view = buildLiveView({
+    now: { day: "2026-11-17", stamp: "2026-11-17 09:56:00" },
+    shops: [{
+      store: "DIKTT环境电器旗舰店",
+      enabled: true,
+      cookies: [{ name: "thor", value: "ok" }],
+      authState: "ok",
+      linkedAt: "2026-11-17 09:55:30"
+    }],
+    samples: []
+  });
+  assert.equal(view.shops[0].capturedAt, "2026/11/17 09:55:30");
+  assert.equal(view.shops[0].loginExpired, false);
+});
+
+test("an older deal time stays ahead of an earlier login", () => {
+  const view = buildLiveView({
+    now: { day: "2026-11-17", stamp: "2026-11-17 09:56:00" },
+    shops: [{
+      store: "已有成交店",
+      enabled: true,
+      cookies: [{ name: "thor", value: "ok" }],
+      authState: "ok",
+      linkedAt: "2026-11-17 08:00:00"
+    }],
+    samples: [{
+      store: "已有成交店",
+      day: "2026-11-17",
+      capturedAt: "2026-11-17 09:40:00",
+      dealAmount: 1200,
+      ok: true
+    }]
+  });
+  assert.equal(view.shops[0].capturedAt, "2026/11/17 09:40:00");
+});
 
 test("captcha text does not count as a wrong password", () => {
   const state = loginScreenState("请完成安全验证 账号或密码", true);

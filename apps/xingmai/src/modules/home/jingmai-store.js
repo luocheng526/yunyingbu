@@ -110,7 +110,8 @@ export async function saveSession(store, fields) {
     cookies: cookies || [],
     authState: authState,
     authMessage: String(authMessage || "").slice(0, 200),
-    enabled: enabled
+    enabled: enabled,
+    linkedAt: stampNow()
   };
   if (memoryMode !== false) {
     memory.sessions.set(store, row);
@@ -126,6 +127,7 @@ export async function saveSession(store, fields) {
        auth_state = VALUES(auth_state),
        auth_message = VALUES(auth_message),
        enabled_flag = VALUES(enabled_flag),
+       linked_at = VALUES(linked_at),
        updated_at = VALUES(updated_at)`,
     [store, JSON.stringify(row.cookies), row.authState, row.authMessage, row.enabled ? 1 : 0, stampNow(), stampNow()]
   );
@@ -205,7 +207,7 @@ export async function listSessions() {
     });
   }
   const result = await query(
-    `SELECT store, cookie_jar, auth_state, auth_message, enabled_flag FROM shen_jingmai_session ORDER BY store ASC`
+    `SELECT store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at FROM shen_jingmai_session ORDER BY store ASC`
   );
   if (result == null) {
     return [...memory.sessions.values()];
@@ -222,7 +224,8 @@ export async function listSessions() {
       cookies: Array.isArray(cookies) ? cookies : [],
       authState: row.auth_state,
       authMessage: row.auth_message || "",
-      enabled: Number(row.enabled_flag) === 1
+      enabled: Number(row.enabled_flag) === 1,
+      linkedAt: row.linked_at instanceof Date ? beijingParts(row.linked_at).stamp : String(row.linked_at || "")
     };
   });
 }
