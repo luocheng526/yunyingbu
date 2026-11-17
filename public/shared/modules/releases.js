@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.102-board-quiet */
+/* xm-module-releases 0.1.104-page2 */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -99,9 +99,15 @@
       .xm-content:has(.oc-wrap), .xm-shell:has(.oc-wrap) .xm-content {
         flex: 1 1 auto !important; height: auto !important; min-height: 0 !important; overflow-y: auto !important; touch-action: pan-y;
       }
-      #history-view, #logs-view, #failed-view {
+      #history-view, #logs-view, #failed-view, #rollback-view, #compare-view {
         max-height: calc(100dvh - 15rem); overflow-y: scroll !important; touch-action: pan-y;
       }
+      .rg-subnav[hidden], .rg-filters[hidden] { display: none !important; }
+      #history-stats, #current-versions { display: none !important; }
+      .rg-table { width: 100%; border-collapse: collapse; }
+      .rg-table th { text-align: left; font-size: 12px; color: #64748b; font-weight: 650; padding: 10px 12px; border-bottom: 1px solid #e8eef5; background: #f8fafc; white-space: nowrap; }
+      .rg-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; color: #1e293b; vertical-align: middle; }
+      .rg-table td:last-child { white-space: nowrap; }
       .oc-wrap.page, .oc-wrap.xm-page { max-width: none !important; width: 100%; margin: 0 !important; background: #f3f6fb !important; border: 0 !important; border-radius: 0; padding: 16px 20px 28px; }
       html:has(.oc-wrap) .xm-content, .xm-content:has(.oc-wrap) { padding: 0 !important; background: #f3f6fb !important; }
       .oc-hero-card, .rg-head { background: transparent; border: 0; box-shadow: none; padding: 0 0 4px; margin: 0 0 16px; }
@@ -127,12 +133,12 @@
       .oc-tab-num { display: block; margin: 0.15rem 0 0.05rem; font-size: 1.7rem; font-weight: 750; }
       .oc-tab p { display: block; margin: 0; font-size: 12px; }
       html body .xm-content .rg-subnav button.oc-tab {
-        min-height: 0; background: transparent !important; color: rgba(255,255,255,.9) !important;
-        border: 0 !important; border-radius: 10px 10px 0 0 !important; box-shadow: none !important; padding: 10px 16px !important;
+        min-height: 0; background: #fff !important; color: #334155 !important;
+        border: 1px solid #e8eef5 !important; border-radius: 999px !important; box-shadow: none !important; padding: 8px 16px !important;
       }
       html body .xm-content .rg-subnav button.oc-tab.active,
       html body .xm-content .rg-subnav button.oc-tab.active:hover {
-        background: #fff !important; color: #1677ff !important;
+        background: #1677ff !important; color: #fff !important; border-color: #1677ff !important;
       }
       #failed-view table { table-layout: fixed; width: 100%; }
       #failed-view th:nth-child(4), #failed-view td.failed-sum { width: 16%; min-width: 10rem; }
@@ -182,18 +188,40 @@
       <div id="flash" class="flash" role="status"></div>
       <div id="lock-view" class="lock-box idle" hidden></div>
       <section class="oc-card panel rg-board">
-        <nav class="rg-subnav" aria-label="记录页签">
-          <button type="button" class="oc-tab rg-sub active" data-tab="queue"><span class="rg-sub-label">待上线</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="history"><span class="rg-sub-label">发布记录</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="logs"><span class="rg-sub-label">运行日志</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="failed"><span class="rg-sub-label">失败版本</span></button>
+        <nav class="rg-subnav" aria-label="记录页签" hidden>
+          <button type="button" class="oc-tab rg-sub" data-tab="history"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="rg-sub-label">发布记录</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="logs"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg><span class="rg-sub-label">运行日志</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="failed"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.3 3.2L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.2a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><span class="rg-sub-label">失败版本</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="compare"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M15.5 5.5A6 6 0 0 1 21 11M8.5 18.5A6 6 0 0 1 3 13"/></svg><span class="rg-sub-label">版本对比</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="rollback"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="rg-sub-label">回滚管理</span></button>
         </nav>
+        <div class="rg-filters" id="rg-filters" hidden>
+          <label>版本号 <input id="flt-ver" type="search" placeholder="请输入版本号" autocomplete="off" /></label>
+          <label>发布状态
+            <select id="flt-status">
+              <option value="">全部</option>
+              <option value="success">已上线</option>
+              <option value="failed">发布失败</option>
+              <option value="rolled">已回滚</option>
+            </select>
+          </label>
+          <label>发布人
+            <select id="flt-who"><option value="">全部</option></select>
+          </label>
+          <label>发布时间
+            <span class="rg-dates">
+              <input id="flt-from" type="date" />
+              <input id="flt-to" type="date" />
+            </span>
+          </label>
+          <button type="button" class="act" id="flt-go">查询</button>
+        </div>
         <div class="pane on" id="pane-queue">
           <div id="queue-view" class="tickets"></div>
         </div>
         <div class="pane" id="pane-history">
-          <div id="history-stats" class="history-stats">已上线发布 <b>0</b> 个版本</div>
-          <div id="current-versions" class="caps"></div>
+          <div id="history-stats" class="history-stats" hidden>已上线发布 <b>0</b> 个版本</div>
+          <div id="current-versions" class="caps" hidden></div>
           <div id="history-view"></div>
         </div>
         <div class="pane" id="pane-logs">
@@ -202,7 +230,25 @@
         <div class="pane" id="pane-failed">
           <div id="failed-view"></div>
         </div>
+        <div class="pane" id="pane-compare">
+          <div class="rg-cmp-pick">
+            <label>版本 A <select id="cmp-a"></select></label>
+            <label>版本 B <select id="cmp-b"></select></label>
+            <button type="button" class="act" id="cmp-go">对比</button>
+          </div>
+          <div id="compare-view" class="rg-cmp"></div>
+        </div>
+        <div class="pane" id="pane-rollback">
+          <div id="rollback-view"></div>
+        </div>
       </section>
+      <div id="rg-detail" class="rg-modal" hidden>
+        <div class="rg-modal-card">
+          <button type="button" class="act secondary rg-modal-close" id="rg-detail-close">关闭</button>
+          <h2 id="rg-detail-title">版本详情</h2>
+          <dl id="rg-detail-body"></dl>
+        </div>
+      </div>
     </div>
 
     <div id="upgrade-mask" aria-live="assertive" aria-modal="true" role="dialog">
@@ -225,7 +271,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-22";
+      link.href = "/releases.css?v=sc-ui-23";
       document.head.appendChild(link);
     }
   }
@@ -271,16 +317,21 @@
       const crumb = document.querySelector(".oc-crumb");
       const tabTitles = {
         queue: "版本发布中心 / 待上线",
-        history: "版本发布中心 / 版本记录",
+        history: "版本发布中心 / 发布记录",
         logs: "版本发布中心 / 运行日志",
-        failed: "版本发布中心 / 失败版本"
+        failed: "版本发布中心 / 失败版本",
+        compare: "版本发布中心 / 版本对比",
+        rollback: "版本发布中心 / 回滚管理"
       };
       const WATCH_MS = 15000;
       const PAGE_SIZE = 20;
       const UPGRADE_PENDING_KEY = "oc-after-upgrade";
       let knownQueueIds = null;
       let lastLock = { locked: false };
-      const listPages = { queue: 1, history: 1, logs: 1, failed: 1 };
+      const listPages = { queue: 1, history: 1, logs: 1, failed: 1, rollback: 1 };
+      let ticketIndex = {};
+      let allTickets = [];
+      let compareLeft = "";
 
       function setText(idOrEl, text) {
         const el = typeof idOrEl === "string" ? document.getElementById(idOrEl) : idOrEl;
@@ -748,8 +799,13 @@
       }
 
       function activeTabName() {
-        const tab = document.querySelector(".rg-cards .oc-tab.active") || document.querySelector(".oc-tab.active");
-        return (tab && tab.getAttribute("data-tab")) || "queue";
+        const sub = document.querySelector(".rg-subnav");
+        const inner = sub && !sub.hidden ? sub.querySelector(".oc-tab.active") : null;
+        if (inner) {
+          return inner.getAttribute("data-tab") || "queue";
+        }
+        const card = document.querySelector(".rg-cards .oc-tab.active");
+        return (card && card.getAttribute("data-tab")) || "queue";
       }
 
       function countsFromBoard(payload) {
@@ -976,36 +1032,295 @@
       function ticketDialogName(item) {
         return String((item && (item.module || item.source || item.applicant)) || "").trim() || "来源对话";
       }
+      function rememberTickets(items) {
+        (items || []).forEach(function (item) {
+          if (item && item.id) {
+            ticketIndex[item.id] = item;
+          }
+        });
+      }
+      function readFilters() {
+        return {
+          ver: String((document.getElementById("flt-ver") || {}).value || "").trim(),
+          status: String((document.getElementById("flt-status") || {}).value || ""),
+          who: String((document.getElementById("flt-who") || {}).value || ""),
+          from: String((document.getElementById("flt-from") || {}).value || ""),
+          to: String((document.getElementById("flt-to") || {}).value || "")
+        };
+      }
+      function matchFilters(item, flt) {
+        if (flt.ver && String(item.version || "").indexOf(flt.ver) < 0) {
+          return false;
+        }
+        if (flt.status === "success" && (item.status !== "success" || item.rolledBack)) {
+          return false;
+        }
+        if (flt.status === "failed" && item.status !== "failed") {
+          return false;
+        }
+        if (flt.status === "rolled" && !item.rolledBack) {
+          return false;
+        }
+        if (flt.who) {
+          const who = ticketDialogName(item);
+          if (who !== flt.who && item.applicant !== flt.who && item.source !== flt.who) {
+            return false;
+          }
+        }
+        const t = String(item.publishFinishedAt || item.reviewedAt || item.submittedAt || "");
+        const day = t.slice(0, 10);
+        if (flt.from && day && day < flt.from) {
+          return false;
+        }
+        if (flt.to && day && day > flt.to) {
+          return false;
+        }
+        return true;
+      }
+      function fillWhoFilter(items) {
+        const sel = document.getElementById("flt-who");
+        if (!sel) {
+          return;
+        }
+        const cur = sel.value;
+        const names = [];
+        (items || []).forEach(function (item) {
+          const name = item.applicant || item.source || ticketDialogName(item);
+          if (name && names.indexOf(name) < 0) {
+            names.push(name);
+          }
+        });
+        names.sort();
+        sel.innerHTML = '<option value="">全部</option>' + names.map(function (name) {
+          return '<option value="' + esc(name) + '">' + esc(name) + "</option>";
+        }).join("");
+        if (cur && names.indexOf(cur) >= 0) {
+          sel.value = cur;
+        }
+      }
+      function fmtDay(ts) {
+        const full = fmt(ts);
+        return full.length >= 16 ? full.slice(0, 16) : full;
+      }
+      function durationText(item) {
+        const start = Date.parse(item.publishStartedAt || item.reviewedAt || item.submittedAt || "");
+        const end = Date.parse(item.publishFinishedAt || "");
+        if (!start || !end || end < start) {
+          return "—";
+        }
+        const sec = Math.round((end - start) / 1000);
+        if (sec < 60) {
+          return sec + "秒";
+        }
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return s ? m + "分" + s + "秒" : m + "分";
+      }
+      function kindBadge(item) {
+        if (item.status === "failed") {
+          return '<span class="badge fail">失败</span>';
+        }
+        if (item.rolledBack) {
+          return '<span class="badge">已回滚</span>';
+        }
+        return '<span class="badge ok">正式版</span>';
+      }
+      function statusCell(item) {
+        if (item.status === "failed") {
+          return '<span class="rg-st bad">发布失败</span>';
+        }
+        if (item.rolledBack) {
+          return '<span class="rg-st rolled">已回滚</span>';
+        }
+        if (item.status === "success") {
+          return '<span class="rg-st ok">已上线</span>';
+        }
+        return esc(item.status || "—");
+      }
+      function rowActions(item, locked, mode) {
+        const bits = ['<button type="button" class="rg-link" data-act="detail">详情</button>'];
+        if (mode === "failed" || item.status === "failed") {
+          bits.push('<button type="button" class="rg-link" data-act="showlog">日志</button>');
+          const returned = item.returned || /已发回给「/.test(item.log || "");
+          if (returned) {
+            bits.push('<span class="badge">已发回</span>');
+          } else {
+            bits.push('<button type="button" class="rg-link" data-act="return">发回</button>');
+          }
+        } else {
+          bits.push('<button type="button" class="rg-link" data-act="compare">对比</button>');
+          if (item.snapshotDir) {
+            bits.push(locked
+              ? '<button type="button" class="rg-link" disabled>回滚</button>'
+              : '<button type="button" class="rg-link" data-act="rollback">回滚</button>');
+          }
+        }
+        return bits.join("");
+      }
+      function recordTable(items, locked, key, mode) {
+        const flt = readFilters();
+        const filtered = (items || []).filter(function (item) { return matchFilters(item, flt); });
+        rememberTickets(filtered);
+        fillWhoFilter(allTickets.length ? allTickets : filtered);
+        if (!filtered.length) {
+          return '<div class="empty">' + (items && items.length ? "没有符合筛选的记录" : "暂无记录") + "</div>";
+        }
+        const paged = paginate(filtered, key);
+        return (
+          "<table class=\"rg-table\"><thead><tr><th>序号</th><th>版本号</th><th>版本说明</th><th>提交人</th><th>发布时间</th><th>发布状态</th><th>耗时</th><th>操作</th></tr></thead><tbody>" +
+          paged.slice.map(function (item, index) {
+            const note = item.module ? (item.module + "：" + (item.summary || "—")) : (item.summary || "—");
+            return (
+              "<tr data-id=\"" + esc(item.id) + "\">" +
+              "<td>" + (paged.from + index) + "</td>" +
+              "<td><span class=\"sc-ver\">" + esc(item.version) + "</span>" + demoBadge(item) + kindBadge(item) + "</td>" +
+              "<td class=\"failed-sum\">" + esc(note) + "</td>" +
+              "<td>" + esc(item.applicant || item.source || ticketDialogName(item)) + "</td>" +
+              "<td>" + esc(fmtDay(item.publishFinishedAt || item.reviewedAt || item.submittedAt)) + "</td>" +
+              "<td>" + statusCell(item) + "</td>" +
+              "<td>" + esc(durationText(item)) + "</td>" +
+              "<td>" + rowActions(item, locked, mode) + "</td></tr>"
+            );
+          }).join("") +
+          "</tbody></table>" + renderPager(key, paged)
+        );
+      }
+      function showDetail(item, focusLog) {
+        const box = document.getElementById("rg-detail");
+        const body = document.getElementById("rg-detail-body");
+        const title = document.getElementById("rg-detail-title");
+        if (!box || !body || !item) {
+          return;
+        }
+        if (title) {
+          title.textContent = item.version || "版本详情";
+        }
+        const rows = [
+          ["版本", item.version || "—"],
+          ["模块", item.module || "—"],
+          ["提交人", item.applicant || item.source || ticketDialogName(item)],
+          ["状态", item.status || "—"],
+          ["说明", item.summary || "—"],
+          ["验收", item.acceptance || "—"],
+          ["文件", (item.files || []).join("\n") || "—"],
+          ["提交时间", fmt(item.submittedAt)],
+          ["发布时间", fmt(item.publishFinishedAt || item.reviewedAt)],
+          ["流水", item.log || "—"]
+        ];
+        body.innerHTML = rows.map(function (row) {
+          return "<dt>" + esc(row[0]) + "</dt><dd" + (row[0] === "流水" ? ' id="rg-detail-log"' : "") + ">" + esc(row[1]) + "</dd>";
+        }).join("");
+        box.hidden = false;
+        box.classList.add("show");
+        if (focusLog) {
+          const log = document.getElementById("rg-detail-log");
+          if (log && log.scrollIntoView) {
+            log.scrollIntoView({ block: "start" });
+          }
+        }
+      }
+      function hideDetail() {
+        const box = document.getElementById("rg-detail");
+        if (box) {
+          box.hidden = true;
+          box.classList.remove("show");
+        }
+      }
+      function syncFilters(tab) {
+        const name = tab || activeTabName();
+        const filters = document.getElementById("rg-filters");
+        if (filters) {
+          filters.hidden = !(name === "history" || name === "failed" || name === "rollback");
+        }
+        const sub = document.querySelector(".rg-subnav");
+        if (sub) {
+          sub.hidden = name === "queue";
+        }
+      }
+      function cmpOption(item) {
+        return '<option value="' + esc(item.id) + '">' + esc(item.version) + " · " + esc(item.module || "") + "</option>";
+      }
+      function fillCompareSelects(items, preferId) {
+        const a = document.getElementById("cmp-a");
+        const b = document.getElementById("cmp-b");
+        if (!a || !b) {
+          return;
+        }
+        const success = (items || []).filter(function (item) { return item.status === "success"; }).sort(newestFirst);
+        const html = '<option value="">请选择版本</option>' + success.map(cmpOption).join("");
+        const keepA = preferId || a.value;
+        const keepB = b.value;
+        a.innerHTML = html;
+        b.innerHTML = html;
+        if (keepA) {
+          a.value = keepA;
+        } else if (success.length) {
+          a.value = success[0].id;
+        }
+        if (keepB && keepB !== a.value) {
+          b.value = keepB;
+        } else if (success.length > 1 && (!keepB || keepB === a.value)) {
+          const other = success.find(function (item) { return item.id !== a.value; });
+          if (other) {
+            b.value = other.id;
+          }
+        }
+      }
+      function renderCompare(items) {
+        const el = document.getElementById("compare-view");
+        if (!el) {
+          return;
+        }
+        fillCompareSelects(items, compareLeft);
+        const a = ticketIndex[(document.getElementById("cmp-a") || {}).value];
+        const b = ticketIndex[(document.getElementById("cmp-b") || {}).value];
+        function card(item, label) {
+          if (!item) {
+            return "<article><h3>" + label + "</h3><div class=\"empty\">请选择版本</div></article>";
+          }
+          return (
+            "<article><h3>" + label + " · " + esc(item.version) + "</h3><dl>" +
+            "<dt>模块</dt><dd>" + esc(item.module || "—") + "</dd>" +
+            "<dt>提交人</dt><dd>" + esc(item.applicant || item.source || ticketDialogName(item)) + "</dd>" +
+            "<dt>说明</dt><dd>" + esc(item.summary || "—") + "</dd>" +
+            "<dt>文件</dt><dd>" + esc((item.files || []).join("、") || "—") + "</dd>" +
+            "<dt>时间</dt><dd>" + esc(fmtDay(item.publishFinishedAt || item.reviewedAt)) + "</dd>" +
+            "<dt>状态</dt><dd>" + statusCell(item) + "</dd>" +
+            "</dl></article>"
+          );
+        }
+        el.innerHTML = card(a, "版本 A") + card(b, "版本 B");
+      }
+      function renderRollbackList(items, locked) {
+        const el = document.getElementById("rollback-view");
+        if (!el) {
+          return;
+        }
+        const rows = (items || []).filter(function (item) {
+          return item.status === "success" && item.snapshotDir;
+        }).sort(newestFirst);
+        if (!rows.length) {
+          el.innerHTML = '<div class="empty">没有可回滚的版本（需要升级前快照）</div>';
+          return;
+        }
+        el.innerHTML = recordTable(rows, locked, "rollback", "history");
+      }
 
       function renderHistory(result, locked) {
         const el = document.getElementById("history-view");
         if (!el) {
           return;
         }
-        const paged = pageInfoFromBoard(result, "history");
-        if (!paged.total) {
-          el.innerHTML = '<div class="empty">还没有成功发布的版本记录</div>';
+        const raw = (result && result.items) || [];
+        const rows = raw.filter(function (item) {
+          return item.status === "success" || item.status === "failed";
+        }).sort(newestFirst);
+        rememberTickets(rows);
+        if (!rows.length) {
+          el.innerHTML = '<div class="empty">还没有发布记录</div>';
           return;
         }
-        el.innerHTML =
-          "<table><thead><tr><th>版本</th><th>模块</th><th>摘要</th><th>时间</th><th>回滚</th></tr></thead><tbody>" +
-          paged.slice.map(function (item) {
-            let rollbackBtn = "<span class=\"oc-crumb\">无快照</span>";
-            if (item.snapshotDir) {
-              rollbackBtn = locked
-                ? "<button class=\"act\" disabled>有发布正在进行</button>"
-                : "<button class=\"act secondary\" data-act=\"rollback\">回滚到升级前</button>";
-            }
-            return (
-              "<tr data-id=\"" + esc(item.id) + "\"><td>" + esc(item.version) + demoBadge(item) +
-              (item.rolledBack ? '<span class="badge">已回滚</span>' : '<span class="badge">正式版</span>') + "</td>" +
-              "<td>" + esc(item.module) + "</td>" +
-              "<td>" + esc(item.summary || "—") + "</td>" +
-              "<td>" + esc(fmt(item.publishFinishedAt || item.reviewedAt)) + "</td>" +
-              "<td>" + rollbackBtn + "</td></tr>"
-            );
-          }).join("") +
-          "</tbody></table>" + renderPager("history", paged);
+        el.innerHTML = recordTable(rows, locked, "history", "history");
       }
 
       function renderFailed(result) {
@@ -1013,31 +1328,16 @@
         if (!el) {
           return;
         }
-        const paged = pageInfoFromBoard(result, "failed");
-        if (!paged.total) {
+        const raw = (result && result.items) || [];
+        const rows = raw.filter(function (item) {
+          return item.status === "failed";
+        }).sort(newestFirst);
+        rememberTickets(rows);
+        if (!rows.length) {
           el.innerHTML = '<div class="empty">还没有失败的版本</div>';
           return;
         }
-        el.innerHTML =
-          "<table><thead><tr><th>版本</th><th>模块</th><th>来源对话</th><th>摘要</th><th>失败原因</th><th>时间</th><th>操作</th></tr></thead><tbody>" +
-          paged.slice.map(function (item) {
-            const dialog = ticketDialogName(item);
-            const returned = item.returned || /已发回给「/.test(item.log || "");
-            const action = returned
-              ? '<span class="badge">已发回</span><div class="sc-meta">等待「' + esc(dialog) + "」改完后重新交单</div>"
-              : '<button class="act secondary" data-act="return">发回给「' + esc(dialog) + "」重新修改后再提交</button>";
-            return (
-              "<tr data-id=\"" + esc(item.id) + "\">" +
-              "<td>" + esc(item.version) + demoBadge(item) + '<span class="badge fail">失败</span>' + (returned ? '<span class="badge">已发回</span>' : "") + "</td>" +
-              "<td>" + esc(item.module) + "</td>" +
-              "<td>" + esc(dialog) + "</td>" +
-              "<td class=\"failed-sum\">" + esc(item.summary || "—") + "</td>" +
-              "<td class=\"failed-log\">" + esc(item.log || "—") + "</td>" +
-              "<td>" + esc(fmt(item.publishFinishedAt || item.reviewedAt || item.submittedAt)) + "</td>" +
-              "<td>" + action + "</td></tr>"
-            );
-          }).join("") +
-          "</tbody></table>" + renderPager("failed", paged);
+        el.innerHTML = recordTable(rows, lastLock.locked, "failed", "failed");
       }
 
       function renderLogs(result) {
@@ -1061,13 +1361,36 @@
         }).join("") + renderPager("logs", paged);
       }
 
+      async function loadAllTickets(apiOpts) {
+        const listed = await api("/api/releases", apiOpts);
+        allTickets = listed.items || [];
+        rememberTickets(allTickets);
+        fillWhoFilter(allTickets);
+        return listed;
+      }
+
+      async function fetchBoardList(path, apiOpts) {
+        try {
+          const result = await api(path, apiOpts);
+          if (result && Array.isArray(result.items)) {
+            rememberTickets(result.items);
+            return result;
+          }
+        } catch (err) {
+          if (!err || err.status !== 404) {
+            throw err;
+          }
+        }
+        return loadAllTickets(apiOpts);
+      }
+
       async function refreshHistory(apiOpts, locked) {
         const el = document.getElementById("history-view");
         if (el) {
           el.innerHTML = '<div class="empty">正在读取本页版本记录…</div>';
         }
-        const result = await api("/api/releases/history?page=" + listPages.history + "&limit=" + PAGE_SIZE, apiOpts);
-        renderHistory(result, locked);
+        const listed = await loadAllTickets(apiOpts);
+        renderHistory(listed, locked);
       }
 
       async function refreshLogs(apiOpts) {
@@ -1075,7 +1398,7 @@
         if (el) {
           el.innerHTML = '<div class="empty">正在读取本页运行日志…</div>';
         }
-        const result = await api("/api/releases/logs?page=" + listPages.logs + "&limit=" + PAGE_SIZE, apiOpts);
+        const result = await fetchBoardList("/api/releases/logs?page=" + listPages.logs + "&limit=" + PAGE_SIZE, apiOpts);
         renderLogs(result);
       }
 
@@ -1084,8 +1407,8 @@
         if (el) {
           el.innerHTML = '<div class="empty">正在读取本页失败版本…</div>';
         }
-        const result = await api("/api/releases/failed?page=" + listPages.failed + "&limit=" + PAGE_SIZE, apiOpts);
-        renderFailed(result);
+        const listed = await loadAllTickets(apiOpts);
+        renderFailed(listed);
       }
 
       async function refresh(opts) {
@@ -1111,8 +1434,15 @@
         const lock = settledValue(settled[1], { locked: false });
         const ready = settledValue(settled[2], {});
         const me = settledValue(settled[3], {});
-        const summary = settledValue(settled[4], {});
+        let summary = settledValue(settled[4], {});
         const versions = settledValue(settled[5], { current: [] });
+        if (settled[4].status === "rejected" || typeof summary.queued !== "number") {
+          try {
+            summary = { items: (await loadAllTickets(apiOpts)).items || [] };
+          } catch (_err) {
+            summary = summary || {};
+          }
+        }
         lastLock = lock;
         setText("who", me.displayName || me.username || "罗成");
         renderLock(lock, ready);
@@ -1124,7 +1454,9 @@
           return dropIds.indexOf(item.id) < 0;
         });
         knownQueueIds = queued.map(function (item) { return item.id; });
+        rememberTickets(queued);
         renderQueue(queued, lock.locked, versions);
+        syncFilters(tab);
         if (failed.length) {
           flash((failed[0].reason && failed[0].reason.message) || "部分刷新失败", true);
         }
@@ -1135,6 +1467,13 @@
             await refreshLogs(apiOpts);
           } else if (tab === "failed") {
             await refreshFailed(apiOpts);
+          } else if (tab === "compare" || tab === "rollback") {
+            const listed = await loadAllTickets(apiOpts);
+            if (tab === "compare") {
+              renderCompare(listed.items || []);
+            } else {
+              renderRollbackList(listed.items || [], lock.locked);
+            }
           }
         } catch (err) {
           flash(err.message, true);
@@ -1201,23 +1540,35 @@
         }
       }
 
+      function showBoardTab(name) {
+        const cardName = (name === "compare" || name === "rollback") ? "history" : name;
+        document.querySelectorAll(".rg-cards .oc-tab").forEach(function (node) {
+          node.classList.toggle("active", node.getAttribute("data-tab") === cardName);
+        });
+        document.querySelectorAll(".rg-subnav .oc-tab").forEach(function (node) {
+          node.classList.toggle("active", node.getAttribute("data-tab") === name);
+        });
+        document.querySelectorAll(".pane").forEach(function (pane) {
+          pane.classList.toggle("on", pane.id === "pane-" + name);
+        });
+        syncFilters(name);
+        if (tabTitles[name]) {
+          document.title = tabTitles[name];
+        }
+        const scroller = document.querySelector(".xm-content");
+        if (scroller) {
+          scroller.scrollTop = 0;
+        }
+        if (name === "history" || name === "logs" || name === "failed" || name === "compare" || name === "rollback") {
+          refresh({ tab: name }).catch(function (err) {
+            flash(err.message, true);
+          });
+        }
+      }
       document.querySelectorAll(".oc-tab").forEach(function (tab) {
         tab.addEventListener("click", function () {
           const name = tab.getAttribute("data-tab");
-          document.querySelectorAll(".oc-tab").forEach(function (node) {
-            node.classList.toggle("active", node.getAttribute("data-tab") === name);
-          });
-          document.querySelectorAll(".pane").forEach(function (pane) {
-            pane.classList.toggle("on", pane.id === "pane-" + name);
-          });
-          if (tabTitles[name]) {
-            document.title = "版本发布中心 · " + (name === "queue" ? "待上线" : name === "history" ? "版本记录" : name === "failed" ? "失败版本" : "运行日志");
-          }
-          if (name === "history" || name === "logs" || name === "failed") {
-            refresh({ tab: name }).catch(function (err) {
-              flash(err.message, true);
-            });
-          }
+          showBoardTab(name);
           if (typeof tab.blur === "function") {
             tab.blur();
           }
@@ -1258,6 +1609,20 @@
         const id = card && card.getAttribute("data-id");
         if (!id) return;
         const act = btn.getAttribute("data-act");
+        if (act === "detail" || act === "showlog" || act === "compare") {
+          const item = ticketIndex[id];
+          if (act === "compare") {
+            compareLeft = id;
+            showBoardTab("compare");
+            return;
+          }
+          if (!item) {
+            flash("找不到该版本", true);
+            return;
+          }
+          showDetail(item, act === "showlog");
+          return;
+        }
         if (act === "pass") {
           if (window.__xmUpgradePass) {
             flash("有发布正在进行，请等当前这一单完成。", true);
@@ -1330,6 +1695,47 @@
           flash(err.message, true);
         }
       });
+      function runFilters() {
+        listPages.history = 1;
+        listPages.failed = 1;
+        listPages.logs = 1;
+        listPages.rollback = 1;
+        refresh().catch(function (err) { flash(err.message, true); });
+      }
+      const fltGo = document.getElementById("flt-go");
+      if (fltGo) {
+        fltGo.addEventListener("click", runFilters);
+      }
+      ["flt-ver", "flt-status", "flt-who", "flt-from", "flt-to"].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (!el) {
+          return;
+        }
+        el.addEventListener("keydown", function (event) {
+          if (event.key === "Enter") {
+            runFilters();
+          }
+        });
+      });
+      const cmpGo = document.getElementById("cmp-go");
+      if (cmpGo) {
+        cmpGo.addEventListener("click", function () {
+          compareLeft = (document.getElementById("cmp-a") || {}).value || compareLeft;
+          renderCompare(allTickets);
+        });
+      }
+      const detailClose = document.getElementById("rg-detail-close");
+      if (detailClose) {
+        detailClose.addEventListener("click", hideDetail);
+      }
+      const detailBox = document.getElementById("rg-detail");
+      if (detailBox) {
+        detailBox.addEventListener("click", function (event) {
+          if (event.target === detailBox) {
+            hideDetail();
+          }
+        });
+      }
 
       (async function bootReleases() {
         pinUpgradeMask();

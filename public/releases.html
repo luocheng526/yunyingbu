@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
-    <link rel="stylesheet" href="/releases.css?v=sc-ui-22" />
+    <link rel="stylesheet" href="/releases.css?v=sc-ui-23" />
     <style>
       #upgrade-mask,
       html > #upgrade-mask {
@@ -111,27 +111,75 @@
           <span class="rg-ico rg-ico-logs" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h8l5 5v13H7z"/><path d="M15 3v5h5M9 13h6M9 17h6"/></svg></span>
           <span class="rg-card-body"><h2>运行日志</h2><strong class="oc-tab-num oc-tab-num-text">流水</strong><p id="tab-logs-sub">发版流水</p></span>
         </button>
+        <button type="button" class="oc-tab" data-tab="failed">
+          <span class="rg-ico rg-ico-failed" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16.5" r="0.8" fill="currentColor"/></svg></span>
+          <span class="rg-card-body"><h2>失败版本</h2><strong class="oc-tab-num" id="tab-failed-count">—</strong><p id="tab-failed-sub">个失败版</p></span>
+        </button>
       </nav>
       <div id="flash" class="flash" role="status"></div>
       <div id="lock-view" class="lock-box idle" hidden></div>
       <section class="oc-card panel rg-board">
-        <nav class="rg-subnav" aria-label="记录页签">
-          <button type="button" class="oc-tab rg-sub active" data-tab="queue"><span class="rg-sub-label">待上线</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="history"><span class="rg-sub-label">发布记录</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="logs"><span class="rg-sub-label">运行日志</span></button>
+        <nav class="rg-subnav" aria-label="记录页签" hidden>
+          <button type="button" class="oc-tab rg-sub" data-tab="history"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="rg-sub-label">发布记录</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="logs"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg><span class="rg-sub-label">运行日志</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="failed"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.3 3.2L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.2a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><span class="rg-sub-label">失败版本</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="compare"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M15.5 5.5A6 6 0 0 1 21 11M8.5 18.5A6 6 0 0 1 3 13"/></svg><span class="rg-sub-label">版本对比</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="rollback"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="rg-sub-label">回滚管理</span></button>
         </nav>
+        <div class="rg-filters" id="rg-filters" hidden>
+          <label>版本号 <input id="flt-ver" type="search" placeholder="请输入版本号" autocomplete="off" /></label>
+          <label>发布状态
+            <select id="flt-status">
+              <option value="">全部</option>
+              <option value="success">已上线</option>
+              <option value="failed">发布失败</option>
+              <option value="rolled">已回滚</option>
+            </select>
+          </label>
+          <label>发布人
+            <select id="flt-who"><option value="">全部</option></select>
+          </label>
+          <label>发布时间
+            <span class="rg-dates">
+              <input id="flt-from" type="date" />
+              <input id="flt-to" type="date" />
+            </span>
+          </label>
+          <button type="button" class="act" id="flt-go">查询</button>
+        </div>
         <div class="pane on" id="pane-queue">
           <div id="queue-view" class="tickets"></div>
         </div>
         <div class="pane" id="pane-history">
-          <div id="history-stats" class="history-stats">已上线发布 <b>0</b> 个版本</div>
-          <div id="current-versions" class="caps"></div>
+          <div id="history-stats" class="history-stats" hidden>已上线发布 <b>0</b> 个版本</div>
+          <div id="current-versions" class="caps" hidden></div>
           <div id="history-view"></div>
         </div>
         <div class="pane" id="pane-logs">
           <div id="logs-view" class="log-list"></div>
         </div>
+        <div class="pane" id="pane-failed">
+          <div id="failed-view"></div>
+        </div>
+        <div class="pane" id="pane-compare">
+          <div class="rg-cmp-pick">
+            <label>版本 A <select id="cmp-a"></select></label>
+            <label>版本 B <select id="cmp-b"></select></label>
+            <button type="button" class="act" id="cmp-go">对比</button>
+          </div>
+          <div id="compare-view" class="rg-cmp"></div>
+        </div>
+        <div class="pane" id="pane-rollback">
+          <div id="rollback-view"></div>
+        </div>
       </section>
+      <div id="rg-detail" class="rg-modal" hidden>
+        <div class="rg-modal-card">
+          <button type="button" class="act secondary rg-modal-close" id="rg-detail-close">关闭</button>
+          <h2 id="rg-detail-title">版本详情</h2>
+          <dl id="rg-detail-body"></dl>
+        </div>
+      </div>
     </div>
 
     <div id="upgrade-mask" aria-live="assertive" aria-modal="true" role="dialog">
@@ -150,14 +198,21 @@
       const crumb = document.querySelector(".oc-crumb");
       const tabTitles = {
         queue: "版本发布中心 / 待上线",
-        history: "版本发布中心 / 版本记录",
-        logs: "版本发布中心 / 运行日志"
+        history: "版本发布中心 / 发布记录",
+        logs: "版本发布中心 / 运行日志",
+        failed: "版本发布中心 / 失败版本",
+        compare: "版本发布中心 / 版本对比",
+        rollback: "版本发布中心 / 回滚管理"
       };
       const WATCH_MS = 15000;
       const PAGE_SIZE = 20;
       const UPGRADE_PENDING_KEY = "oc-after-upgrade";
       let knownQueueIds = null;
-      const listPages = { queue: 1, history: 1, logs: 1 };
+      let lastLock = { locked: false };
+      const listPages = { queue: 1, history: 1, logs: 1, failed: 1, rollback: 1 };
+      let ticketIndex = {};
+      let allTickets = [];
+      let compareLeft = "";
 
       /* Theme SPA replace #xm-content and re-runs this script. Prefer the
          current wrap so leftover empty #history-view / #logs-view are ignored. */
@@ -187,14 +242,26 @@
       }
       function showTab(name) {
         const root = pageRoot();
-        root.querySelectorAll(".oc-tab").forEach(function (node) {
+        const cardName = (name === "compare" || name === "rollback") ? "history" : name;
+        root.querySelectorAll(".rg-cards .oc-tab").forEach(function (node) {
+          node.classList.toggle("active", node.getAttribute("data-tab") === cardName);
+        });
+        root.querySelectorAll(".rg-subnav .oc-tab").forEach(function (node) {
           node.classList.toggle("active", node.getAttribute("data-tab") === name);
         });
         root.querySelectorAll(".pane").forEach(function (pane) {
           pane.classList.toggle("on", pane.id === "pane-" + name);
         });
+        const filters = liveEl("rg-filters");
+        if (filters) {
+          filters.hidden = !(name === "history" || name === "failed" || name === "rollback");
+        }
+        const sub = root.querySelector(".rg-subnav");
+        if (sub) {
+          sub.hidden = name === "queue";
+        }
         if (tabTitles[name]) {
-          document.title = "版本发布中心 · " + (name === "queue" ? "待上线" : name === "history" ? "版本记录" : "运行日志");
+          document.title = tabTitles[name];
         }
         const scroller = document.querySelector(".xm-content");
         if (scroller) {
@@ -716,6 +783,8 @@
         setText("tab-history-count", String(success));
         setText("tab-history-sub", success + " 个正式版");
         setText("tab-logs-sub", "发版流水");
+        setText("tab-failed-count", String(failed));
+        setText("tab-failed-sub", failed + " 个失败版");
         const crumbEl = (pageRoot() && pageRoot().querySelector(".oc-crumb")) || crumb;
         if (crumbEl) {
           crumbEl.textContent = "当前运行 " + (runVer || "—") + " · 待上线 / 版本记录 / 运行日志";
@@ -868,37 +937,232 @@
           String(a.publishFinishedAt || a.reviewedAt || a.submittedAt || "")
         );
       }
+      function rememberTickets(items) {
+        (items || []).forEach(function (item) {
+          if (item && item.id) {
+            ticketIndex[item.id] = item;
+          }
+        });
+      }
+      function ticketDialogName(item) {
+        return String((item && (item.module || item.source || item.applicant)) || "").trim() || "来源对话";
+      }
+      function readFilters() {
+        return {
+          ver: String((liveEl("flt-ver") || {}).value || "").trim(),
+          status: String((liveEl("flt-status") || {}).value || ""),
+          who: String((liveEl("flt-who") || {}).value || ""),
+          from: String((liveEl("flt-from") || {}).value || ""),
+          to: String((liveEl("flt-to") || {}).value || "")
+        };
+      }
+      function matchFilters(item, flt) {
+        if (flt.ver && String(item.version || "").indexOf(flt.ver) < 0) return false;
+        if (flt.status === "success" && (item.status !== "success" || item.rolledBack)) return false;
+        if (flt.status === "failed" && item.status !== "failed") return false;
+        if (flt.status === "rolled" && !item.rolledBack) return false;
+        if (flt.who) {
+          const who = ticketDialogName(item);
+          if (who !== flt.who && item.applicant !== flt.who && item.source !== flt.who) return false;
+        }
+        const t = String(item.publishFinishedAt || item.reviewedAt || item.submittedAt || "");
+        const day = t.slice(0, 10);
+        if (flt.from && day && day < flt.from) return false;
+        if (flt.to && day && day > flt.to) return false;
+        return true;
+      }
+      function fillWhoFilter(items) {
+        const sel = liveEl("flt-who");
+        if (!sel) return;
+        const cur = sel.value;
+        const names = [];
+        (items || []).forEach(function (item) {
+          const name = item.applicant || item.source || ticketDialogName(item);
+          if (name && names.indexOf(name) < 0) names.push(name);
+        });
+        names.sort();
+        sel.innerHTML = '<option value="">全部</option>' + names.map(function (name) {
+          return '<option value="' + esc(name) + '">' + esc(name) + "</option>";
+        }).join("");
+        if (cur && names.indexOf(cur) >= 0) sel.value = cur;
+      }
+      function fmtDay(ts) {
+        const full = fmt(ts);
+        return full.length >= 16 ? full.slice(0, 16) : full;
+      }
+      function durationText(item) {
+        const start = Date.parse(item.publishStartedAt || item.reviewedAt || item.submittedAt || "");
+        const end = Date.parse(item.publishFinishedAt || "");
+        if (!start || !end || end < start) return "—";
+        const sec = Math.round((end - start) / 1000);
+        if (sec < 60) return sec + "秒";
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return s ? m + "分" + s + "秒" : m + "分";
+      }
+      function kindBadge(item) {
+        if (item.status === "failed") return '<span class="badge fail">失败</span>';
+        if (item.rolledBack) return '<span class="badge">已回滚</span>';
+        return '<span class="badge ok">正式版</span>';
+      }
+      function statusCell(item) {
+        if (item.status === "failed") return '<span class="rg-st bad">发布失败</span>';
+        if (item.rolledBack) return '<span class="rg-st rolled">已回滚</span>';
+        if (item.status === "success") return '<span class="rg-st ok">已上线</span>';
+        return esc(item.status || "—");
+      }
+      function rowActions(item, locked, mode) {
+        const bits = ['<button type="button" class="rg-link" data-act="detail">详情</button>'];
+        if (mode === "failed" || item.status === "failed") {
+          bits.push('<button type="button" class="rg-link" data-act="showlog">日志</button>');
+          const returned = item.returned || /已发回给「/.test(item.log || "");
+          bits.push(returned ? '<span class="badge">已发回</span>' : '<button type="button" class="rg-link" data-act="return">发回</button>');
+        } else {
+          bits.push('<button type="button" class="rg-link" data-act="compare">对比</button>');
+          if (item.snapshotDir) {
+            bits.push(locked
+              ? '<button type="button" class="rg-link" disabled>回滚</button>'
+              : '<button type="button" class="rg-link" data-act="rollback">回滚</button>');
+          }
+        }
+        return bits.join("");
+      }
+      function recordTable(items, locked, key, mode) {
+        const flt = readFilters();
+        const filtered = (items || []).filter(function (item) { return matchFilters(item, flt); });
+        rememberTickets(filtered);
+        fillWhoFilter(allTickets.length ? allTickets : filtered);
+        if (!filtered.length) {
+          return '<div class="empty">' + (items && items.length ? "没有符合筛选的记录" : "暂无记录") + "</div>";
+        }
+        const paged = paginate(filtered, key);
+        return (
+          "<table class=\"rg-table\"><thead><tr><th>序号</th><th>版本号</th><th>版本说明</th><th>提交人</th><th>发布时间</th><th>发布状态</th><th>耗时</th><th>操作</th></tr></thead><tbody>" +
+          paged.slice.map(function (item, index) {
+            const note = item.module ? (item.module + "：" + (item.summary || "—")) : (item.summary || "—");
+            return (
+              "<tr data-id=\"" + esc(item.id) + "\">" +
+              "<td>" + (paged.from + index) + "</td>" +
+              "<td><span class=\"sc-ver\">" + esc(item.version) + "</span>" + demoBadge(item) + kindBadge(item) + "</td>" +
+              "<td class=\"failed-sum\">" + esc(note) + "</td>" +
+              "<td>" + esc(item.applicant || item.source || ticketDialogName(item)) + "</td>" +
+              "<td>" + esc(fmtDay(item.publishFinishedAt || item.reviewedAt || item.submittedAt)) + "</td>" +
+              "<td>" + statusCell(item) + "</td>" +
+              "<td>" + esc(durationText(item)) + "</td>" +
+              "<td>" + rowActions(item, locked, mode) + "</td></tr>"
+            );
+          }).join("") +
+          "</tbody></table>" + renderPager(key, paged)
+        );
+      }
+      function showDetail(item, focusLog) {
+        const box = liveEl("rg-detail");
+        const body = liveEl("rg-detail-body");
+        const title = liveEl("rg-detail-title");
+        if (!box || !body || !item) return;
+        if (title) title.textContent = item.version || "版本详情";
+        const rows = [
+          ["版本", item.version || "—"],
+          ["模块", item.module || "—"],
+          ["提交人", item.applicant || item.source || ticketDialogName(item)],
+          ["状态", item.status || "—"],
+          ["说明", item.summary || "—"],
+          ["验收", item.acceptance || "—"],
+          ["文件", (item.files || []).join("\n") || "—"],
+          ["提交时间", fmt(item.submittedAt)],
+          ["发布时间", fmt(item.publishFinishedAt || item.reviewedAt)],
+          ["流水", item.log || "—"]
+        ];
+        body.innerHTML = rows.map(function (row) {
+          return "<dt>" + esc(row[0]) + "</dt><dd" + (row[0] === "流水" ? ' id="rg-detail-log"' : "") + ">" + esc(row[1]) + "</dd>";
+        }).join("");
+        box.hidden = false;
+        box.classList.add("show");
+        if (focusLog) {
+          const log = liveEl("rg-detail-log");
+          if (log && log.scrollIntoView) log.scrollIntoView({ block: "start" });
+        }
+      }
+      function hideDetail() {
+        const box = liveEl("rg-detail");
+        if (box) {
+          box.hidden = true;
+          box.classList.remove("show");
+        }
+      }
+      function cmpOption(item) {
+        return '<option value="' + esc(item.id) + '">' + esc(item.version) + " · " + esc(item.module || "") + "</option>";
+      }
+      function fillCompareSelects(items, preferId) {
+        const a = liveEl("cmp-a");
+        const b = liveEl("cmp-b");
+        if (!a || !b) return;
+        const success = (items || []).filter(function (item) { return item.status === "success"; }).sort(newestFirst);
+        const html = '<option value="">请选择版本</option>' + success.map(cmpOption).join("");
+        const keepA = preferId || a.value;
+        const keepB = b.value;
+        a.innerHTML = html;
+        b.innerHTML = html;
+        if (keepA) a.value = keepA;
+        else if (success.length) a.value = success[0].id;
+        if (keepB && keepB !== a.value) b.value = keepB;
+        else if (success.length > 1 && (!keepB || keepB === a.value)) {
+          const other = success.find(function (item) { return item.id !== a.value; });
+          if (other) b.value = other.id;
+        }
+      }
+      function renderCompare(items) {
+        const el = liveEl("compare-view");
+        if (!el) return;
+        fillCompareSelects(items, compareLeft);
+        const a = ticketIndex[(liveEl("cmp-a") || {}).value];
+        const b = ticketIndex[(liveEl("cmp-b") || {}).value];
+        function card(item, label) {
+          if (!item) return "<article><h3>" + label + "</h3><div class=\"empty\">请选择版本</div></article>";
+          return (
+            "<article><h3>" + label + " · " + esc(item.version) + "</h3><dl>" +
+            "<dt>模块</dt><dd>" + esc(item.module || "—") + "</dd>" +
+            "<dt>提交人</dt><dd>" + esc(item.applicant || item.source || ticketDialogName(item)) + "</dd>" +
+            "<dt>说明</dt><dd>" + esc(item.summary || "—") + "</dd>" +
+            "<dt>文件</dt><dd>" + esc((item.files || []).join("、") || "—") + "</dd>" +
+            "<dt>时间</dt><dd>" + esc(fmtDay(item.publishFinishedAt || item.reviewedAt)) + "</dd>" +
+            "<dt>状态</dt><dd>" + statusCell(item) + "</dd>" +
+            "</dl></article>"
+          );
+        }
+        el.innerHTML = card(a, "版本 A") + card(b, "版本 B");
+      }
+      function renderRollbackList(items, locked) {
+        const el = liveEl("rollback-view");
+        if (!el) return;
+        const rows = (items || []).filter(function (item) {
+          return item.status === "success" && item.snapshotDir;
+        }).sort(newestFirst);
+        el.innerHTML = rows.length
+          ? recordTable(rows, locked, "rollback", "history")
+          : '<div class="empty">没有可回滚的版本（需要升级前快照）</div>';
+      }
 
       function renderHistory(items, locked) {
         const el = liveEl("history-view");
-        if (!el) {
-          return;
-        }
-        const success = successReleases(items).slice().sort(newestFirst);
-        if (!success.length) {
-          el.innerHTML = '<div class="empty">还没有成功发布的版本记录</div>';
-          return;
-        }
-        const paged = paginate(success, "history");
-        el.innerHTML =
-          "<table><thead><tr><th>版本</th><th>模块</th><th>摘要</th><th>时间</th><th>回滚</th></tr></thead><tbody>" +
-          paged.slice.map(function (item) {
-            let rollbackBtn = "<span class=\"oc-crumb\">无快照</span>";
-            if (item.snapshotDir) {
-              rollbackBtn = locked
-                ? "<button class=\"act\" disabled>有发布正在进行</button>"
-                : "<button class=\"act secondary\" data-act=\"rollback\">回滚到升级前</button>";
-            }
-            return (
-              "<tr data-id=\"" + esc(item.id) + "\"><td>" + esc(item.version) + demoBadge(item) +
-              (item.rolledBack ? '<span class="badge">已回滚</span>' : "") + "</td>" +
-              "<td>" + esc(item.module) + "</td>" +
-              "<td>" + esc(item.summary || "—") + "</td>" +
-              "<td>" + esc(fmt(item.publishFinishedAt || item.reviewedAt)) + "</td>" +
-              "<td>" + rollbackBtn + "</td></tr>"
-            );
-          }).join("") +
-          "</tbody></table>" + renderPager("history", paged);
+        if (!el) return;
+        const rows = (items || []).filter(function (item) {
+          return item.status === "success" || item.status === "failed";
+        }).sort(newestFirst);
+        rememberTickets(rows);
+        el.innerHTML = rows.length
+          ? recordTable(rows, locked, "history", "history")
+          : '<div class="empty">还没有发布记录</div>';
+      }
+
+      function renderFailed(items, locked) {
+        const el = liveEl("failed-view");
+        if (!el) return;
+        const rows = (items || []).filter(function (item) { return item.status === "failed"; }).sort(newestFirst);
+        rememberTickets(rows);
+        el.innerHTML = rows.length
+          ? recordTable(rows, locked, "failed", "failed")
+          : '<div class="empty">还没有失败的版本</div>';
       }
 
       function renderLogs(items) {
@@ -934,6 +1198,10 @@
           api("/api/auth/me")
         ]);
         const items = all.items || [];
+        lastLock = lock;
+        allTickets = items;
+        rememberTickets(items);
+        fillWhoFilter(items);
         setText("who", me.displayName || me.username || "罗成");
         renderStats(items, ready);
         renderLock(lock, ready);
@@ -944,6 +1212,9 @@
         renderQueue(queued, lock.locked, versions);
         renderHistory(items, lock.locked);
         renderLogs(items);
+        renderFailed(items, lock.locked);
+        renderCompare(items);
+        renderRollbackList(items, lock.locked);
         return lock;
       }
 
@@ -1026,9 +1297,23 @@
         const card = btn.closest("[data-id]");
         const id = card && card.getAttribute("data-id");
         if (!id) return;
+        const act = btn.getAttribute("data-act");
+        if (act === "detail" || act === "showlog" || act === "compare") {
+          const item = ticketIndex[id];
+          if (act === "compare") {
+            compareLeft = id;
+            showTab("compare");
+            return;
+          }
+          if (!item) {
+            flash("找不到该版本", true);
+            return;
+          }
+          showDetail(item, act === "showlog");
+          return;
+        }
         btn.disabled = true;
         try {
-          const act = btn.getAttribute("data-act");
           if (act === "reject") {
             const reason = window.prompt("请填写驳回原因（必填）");
             if (!reason || !reason.trim()) {
@@ -1059,6 +1344,15 @@
               body: "{}"
             });
             flash("已回滚到升级前快照。下一条不会自动发布。");
+          } else if (act === "return") {
+            const data = await api("/api/releases/" + id + "/return", {
+              method: "POST",
+              body: "{}"
+            });
+            const dialog = (data && data.dialog) || "来源对话";
+            flash(data && data.already
+              ? "已经发回给「" + dialog + "」对话框，请等对方改完后重新交单。"
+              : "已发回给「" + dialog + "」对话框，请改完后重新交单，不要在本页再点通过。");
           }
           await refresh();
         } catch (err) {
@@ -1080,6 +1374,30 @@
             flash(err.message, true);
           }
         });
+      }
+      const fltGo = liveEl("flt-go");
+      if (fltGo && fltGo.dataset.bound !== "1") {
+        fltGo.dataset.bound = "1";
+        fltGo.addEventListener("click", function () {
+          listPages.history = 1;
+          listPages.failed = 1;
+          listPages.logs = 1;
+          listPages.rollback = 1;
+          refresh().catch(function (err) { flash(err.message, true); });
+        });
+      }
+      const cmpGo = liveEl("cmp-go");
+      if (cmpGo && cmpGo.dataset.bound !== "1") {
+        cmpGo.dataset.bound = "1";
+        cmpGo.addEventListener("click", function () {
+          compareLeft = (liveEl("cmp-a") || {}).value || compareLeft;
+          renderCompare(allTickets);
+        });
+      }
+      const detailClose = liveEl("rg-detail-close");
+      if (detailClose && detailClose.dataset.bound !== "1") {
+        detailClose.dataset.bound = "1";
+        detailClose.addEventListener("click", hideDetail);
       }
 
       pinUpgradeMask();

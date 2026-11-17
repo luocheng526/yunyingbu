@@ -204,8 +204,8 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /不会自动跳转/);
     assert.match(text, /localStorage\.setItem\(UPGRADE_PENDING_KEY/);
     assert.match(text, /href="\/releases.css(?:\?[^"]*)?"/);
-    assert.match(text, /sc-ui-22/);
-    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-22/);
+    assert.match(text, /sc-ui-23/);
+    assert.match(res.headers.get("link") || "", /releases\.css\?v=sc-ui-23/);
     assert.match(text, /id="xm-releases-scroll"/);
     assert.match(text, /id="xm-releases-fetch-patch"/);
     assert.match(text, /id="xm-releases-boot"/);
@@ -226,8 +226,16 @@ test("GET /releases is the release center page", async () => {
     assert.match(text, /个版本/);
     assert.match(text, /function renderHistoryStats/);
     assert.match(text, /function successReleases/);
-    assert.match(text, /<th>摘要<\/th>/);
+    assert.match(text, /<th>序号<\/th>/);
+    assert.match(text, /<th>版本说明<\/th>/);
     assert.match(text, /item\.summary/);
+    assert.match(text, /版本对比/);
+    assert.match(text, /回滚管理/);
+    assert.match(text, /请输入版本号/);
+    assert.match(text, /data-tab="compare"/);
+    assert.match(text, /data-tab="rollback"/);
+    assert.match(text, /data-tab="failed"/);
+    assert.match(text, /id="flt-go"/);
     assert.doesNotMatch(text, /<th>日志<\/th>/);
     assert.match(text, /newestFirst/);
     assert.match(text, /PAGE_SIZE = 20/);
@@ -271,6 +279,11 @@ test("release board scripts parse so tab refresh can run", () => {
   assert.doesNotThrow(() => new Function(theme));
   assert.match(theme, /function autoMountReleases/);
   assert.match(theme, /data-xm-rel-mounted/);
+  assert.match(theme, /function renderCompare/);
+  assert.match(theme, /function renderRollbackList/);
+  assert.match(theme, /data-act="detail"/);
+  assert.match(theme, /rg-sub-label">发布记录/);
+  assert.doesNotMatch(theme, /新建发布/);
 });
 
 test("releases.html has no login form and sends users to /login", () => {
