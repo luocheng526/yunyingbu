@@ -507,15 +507,21 @@ export async function reloginState(store) {
   }
   const startLimit = deps.startLimitMs || 55000;
   if (!idle && loginCursor.phase === "opening" && loginCursor.startedAt && Date.now() - loginCursor.startedAt > startLimit) {
-    loginEpoch += 1;
-    loginCursor.failed = true;
-    loginCursor.phase = "failed";
-    loginCursor.step = "启动浏览器";
-    loginCursor.message = "服务器浏览器启动失败";
-    if (deps.desk && deps.desk.close) {
-      await deps.desk.close();
+    const peeked = await deps.desk.poll(name);
+    if (peeked && (peeked.status === "verify" || peeked.status === "screen" || peeked.status === "ok")) {
+      /* 浏览器已经开了，交给下面的正常判断 */
+    } else {
+      const note = peeked && peeked.message && peeked.message !== "正在启动浏览器" ? peeked.message : "";
+      loginEpoch += 1;
+      loginCursor.failed = true;
+      loginCursor.phase = "failed";
+      loginCursor.step = "启动浏览器";
+      loginCursor.message = note || "服务器浏览器启动失败";
+      if (deps.desk && deps.desk.close) {
+        await deps.desk.close();
+      }
+      return publicState({ status: "failed", store: name, step: "启动浏览器", message: loginCursor.message });
     }
-    return publicState({ status: "failed", store: name, step: "启动浏览器", message: loginCursor.message });
   }
   const state = await deps.desk.poll(name);
   if (idle && (!state || state.status === "opening" || state.status === "missing")) {

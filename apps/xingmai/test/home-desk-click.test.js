@@ -6,7 +6,7 @@ import { beginRelogin, beginReloginAll, reloginState, resetJingmaiDeps, setJingm
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginScreenState, readDebugTargets, sessionReady, unpackDebBuffer } from "../src/modules/home/jingmai-desk.js";
+import { browserCandidates, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginScreenState, readDebugTargets, sessionReady, unpackDebBuffer } from "../src/modules/home/jingmai-desk.js";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import zlib from "node:zlib";
@@ -467,6 +467,12 @@ test("opening a shop reports the browser step before the login page is ready", a
   } finally {
     resetJingmaiDeps();
   }
+});
+
+test("the homepage tries the host browser first and can fall back to the shell", () => {
+  const shell = "/tmp/shen-chrome/chrome-headless-shell-linux64/chrome-headless-shell";
+  assert.deepEqual(browserCandidates("/usr/bin/google-chrome", shell), ["/usr/bin/google-chrome", shell]);
+  assert.deepEqual(browserCandidates(shell, shell), [shell]);
 });
 
 test("the homepage uses the same host browser as the paid center and does not start it twice", async () => {

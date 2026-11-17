@@ -155,6 +155,22 @@ export function hostChromePath(path) {
   return value;
 }
 
+export function browserCandidates(found, shell) {
+  const host = hostChromePath(found);
+  const list = [];
+  if (host) {
+    list.push(host);
+  }
+  const extra = String(shell || "");
+  if (extra && list.indexOf(extra) < 0) {
+    list.push(extra);
+  }
+  if (!list.length && found) {
+    list.push(found);
+  }
+  return list;
+}
+
 function extractZip(zip, dir) {
   return new Promise(function (resolve, reject) {
     let settled = false;
@@ -1240,43 +1256,57 @@ function browserLaunchError(error) {
   return wrapped;
 }
 
+let lastLaunchNote = "";
+
 async function launchChrome(signal) {
   if (signal && signal.aborted) {
     throw browserAbortError();
   }
-  const host = hostChromePath(findChrome());
-  let chromePath = host;
-  if (!chromePath) {
+  lastLaunchNote = "";
+  let bins = browserCandidates(findChrome(), installedBinary());
+  if (!bins.length) {
     try {
-      chromePath = await ensureChrome();
+      bins = [await ensureChrome()];
     } catch (error) {
       throw browserLaunchError(error);
     }
   }
-  if (!chromePath || (signal && signal.aborted)) {
-    throw browserLaunchError(new Error(browserStartFailure()));
-  }
-  if (host) {
-    fontConfig = "";
-  } else {
-    try {
-      fontConfig = await ensureLoginFont();
-    } catch {
-      fontConfig = "";
-    }
-  }
-  libraryPath = libSearchPath(libHome());
-  try {
-    return await startChromeProcess(chromePath, signal);
-  } catch (error) {
+  let lastError = null;
+  for (let i = 0; i < bins.length; i += 1) {
     if (signal && signal.aborted) {
       throw browserAbortError();
     }
-    throw browserLaunchError(error);
+    const chromePath = bins[i];
+    const host = hostChromePath(chromePath);
+    if (host) {
+      fontConfig = "";
+    } else {
+      try {
+        fontConfig = await ensureLoginFont();
+      } catch {
+        fontConfig = "";
+      }
+    }
+    libraryPath = libSearchPath(libHome());
+    const budget = bins.length > 1 && i === 0 ? 8000 : 20000;
+    try {
+      return await startChromeProcess(chromePath, signal, budget);
+    } catch (error) {
+      lastError = error;
+      const message = String((error && error.message) || "");
+      if (message && message !== "aborted") {
+        lastLaunchNote = message;
+      }
+      stopBooting();
+      if (signal && signal.aborted) {
+        throw browserAbortError();
+      }
+    }
   }
+  throw browserLaunchError(lastError || new Error(browserStartFailure()));
 }
 
-async function startChromeProcess(chromePath, signal) {
+async function startChromeProcess(chromePath, signal, budgetMs) {
   const dir = mkdtempSync(tmpdir() + "/shen-jingmai-");
   const env = Object.assign({}, process.env);
   if (libraryPath) {
@@ -1321,7 +1351,7 @@ async function startChromeProcess(chromePath, signal) {
       }
       const timer = setTimeout(function () {
         finish(Object.assign(new Error(browserFailure(buf)), { code: "browser" }));
-      }, 20000);
+      }, budgetMs || 20000);
       if (linked.aborted) {
         finish(browserAbortError());
         return;
@@ -1770,7 +1800,8 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
 
 export async function pollDesk(store) {
   if (!current || current.store !== store || !current.ws || current.ws.readyState !== 1) {
-    return { status: "opening", message: "正在启动浏览器" };
+    const note = lastLaunchNote && lastLaunchNote !== "aborted" ? lastLaunchNote : "";
+    return { status: "opening", message: note || "正在启动浏览器" };
   }
   try {
     const cookies = await readCookies(current.ws);
