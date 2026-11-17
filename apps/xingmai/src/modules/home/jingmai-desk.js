@@ -1197,88 +1197,82 @@ export function browserStartFailure() {
   return "服务器浏览器启动失败";
 }
 
-async function launchChrome() {
+function browserAbortError() {
+  return Object.assign(new Error("aborted"), { code: "browser" });
+}
+
+export function readDebugTargets(url, signal) {
+  const timeout = AbortSignal.timeout(4000);
+  const link = signal ? AbortSignal.any([timeout, signal]) : timeout;
+  return fetch(url, { signal: link }).then(function (response) {
+    if (!response.ok) {
+      throw Object.assign(new Error("json"), { code: "browser" });
+    }
+    return response.json();
+  });
+}
+
+async function launchChrome(signal) {
+  if (signal && signal.aborted) {
+    throw browserAbortError();
+  }
   const found = findChrome();
   const host = hostChromePath(found);
-  let chromePath = "";
+  let chromePath = host;
   if (host) {
     try {
       fontConfig = "";
       libraryPath = libSearchPath(libHome());
-      return await startChromeProcess(host);
+      return await startChromeProcess(host, signal);
     } catch (error) {
       const message = String((error && error.message) || "");
       console.error("jingmai browser", message);
-      if (!message.includes("缺少 ") && !message.includes("这台机器没有")) {
+      if (signal && signal.aborted) {
+        throw browserAbortError();
+      }
+      const missing = message.match(/缺少 ([A-Za-z0-9._+-]+)/) || message.match(/服务器上的 ([A-Za-z0-9._+-]+\.so(?:\.\d+)*)/);
+      if (!missing) {
         const wrapped = new Error(browserStartFailure());
         wrapped.code = "browser";
         throw wrapped;
       }
-      chromePath = host;
+      const home = libHome();
+      if (message.includes("这台机器没有")) {
+        removeSoname(home, missing[1]);
+      }
+      const installed = await downloadSonames(home, [missing[1]], message.includes("这台机器没有") ? olderSuite(linuxDistro().suite) : "");
+      libraryPath = libSearchPath(home);
+      if (!installed || (signal && signal.aborted)) {
+        const wrapped = new Error(browserStartFailure());
+        wrapped.code = "browser";
+        throw wrapped;
+      }
+      return await startChromeProcess(host, signal);
     }
   }
-  if (!chromePath) {
-    try {
-      chromePath = await ensureChrome();
-    } catch (error) {
-      console.error("jingmai browser", error && error.message);
-      const wrapped = new Error(browserStartFailure());
-      wrapped.code = "browser";
-      throw wrapped;
-    }
+  try {
+    chromePath = await ensureChrome();
+  } catch (error) {
+    console.error("jingmai browser", error && error.message);
+    const wrapped = new Error(browserStartFailure());
+    wrapped.code = "browser";
+    throw wrapped;
   }
-  if (!chromePath) {
+  if (!chromePath || (signal && signal.aborted)) {
     const error = new Error(browserStartFailure());
     error.code = "browser";
     throw error;
   }
-  if (!host) {
-    try {
-      fontConfig = await ensureLoginFont();
-    } catch {
-      fontConfig = "";
-    }
+  try {
+    fontConfig = await ensureLoginFont();
+  } catch {
+    fontConfig = "";
   }
-  const tried = new Set();
-  let lastError = null;
-  for (let attempt = 0; attempt < 24; attempt += 1) {
-    try {
-      libraryPath = libSearchPath(libHome()) || libraryPath;
-      return await startChromeProcess(chromePath);
-    } catch (error) {
-      lastError = error;
-      const message = String(error && error.message || "");
-      console.error("jingmai browser", message);
-      const match = message.match(/缺少 ([A-Za-z0-9._+-]+)/) || message.match(/服务器上的 ([A-Za-z0-9._+-]+\.so(?:\.\d+)*)/);
-      if (!match || tried.has(match[1])) {
-        const wrapped = new Error(browserStartFailure());
-        wrapped.code = "browser";
-        throw wrapped;
-      }
-      tried.add(match[1]);
-      const home = libHome();
-      const mismatched = message.includes("这台机器没有");
-      if (mismatched) {
-        removeSoname(home, match[1]);
-      }
-      const suite = mismatched ? olderSuite(linuxDistro().suite) : "";
-      const installed = await downloadSonames(home, [match[1]], suite);
-      libraryPath = libSearchPath(home);
-      if (!installed) {
-        console.error("jingmai browser libs", readableNote(libraryNote) || message);
-        const wrapped = new Error(browserStartFailure());
-        wrapped.code = "browser";
-        throw wrapped;
-      }
-    }
-  }
-  console.error("jingmai browser", lastError && lastError.message);
-  const wrapped = new Error(browserStartFailure());
-  wrapped.code = "browser";
-  throw wrapped;
+  libraryPath = libSearchPath(libHome()) || libraryPath;
+  return await startChromeProcess(chromePath, signal);
 }
 
-async function startChromeProcess(chromePath) {
+async function startChromeProcess(chromePath, signal) {
   const dir = mkdtempSync(tmpdir() + "/shen-jingmai-");
   const env = Object.assign({}, process.env);
   if (libraryPath) {
@@ -1304,32 +1298,52 @@ async function startChromeProcess(chromePath) {
   try {
     let buf = "";
     const port = await new Promise(function (resolve, reject) {
-      const timer = setTimeout(function () {
-        reject(Object.assign(new Error(browserFailure(buf)), { code: "browser" }));
-      }, 15000);
-      chrome.on("error", function () {
+      let settled = false;
+      function finish(error, value) {
+        if (settled) {
+          return;
+        }
+        settled = true;
         clearTimeout(timer);
-        reject(Object.assign(new Error(browserFailure(buf || "spawn")), { code: "browser" }));
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(value);
+      }
+      const timer = setTimeout(function () {
+        finish(Object.assign(new Error(browserFailure(buf)), { code: "browser" }));
+      }, 12000);
+      if (signal) {
+        if (signal.aborted) {
+          finish(browserAbortError());
+          return;
+        }
+        signal.addEventListener("abort", function () {
+          finish(browserAbortError());
+        }, { once: true });
+      }
+      chrome.on("error", function () {
+        finish(Object.assign(new Error(browserFailure(buf || "spawn")), { code: "browser" }));
       });
       chrome.stderr.on("data", function (chunk) {
         buf = (buf + chunk.toString()).slice(-2000);
         const match = buf.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//);
         if (match) {
-          clearTimeout(timer);
-          resolve(Number(match[1]));
+          finish(null, Number(match[1]));
         }
       });
       chrome.on("exit", function () {
-        clearTimeout(timer);
-        reject(Object.assign(new Error(browserFailure(buf)), { code: "browser" }));
+        finish(Object.assign(new Error(browserFailure(buf)), { code: "browser" }));
       });
     });
-    const list = await fetch("http://127.0.0.1:" + port + "/json/list").then(function (response) {
-      return response.json();
-    });
-    const page = list.find(function (item) {
+    const list = await readDebugTargets("http://127.0.0.1:" + port + "/json/list", signal);
+    const page = Array.isArray(list) ? list.find(function (item) {
       return item.type === "page";
-    });
+    }) : null;
+    if (!page || !page.webSocketDebuggerUrl) {
+      throw Object.assign(new Error("json"), { code: "browser" });
+    }
     const ws = await connectSocket(page.webSocketDebuggerUrl);
     return { chrome: chrome, dir: dir, ws: ws, port: port, password: "" };
   } catch (error) {
@@ -1533,8 +1547,11 @@ export function resetDesk() {
   stopCurrent();
 }
 
-async function acquireDesk(store, ticket) {
+async function acquireDesk(store, ticket, signal) {
   if (ticket != null && ticket !== openTicket) {
+    return null;
+  }
+  if (signal && signal.aborted) {
     return null;
   }
   if (deskUsable(current)) {
@@ -1547,11 +1564,11 @@ async function acquireDesk(store, ticket) {
       stopCurrent();
     }
   }
-  if (ticket != null && ticket !== openTicket) {
+  if ((ticket != null && ticket !== openTicket) || (signal && signal.aborted)) {
     return null;
   }
-  const desk = await launchChrome();
-  if (ticket != null && ticket !== openTicket) {
+  const desk = await launchChrome(signal);
+  if ((ticket != null && ticket !== openTicket) || (signal && signal.aborted)) {
     discard(desk);
     return null;
   }
@@ -1670,13 +1687,33 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
     }
   };
   let desk = null;
+  const launchLimit = AbortSignal.timeout(18000);
   try {
     loginVisible = false;
     shotCache = { at: 0, store: "", image: null, ready: false };
     step("正在启动浏览器");
-    desk = await acquireDesk(store, ticket);
-    if (!desk || ticket !== openTicket) {
-      return { status: "login", message: "登录已取消" };
+    const launching = acquireDesk(store, ticket, launchLimit);
+    launching.catch(function () {});
+    desk = await Promise.race([
+      launching,
+      new Promise(function (_resolve, reject) {
+        if (launchLimit.aborted) {
+          reject(browserAbortError());
+          return;
+        }
+        launchLimit.addEventListener("abort", function () {
+          reject(browserAbortError());
+        }, { once: true });
+      })
+    ]);
+    if (!desk || ticket !== openTicket || launchLimit.aborted) {
+      if (desk && desk !== current) {
+        discard(desk);
+      }
+      if (ticket === openTicket) {
+        openTicket += 1;
+      }
+      return { status: "login", message: launchLimit.aborted ? browserStartFailure() : "登录已取消" };
     }
     step("正在打开登录页");
     try {
@@ -1694,7 +1731,10 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
     if (ticket === openTicket) {
       stopCurrent();
     }
-    if (error && error.code === "browser") {
+    if (ticket === openTicket && (launchLimit.aborted || (error && error.code === "browser"))) {
+      openTicket += 1;
+    }
+    if (error && (error.code === "browser" || launchLimit.aborted)) {
       console.error("jingmai browser", error.message);
       return { status: "login", message: browserStartFailure() };
     }
@@ -1724,7 +1764,7 @@ export async function pollDesk(store) {
       return { status: "opening", message: PAGE_WAIT_MESSAGE };
     }
   } catch {
-    return { status: "opening", message: "正在启动浏览器" };
+    return { status: "opening", message: PAGE_WAIT_MESSAGE };
   }
   return { status: "verify", message: LOGIN_SCREEN_MESSAGE };
 }

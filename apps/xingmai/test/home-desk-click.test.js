@@ -6,7 +6,8 @@ import { beginRelogin, beginReloginAll, reloginState, resetJingmaiDeps, setJingm
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginScreenState, sessionReady, unpackDebBuffer } from "../src/modules/home/jingmai-desk.js";
+import { browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginScreenState, readDebugTargets, sessionReady, unpackDebBuffer } from "../src/modules/home/jingmai-desk.js";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import zlib from "node:zlib";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
@@ -749,6 +750,26 @@ test("a zstd library package unpacks the soname without python or dpkg", () => {
     assert.equal(link.toString(), "elf-atk");
   } finally {
     rmSync(dest, { recursive: true, force: true });
+  }
+});
+
+test("a browser debug port that never answers does not keep the login starting", async () => {
+  const server = createServer(function () {});
+  await new Promise(function (resolve) {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  const started = Date.now();
+  try {
+    await assert.rejects(readDebugTargets("http://127.0.0.1:" + address.port + "/json/list"));
+    assert.ok(Date.now() - started < 7000);
+  } finally {
+    if (typeof server.closeAllConnections === "function") {
+      server.closeAllConnections();
+    }
+    await new Promise(function (resolve) {
+      server.close(resolve);
+    });
   }
 });
 
