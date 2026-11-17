@@ -405,6 +405,62 @@ test("连接京麦 lists shops that still need a login and does not open the bro
   }
 });
 
+test("opening a shop reports the browser step before the login page is ready", async () => {
+  await resetJingmaiStore();
+  let closed = false;
+  let release = function () {};
+  setJingmaiDeps({
+    loadOrg: async () => [
+      { store: "飒望生活日用旗舰店", enabled: true, login: "sa", password: "secret", shopId: "1" }
+    ],
+    desk: {
+      open: function (options) {
+        if (options && options.onStep) {
+          options.onStep("正在启动浏览器");
+        }
+        return new Promise(function (resolve) {
+          release = function () {
+            if (options && options.onStep) {
+              options.onStep("正在打开登录页");
+            }
+            resolve({ status: "verify", message: "登录页已打开" });
+          };
+        });
+      },
+      close: async function () {
+        closed = true;
+      },
+      poll: async function () {
+        return { status: "screen", message: "登录页已打开" };
+      }
+    }
+  });
+  try {
+    const started = Date.now();
+    const opening = await beginRelogin("飒望生活日用旗舰店", "cookie");
+    assert.equal(opening.status, "opening");
+    assert.equal(opening.store, "飒望生活日用旗舰店");
+    assert.ok(Date.now() - started < 1000);
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 30);
+    });
+    const mid = await reloginState("飒望生活日用旗舰店");
+    assert.equal(mid.status, "opening");
+    assert.equal(mid.message, "正在启动浏览器");
+    assert.equal(closed, false);
+    release();
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 30);
+    });
+    const screen = await reloginState("飒望生活日用旗舰店");
+    assert.equal(screen.status, "screen");
+    assert.equal(screen.store, "飒望生活日用旗舰店");
+    assert.equal(screen.step, "京麦登录页");
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
 test("a shop that fails to open keeps other shops logged in and names the step", async () => {
   await resetJingmaiStore();
   await saveSession("DIKTT潮流生活旗舰店", {

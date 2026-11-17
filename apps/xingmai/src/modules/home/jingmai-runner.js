@@ -263,10 +263,19 @@ async function startQueued(shop) {
   loginCursor.step = "打开京麦登录页";
   loginCursor.phase = "opening";
   loginCursor.failed = false;
-  loginCursor.message = "正在打开「" + shop.store + "」的登录画面";
+  loginCursor.message = "正在启动浏览器";
   let opened;
   try {
-    opened = await deps.desk.open({ store: shop.store, loginName: shop.login, password: shop.password });
+    opened = await deps.desk.open({
+      store: shop.store,
+      loginName: shop.login,
+      password: shop.password,
+      reveal: true,
+      onStep: function (message) {
+        loginCursor.step = message.indexOf("启动") >= 0 ? "启动浏览器" : "打开京麦登录页";
+        loginCursor.message = message;
+      }
+    });
   } catch {
     opened = { status: "login", message: "服务器没有打开京麦登录页" };
   }
@@ -346,13 +355,10 @@ async function queueShops(shops) {
     total: loginQueue.length,
     store: first ? first.store : "",
     step: "打开京麦登录页",
-    message: first ? "正在打开「" + first.store + "」的登录画面" : "全部店铺已连接",
+    message: first ? "正在启动浏览器" : "全部店铺已连接",
     failed: false,
     phase: "opening"
   };
-  if (deps.desk && deps.desk.close) {
-    await deps.desk.close();
-  }
   const next = loginQueue.shift();
   if (!next) {
     return publicState({ status: "done", message: "全部店铺已连接" });
@@ -399,7 +405,7 @@ export async function beginRelogin(store, cookie) {
     status: "opening",
     store: name,
     step: "打开京麦登录页",
-    message: "正在打开「" + name + "」的登录画面"
+    message: "正在启动浏览器"
   });
 }
 

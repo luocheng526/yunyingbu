@@ -5229,15 +5229,12 @@
             if (dead || seq !== deskSeq || !state.desk || !state.desk.preview) {
               return;
             }
-            state.desk.status = "screen";
-            var img = root.querySelector("#xm-hm-desk-shot");
-            if (!img) {
-              paint(root, state);
-              img = root.querySelector("#xm-hm-desk-shot");
-            }
-            if (img && img.getAttribute("src") !== probe.src) {
-              img.src = probe.src;
-            }
+            showDesk({
+              open: true,
+              status: "screen",
+              store: name,
+              message: state.desk.message || "登录页已打开"
+            });
           };
           probe.src = "/api/home/live-login/screen?store=" + encodeURIComponent(name) + "&t=" + Date.now();
         }, 1500);
@@ -5327,7 +5324,7 @@
         var seq = ++deskSeq;
         window.clearInterval(deskTimer);
         deskTimer = 0;
-        state.desk = { open: true, status: "opening", store: name, preview: true, step: "打开京麦登录页", message: "正在打开「" + name + "」的登录画面" };
+        state.desk = { open: true, status: "opening", store: name, preview: true, step: "启动浏览器", message: "正在启动浏览器" };
         if (!dead) {
           paint(root, state);
         }
@@ -5361,9 +5358,18 @@
               state.desk = null;
               paint(root, state);
               pullLive();
+              return;
+            }
+            if (row.message && state.desk.status === "opening") {
+              state.desk.message = row.message;
+              state.desk.step = row.step || state.desk.step;
+              var line = root.querySelector("#xm-hm-desk-msg");
+              if (line) {
+                line.textContent = row.message;
+              }
             }
           });
-        }, 2000);
+        }, 700);
         var timed = window.setTimeout(function () {
           if (dead || seq !== deskSeq || !state.desk) {
             return;
@@ -5371,8 +5377,8 @@
           if (state.desk.status === "screen" || state.desk.status === "verify") {
             return;
           }
-          failDesk(seq, name, state.desk.step || "打开京麦登录页", "这一步超时，登录画面没有回来");
-        }, 45000);
+          failDesk(seq, name, state.desk.step || "打开京麦登录页", "登录页还没有出来，可以重试本店");
+        }, 20000);
         api("/api/home/live-login/one", { store: name }).then(function (st) {
           if (dead || seq !== deskSeq) {
             return;
