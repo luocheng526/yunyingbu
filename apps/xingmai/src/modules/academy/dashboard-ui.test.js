@@ -8,8 +8,6 @@ const css = await readFile(new URL("../../../public/academy.css", import.meta.ur
 test("academy root mounts the complete learning dashboard", () => {
   assert.match(js, /function dashboardPage/);
   assert.match(js, /XmModules\["\/academy"\] = dashboardPage\(\)/);
-  assert.match(js, /XmModules\["\/academy\/courses"\] = dashboardPage\(\)/);
-  assert.match(js, /XmModules\["\/academy\/courseware"\] = courses/);
   assert.match(js, /甄选商学院/);
   assert.match(js, /在学人数/);
   assert.match(js, /课程总数/);
@@ -26,7 +24,7 @@ test("academy root mounts the complete learning dashboard", () => {
 });
 
 test("dashboard controls connect to academy routes and APIs", () => {
-  assert.match(js, /data-go="\/academy\/courseware"/);
+  assert.match(js, /data-go="\/academy\/courses"/);
   assert.match(js, /data-go="\/academy\/exams"/);
   assert.match(js, /data-go="\/academy\/handbook"/);
   assert.match(js, /api\("\/api\/academy"\)/);

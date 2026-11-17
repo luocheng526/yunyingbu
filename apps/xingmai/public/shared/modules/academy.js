@@ -165,11 +165,11 @@
           ["chart", "学习完成率", "82%", "↑ +6%", "blue"]
         ];
         const quick = [
-          ["play", "课程学习", "/academy/courseware", "blue"],
+          ["play", "课程学习", "/academy/courses", "blue"],
           ["paper", "参加考试", "/academy/exams", "blue"],
           ["trophy", "职级晋升", "/academy/exams", "orange"],
           ["book", "运营手册", "/academy/handbook", "blue"],
-          ["video", "培训视频", "/academy/courseware", "purple"],
+          ["video", "培训视频", "/academy/courses", "purple"],
           ["chat", "知识问答", "#academy-search", "blue"]
         ];
         const courses = [
@@ -202,7 +202,7 @@
           academyIcon("search") +
           '<input id="academy-search" autocomplete="off" placeholder="搜索课程、手册、知识、视频..." />' +
           '<div id="academy-search-results" class="academy-search-results" hidden></div></div>' +
-          '<button type="button" class="academy-primary-btn" data-go="/academy/courseware">' +
+          '<button type="button" class="academy-primary-btn" data-go="/academy/courses">' +
           academyIcon("plus") +
           " 上传资料</button>" +
           '<button type="button" class="academy-plain-btn" data-go="/academy/handbook">' +
@@ -250,13 +250,13 @@
           '<div class="academy-home-grid"><main class="academy-home-main">' +
           '<section class="academy-home-card academy-recommend"><div class="academy-section-head"><h2>推荐课程</h2>' +
           '<div class="academy-course-tabs"><button class="is-on" data-course-tab="all">新人必修</button><button data-course-tab="advanced">运营进阶</button><button data-course-tab="ads">付费推广</button><button data-course-tab="data">数据分析</button><button data-course-tab="shop">店铺运营</button><button data-course-tab="manage">管理提升</button></div>' +
-          '<button class="academy-link" data-go="/academy/courseware">查看全部 ' +
+          '<button class="academy-link" data-go="/academy/courses">查看全部 ' +
           academyIcon("arrow") +
           "</button></div><div class=\"academy-recommend-grid\">" +
           courses
             .map(function (item, index) {
               return (
-                '<button type="button" class="academy-recommend-item" data-go="/academy/courseware" data-course-kind="' +
+                '<button type="button" class="academy-recommend-item" data-go="/academy/courses" data-course-kind="' +
                 (index ? "advanced" : "all") +
                 '"><span class="academy-course-cover cover-' +
                 item[4] +
@@ -308,7 +308,7 @@
             })
             .join("") +
           "</div></section></div></main>" +
-          '<aside class="academy-home-side"><section class="academy-home-card academy-learning"><div class="academy-section-head"><h2>我的学习</h2><button class="academy-link" data-go="/academy/courseware">学习进度 ' +
+          '<aside class="academy-home-side"><section class="academy-home-card academy-learning"><div class="academy-section-head"><h2>我的学习</h2><button class="academy-link" data-go="/academy/courses">学习进度 ' +
           academyIcon("arrow") +
           '</button></div><div class="academy-learning-body"><div class="academy-ring"><div><strong>82%</strong><span>本月学习完成率</span></div></div>' +
           '<ul><li><span class="dot done">✓</span>已完成课程 <b>14 门</b></li><li><span class="dot clock">◷</span>学习时长 <b>32.5 小时</b></li><li><span class="dot play">▷</span>在学课程 <b>4 门</b></li><li><span class="dot exam">▣</span>待考试 <b>1 场</b></li></ul></div></section>' +
@@ -836,8 +836,7 @@
   window.XmModules = window.XmModules || {};
   const courses = coursesPage();
   window.XmModules["/academy"] = dashboardPage();
-  window.XmModules["/academy/courses"] = dashboardPage();
-  window.XmModules["/academy/courseware"] = courses;
+  window.XmModules["/academy/courses"] = courses;
   window.XmModules["/academy/exams"] = examsPage();
   window.XmModules["/academy/handbook"] = handbookPage();
 })();
