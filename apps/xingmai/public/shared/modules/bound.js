@@ -320,14 +320,39 @@
     if (column.key === "owner") {
       return row.owner || (row.metrics && row.metrics.owner) || "";
     }
+    if (column.key === "platform") {
+      return row.platform || (row.metrics && row.metrics.platform) || "";
+    }
     var metrics = row.metrics || {};
     if (metrics[column.key] != null && metrics[column.key] !== "") {
       return metrics[column.key];
+    }
+    var folded = null;
+    Object.keys(metrics).forEach(function (key) {
+      if (folded) {
+        return;
+      }
+      if (key.toLowerCase() === String(column.key).toLowerCase() && metrics[key] != null && metrics[key] !== "") {
+        folded = metrics[key];
+      }
+    });
+    if (folded != null) {
+      return folded;
     }
     var aliases = column.aliases || [];
     for (var i = 0; i < aliases.length; i += 1) {
       if (metrics[aliases[i]] != null && metrics[aliases[i]] !== "") {
         return metrics[aliases[i]];
+      }
+      var alias = String(aliases[i]).toLowerCase();
+      var aliasHit = null;
+      Object.keys(metrics).forEach(function (key) {
+        if (!aliasHit && key.toLowerCase() === alias && metrics[key] != null && metrics[key] !== "") {
+          aliasHit = metrics[key];
+        }
+      });
+      if (aliasHit != null) {
+        return aliasHit;
       }
     }
     return null;
@@ -340,6 +365,9 @@
     var num = Number(value);
     if (!column || !column.numeric || !Number.isFinite(num)) {
       return esc(value);
+    }
+    if (column.rate && Math.abs(num) <= 1) {
+      num = num * 100;
     }
     var whole = Math.abs(num) >= 100 && Math.abs(num - Math.round(num)) < 0.001;
     var digits = column.rate || !whole ? 2 : 0;
@@ -389,9 +417,11 @@
       return '<article class="bd-kpi"><span>' + esc(card.label) + '</span><b class="' + tone + '">' + text + "</b><em>" + (sub || "&nbsp;") + "</em></article>";
     });
     var title = cardTitle(data.page && data.page.id);
+    var channelCount = data.channelCount != null ? data.channelCount : data.total;
+    var shopCount = data.shopCount != null ? data.shopCount : (data.shops || []).length;
     var first = cards.slice(0, 9).join("");
     var rest = cards.slice(9).join("");
-    return '<section class="bd-kpis"><div class="bd-kpi-head"><strong>' + esc(title) + '</strong><span>渠道 ' + esc(data.total) + ' 个</span><span>店铺 ' + esc((data.shops || []).length) + ' 个</span><button type="button" class="bd-primary" data-act="panel" data-panel="cards">设定指标</button></div><div class="bd-kpi-row">' + first + "</div>" + (rest ? '<div class="bd-kpi-row">' + rest + "</div>" : "") + "</section>";
+    return '<section class="bd-kpis"><div class="bd-kpi-head"><strong>' + esc(title) + '</strong><span>渠道 ' + esc(channelCount) + ' 个</span><span>店铺 ' + esc(shopCount) + ' 个</span><button type="button" class="bd-primary" data-act="panel" data-panel="cards">设定指标</button></div><div class="bd-kpi-row">' + first + "</div>" + (rest ? '<div class="bd-kpi-row">' + rest + "</div>" : "") + "</section>";
   }
 
   function chips(items, key) {
@@ -577,6 +607,9 @@
     if (!Number.isFinite(num)) {
       return esc(card.value);
     }
+    if (card.rate && Math.abs(num) <= 1) {
+      num = num * 100;
+    }
     var whole = !card.rate && Math.abs(num) >= 100 && Math.abs(num - Math.round(num)) < 0.001;
     var digits = card.rate || !whole ? 2 : 0;
     var text = num.toLocaleString("zh-CN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -629,7 +662,11 @@
       var cells = cols.map(function (column) {
         var value = formatCell(metricOf(row, column), column);
         if (column.key === "name") {
-          value = channelDot(row.name) + value;
+          var shown = row.name === "全部" && data.page && data.page.id === "channelOverview" ? "全渠道" : row.name;
+          value = channelDot(shown) + (shown === row.name ? value : formatCell(shown, column));
+        }
+        if (column.key === "platform") {
+          value = channelDot(row.platform || row.name) + value;
         }
         return "<td>" + value + "</td>";
       }).join("");
@@ -648,30 +685,36 @@
   }
 
   function renderShopBlock(data) {
-    if (!data.page || data.page.id !== "channelOverview" || !(data.shops || []).length) {
+    if (!data.page || data.page.id !== "channelOverview" || !data.tab || data.tab.id !== "qdzl_lb") {
       return "";
     }
-    var columns = (data.columns || []).filter(function (column) { return column.on; }).map(function (column, index) {
-      if (index === 0) {
-        return { key: "name", label: "店铺", numeric: false, aliases: [] };
-      }
-      return column;
-    });
-    columns.splice(1, 0, { key: "platform", label: "渠道", numeric: false, aliases: ["platform", "channelName"] });
-    var byShop = {};
-    (data.rows || []).forEach(function (row) {
-      if (row.shop) {
-        byShop[row.shop] = row;
-      }
-    });
-    var rows = data.shops.map(function (shop) {
-      return byShop[shop] || { key: "shop-" + shop, name: shop, shop: shop, metrics: {}, fields: null };
-    });
-    if (data.allSum) {
-      rows.unshift({ key: "shop-sum", name: "汇总", shop: "全部", metrics: data.allSum, fields: null });
+    var source = data.shopRows || [];
+    if (!source.length) {
+      var waiting = data.shopStatus && data.shopStatus !== "ready" ? "店铺列表还没采完。" : "这个范围内没有店铺记录。";
+      return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2></div><p class="bd-miss">' + waiting + "</p></section>";
     }
+    var columns = [{ key: "shop", label: "店铺", numeric: false, aliases: ["shopName"] }, { key: "platform", label: "渠道", numeric: false, aliases: [] }].concat((data.columns || []).filter(function (column) {
+      return column.on && column.key !== "name";
+    }));
+    var rows = source.map(function (row) {
+      var total = isTotalName(row);
+      return {
+        key: row.key,
+        name: total ? "汇总" : row.shop || row.name,
+        shop: total ? "汇总" : row.shop || row.name,
+        platform: total ? "全部" : row.platform || row.name,
+        metrics: row.metrics || {},
+        fields: null
+      };
+    }).sort(function (left, right) {
+      return (left.name === "汇总" ? 0 : 1) - (right.name === "汇总" ? 0 : 1);
+    });
     var shopBody = state.shopView === "chart" ? renderBars(data, rows) : renderTable(data, rows, columns);
-    return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2><div class="bd-tools"><button type="button" data-act="panel" data-panel="batch" data-field="tag">打标</button><button type="button" data-act="shop-view" data-view="list" class="' + (state.shopView === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="shop-view" data-view="chart" class="' + (state.shopView === "chart" ? "is-on" : "") + '">图表</button><button type="button" data-act="panel" data-panel="columns">默认视窗</button><button type="button" data-act="panel" data-panel="columns">更多</button><a href="/api/bound/export?' + esc(queryString()) + '">导出</a></div></div>' + shopBody + "</section>";
+    return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2><div class="bd-tools"><button type="button" data-act="shop-view" data-view="list" class="' + (state.shopView === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="shop-view" data-view="chart" class="' + (state.shopView === "chart" ? "is-on" : "") + '">图表</button><a href="/api/bound/export?' + esc(queryString()) + '">导出</a></div></div>' + shopBody + "</section>";
+  }
+
+  function isTotalName(row) {
+    return row.shop === "合计" || row.name === "全部" || row.name === "全渠道" || row.name === "汇总";
   }
 
   function renderSums(data) {

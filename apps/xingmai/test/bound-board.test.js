@@ -186,6 +186,87 @@ test("没采完的范围汇总留空，采完的整月和当前页分开算", as
     const namedBody = await named.json();
     assert.equal(namedBody.rows[0].name, "天猫");
     assert.equal(namedBody.allSum.payAmount, 20);
+    await writeSheet({
+      reportId: "qdzl_lb",
+      dim: "all",
+      startOn: "2026-11-05",
+      endOn: "2026-11-05",
+      pageNo: 1,
+      status: "done",
+      kind: "list",
+      totalRows: 2,
+      pageSize: 50,
+      rowCount: 2,
+      payload: {
+        rows: [
+          { platform: "ALL", payAmount: 10, refund: 2, profit: 3, ssxse: 9 },
+          { platform: "JD", payAmount: 7, refund: 1, profit: 2, ssxse: 6 }
+        ]
+      }
+    });
+    await writeSheet({
+      reportId: "qdzl_lb",
+      dim: "all",
+      startOn: "2026-11-06",
+      endOn: "2026-11-06",
+      pageNo: 1,
+      status: "done",
+      kind: "list",
+      totalRows: 2,
+      pageSize: 50,
+      rowCount: 2,
+      payload: {
+        rows: [
+          { platform: "ALL", payAmount: 5, refund: 1, profit: 1, ssxse: 4 },
+          { platform: "JD", payAmount: 4, refund: 1, profit: 1, ssxse: 3 }
+        ]
+      }
+    });
+    await writeSheet({
+      reportId: "qdfx_dplb",
+      dim: "all",
+      startOn: "2026-11-05",
+      endOn: "2026-11-05",
+      pageNo: 1,
+      status: "done",
+      kind: "list",
+      totalRows: 2,
+      pageSize: 50,
+      rowCount: 2,
+      payload: {
+        rows: [
+          { shopName: "合计", platform: "ALL", sumLine: true, payAmount: 10 },
+          { shopId: 7, shopName: "甲店", platform: "JD", payAmount: 6, profit: 1 }
+        ]
+      }
+    });
+    await writeSheet({
+      reportId: "qdfx_dplb",
+      dim: "all",
+      startOn: "2026-11-06",
+      endOn: "2026-11-06",
+      pageNo: 1,
+      status: "done",
+      kind: "list",
+      totalRows: 2,
+      pageSize: 50,
+      rowCount: 2,
+      payload: {
+        rows: [
+          { shopName: "合计", platform: "ALL", sumLine: true, payAmount: 4 },
+          { shopId: 7, shopName: "甲店", platform: "JD", payAmount: 3, profit: 1 }
+        ]
+      }
+    });
+    const stacked = await fetch(`${base}/api/bound/view?page=channelOverview&tab=qdzl_lb&from=2026-11-05&to=2026-11-06&daysType=custom`);
+    const stackedBody = await stacked.json();
+    assert.equal(stackedBody.total, 2);
+    assert.equal(stackedBody.rows.map((row) => row.name).join(","), "全部,京东");
+    assert.equal(stackedBody.allSum.payAmount, 15);
+    assert.equal(stackedBody.channelCount, 1);
+    assert.equal(stackedBody.rows[1].metrics.payAmount, 11);
+    assert.equal(stackedBody.shopCount, 1);
+    assert.equal(stackedBody.shopRows.find((row) => row.shop === "甲店").metrics.payAmount, 9);
   } finally {
     await close();
   }

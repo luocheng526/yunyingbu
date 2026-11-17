@@ -274,6 +274,119 @@ function rowsOf(pages) {
     .flatMap((row) => (Array.isArray(row.payload && row.payload.rows) ? row.payload.rows : []));
 }
 
+const SNAPSHOT_REPORTS = new Set(["qdzl_lb", "qdzl_fz", "qdfx_dplb", "qd_gjzbfx_dpck", "qd_gjzbfx_qdck"]);
+const LAST_VALUE_KEYS = new Set(["realTimeGmv", "ssxse", "ssxseMax"]);
+
+function isTotalRow(row) {
+  const name = String(row.name || "");
+  return name === "全部" || name === "全渠道" || name === "汇总" || row.shop === "合计" || row.metrics?.sumLine === true || row.metrics?.sumLine === "true";
+}
+
+function entityKey(row) {
+  const shopId = row.metrics && (row.metrics.shopId || row.metrics.shopID);
+  if (shopId) {
+    return `shop:${shopId}`;
+  }
+  const shop = row.shop && row.shop !== "合计" ? row.shop : "";
+  if (shop) {
+    return `shop:${shop}`;
+  }
+  return `name:${row.name || ""}`;
+}
+
+function skipSum(key) {
+  if (LAST_VALUE_KEYS.has(key)) {
+    return true;
+  }
+  if (/id$/i.test(key) || key === "dataType" || key === "empty" || key === "name") {
+    return true;
+  }
+  return RATE_RE.test(key) || /tkl|lrl|roi|zzl|zb/i.test(key) || key.startsWith("gxh_");
+}
+
+function fillDerived(metrics) {
+  const pay = asNumber(metrics.payAmount);
+  const net = asNumber(metrics.netGmv);
+  const profit = asNumber(metrics.profit);
+  const refund = asNumber(metrics.refund);
+  const cost = asNumber(metrics.cost);
+  const hp = asNumber(metrics.netHpCost);
+  if (pay && refund != null) {
+    metrics.tkl = refund / pay;
+    metrics.refundRate = metrics.tkl;
+  }
+  if (pay && cost != null) {
+    metrics.tghfXseZb = cost / pay;
+  }
+  if (pay && profit != null && metrics.grossRate == null) {
+    metrics.grossRate = profit / pay;
+  }
+  if (net && hp != null) {
+    metrics.jhpcbzb = hp / net;
+  }
+  if (net && profit != null) {
+    metrics.lrl = profit / net;
+  }
+}
+
+function collapseSnapshots(rows) {
+  const order = [];
+  const grouped = new Map();
+  rows.forEach((row) => {
+    const key = entityKey(row);
+    if (!grouped.has(key)) {
+      grouped.set(key, []);
+      order.push(key);
+    }
+    grouped.get(key).push(row);
+  });
+  return order.map((key) => {
+    const group = grouped.get(key);
+    if (group.length === 1) {
+      fillDerived(group[0].metrics);
+      return group[0];
+    }
+    const metrics = { ...group[0].metrics };
+    let shippedRate = 0;
+    let shippedPay = 0;
+    group.forEach((row, index) => {
+      const rate = asNumber(row.metrics && (row.metrics.yfhTkl ?? row.metrics.shipRefundRate));
+      const pay = asNumber(row.metrics && row.metrics.payAmount) || 0;
+      if (rate != null && pay) {
+        shippedRate += rate * pay;
+        shippedPay += pay;
+      }
+      if (index === 0) {
+        return;
+      }
+      Object.entries(row.metrics || {}).forEach(([metricKey, value]) => {
+        const num = asNumber(value);
+        if (num == null) {
+          return;
+        }
+        if (LAST_VALUE_KEYS.has(metricKey)) {
+          metrics[metricKey] = num;
+          return;
+        }
+        if (skipSum(metricKey)) {
+          return;
+        }
+        metrics[metricKey] = (asNumber(metrics[metricKey]) || 0) + num;
+      });
+    });
+    if (shippedPay) {
+      metrics.yfhTkl = shippedRate / shippedPay;
+    } else {
+      delete metrics.yfhTkl;
+      delete metrics.shipRefundRate;
+    }
+    delete metrics.ssxseZzl;
+    delete metrics.roi;
+    fillDerived(metrics);
+    return { ...group[0], metrics };
+  });
+}
+
 function sumRows(rows) {
   const totals = {};
   let saw = false;
@@ -518,7 +631,15 @@ export async function readView(query) {
     const sumPage = loaded.pages.find((item) => item.pageNo === 0 && item.status === "done");
     sumPayload = sumPage ? sumPage.payload : null;
   }
-  const normalized = rawRows.map((row, index) => normalizeRow(row, index));
+  let normalized = rawRows.map((row, index) => normalizeRow(row, index));
+  if (tab && SNAPSHOT_REPORTS.has(tab.id) && coverage.mode === "day" && range.from !== range.to) {
+    normalized = collapseSnapshots(normalized);
+  } else if (tab && SNAPSHOT_REPORTS.has(tab.id)) {
+    normalized.forEach((row) => fillDerived(row.metrics));
+  }
+  if (tab && SNAPSHOT_REPORTS.has(tab.id)) {
+    normalized = normalized.filter((row) => isTotalRow(row)).concat(normalized.filter((row) => !isTotalRow(row)));
+  }
   const filtered = filterRows(normalized, query);
   const marks = await readMarks(filtered.map((row) => row.key));
   const markMap = new Map(marks.map((item) => [item.rowKey, item]));
@@ -531,11 +652,26 @@ export async function readView(query) {
   const start = (pageNo - 1) * pageSize;
   const slice = filtered.slice(start, start + pageSize);
   const complete = coverage.status === "ready";
-  const pageSum = !complete && !slice.length ? null : sumRows(slice) || (complete || slice.length ? {} : null);
+  const totalRow = filtered.find((row) => isTotalRow(row));
+  const pageSum = !complete && !slice.length ? null : (totalRow ? totalRow.metrics : sumRows(slice) || (complete || slice.length ? {} : null));
   let allSum = null;
   if (complete) {
     const fromSum = sumPayload && sumPayload.raw ? sumRows([normalizeRow(sumPayload.raw, 0)]) : null;
-    allSum = fromSum || sumRows(filtered) || {};
+    allSum = totalRow ? totalRow.metrics : fromSum || sumRows(filtered) || {};
+  }
+  let shopRows = [];
+  let shopStatus = "missing";
+  if (page.id === "channelOverview" && tab && tab.id === "qdzl_lb") {
+    const shopReport = tabById(pageById("channelAnalysis"), "qdfx_dplb");
+    const shopLoaded = await loadScope(all, shopReport, "all", range.from, range.to, daysType);
+    shopStatus = shopLoaded.status.status;
+    let shopNormalized = rowsOf(shopLoaded.pages).map((row, index) => normalizeRow(row, index));
+    if (shopLoaded.mode === "day" && range.from !== range.to) {
+      shopNormalized = collapseSnapshots(shopNormalized);
+    } else {
+      shopNormalized.forEach((row) => fillDerived(row.metrics));
+    }
+    shopRows = shopNormalized;
   }
   const cardSheet = page.cards ? sheetsFor(all, page.cards.id, "all", range.from, range.to) : [];
   const cardDay = page.cards && !cardSheet.length ? sheetsFor(all, page.cards.id, "all", range.to, range.to) : [];
@@ -560,6 +696,17 @@ export async function readView(query) {
     dim,
     view,
     shops,
+    channelCount: page.id === "channelOverview" && tab && tab.id === "qdzl_lb" ? filtered.filter((row) => !isTotalRow(row)).length : undefined,
+    shopCount: page.id === "channelOverview" && tab && tab.id === "qdzl_lb" ? shopRows.filter((row) => !isTotalRow(row)).length : undefined,
+    shopStatus,
+    shopRows: shopRows.map((row) => ({
+      key: row.key,
+      name: row.name,
+      shop: row.shop,
+      platform: row.name,
+      owner: row.owner,
+      metrics: row.metrics
+    })),
     columns: columnsFrom(pref, page, tab),
     cards: page.ops.includes("cards")
       ? cardsFrom(cardPage && cardPage.payload, pref, page)

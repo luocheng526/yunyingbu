@@ -309,11 +309,11 @@ export const CHANNEL_COLUMNS = [
   { key: "name", label: "渠道", aliases: ["channelName", "platformName", "name", "title"] },
   { key: "realTimeGmv", label: "实时销售额(支付)", aliases: ["realTimeGmv", "ssxse"], numeric: true, money: true },
   { key: "payAmount", label: "支付金额(支付)", aliases: ["payAmount", "gmv", "xse"], numeric: true, money: true },
-  { key: "noOrderAmount", label: "无订单金额(支付)", aliases: ["noOrderAmount", "wddje", "invalidOrderAmount"], numeric: true, money: true },
+  { key: "noOrderAmount", label: "无订单金额(支付)", aliases: ["noOrderAmount", "wddje", "invalidOrderAmount", "invalidGmv", "zgxse"], numeric: true, money: true },
   { key: "netGmv", label: "净销售额(支付)", aliases: ["netGmv", "jxse"], numeric: true, money: true },
   { key: "sales", label: "销售件数(支付)", aliases: ["sales", "xsjs", "saleCount"], numeric: true },
   { key: "refund", label: "退款数", aliases: ["refund", "refundCount", "thtkjs"], numeric: true },
-  { key: "shipRefundRate", label: "已发货退款率(退款金额)", aliases: ["shipRefundRate", "yfhtkl"], numeric: true, rate: true },
+  { key: "shipRefundRate", label: "已发货退款率(退款金额)", aliases: ["shipRefundRate", "yfhtkl", "yfhTkl"], numeric: true, rate: true },
   { key: "refundRate", label: "退款率(退款金额)", aliases: ["refundRate", "tkl"], numeric: true, rate: true },
   { key: "netHpCost", label: "净商品成本(支付)", aliases: ["netHpCost", "jhpcb"], numeric: true, money: true },
   { key: "jhpcbzb", label: "净商品成本占比(支付)", aliases: ["jhpcbzb"], numeric: true, rate: true },
@@ -333,10 +333,10 @@ export const CHANNEL_CARDS = [
   { key: "platformCost", label: "平台花费(支付预估)", aliases: ["platformCost", "ptCost", "pthf"], money: true, note: "平台花费占比 —" },
   { key: "profit", label: "毛利(支付预估)", aliases: ["profit", "lryg"], money: true, note: "毛利率 —" },
   { key: "cost", label: "推广花费(支付预估)", aliases: ["cost", "tghf"], money: true, note: "推广花费率 —" },
-  { key: "selfShipFee", label: "自发货费用", aliases: ["selfShipFee", "zfhfy"], money: true, note: "" },
+  { key: "selfShipFee", label: "自发货费用", aliases: ["selfShipFee", "zfhfy", "fhfyZf", "deliverCost"], money: true, note: "" },
   { key: "grossRate", label: "大毛利率", aliases: ["grossRate", "dml", "dmll"], rate: true, note: "" },
   { key: "jdFeeRate", label: "京东费用占比", aliases: ["jdFeeRate", "jdfyzb"], rate: true, note: "京东费用占比 —" },
-  { key: "otherFee", label: "其他费用(支付)", aliases: ["otherFee", "qtfy"], money: true, note: "其他费用占比 —" }
+  { key: "otherFee", label: "其他费用(支付)", aliases: ["otherFee", "qtfy", "qtfyZf", "otherCost"], money: true, note: "其他费用占比 —" }
 ];
 
 export const TEAM_COLUMNS = [
