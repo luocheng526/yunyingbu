@@ -716,49 +716,48 @@ function dingFail(message, code) {
   return error;
 }
 
-function dingBody(title, markdown, url, button) {
+function mentionText(userid, title, markdown, url, button) {
   const head = String(title || "工作任务").trim().slice(0, 40);
   const text = String(markdown || "").replace(/\s+/g, " ").trim().slice(0, 180);
   const link = url || WORK_URL;
   const action = button || "去处理";
-  return `${head}\n${text}\n${action}：${link}`.slice(0, 500);
+  return `工作汇报 @${userid} ${head}\n${text}\n${action}：${link}`.slice(0, 500);
 }
 
-function dingRejected(data) {
-  const list = data && data.failedList;
-  if (Array.isArray(list)) {
-    return list.length ? "DING 没有送到" : "";
+function notifyWebhook() {
+  const raw = String(process.env.DINGTALK_NOTIFY_WEBHOOK || "").trim();
+  if (!raw) {
+    return "";
   }
-  if (list && typeof list === "object") {
-    const reason = Object.keys(list)[0] || "";
-    return reason;
+  try {
+    const url = new URL(raw);
+    if (url.protocol === "https:" && url.hostname === "oapi.dingtalk.com") {
+      return url.toString();
+    }
+  } catch {
+    return "";
   }
   return "";
 }
 
-async function sendRobotDing(userid, title, markdown, url, button, robotCode) {
-  const token = await accessToken();
-  const res = await transport("https://api.dingtalk.com/v1.0/robot/ding/send", {
+async function sendMention(userid, title, markdown, url, button) {
+  const hook = notifyWebhook();
+  if (!hook) {
+    throw dingFail("还没有可以 @ 人的通知群");
+  }
+  const res = await transport(hook, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-acs-dingtalk-access-token": token
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      robotCode: robotCode || dingConfig().clientId,
-      remindType: 1,
-      receiverUserIdList: [String(userid)],
-      content: dingBody(title, markdown, url, button)
+      msgtype: "text",
+      text: { content: mentionText(userid, title, markdown, url, button) },
+      at: { atUserIds: [String(userid)], isAtAll: false }
     }),
     signal: AbortSignal.timeout(8000)
   });
   const data = await res.json();
-  if (res.ok === false || data.code || data.errcode) {
-    throw dingFail(data.message || data.errmsg || "DING 没有发出", data.code || data.errcode);
-  }
-  const rejected = dingRejected(data);
-  if (rejected) {
-    throw dingFail(rejected);
+  if (res.ok === false || data.errcode) {
+    throw dingFail(data.errmsg || data.message || "@ 没有发出", data.errcode);
   }
 }
 
@@ -815,13 +814,13 @@ export async function sendTaskNotice(userid, title, markdown, url, button = "去
     return false;
   }
   try {
-    await sendRobotDing(userid, title, markdown, url, button);
-    lastPopup = { channel: "ding", error: "" };
-    return "ding";
-  } catch (dingError) {
+    await sendMention(userid, title, markdown, url, button);
+    lastPopup = { channel: "at", error: "" };
+    return "at";
+  } catch (mentionError) {
     try {
       await sendRobotCard(userid, title, markdown, url, button);
-      lastPopup = { channel: "robot", error: dingError.publicMessage || "DING 没有发出" };
+      lastPopup = { channel: "robot", error: mentionError.publicMessage || "@ 没有发出" };
       return "robot";
     } catch (error) {
       lastPopup = { channel: "work", error: error.publicMessage || "机器人消息没有发出" };
@@ -839,51 +838,21 @@ function maskId(value) {
   return `${text.slice(0, 6)}…${text.slice(-4)}`;
 }
 
-async function robotState() {
-  try {
-    const data = await oapi("/microapp/list", {});
-    const list = Array.isArray(data.appList) ? data.appList : [];
-    const agentId = String(currentAgentId());
-    const mine = list.find((app) => String(app.agentId || "") === agentId);
-    const named = list
-      .filter((app) => /甄选|汇报|人事|通知/.test(String(app.name || "")))
-      .map((app) => `${app.name}#${app.agentId} 状态${app.appStatus ?? ""}`)
-      .join("，");
-    const self = mine
-      ? `当前应用 ${mine.name || "未命名"} 状态${mine.appStatus ?? ""} 字段 ${Object.keys(mine).join("/")}`
-      : "当前 AgentId 不在已安装应用里";
-    return `${self}。相关应用：${named || "没有"}`;
-  } catch (error) {
-    return `读应用列表失败 ${error.code || ""} ${error.publicMessage || ""}`.slice(0, 300);
-  }
-}
-
 export async function popupTo(userid) {
   if (!userid) {
     return { ok: false, statusCode: 400, error: "当前账号还没有钉钉" };
   }
   const meta = { appKey: maskId(dingConfig().clientId), agentId: currentAgentId() };
-  const notice = ["工作汇报", "右下角弹窗测试。请看电脑右下角，这一条会显示内容。", workLink("todo"), "去处理"];
   try {
-    await sendRobotDing(userid, ...notice);
-    lastPopup = { channel: "ding", error: "" };
-    return { ok: true, channel: "ding", error: "", ...meta };
+    await sendMention(userid, "工作汇报", "右下角弹窗测试。请看电脑右下角，这一条会显示内容。", workLink("todo"), "去处理");
+    lastPopup = { channel: "at", error: "" };
+    return { ok: true, channel: "at", error: "", ...meta };
   } catch (error) {
-    const agentCode = String(currentAgentId() || "");
-    if (agentCode && agentCode !== dingConfig().clientId) {
-      try {
-        await sendRobotDing(userid, ...notice, agentCode);
-        lastPopup = { channel: "ding", error: "" };
-        return { ok: true, channel: "ding", error: "", ...meta, robotCode: "agent" };
-      } catch {
-        /* AgentId 也不是机器人编号。 */
-      }
-    }
     return {
       ok: false,
       statusCode: 502,
       channel: "",
-      error: `${error.publicMessage || "DING 没有发出"} 当前 Client ID ${meta.appKey}，AgentId ${meta.agentId}。${await robotState()}`,
+      error: error.publicMessage || "@ 没有发出",
       ...meta
     };
   }
