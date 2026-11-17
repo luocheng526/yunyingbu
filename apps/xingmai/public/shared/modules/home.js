@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.1070-liveon */
+/* xm-module-home 0.1.1090-paidon */
 (function () {
-  var HOME_JS_STAMP = "0.1.1070-liveon";
+  var HOME_JS_STAMP = "0.1.1090-paidon";
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
@@ -2025,6 +2025,7 @@
       escapeHtml(liveAtText(state && state.liveAt)) +
       "</span>" +
       '<button type="button" class="xm-hm-live-heads" data-live-heads>表头设置</button>' +
+      '<button type="button" class="xm-hm-live-refresh" data-connect-jingmai>连接京麦</button>' +
       '<button type="button" class="xm-hm-live-refresh" data-refresh-live' +
       (liveRefreshing ? " disabled" : "") +
       ">" +
@@ -2272,7 +2273,7 @@
     { key: "feeWarn", label: "费比监控", w: "120px" },
     { key: "feeGoal", label: "费比设置", w: "110px" },
     { key: "liveAt", label: "更新时间", w: "150px" },
-    { key: "liveOn", label: "状态", w: "72px" }
+    { key: "liveOn", label: "登录状态", w: "88px" }
   ];
   var LIVE_EXTRA_HEADS = [
     { key: "jzAccount", label: "京准通主账户ID", extra: true, w: "140px" },
@@ -2438,17 +2439,43 @@
       "</tr></thead>"
     );
   }
-  function liveLinkOf(row) {
-    if (row && row.loginExpired === true) {
-      return { label: "掉线", kind: "off" };
+  var liveBoardSlot = "";
+  function fiveMinuteStamp(stamp) {
+    var match = String(stamp || "").match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})[ T](\d{1,2}):(\d{2})/);
+    if (!match) {
+      return "";
     }
+    var minute = Math.floor(Number(match[5]) / 5) * 5;
+    function pad(value) {
+      value = String(value);
+      return value.length < 2 ? "0" + value : value;
+    }
+    return match[1] + "/" + pad(match[2]) + "/" + pad(match[3]) + " " + pad(match[4]) + ":" + pad(minute);
+  }
+  function liveSlotOf(rows) {
+    var latest = "";
+    (rows || []).forEach(function (row) {
+      if (row && row.online === true && row.capturedAt > latest) {
+        latest = row.capturedAt;
+      }
+    });
+    if (!latest) {
+      (rows || []).forEach(function (row) {
+        if (row && row.capturedAt > latest) {
+          latest = row.capturedAt;
+        }
+      });
+    }
+    return fiveMinuteStamp(latest);
+  }
+  function liveLinkOf(row) {
     if (row && row.online === true) {
       return { label: "在线", kind: "on" };
     }
-    var t = parseLiveAt(row && (row.capturedAt || row.ingestedAt));
-    return Number.isFinite(t) && Date.now() - t <= 6e5
-      ? { label: "在线", kind: "on" }
-      : { label: "掉线", kind: "off" };
+    if (row && (row.loginExpired === true || row.offline === true)) {
+      return { label: "掉线", kind: "off" };
+    }
+    return { label: "", kind: "" };
   }
   function liveShopCellHtml(col, row, index, liveAt) {
     var shop = row && row.shop;
@@ -2494,7 +2521,8 @@
       return '<td class="xm-hm-num">' + escapeHtml(feeGoalCellHtml(row)) + "</td>";
     }
     if (key === "liveAt") {
-      return '<td class="xm-hm-num">' + escapeHtml(fmtShopAt(row && (row.capturedAt || row.ingestedAt || row.liveAt)) || "—") + "</td>";
+      var ownAt = row && (row.capturedAt || row.ingestedAt || row.liveAt);
+      return '<td class="xm-hm-num">' + escapeHtml(ownAt && liveBoardSlot ? liveBoardSlot : "—") + "</td>";
     }
     if (key === "liveOn") {
       var link = liveLinkOf(row);
@@ -2502,8 +2530,13 @@
         return (
           '<td class="xm-hm-num is-fee-hot"><button type="button" class="xm-hm-login-link" data-live-login="' +
           escapeHtml(shop) +
-          '">掉线</button></td>'
+          '"' +
+          (row && row.offlineReason ? ' title="' + escapeHtml(row.offlineReason) + '"' : "") +
+          ">掉线</button></td>"
         );
+      }
+      if (!link.label) {
+        return "<td></td>";
       }
       return '<td class="xm-hm-num is-fee-cold">' + escapeHtml(link.label) + "</td>";
     }
@@ -3125,8 +3158,8 @@
       liveColgroupHtml() +
       liveTheadHtml() +
       "<tbody>" +
-      shops.map(function (row, i) {
-        return liveShopRowHtml(row, i, state.liveAt);
+      (liveBoardSlot = liveSlotOf(shops), shops).map(function (row, i) {
+        return liveShopRowHtml(row, i, liveBoardSlot || state.liveAt);
       }).join("") +
       "</tbody></table></div>";
     applyLiveRowPad(root);
@@ -3146,7 +3179,7 @@
     root.querySelector("#xm-hm-note").textContent = gapText
       ? "人管对不上：" + gapText
       : state.view === "live"
-        ? "实时按付费中心的方式，用组织中心账号在服务器登录京麦，抓京麦成交和京准通付费。点掉线的店，在页面中间弹出这一家的登录画面。"
+        ? "实时按付费中心的方式，用组织中心账号在服务器登录京麦，抓京麦成交和京准通付费。点掉线的店，在页面中间弹出这一家的登录画面。连接京麦登录还没有会话的店。在线只算 15 分钟内还在采集的店。"
         : state.view === "week"
           ? "近七天业绩汇总：爬虫填店铺和当天数字，其余可手填；一键发送图片发到钉钉。"
           : "数字来自星脉 ERP。";
@@ -4440,6 +4473,8 @@
       jzAccount: String((row && (row.accountId || row.jzAccount)) || "").trim() || "—",
       jzOk: String((row && (row.success || row.jzOk)) || "").trim() || "—",
       online: row && row.online === true,
+      offline: row && row.offline === true,
+      offlineReason: row && row.offlineReason ? String(row.offlineReason) : "",
       loginExpired: row && row.loginExpired === true,
       capturedAt: row && (row.capturedAt || row.ingestedAt),
       feeLo: row && (row.feeLo != null ? row.feeLo : row.feeMin),
@@ -4451,8 +4486,23 @@
     live = live || blankLive();
     var rows = (local && local.records) || [];
     var yestRows = (local && local.yesterday && local.yesterday.records) || [];
-    var sum = rows.length ? sumLocalPaid(rows) : {};
-    var yestSum = yestRows.length ? sumLocalPaid(yestRows) : {};
+    var offlineNames = {};
+    rows.forEach(function (row) {
+      if (row && row.online === false) {
+        var offName = String((row.shopName || row.shop) || "");
+        if (offName) {
+          offlineNames[offName] = true;
+        }
+      }
+    });
+    var liveRows = rows.filter(function (row) {
+      return !row || row.online !== false;
+    });
+    var yestOnline = yestRows.filter(function (row) {
+      return !offlineNames[String((row && (row.shopName || row.shop)) || "")];
+    });
+    var sum = liveRows.length ? sumLocalPaid(liveRows) : {};
+    var yestSum = yestOnline.length ? sumLocalPaid(yestOnline) : {};
     var orgIndex = indexOrgStores(orgPack);
     var hourly = localHourlyOf(local);
     var yestSpendH = hoursHaveNow(hourly.yesterdaySpend) ? hourly.yesterdaySpend : [];
@@ -4953,7 +5003,7 @@
         weekPack: blankWeekPack()
       };
       var poll = 0;
-      var LIVE_REFRESH_MS = 10 * 60 * 1000;
+      var LIVE_REFRESH_MS = 60 * 1000;
       cardSetOpen = false;
       paint(root, state);
       function shanghaiClock(date) {
@@ -5004,9 +5054,7 @@
         var local = scopeLocalPaid(localPack || state.localPaid || emptyLocalPaid(), keys);
         state.live = fillLocalPaid(blankLive(), local, { stores: state.dutyShops || [] });
         state.shops = state.live.shops;
-        if (stampClock || !state.liveAt) {
-          state.liveAt = shanghaiClock();
-        }
+        state.liveAt = liveSlotOf(state.shops) || shanghaiClock();
         state.source = "jingmai-local";
         paint(root, state);
         var L = state.live;
@@ -5166,6 +5214,32 @@
           };
           probe.src = "/api/home/live-login/screen?store=" + encodeURIComponent(name) + "&t=" + Date.now();
         }, 1500);
+      }
+      function openConnectJingmai() {
+        var seq = ++deskSeq;
+        window.clearInterval(deskTimer);
+        deskTimer = 0;
+        state.desk = { open: true, status: "opening", store: "全部店铺", message: "正在打开还没有登录的店铺" };
+        if (!dead) {
+          paint(root, state);
+        }
+        api("/api/home/live-login", {}).then(function (st) {
+          if (dead || seq !== deskSeq) {
+            return;
+          }
+          var next = st || { status: "login", message: "登录没有打开" };
+          next.open = true;
+          if (next.status === "done" || next.status === "ok") {
+            state.desk = null;
+            if (!dead) {
+              paint(root, state);
+              pullLive();
+            }
+            return;
+          }
+          next.store = next.store || "全部店铺";
+          showDesk(next);
+        });
       }
       function openShopLogin(shop) {
         var name = String(shop || "").trim();
@@ -5551,6 +5625,10 @@
         }
         if (event.target.closest("[data-refresh-live]")) {
           refreshLive();
+          return;
+        }
+        if (event.target.closest("[data-connect-jingmai]")) {
+          openConnectJingmai();
           return;
         }
         if (event.target.closest("[data-show-teams]")) {

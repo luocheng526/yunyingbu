@@ -781,9 +781,9 @@ export function packJingmaiShops(view, org) {
       shop: row.store,
       enabled: true,
       online: false,
-      offline: true,
-      loginExpired: true,
-      offlineReason: row.login && row.password ? "未在服务器登录" : "组织中心未填账号",
+      offline: false,
+      loginExpired: false,
+      offlineReason: "",
       dealAmount: null,
       paidAmount: null,
       paidDeal: null,
@@ -802,27 +802,30 @@ export function packJingmaiShops(view, org) {
         paidDeal: asNum(shop.paidDeal),
         roi: asNum(shop.paidRoi),
         online: shop.online === true,
+        offline: shop.offline === true,
+        offlineReason: shop.offlineReason || "",
         loginExpired: shop.loginExpired === true,
         capturedAt: shop.capturedAt || "",
         platformUpdatedAt: shop.platformUpdatedAt || ""
       };
     });
+  const counted = shops.filter((shop) => shop && shop.online === true);
   const hourly = {
-    todayPay: sumHourIncrements(shops, "todayHours"),
-    yesterdayPay: sumHourIncrements(shops, "yesterdayHours"),
-    todaySpend: sumHourIncrements(shops, "todayPaidHours"),
-    yesterdaySpend: sumHourIncrements(shops, "yesterdayPaidHours")
+    todayPay: sumHourIncrements(counted, "todayHours"),
+    yesterdayPay: sumHourIncrements(counted, "yesterdayHours"),
+    todaySpend: sumHourIncrements(counted, "todayPaidHours"),
+    yesterdaySpend: sumHourIncrements(counted, "yesterdayPaidHours")
   };
   hourly.todayFee = feeHoursFrom(hourly.todaySpend, hourly.todayPay);
   hourly.yesterdayFee = feeHoursFrom(hourly.yesterdaySpend, hourly.yesterdayPay);
   return {
     records,
     summary: {
-      liveAmount: sumMoney(records, "liveAmount"),
-      spend: sumMoney(records, "paidAmount"),
-      paidDeal: sumMoney(records, "paidDeal"),
+      liveAmount: sumMoney(counted.map((shop) => ({ liveAmount: asNum(shop.dealAmount) })), "liveAmount"),
+      spend: sumMoney(counted.map((shop) => ({ paidAmount: asNum(shop.paidAmount) })), "paidAmount"),
+      paidDeal: sumMoney(counted.map((shop) => ({ paidDeal: asNum(shop.paidDeal) })), "paidDeal"),
       shopCount: records.length,
-      onlineCount: records.filter((row) => row.online).length
+      onlineCount: counted.length
     },
     hourly,
     updatedAt: (view && view.updatedAt) || "",

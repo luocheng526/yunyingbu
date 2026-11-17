@@ -877,22 +877,18 @@ export function buildLiveView({ shops, samples, now }) {
     const loggedStamp = asStamp(shop.linkedAt);
     const loginExpired = shop.enabled !== false && shop.authState === "login_expired";
     const fresh = sampleIsFresh(latestDataStamp(mine), now);
-    const dealMissing = !reading || reading.dealAmount == null;
     const collectFailed = shop.authState === "offline";
     const watched = shop.authState === "ok" || collectFailed;
     const loggedIn = hasSession && !loginExpired;
-    const dataLive = loggedIn && watched && fresh && !dealMissing;
-    const online = loggedIn;
+    const online = loggedIn && watched && fresh;
     let offline = false;
     let offlineReason = "";
-    if (loggedIn && watched && !dataLive && (collectFailed || !fresh || dealMissing)) {
+    if (loggedIn && watched && !online && (collectFailed || !fresh)) {
       offline = true;
       if (collectFailed && shop.authMessage) {
         offlineReason = String(shop.authMessage);
       } else if (!fresh) {
         offlineReason = "采集已停止";
-      } else if (dealMissing) {
-        offlineReason = (reading && reading.dealNote) || "京麦首页没有成交字段";
       } else {
         offlineReason = "采集超时";
       }

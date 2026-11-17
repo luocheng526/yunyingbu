@@ -13,7 +13,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
     assert.equal(HOME_CLIENT_JS, `/api/home/client.js?v=${HOME_JS_STAMP}`);
-    assert.equal(HOME_JS_STAMP, "0.1.1070-liveon");
+    assert.equal(HOME_JS_STAMP, "0.1.1090-paidon");
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -28,7 +28,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     const text = await res.text();
     assert.equal(res.status, 200);
     assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
-    assert.match(text, /xm-module-home 0\.1\.1070-liveon/);
+    assert.match(text, /xm-module-home 0\.1\.1090-paidon/);
     assert.match(text, /function liveTheadHtml/);
     assert.match(text, /function liveFilterHtml/);
     assert.match(text, /data-live-filter="pick"/);
@@ -57,7 +57,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /label: "更新时间"/);
     assert.match(text, /label: "费比设置"/);
     assert.doesNotMatch(text, /label: "是否回传成功"/);
-    assert.match(text, /label: "状态"/);
+    assert.match(text, /label: "登录状态"/);
     assert.match(text, /function liveLinkOf/);
     assert.match(text, /费比超标/);
     assert.match(text, /加大付费/);
@@ -95,7 +95,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.doesNotMatch(text, /\/api\/han\/fee-targets/);
     assert.doesNotMatch(text, /\/api\/shen\/fee-targets/);
     assert.doesNotMatch(text, /function overlayFeeBooks/);
-    assert.match(text, /LIVE_REFRESH_MS = 10 \* 60 \* 1000/);
+    assert.match(text, /LIVE_REFRESH_MS = 60 \* 1000/);
     assert.match(text, /cache: "no-store"/);
     assert.match(text, /Promise\.resolve\(pullLive\(\)\)/);
     assert.doesNotMatch(text, /function kickLive/);
@@ -104,7 +104,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /function applyFeeBook/);
     assert.match(text, /function ensureFreshHome/);
     assert.match(text, /applyFeeBook\(live\.shops, local && local\.feeTargets\)/);
-    assert.match(text, /var HOME_JS_STAMP = "0\.1\.1070-liveon"/);
+    assert.match(text, /var HOME_JS_STAMP = "0\.1\.1090-paidon"/);
     assert.match(text, /label: "数据总揽"/);
     assert.match(text, /label: "团队概括"/);
     assert.match(text, /data-over-open/);
