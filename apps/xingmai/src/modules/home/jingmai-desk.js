@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { connect as connectTcp } from "node:net";
 import { tmpdir } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -131,6 +131,14 @@ export function findChrome() {
   return candidates.find(function (path) {
     return path && existsSync(path);
   }) || "";
+}
+
+export function hostChromePath(path) {
+  const value = String(path || "");
+  if (!value || value.includes("chrome-headless-shell")) {
+    return "";
+  }
+  return value;
 }
 
 function extractZip(zip, dir) {
@@ -664,15 +672,35 @@ function removeSoname(home, name) {
 }
 
 function cleanStaleProfiles() {
+  const live = new Set();
+  if (current && current.dir) {
+    live.add(current.dir);
+  }
+  if (readerDesk && readerDesk.dir) {
+    live.add(readerDesk.dir);
+  }
   let names = [];
   try {
     names = readdirSync(tmpdir());
   } catch {
     return;
   }
+  const now = Date.now();
   names.forEach(function (name) {
-    if (name.startsWith("shen-jingmai-")) {
-      rmSync(tmpdir() + "/" + name, { recursive: true, force: true });
+    if (!name.startsWith("shen-jingmai-")) {
+      return;
+    }
+    const dir = tmpdir() + "/" + name;
+    if (live.has(dir)) {
+      return;
+    }
+    try {
+      if (now - statSync(dir).mtimeMs < 10 * 60 * 1000) {
+        return;
+      }
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* profile already gone */
     }
   });
 }
@@ -1071,6 +1099,21 @@ function browserFailure(stderr) {
 }
 
 async function launchChrome() {
+  const host = hostChromePath(findChrome());
+  if (host) {
+    try {
+      fontConfig = "";
+      libraryPath = "";
+      return await startChromeProcess(host);
+    } catch (error) {
+      if (error && error.code === "browser") {
+        throw error;
+      }
+      const wrapped = new Error("服务器登录没有打开");
+      wrapped.code = "browser";
+      throw wrapped;
+    }
+  }
   let chromePath = "";
   try {
     chromePath = await ensureChrome();
@@ -1318,7 +1361,10 @@ export function resetDesk() {
   stopCurrent();
 }
 
-async function acquireDesk(store) {
+async function acquireDesk(store, ticket) {
+  if (ticket != null && ticket !== openTicket) {
+    return null;
+  }
   if (deskUsable(current)) {
     current.store = store;
     current.password = "";
@@ -1329,7 +1375,14 @@ async function acquireDesk(store) {
       stopCurrent();
     }
   }
+  if (ticket != null && ticket !== openTicket) {
+    return null;
+  }
   const desk = await launchChrome();
+  if (ticket != null && ticket !== openTicket) {
+    discard(desk);
+    return null;
+  }
   desk.store = store;
   current = desk;
   await send(desk.ws, "Page.enable");
@@ -1440,8 +1493,8 @@ export async function openDesk({ store, loginName, password, reveal, onStep } = 
   let desk = null;
   try {
     step("正在启动浏览器");
-    desk = await acquireDesk(store);
-    if (ticket !== openTicket) {
+    desk = await acquireDesk(store, ticket);
+    if (!desk || ticket !== openTicket) {
       return { status: "login", message: "登录已取消" };
     }
     step("正在打开登录页");
