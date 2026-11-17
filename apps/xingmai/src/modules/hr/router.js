@@ -61,7 +61,13 @@ function actorName(req) {
 
 function sendErr(res, err) {
   const status = Number(err?.statusCode) || 500;
-  res.status(status).json({ ok: false, error: status >= 500 ? "人事数据暂时读不出来" : err.message });
+  const detail = String(err?.code || err?.sqlMessage || err?.message || "").replace(/\s+/g, " ").slice(0, 180);
+  const safe = /password|secret|token/i.test(detail) ? "" : detail;
+  res.status(status).json({
+    ok: false,
+    error: status >= 500 ? "人事数据暂时读不出来" : err.message,
+    detail: status >= 500 ? safe : undefined
+  });
 }
 
 hrRouter.use(requireUser);

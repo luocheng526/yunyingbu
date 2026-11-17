@@ -160,9 +160,10 @@ export const HR_SCHEMA = [
     saved_at VARCHAR(40) NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS hr_effort_months (
-    year_month VARCHAR(7) NOT NULL PRIMARY KEY,
+    \`year_month\` VARCHAR(7) NOT NULL,
     report_json MEDIUMTEXT NOT NULL,
-    saved_at VARCHAR(40) NOT NULL
+    saved_at VARCHAR(40) NOT NULL,
+    PRIMARY KEY (\`year_month\`)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 ];
 
@@ -210,11 +211,29 @@ export function ensureHrSchema() {
   if (dbMode() !== "mysql") return Promise.resolve();
   if (!ready) {
     ready = (async () => {
-      for (const sql of HR_SCHEMA) await query(sql);
-      await migratePunchTable();
-      await migrateDingUsers();
-      await migrateRecruitTable();
-      await migrateLeaveTable();
+      const errors = [];
+      for (const sql of HR_SCHEMA) {
+        try {
+          await query(sql);
+        } catch (err) {
+          errors.push(String(err.sqlMessage || err.message || "建表失败"));
+        }
+      }
+      for (const step of [migratePunchTable, migrateDingUsers, migrateRecruitTable, migrateLeaveTable]) {
+        try {
+          await step();
+        } catch (err) {
+          errors.push(String(err.sqlMessage || err.message || "补字段失败"));
+        }
+      }
+      try {
+        await query("SELECT 1 FROM hr_ding_links LIMIT 1");
+      } catch (err) {
+        const reason = errors[0] || String(err.sqlMessage || err.message || "人事表读不了");
+        const wrapped = new Error(reason);
+        wrapped.sqlMessage = reason;
+        throw wrapped;
+      }
     })().catch((err) => {
       ready = null;
       throw err;
@@ -701,7 +720,7 @@ export async function saveEffortMonth(yearMonth, report) {
   const body = JSON.stringify(report || {});
   if (dbMode() === "mysql") {
     await query(
-      `INSERT INTO hr_effort_months (year_month, report_json, saved_at)
+      `INSERT INTO hr_effort_months (\`year_month\`, report_json, saved_at)
        VALUES (?, ?, ?)
        ON DUPLICATE KEY UPDATE report_json = VALUES(report_json), saved_at = VALUES(saved_at)`,
       [month, body, savedAt]
@@ -720,7 +739,7 @@ export async function readEffortMonth(yearMonth) {
   const month = mustMonth(yearMonth);
   if (!month) return null;
   if (dbMode() === "mysql") {
-    const rows = await rowsOf("SELECT report_json, saved_at FROM hr_effort_months WHERE year_month = ?", [month]);
+    const rows = await rowsOf("SELECT report_json, saved_at FROM hr_effort_months WHERE \`year_month\` = ?", [month]);
     if (!rows.length) return null;
     return { month, report: JSON.parse(rows[0].report_json || "{}"), savedAt: String(rows[0].saved_at || "") };
   }
