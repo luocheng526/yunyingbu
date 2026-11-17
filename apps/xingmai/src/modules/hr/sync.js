@@ -9,6 +9,8 @@ import {
   markLatePunches,
   readBoardPunches,
   readBoardStamp,
+  readEffortMonth,
+  saveEffortMonth,
   recordSync,
   replaceDayPunches,
   renameCoveringLeaves,
@@ -658,6 +660,29 @@ export function shouldReconcileMonth(parts, latest, today) {
   return true;
 }
 
+export function shouldArchiveEffortMonth(parts, latest, today) {
+  if (!parts || Number(parts.day) !== 1 || Number(parts.hour) < 10) return false;
+  const month = previousMonth(today);
+  if (latest && latest.ok && latest.workDate === month) return false;
+  return true;
+}
+
+export function emptyEffortReport(month = "") {
+  return {
+    month: String(month || ""),
+    participants: 0,
+    roster: 0,
+    hours: 0,
+    average: 0,
+    unmatched: 0,
+    teams: [],
+    ranks: EFFORT_RANKS.map((rank) => ({ id: rank.id, title: rank.title, rows: [] })),
+    people: [],
+    choices: { people: [], users: [] },
+    watch: { conflict: false, compared: "0/0", pairs: [], dingMiss: [], orgMiss: [] }
+  };
+}
+
 export function leaveNameFromApprove(item) {
   const biz = Number(item?.biz_type ?? item?.bizType);
   const tag = String(item?.tag_name || item?.tagName || "").trim();
@@ -1177,6 +1202,37 @@ export async function archiveYesterday(client = createDingClient()) {
   return archiveDay(addDays(shanghaiToday(), -1), "daily", client);
 }
 
+export async function archiveEffortMonth(yearMonth) {
+  const month = /^\d{4}-\d{2}$/.test(String(yearMonth || "")) ? String(yearMonth) : "";
+  if (!month) return { saved: false, month: "" };
+  const users = await listDingUsers();
+  const byId = new Map(users.map((user) => [user.userId, user]));
+  const punches = (await listPunches({ month })).map((row) => {
+    const user = byId.get(row.dingtalkUserId) || {};
+    return {
+      ...row,
+      userName: row.userName || user.userName || "",
+      department: row.department || user.department || ""
+    };
+  });
+  const report = effortReport({
+    month,
+    users,
+    punches,
+    people: await loadRoster(),
+    links: await listLinks()
+  });
+  const saved = await saveEffortMonth(month, report);
+  return { saved: true, month, updatedAt: shanghaiClock(saved.savedAt), hours: report.hours };
+}
+
+export async function readStoredEffort(yearMonth) {
+  const month = /^\d{4}-\d{2}$/.test(String(yearMonth || "")) ? String(yearMonth) : shanghaiToday().slice(0, 7);
+  const row = await readEffortMonth(month);
+  if (!row || !row.report) return { ...emptyEffortReport(month), saved: false, updatedAt: "" };
+  return { ...row.report, month, saved: true, updatedAt: shanghaiClock(row.savedAt) };
+}
+
 export async function reconcileMonth(yearMonth, client = createDingClient()) {
   if (!client.configured()) {
     await recordSync("month", yearMonth, false, "钉钉还没配置");
@@ -1259,6 +1315,23 @@ export function startScheduler(client = createDingClient()) {
         await archiveDay(today, "today", client);
       } catch (err) {
         await recordSync("today", today, false, String(err.message || "当天没有留档").slice(0, 180));
+      }
+    }
+    if (shouldPullYesterday(parts, await latestSync("effort"), yesterday)) {
+      try {
+        await archiveEffortMonth(yesterday.slice(0, 7));
+        await recordSync("effort", yesterday, true, `已留档 ${yesterday.slice(0, 7)} 的奋斗时长`);
+      } catch (err) {
+        await recordSync("effort", yesterday, false, String(err.message || "奋斗时长没有留档").slice(0, 180));
+      }
+    }
+    if (shouldArchiveEffortMonth(parts, await latestSync("effort-month"), today)) {
+      const month = previousMonth(today);
+      try {
+        await archiveEffortMonth(month);
+        await recordSync("effort-month", month, true, `${month} 奋斗时长已覆盖`);
+      } catch (err) {
+        await recordSync("effort-month", month, false, String(err.message || "上月奋斗时长没有覆盖").slice(0, 180));
       }
     }
     if (shouldReconcileMonth(parts, await latestSync("month"), today)) {

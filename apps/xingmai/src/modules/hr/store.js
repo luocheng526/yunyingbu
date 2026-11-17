@@ -158,6 +158,11 @@ export const HR_SCHEMA = [
     metrics_json MEDIUMTEXT NOT NULL,
     punches_json MEDIUMTEXT NOT NULL,
     saved_at VARCHAR(40) NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS hr_effort_months (
+    year_month VARCHAR(7) NOT NULL PRIMARY KEY,
+    report_json MEDIUMTEXT NOT NULL,
+    saved_at VARCHAR(40) NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 ];
 
@@ -179,7 +184,8 @@ function emptyMemory() {
     staff: [],
     talents: [],
     runs: [],
-    boards: []
+    boards: [],
+    effort: []
   };
 }
 
@@ -685,6 +691,41 @@ export async function readBoardStamp(workDate) {
   }
   const row = memory.boards.find((item) => item.workDate === day);
   return row ? String(row.savedAt || "") : "";
+}
+
+export async function saveEffortMonth(yearMonth, report) {
+  await ensureHrSchema();
+  const month = mustMonth(yearMonth);
+  if (!month) throw bad("月份要写成 YYYY-MM");
+  const savedAt = new Date().toISOString();
+  const body = JSON.stringify(report || {});
+  if (dbMode() === "mysql") {
+    await query(
+      `INSERT INTO hr_effort_months (year_month, report_json, saved_at)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE report_json = VALUES(report_json), saved_at = VALUES(saved_at)`,
+      [month, body, savedAt]
+    );
+    return { month, savedAt };
+  }
+  const row = { month, report: JSON.parse(body), savedAt };
+  const index = memory.effort.findIndex((item) => item.month === month);
+  if (index >= 0) memory.effort[index] = row;
+  else memory.effort.push(row);
+  return { month, savedAt };
+}
+
+export async function readEffortMonth(yearMonth) {
+  await ensureHrSchema();
+  const month = mustMonth(yearMonth);
+  if (!month) return null;
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf("SELECT report_json, saved_at FROM hr_effort_months WHERE year_month = ?", [month]);
+    if (!rows.length) return null;
+    return { month, report: JSON.parse(rows[0].report_json || "{}"), savedAt: String(rows[0].saved_at || "") };
+  }
+  const row = memory.effort.find((item) => item.month === month);
+  return row ? { month, report: row.report, savedAt: String(row.savedAt || "") } : null;
 }
 
 export async function readBoardPunches(workDate) {

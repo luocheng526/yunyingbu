@@ -619,7 +619,8 @@
         (dayRows(person) || emptyRow(3, "这个月没有 18 点后的下班")) + "</tbody></table></td></tr>";
     }).join("") : emptyRow(5, "这个月还没有运营部门的人");
     setList(root, ["姓名", "部门", "角色", "组织", "月累计"], body);
-    if (!pack.configured) setMsg(root, "钉钉还没配置，奋斗时长先留空。", false);
+    if (!pack.saved) setMsg(root, "这个月还没留档。每天 10 点留档昨天，每月 1 号覆盖上个月。", false);
+    else if (pack.updatedAt) setMsg(root, "更新于 " + pack.updatedAt, false);
     else setMsg(root, "", false);
   }
 
@@ -839,6 +840,26 @@
       });
       return;
     }
+    if (tab === "overtime") {
+      var effortInput = root.querySelector("[data-month]");
+      var effortMonth = effortInput && effortInput.value ? effortInput.value : shanghaiToday().slice(0, 7);
+      state.effort = state.effort || {};
+      var effortReq = state.effort[effortMonth]
+        ? Promise.resolve(state.effort[effortMonth])
+        : api("/api/hr/effort?month=" + encodeURIComponent(effortMonth)).then(function (data) {
+          state.effort[effortMonth] = data;
+          return data;
+        });
+      effortReq.then(function (view) {
+        if (!state.alive || ticket !== state.ticket || state.tab !== tab) return;
+        state.view = view;
+        fillEffort(root, view);
+      }).catch(function (err) {
+        if (!state.alive || ticket !== state.ticket) return;
+        setMsg(root, err.message || "读取失败", true);
+      });
+      return;
+    }
     if (!state.people) {
       state.people = api("/api/people").then(safePeople).catch(function () { return []; });
     }
@@ -848,9 +869,7 @@
     var peopleReq = state.people;
     var statusReq = state.status;
     var dataReq;
-    if (tab === "overtime") {
-      dataReq = api("/api/hr/effort" + monthQuery(root));
-    } else if (tab === "staff") {
+    if (tab === "staff") {
       dataReq = api("/api/hr/staff");
     } else {
       var monthInput = root.querySelector("[data-join-month]");
@@ -1047,7 +1066,7 @@
         var personId = bind.getAttribute("data-person") || (personPick ? personPick.value : "");
         var userId = bind.getAttribute("data-user") || (userPick ? userPick.value : "");
         api("/api/hr/links", { method: "POST", body: { personId: Number(personId), dingtalkUserId: userId } })
-          .then(function () { loadTab(root, state); })
+          .then(function () { state.effort = {}; loadTab(root, state); })
           .catch(function (err) { setMsg(root, err.message, true); });
         return;
       }
@@ -1055,7 +1074,7 @@
       if (unbind && root.contains(unbind)) {
         event.preventDefault();
         api("/api/hr/links/" + encodeURIComponent(unbind.getAttribute("data-person")), { method: "DELETE" })
-          .then(function () { loadTab(root, state); })
+          .then(function () { state.effort = {}; loadTab(root, state); })
           .catch(function (err) { setMsg(root, err.message, true); });
         return;
       }

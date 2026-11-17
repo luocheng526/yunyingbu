@@ -5,9 +5,10 @@ import {
   archiveYesterday,
   canSeeHr,
   refreshLeaves,
-  effortReport,
+  archiveEffortMonth,
   loadRoster,
   readStoredBoard,
+  readStoredEffort,
   refreshBoardDay,
   shanghaiToday,
   startScheduler
@@ -170,24 +171,7 @@ hrRouter.get("/attendance", async (req, res) => {
 hrRouter.get("/effort", async (req, res) => {
   try {
     const month = String(req.query.month || shanghaiToday().slice(0, 7));
-    const users = await listDingUsers();
-    const byId = new Map(users.map((user) => [user.userId, user]));
-    const punches = (await listPunches({ month })).map((row) => {
-      const user = byId.get(row.dingtalkUserId) || {};
-      return {
-        ...row,
-        userName: row.userName || user.userName || "",
-        department: row.department || user.department || ""
-      };
-    });
-    const report = effortReport({
-      month: /^\d{4}-\d{2}$/.test(month) ? month : "",
-      users,
-      punches,
-      people: await loadRoster(),
-      links: await listLinks()
-    });
-    res.json({ ok: true, ...report });
+    res.json({ ok: true, ...(await readStoredEffort(month)) });
   } catch (err) {
     sendErr(res, err);
   }
@@ -196,6 +180,7 @@ hrRouter.get("/effort", async (req, res) => {
 hrRouter.post("/links", async (req, res) => {
   try {
     const link = await upsertLink(req.body || {});
+    await archiveEffortMonth(shanghaiToday().slice(0, 7)).catch(() => {});
     res.status(201).json({ ok: true, link });
   } catch (err) {
     sendErr(res, err);
@@ -204,7 +189,9 @@ hrRouter.post("/links", async (req, res) => {
 
 hrRouter.delete("/links/:personId", async (req, res) => {
   try {
-    res.json({ ok: true, ...(await deleteLink(req.params.personId)) });
+    const removed = await deleteLink(req.params.personId);
+    await archiveEffortMonth(shanghaiToday().slice(0, 7)).catch(() => {});
+    res.json({ ok: true, ...removed });
   } catch (err) {
     sendErr(res, err);
   }
