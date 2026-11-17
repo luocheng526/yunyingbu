@@ -1,4 +1,4 @@
-/* xm-module-people org-board 0.1.239-tabs-up */
+/* xm-module-people org-board 0.1.240-org-struct */
 (function () {
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -114,7 +114,7 @@
   }
 
   function ensureCss() {
-    const href = "/people.css?v=0.1.239-tabs-up";
+    const href = "/people.css?v=0.1.240-org-struct";
     let link = document.querySelector('link[data-people-css="1"]') || document.querySelector('link[href*="people.css"]');
     if (!link) {
       link = document.createElement("link");
@@ -333,11 +333,26 @@
         "</div>" +
         '<div class="org-filter-pop" id="people-filter-pop" hidden></div></section></div>' +
         '<div class="org-pane" data-pane="rights" hidden>' +
-        '<section class="panel rights-fit-panel"><h2>管辖</h2>' +
-        '<p class="lead">只读对照。店铺必有归属：最小可以是运营或助理，也可以是主管、储备或经理自己；填了几层就几层一起管。人员可以还没分店，责权仍列出人员对不上。表头是经理、主管、储备、运营、助理、店铺。</p>' +
-        '<div class="rights-watch" id="rights-watch"></div>' +
+        '<section class="panel rights-fit-panel org-struct">' +
+        '<div class="org-struct-head">' +
+        "<div><h2>组织结构</h2>" +
+        '<p class="lead">只读对照。店铺必有归属：最小可以是运营或助理，也可以是主管、储备或经理自己；填了几层就几层一起管。人员可以还没分店，责权仍列出人员对不上。表头是经理、主管、储备、运营、助理、店铺。</p></div>' +
         '<div class="rights-tree-toolbar"><button type="button" id="rights-refresh">刷新树和看板</button><span class="muted" id="rights-checked">检查时间：—</span></div>' +
-        '<div class="rights-tree-chart" id="rights-tree-chart"></div></section></div>' +
+        "</div>" +
+        '<div class="rights-watch" id="rights-watch"></div>' +
+        '<div class="org-struct-stage">' +
+        '<aside class="org-struct-tree">' +
+        '<input type="text" id="rights-tree-q" placeholder="搜索部门 / 姓名" autocomplete="off" spellcheck="false" />' +
+        '<div id="rights-dept-tree"></div></aside>' +
+        '<div class="org-struct-canvas">' +
+        '<div class="org-struct-canvas-head"><strong>组织架构图</strong>' +
+        '<div><button type="button" class="ghost" id="rights-tree-expand">展开全部</button>' +
+        '<button type="button" class="ghost" id="rights-tree-collapse">收起全部</button></div></div>' +
+        '<div class="rights-tree-chart" id="rights-tree-chart"></div>' +
+        '<div class="org-struct-members">' +
+        '<div class="org-struct-members-head"><strong id="rights-members-title">部门成员</strong><span class="muted" id="rights-members-count"></span></div>' +
+        '<div class="org-table-wrap"><table><thead><tr><th>姓名</th><th>总监</th><th>经理</th><th>主管</th><th>储备</th><th>运营</th><th>助理</th><th>状态</th><th>操作</th></tr></thead>' +
+        '<tbody id="rights-members-tbody"></tbody></table></div></div></div></div></section></div>' +
         '<div class="org-pane" data-pane="acl" hidden>' +
         '<section class="panel site-acl-panel">' +
         '<div class="site-acl-hero">' +
@@ -1922,6 +1937,45 @@
 
       let lastWatch = { kpis: [], issues: [] };
       let watchOpen = "";
+      let lastRightsTree = null;
+      let rightsSel = { kind: "all", key: "all", label: "组织中心" };
+      let rightsTreeQuery = "";
+      let rightsTreeFold = {};
+
+      function rightsKpiIco(tone) {
+        if (tone === "green") {
+          return '<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="2.4"/><circle cx="16" cy="8" r="2.4"/><path d="M4.6 18c.5-2.6 2.4-4 4.4-4s3.9 1.4 4.4 4"/><path d="M12.8 18c.4-2.4 2-3.6 3.6-3.6 1.7 0 3.2 1.2 3.6 3.6"/></svg>';
+        }
+        if (tone === "purple") {
+          return '<svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6"/><path d="M9 13h6"/></svg>';
+        }
+        if (tone === "orange") {
+          return '<svg viewBox="0 0 24 24"><path d="M4 10h16l-1.2 10H5.2z"/><path d="M8 10V7h8v3"/></svg>';
+        }
+        if (tone === "cyan") {
+          return '<svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M8 12h8"/></svg>';
+        }
+        return '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5.5 19c.8-3.3 3.3-5 6.5-5s5.7 1.7 6.5 5"/></svg>';
+      }
+
+      function rightsKpiMeta(label) {
+        if (label === "在职员工") {
+          return { tone: "blue", hint: "花名册在职" };
+        }
+        if (label === "部门") {
+          return { tone: "green", hint: "按花名册中心" };
+        }
+        if (label === "在营店铺") {
+          return { tone: "purple", hint: "运营中店铺" };
+        }
+        if (label === "树上人数") {
+          return { tone: "orange", hint: "责权树上" };
+        }
+        if (label === "待补全" || label === "人员对不上" || label === "店铺对不上") {
+          return { tone: "cyan", hint: "点开看名单" };
+        }
+        return { tone: "blue", hint: "" };
+      }
 
       function watchFilterOf(label) {
         if (label === "待补全") {
@@ -2007,30 +2061,68 @@
           return;
         }
         const kpis = lastWatch.kpis || [];
+        const primaryLabels = ["在职员工", "部门", "在营店铺", "人员对不上", "待补全"];
+        const byLabel = {};
+        kpis.forEach(function (item) {
+          byLabel[item.label] = item;
+        });
+        const primary = primaryLabels
+          .map(function (label) {
+            return byLabel[label];
+          })
+          .filter(Boolean);
+        const rest = kpis.filter(function (item) {
+          return primaryLabels.indexOf(item.label) < 0;
+        });
+        function kpiCard(item) {
+          const open = watchFilterOf(item.label);
+          const meta = rightsKpiMeta(item.label);
+          return (
+            '<article class="rights-watch-kpi org-hero-kpi tone-' +
+            meta.tone +
+            (open ? " is-click" : "") +
+            '"' +
+            (open ? ' data-watch-open="' + open + '"' : "") +
+            '><span class="org-hero-kpi-ico" aria-hidden="true">' +
+            rightsKpiIco(meta.tone) +
+            '</span><div><div class="label">' +
+            escapeHtml(item.label) +
+            '</div><div class="value">' +
+            escapeHtml(item.value) +
+            '</div><div class="hint">' +
+            escapeHtml(meta.hint) +
+            "</div></div></article>"
+          );
+        }
         host.innerHTML =
+          '<div class="rights-watch-kpis org-console-kpis">' +
+          (primary.length ? primary : kpis).map(kpiCard).join("") +
+          "</div>" +
+          (rest.length
+            ? '<div class="rights-watch-kpis-more">' +
+              rest
+                .map(function (item) {
+                  const open = watchFilterOf(item.label);
+                  return (
+                    '<article class="rights-watch-kpi' +
+                    (open ? " is-click" : "") +
+                    '"' +
+                    (open ? ' data-watch-open="' + open + '"' : "") +
+                    '><div class="label">' +
+                    escapeHtml(item.label) +
+                    '</div><div class="value">' +
+                    escapeHtml(item.value) +
+                    "</div></article>"
+                  );
+                })
+                .join("") +
+              "</div>"
+            : "") +
           '<div class="rights-watch-banner' +
           (lastWatch.conflict ? " is-conflict" : "") +
           '"><div>店铺必有归属，人员可以没有店。组织人员以花名册为准，店铺归属以店铺主数据为准。点「人员对不上」看名单。待补全要点数字才展开。</div><strong>' +
           (lastWatch.conflict ? "存在冲突" : "暂无冲突") +
-          "</strong></div>" +
-          '<div class="rights-watch-kpis">' +
-          kpis
-            .map(function (item) {
-              const open = watchFilterOf(item.label);
-              return (
-                '<article class="rights-watch-kpi' +
-                (open ? " is-click" : "") +
-                '"' +
-                (open ? ' data-watch-open="' + open + '"' : "") +
-                '><div class="label">' +
-                escapeHtml(item.label) +
-                '</div><div class="value">' +
-                escapeHtml(item.value) +
-                "</div></article>"
-              );
-            })
-            .join("") +
-          "</div>";
+          "</strong></div>";
         paintWatchIssues();
       }
 
@@ -2315,18 +2407,289 @@
           "</div></div>";
       }
 
-      function loadRights() {
-        return fetch("/api/people/org/rights-board", { credentials: "same-origin" })
-          .then(function (res) {
-            return res.json();
-          })
-          .then(function (board) {
-            if (dead) {
-              return;
-            }
-            renderRightsWatch(board.watch || {});
-            renderRightsTreeChart(board.tree);
+      function countRightsNode(node) {
+        if (!node) {
+          return 0;
+        }
+        let total = node.name ? 1 : 0;
+        (node.children || []).forEach(function (child) {
+          total += countRightsNode(child);
+        });
+        return total;
+      }
+
+      function namesUnderRights(node, bag) {
+        bag = bag || {};
+        if (node && node.name) {
+          bag[node.name] = true;
+        }
+        (node.children || []).forEach(function (child) {
+          namesUnderRights(child, bag);
+        });
+        return bag;
+      }
+
+      function findRightsNode(node, name) {
+        if (!node) {
+          return null;
+        }
+        if (node.name === name) {
+          return node;
+        }
+        const kids = node.children || [];
+        for (let i = 0; i < kids.length; i += 1) {
+          const hit = findRightsNode(kids[i], name);
+          if (hit) {
+            return hit;
+          }
+        }
+        return null;
+      }
+
+      function rightsRoster() {
+        return roster.people && roster.people.length ? roster.people : lastConsolePeople || [];
+      }
+
+      function rightsTreeNodes() {
+        const people = rightsRoster();
+        const root = {
+          key: "all",
+          kind: "all",
+          name: "组织中心",
+          count: people.filter(onDuty).length,
+          children: []
+        };
+        PEOPLE_BOARDS.forEach(function (board) {
+          const members = people.filter(function (row) {
+            return (row.board || "ops") === board.id;
           });
+          const node = {
+            key: "board:" + board.id,
+            kind: "board",
+            board: board.id,
+            name: board.name,
+            count: members.filter(onDuty).length,
+            children: []
+          };
+          if (board.id === "ops" && lastRightsTree) {
+            (lastRightsTree.children || [])
+              .filter(function (child) {
+                return child.role === "经理";
+              })
+              .forEach(function (mgr) {
+                const mgrNode = {
+                  key: "person:" + mgr.name,
+                  kind: "person",
+                  name: mgr.name,
+                  role: "经理",
+                  count: countRightsNode(mgr),
+                  children: (mgr.children || [])
+                    .filter(function (lead) {
+                      return lead.role === "主管" || lead.role === "储备";
+                    })
+                    .map(function (lead) {
+                      return {
+                        key: "person:" + lead.name,
+                        kind: "person",
+                        name: lead.name,
+                        role: lead.role,
+                        count: countRightsNode(lead),
+                        children: []
+                      };
+                    })
+                };
+                node.children.push(mgrNode);
+              });
+          }
+          root.children.push(node);
+        });
+        return root;
+      }
+
+      function rightsNodeVisible(node, q) {
+        if (!q) {
+          return true;
+        }
+        if (String(node.name || "").toLowerCase().indexOf(q) >= 0) {
+          return true;
+        }
+        return (node.children || []).some(function (child) {
+          return rightsNodeVisible(child, q);
+        });
+      }
+
+      function renderRightsDeptItem(node, q) {
+        if (!rightsNodeVisible(node, q)) {
+          return "";
+        }
+        const kids = node.children || [];
+        const folded = Boolean(rightsTreeFold[node.key]);
+        const selected = rightsSel.key === node.key;
+        const kidHtml = kids.map(function (child) {
+          return renderRightsDeptItem(child, q);
+        }).join("");
+        return (
+          '<div class="org-struct-node' +
+          (selected ? " is-on" : "") +
+          (folded ? " is-fold" : "") +
+          '" data-tree-key="' +
+          escapeHtml(node.key) +
+          '">' +
+          '<div class="org-struct-node-row">' +
+          (kids.length
+            ? '<button type="button" class="org-struct-caret" data-tree-fold="' +
+              escapeHtml(node.key) +
+              '" aria-label="展开">' +
+              (folded ? "▸" : "▾") +
+              "</button>"
+            : '<span class="org-struct-caret is-leaf"></span>') +
+          '<button type="button" class="org-struct-node-btn" data-tree-select="' +
+          escapeHtml(node.key) +
+          '" data-tree-kind="' +
+          escapeHtml(node.kind) +
+          '" data-tree-name="' +
+          escapeHtml(node.name) +
+          '"><span>' +
+          escapeHtml(node.name) +
+          (node.role ? " · " + node.role : "") +
+          "</span><b>" +
+          escapeHtml(node.count) +
+          "</b></button></div>" +
+          (kids.length && !folded ? '<div class="org-struct-kids">' + kidHtml + "</div>" : "") +
+          "</div>"
+        );
+      }
+
+      function renderRightsDeptTree() {
+        const host = root.querySelector("#rights-dept-tree");
+        if (!host) {
+          return;
+        }
+        const q = String(rightsTreeQuery || "").trim().toLowerCase();
+        host.innerHTML = renderRightsDeptItem(rightsTreeNodes(), q);
+      }
+
+      function selectedRightsPeople() {
+        const people = rightsRoster();
+        if (rightsSel.kind === "board") {
+          return people.filter(function (row) {
+            return (row.board || "ops") === rightsSel.board;
+          });
+        }
+        if (rightsSel.kind === "person") {
+          const node = findRightsNode(lastRightsTree, rightsSel.name);
+          const bag = namesUnderRights(node, {});
+          bag[rightsSel.name] = true;
+          return people.filter(function (row) {
+            return bag[row.name] || bag[row.lineManager] || bag[row.supervisor] || bag[row.operator];
+          });
+        }
+        return people;
+      }
+
+      function renderRightsMembers() {
+        const tbody = root.querySelector("#rights-members-tbody");
+        const title = root.querySelector("#rights-members-title");
+        const count = root.querySelector("#rights-members-count");
+        if (!tbody) {
+          return;
+        }
+        const rows = selectedRightsPeople();
+        if (title) {
+          title.textContent = "部门成员（" + (rightsSel.label || "组织中心") + "）";
+        }
+        if (count) {
+          count.textContent = rows.length + " 人";
+        }
+        tbody.replaceChildren();
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="9" class="org-empty">这一层还没有花名册人员。</td></tr>';
+          return;
+        }
+        rows.forEach(function (row) {
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td>" +
+            escapeHtml(row.name || "—") +
+            "</td><td>" +
+            escapeHtml(row.director || "—") +
+            "</td><td>" +
+            escapeHtml(row.lineManager || "—") +
+            "</td><td>" +
+            escapeHtml(row.supervisor || "—") +
+            "</td><td>" +
+            escapeHtml(row.reserve || "—") +
+            "</td><td>" +
+            escapeHtml(row.operator || "—") +
+            "</td><td>" +
+            escapeHtml(row.assistant || "—") +
+            "</td><td>" +
+            escapeHtml(row.status || "在职") +
+            "</td><td class=\"people-ops\">" +
+            (row.canSeeLogin
+              ? '<button type="button" class="people-login-btn" data-login="' + row.id + '">登录信息</button>'
+              : "—") +
+            (row.canEditLogin
+              ? '<button type="button" class="people-pass-btn" data-pass="' + row.id + '">设置密码</button>'
+              : "") +
+            "</td>";
+          tbody.append(tr);
+        });
+      }
+
+      function selectRightsNode(key, kind, name) {
+        rightsSel = {
+          kind: kind || "all",
+          key: key || "all",
+          board: kind === "board" ? String(key || "").replace(/^board:/, "") : "",
+          name: name || "",
+          label: name || "组织中心"
+        };
+        renderRightsDeptTree();
+        renderRightsMembers();
+      }
+
+      function setRightsTreeFold(allFolded) {
+        function walk(node) {
+          if (node.children && node.children.length) {
+            rightsTreeFold[node.key] = allFolded;
+            node.children.forEach(walk);
+          }
+        }
+        walk(rightsTreeNodes());
+        renderRightsDeptTree();
+      }
+
+      function loadRights() {
+        const peopleP =
+          roster.people && roster.people.length
+            ? Promise.resolve({ ok: true, people: roster.people })
+            : fetch("/api/people", { credentials: "same-origin" }).then(function (res) {
+                return res.json();
+              });
+        return Promise.all([
+          fetch("/api/people/org/rights-board", { credentials: "same-origin" }).then(function (res) {
+            return res.json();
+          }),
+          peopleP
+        ]).then(function (pair) {
+          if (dead) {
+            return;
+          }
+          const board = pair[0] || {};
+          const peopleData = pair[1] || {};
+          if (peopleData.ok && peopleData.people) {
+            roster.people = peopleData.people;
+            if (peopleData.canEdit === true || peopleData.canEdit === false) {
+              roster.canEdit = peopleData.canEdit === true;
+            }
+          }
+          lastRightsTree = board.tree || null;
+          renderRightsWatch(board.watch || {});
+          renderRightsTreeChart(board.tree);
+          renderRightsDeptTree();
+          renderRightsMembers();
+        });
       }
 
       let siteAclBoard = null;
@@ -2693,6 +3056,75 @@
       root.querySelector("#rights-refresh").addEventListener("click", function () {
         loadRights();
       });
+      const rightsTreeHost = root.querySelector("#rights-dept-tree");
+      if (rightsTreeHost) {
+        rightsTreeHost.addEventListener("click", function (event) {
+          const fold = event.target.closest("[data-tree-fold]");
+          if (fold) {
+            const key = fold.getAttribute("data-tree-fold");
+            rightsTreeFold[key] = !rightsTreeFold[key];
+            renderRightsDeptTree();
+            return;
+          }
+          const pick = event.target.closest("[data-tree-select]");
+          if (pick) {
+            selectRightsNode(
+              pick.getAttribute("data-tree-select"),
+              pick.getAttribute("data-tree-kind"),
+              pick.getAttribute("data-tree-name")
+            );
+          }
+        });
+      }
+      const rightsTreeQ = root.querySelector("#rights-tree-q");
+      if (rightsTreeQ) {
+        rightsTreeQ.addEventListener("input", function () {
+          rightsTreeQuery = rightsTreeQ.value || "";
+          renderRightsDeptTree();
+        });
+      }
+      const expandBtn = root.querySelector("#rights-tree-expand");
+      const collapseBtn = root.querySelector("#rights-tree-collapse");
+      if (expandBtn) {
+        expandBtn.addEventListener("click", function () {
+          setRightsTreeFold(false);
+        });
+      }
+      if (collapseBtn) {
+        collapseBtn.addEventListener("click", function () {
+          setRightsTreeFold(true);
+        });
+      }
+      const rightsChart = root.querySelector("#rights-tree-chart");
+      if (rightsChart) {
+        rightsChart.addEventListener("click", function (event) {
+          const card = event.target.closest(".rights-mod-card");
+          if (!card) {
+            return;
+          }
+          const name = card.textContent.trim();
+          if (!name) {
+            return;
+          }
+          selectRightsNode("person:" + name, "person", name);
+        });
+      }
+      const rightsMembers = root.querySelector("#rights-members-tbody");
+      if (rightsMembers) {
+        rightsMembers.addEventListener("click", function (event) {
+          const loginBtn = event.target.closest(".people-login-btn");
+          if (loginBtn) {
+            event.preventDefault();
+            openLoginModal(loginBtn.getAttribute("data-login"));
+            return;
+          }
+          const passBtn = event.target.closest(".people-pass-btn");
+          if (passBtn) {
+            event.preventDefault();
+            openPassModal(passBtn.getAttribute("data-pass"));
+          }
+        });
+      }
       window.addEventListener("resize", fitRightsTree);
       root.querySelector("#site-acl-people").addEventListener("click", function (event) {
         const btn = event.target.closest("[data-acl-person]");
