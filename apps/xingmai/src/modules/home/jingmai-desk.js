@@ -14,7 +14,13 @@ const CHROME_VERSION = "157.0.8103.78";
 const CHROME_URL =
   "https://cdn.npmmirror.com/binaries/chrome-for-testing/" +
   CHROME_VERSION +
+  "/linux64/chrome-linux64.zip";
+const CHROME_SHELL_URL =
+  "https://cdn.npmmirror.com/binaries/chrome-for-testing/" +
+  CHROME_VERSION +
   "/linux64/chrome-headless-shell-linux64.zip";
+const DESK_UA =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + CHROME_VERSION + " Safari/537.36";
 const SESSION_NAMES = new Set(["thor", "pt_key"]);
 
 const SYSTEM_SONAMES = new Set(["libc.so.6", "libdl.so.2", "libpthread.so.0", "libm.so.6", "libgcc_s.so.1", "ld-linux-x86-64.so.2", "linux-vdso.so.1"]);
@@ -124,9 +130,13 @@ function chromeHomes() {
 
 function installedBinary() {
   for (const home of chromeHomes()) {
-    const bin = home + "/chrome-headless-shell-linux64/chrome-headless-shell";
-    if (existsSync(bin)) {
-      return bin;
+    const full = home + "/chrome-linux64/chrome";
+    if (existsSync(full)) {
+      return full;
+    }
+    const shell = home + "/chrome-headless-shell-linux64/chrome-headless-shell";
+    if (existsSync(shell)) {
+      return shell;
     }
   }
   return "";
@@ -307,24 +317,33 @@ function extractZip(zip, dir) {
   });
 }
 
+async function installChromePackage(home, url, relativeBin) {
+  mkdirSync(home, { recursive: true });
+  const zip = home + "/chrome.zip";
+  const response = await fetch(url, { signal: AbortSignal.timeout(180000) });
+  if (!response.ok) {
+    throw new Error("download");
+  }
+  writeFileSync(zip, Buffer.from(await response.arrayBuffer()));
+  await extractZip(zip, home);
+  const bin = home + "/" + relativeBin;
+  chmodSync(bin, 0o755);
+  rmSync(zip, { force: true });
+  return bin;
+}
+
 async function installChrome() {
   let lastError = null;
   for (const home of chromeHomes()) {
     try {
-      mkdirSync(home, { recursive: true });
-      const zip = home + "/chrome.zip";
-      const response = await fetch(CHROME_URL, { signal: AbortSignal.timeout(120000) });
-      if (!response.ok) {
-        throw new Error("download");
-      }
-      writeFileSync(zip, Buffer.from(await response.arrayBuffer()));
-      await extractZip(zip, home);
-      const bin = home + "/chrome-headless-shell-linux64/chrome-headless-shell";
-      chmodSync(bin, 0o755);
-      rmSync(zip, { force: true });
-      return bin;
+      return await installChromePackage(home, CHROME_URL, "chrome-linux64/chrome");
     } catch (error) {
       lastError = error;
+      try {
+        return await installChromePackage(home, CHROME_SHELL_URL, "chrome-headless-shell-linux64/chrome-headless-shell");
+      } catch (shellError) {
+        lastError = shellError;
+      }
     }
   }
   const failure = new Error("服务器上还没有浏览器，账号登录开不了");
@@ -986,12 +1005,29 @@ async function fillLibraryHome(home, chromePath) {
   return libraryPath;
 }
 
+function hasFullChrome(path) {
+  const value = String(path || "");
+  return Boolean(value) && !value.includes("chrome-headless-shell");
+}
+
 export function ensureChrome() {
   const existing = findChrome();
-  const pending = existing ? Promise.resolve(existing) : chromeInstall || (chromeInstall = installChrome().catch(function (error) {
-    chromeInstall = null;
-    throw error;
-  }));
+  const pending =
+    hasFullChrome(existing)
+      ? Promise.resolve(existing)
+      : chromeInstall ||
+        (chromeInstall = installChrome()
+          .catch(function (error) {
+            chromeInstall = null;
+            if (existing) {
+              return existing;
+            }
+            throw error;
+          })
+          .then(function (bin) {
+            chromeInstall = null;
+            return bin;
+          }));
   return pending.then(function (bin) {
     return installLibraries(bin).then(function () {
       return bin;
@@ -1718,6 +1754,17 @@ const LOGIN_PAGE_EXPR = `(() => {
   };
 })()`;
 
+export function loginTipBlocked(page) {
+  if (!page) {
+    return false;
+  }
+  if (page.accountVisible || page.passwordVisible) {
+    return false;
+  }
+  const text = String(page.text || "");
+  return /访问出错|暂时无法访问|人数过多|网络繁忙|环境异常|登录异常|拒绝访问|系统繁忙/.test(text);
+}
+
 export function loginPageVisible(page) {
   if (!page) {
     return false;
@@ -1729,7 +1776,10 @@ export function loginPageVisible(page) {
   if (page.accountVisible || page.passwordVisible) {
     return true;
   }
-  return /登录|账号|密码|验证码|安全验证|滑块|扫码/.test(String(page.text || ""));
+  if (loginTipBlocked(page)) {
+    return false;
+  }
+  return /密码登录|短信登录|账号登录|请输入账号|请输入登录密码|验证码|安全验证|滑块|扫码登录/.test(String(page.text || ""));
 }
 
 export function loginPageSettled(page) {
@@ -1831,6 +1881,45 @@ export function resetDesk() {
   stopCurrent();
 }
 
+async function disguiseDesk(ws) {
+  if (!ws) {
+    return;
+  }
+  await send(ws, "Page.enable", {}, undefined, 3000);
+  await send(ws, "Network.enable", {}, undefined, 3000);
+  try {
+    await send(
+      ws,
+      "Network.setUserAgentOverride",
+      {
+        userAgent: DESK_UA,
+        acceptLanguage: "zh-CN,zh;q=0.9,en;q=0.8",
+        platform: "Linux x86_64"
+      },
+      undefined,
+      3000
+    );
+  } catch {
+    /* older chrome builds still open the login page */
+  }
+  try {
+    await send(
+      ws,
+      "Emulation.setDeviceMetricsOverride",
+      {
+        width: 1100,
+        height: 720,
+        deviceScaleFactor: 1,
+        mobile: false
+      },
+      undefined,
+      3000
+    );
+  } catch {
+    /* keep going */
+  }
+}
+
 async function acquireDesk(store, ticket, signal) {
   if (ticket != null && ticket !== openTicket) {
     return null;
@@ -1843,6 +1932,11 @@ async function acquireDesk(store, ticket, signal) {
     current.password = "";
     try {
       await send(current.ws, "Network.clearBrowserCookies", {}, undefined, 2000);
+      try {
+        await disguiseDesk(current.ws);
+      } catch {
+        /* reuse the open browser even if disguise fails */
+      }
       return current;
     } catch {
       stopCurrent();
@@ -1861,14 +1955,7 @@ async function acquireDesk(store, ticket, signal) {
   loginVisible = true;
   lastLaunchNote = "浏览器已打开，正在接登录页";
   try {
-    await send(desk.ws, "Page.enable", {}, undefined, 3000);
-    await send(desk.ws, "Network.enable", {}, undefined, 3000);
-    await send(desk.ws, "Emulation.setDeviceMetricsOverride", {
-      width: 1100,
-      height: 720,
-      deviceScaleFactor: 1,
-      mobile: false
-    }, undefined, 3000);
+    await disguiseDesk(desk.ws);
   } catch {
     /* page commands can continue after the picture is already up */
   }
@@ -1906,7 +1993,8 @@ async function finishOpen(desk, loginName, password, ticket) {
     lastLaunchNote = LOGIN_SCREEN_MESSAGE;
     let streak = 0;
     let sawPage = false;
-    for (let attempt = 0; attempt < 8; attempt += 1) {
+    let retried = false;
+    for (let attempt = 0; attempt < 24; attempt += 1) {
       if (ticket !== openTicket || current !== desk) {
         return { status: "login", message: "登录已取消" };
       }
@@ -1914,6 +2002,15 @@ async function finishOpen(desk, loginName, password, ticket) {
         await sleep(500);
       }
       const page = await readLoginPage(desk.ws);
+      if (loginTipBlocked(page) && !retried) {
+        retried = true;
+        try {
+          await send(desk.ws, "Page.navigate", { url: LOGIN_URL }, undefined, 8000);
+        } catch {
+          /* keep waiting on the current page */
+        }
+        continue;
+      }
       if (loginPageVisible(page)) {
         sawPage = true;
       }
@@ -1937,7 +2034,7 @@ async function finishOpen(desk, loginName, password, ticket) {
       }
     }
     password = "";
-    for (let attempt = 0; attempt < 4; attempt += 1) {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
       if (ticket !== openTicket || current !== desk) {
         return { status: "login", message: "登录已取消" };
       }
@@ -1954,14 +2051,20 @@ async function finishOpen(desk, loginName, password, ticket) {
         return { status: "ok", cookies: cookies };
       }
       const page = await readLoginPage(desk.ws);
+      if (loginTipBlocked(page)) {
+        return { status: "login", message: "京麦拒绝了这次服务器登录，请过一会儿再试" };
+      }
       const screen = loginScreenState(page && page.text, Boolean(page && page.accountVisible));
       if (screen.status === "login") {
         return screen;
       }
-      if (sawPage || loginPageVisible(page)) {
+      if ((page && (page.accountVisible || page.passwordVisible)) || loginPageVisible(page)) {
         return { status: "verify", message: LOGIN_SCREEN_MESSAGE, formReady: true };
       }
       await sleep(400);
+    }
+    if (!sawPage) {
+      return { status: "login", message: "服务器没有打开京麦登录页" };
     }
     return { status: "verify", message: LOGIN_SCREEN_MESSAGE, formReady: Boolean(sawPage) };
   } finally {

@@ -6,7 +6,7 @@ import { beginRelogin, beginReloginAll, recoverDroppedShops, reloginState, reset
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { browserCandidates, browserLaunchOrder, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginScreenState, readDebugTargets, realBrowserBinary, resolveBrowserBinary, sessionReady, unpackDebBuffer, waitForDebugPort } from "../src/modules/home/jingmai-desk.js";
+import { browserCandidates, browserLaunchOrder, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginTipBlocked, loginScreenState, readDebugTargets, realBrowserBinary, resolveBrowserBinary, sessionReady, unpackDebBuffer, waitForDebugPort } from "../src/modules/home/jingmai-desk.js";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import zlib from "node:zlib";
@@ -680,6 +680,9 @@ test("the login page is shown once it is on screen, and typing waits until the f
   assert.equal(loginPageVisible(null), false);
   assert.equal(loginPageVisible(blank), false);
   assert.equal(loginPageVisible(painted), true);
+  assert.equal(loginTipBlocked({ text: "访问出错，请稍后再试", accountVisible: false }), true);
+  assert.equal(loginTipBlocked({ text: "访问出错", accountVisible: true }), false);
+  assert.equal(loginPageVisible({ readyState: "complete", href: "https://passport.shop.jd.com/login", text: "访问出错，请稍后再试" }), false);
   assert.equal(loginPageSettled(blank), false);
   assert.equal(loginPageSettled(loading), false);
   assert.equal(loginPageSettled(painted), false);

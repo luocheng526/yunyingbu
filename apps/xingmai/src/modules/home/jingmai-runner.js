@@ -251,7 +251,7 @@ export async function jingmaiLive() {
 function publicState(state) {
   return {
     ok: true,
-    build: "relogin",
+    build: "deskua",
     store: state.store || loginCursor.store,
     status: state.status,
     message: state.message || "",
