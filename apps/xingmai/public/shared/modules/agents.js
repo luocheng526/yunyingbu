@@ -1,114 +1,23 @@
-/* xm-module-agents 0.1.149 */
+/* xm-module-agents 0.1.151 */
 (function () {
-  var SPARK =
-    '<svg class="agents-spark" viewBox="0 0 28 28" aria-hidden="true">' +
-    '<path fill="#2f7bff" d="M9 1.2l2.4 6.4 6.4 2.4-6.4 2.4L9 18.8 6.6 12.4 0.2 10l6.4-2.4z"/>' +
-    '<path fill="#7cb6ff" d="M22 11l1.3 3.2L26.5 15.5 23.3 16.8 22 20l-1.3-3.2L17.5 15.5 20.7 14.2z"/>' +
-    "</svg>";
-
-  var BOT =
-    '<svg class="agents-bot" viewBox="0 0 180 168" aria-hidden="true">' +
-    '<defs><linearGradient id="agbot" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#7db7ff"/><stop offset="1" stop-color="#2f7bff"/></linearGradient></defs>' +
-    '<ellipse cx="90" cy="154" rx="46" ry="8" fill="#d7e8ff"/>' +
-    '<rect x="74" y="18" width="8" height="22" rx="4" fill="#93c5fd"/>' +
-    '<circle cx="78" cy="16" r="8" fill="#60a5fa"/><circle cx="78" cy="16" r="3.5" fill="#fbbf24"/>' +
-    '<rect x="42" y="46" width="96" height="82" rx="36" fill="url(#agbot)"/>' +
-    '<circle cx="68" cy="82" r="13" fill="#fff"/><circle cx="112" cy="82" r="13" fill="#fff"/>' +
-    '<circle cx="71" cy="84" r="6" fill="#163a8a"/><circle cx="115" cy="84" r="6" fill="#163a8a"/>' +
-    '<circle cx="62" cy="102" r="5" fill="#93c5fd" opacity=".7"/><circle cx="118" cy="102" r="5" fill="#93c5fd" opacity=".7"/>' +
-    '<rect x="78" y="104" width="24" height="7" rx="3.5" fill="#dbeafe"/>' +
-    "</svg>";
-
-  var MINI_BOT =
-    '<svg class="agents-mini-bot" viewBox="0 0 80 80" aria-hidden="true">' +
-    '<rect x="14" y="18" width="52" height="48" rx="20" fill="#2f7bff"/>' +
-    '<circle cx="32" cy="40" r="7" fill="#fff"/><circle cx="48" cy="40" r="7" fill="#fff"/>' +
-    '<circle cx="33" cy="41" r="3.2" fill="#163a8a"/><circle cx="49" cy="41" r="3.2" fill="#163a8a"/>' +
-    '<rect x="34" y="52" width="12" height="4" rx="2" fill="#dbeafe"/>' +
-    "</svg>";
-
-  function icon(path, color) {
-    return (
-      '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="' +
-      color +
-      '" d="' +
-      path +
-      '"/></svg>'
-    );
-  }
-
-  function sceneIco(inner) {
-    return '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">' + inner + "</svg>";
-  }
-
   var SCENES = [
-    {
-      id: "qa",
-      title: "电商知识问答",
-      text: "运营问题、平台规则、玩法策略 SOP流程即时解答",
-      prompt: "电商运营里，选品和平台规则日常要注意什么？",
-      ico:
-        sceneIco(
-          '<path fill="#2f7bff" d="M3.6 4.2A2.6 2.6 0 016.2 1.6h8.2A2.6 2.6 0 0117 4.2v5.6A2.6 2.6 0 0114.4 12.4H8.1L3.6 15.8V4.2z"/>' +
-            '<path fill="#60a5fa" d="M9.4 13.1h7.4A2.3 2.3 0 0119.1 15.4V21l-3.6-2.5h-4.8A2.3 2.3 0 018.4 16.2v-1.5c0-.9.8-1.6 1.8-1.6z"/>'
-        )
-    },
-    {
-      id: "create",
-      title: "创作与运营执行",
-      text: "主图/详情图/海报/标题/卖点 文案、上新、优化等日常工作",
-      prompt: "怎么做主图、详情和标题？日常做店怎么排？",
-      ico:
-        sceneIco(
-          '<rect x="3" y="4" width="18" height="16" rx="3.2" fill="#8b5cf6"/>' +
-            '<circle cx="8.6" cy="9" r="1.7" fill="#f3e8ff"/>' +
-            '<path fill="#ddd6fe" d="M5 17.6l4.6-5 2.8 2.7 3.2-3.4 4.4 5.7H5z"/>'
-        )
-    },
-    {
-      id: "diag",
-      title: "店铺分析与诊断",
-      text: "店铺健康度、流量/转化/利润 问题定位与优化建议",
-      prompt: "店铺健康一般看哪些指标？本店近30天如果没有接口请直接说还没有。",
-      ico:
-        sceneIco(
-          '<path fill="#16a34a" d="M4 10.4L12 4.2l8 6.2V12H4v-1.6zM6 13h12v8H6v-8zm4.2 3h3.6v5h-3.6v-5z"/>'
-        )
-    },
-    {
-      id: "market",
-      title: "行业大盘分析",
-      text: "行业趋势、竞争格局、热销商品 价格带、机会赛道分析",
-      prompt: "行业大盘和竞品分析一般怎么做？没有外数就说还没有。",
-      ico:
-        sceneIco(
-          '<rect x="3.4" y="12.2" width="4.2" height="8" rx="1.2" fill="#f59e0b"/>' +
-            '<rect x="9.9" y="5.4" width="4.2" height="14.8" rx="1.2" fill="#f59e0b"/>' +
-            '<rect x="16.4" y="8.6" width="4.2" height="11.6" rx="1.2" fill="#f59e0b"/>'
-        )
-    },
-    {
-      id: "watch",
-      title: "数据异常监控",
-      text: "公司/店铺经营数据实时监控 异常预警、原因分析与处置建议",
-      prompt: "数据异常监控需要哪些只读接口？现在缺什么？",
-      ico:
-        sceneIco(
-          '<path fill="#f43f5e" d="M12 2.6a6.2 6.2 0 016.2 6.2v3.1l1.9 2.8H3.9l1.9-2.8V8.8A6.2 6.2 0 0112 2.6zm-2.6 16.6a2.6 2.6 0 005.2 0H9.4z"/>'
-        )
-    }
+    { id: "qa", title: "电商知识问答", text: "运营问题、平台规则、玩法策略 SOP流程即时解答", prompt: "电商运营里，选品和平台规则日常要注意什么？", icon: "file", tone: "blue" },
+    { id: "create", title: "创作与运营执行", text: "主图/详情图/海报/标题/卖点 文案、上新、优化等日常工作", prompt: "怎么做主图、详情和标题？日常做店怎么排？", icon: "play", tone: "purple" },
+    { id: "diag", title: "店铺分析与诊断", text: "店铺健康度、流量/转化/利润 问题定位与优化建议", prompt: "店铺健康一般看哪些指标？本店近30天如果没有接口请直接说还没有。", icon: "users", tone: "green" },
+    { id: "market", title: "行业大盘分析", text: "行业趋势、竞争格局、热销商品 价格带、机会赛道分析", prompt: "行业大盘和竞品分析一般怎么做？没有外数就说还没有。", icon: "chart", tone: "orange" },
+    { id: "watch", title: "数据异常监控", text: "公司/店铺经营数据实时监控 异常预警、原因分析与处置建议", prompt: "数据异常监控需要哪些只读接口？现在缺什么？", icon: "award", tone: "orange" }
   ];
 
   var TOOLS = [
-    { tone: "sky", ico: icon("M4 5h16v10H4zm2 12h12v2H6zM8 8l2.2 2.8L13 8.5 16 13H8z", "#2f7bff"), name: "主图生成", prompt: "帮我规划一组商品主图：构图、卖点和测图顺序。" },
-    { tone: "lilac", ico: icon("M5 4h10l4 4v12H5zM15 4v4h4", "#7c3aed"), name: "详情图生成", prompt: "按转化路径拆一套详情页模块和文案。" },
-    { tone: "sand", ico: icon("M5 4h14v3H5zm0 5h14v11H5zm3 3h8v2H8z", "#d97706"), name: "标题优化", prompt: "写三个高转化商品标题，并说明关键词怎么放。" },
-    { tone: "mint", ico: icon("M9 21h6v-2H9zM12 2a7 7 0 00-4 12.7V17h8v-2.3A7 7 0 0012 2z", "#16a34a"), name: "卖点提炼", prompt: "从人群和场景出发，提炼五条商品卖点。" },
-    { tone: "rose", ico: icon("M4 20l3.5-9L12 16l4.5-8L20 20z", "#db2777"), name: "文案生成", prompt: "写一段主图短文案和一段详情页长文案。" },
-    { tone: "sky", ico: icon("M4 5h11a2 2 0 012 2v7H8l-4 4z", "#2563eb"), name: "评价回复", prompt: "给好评、中评、差评各写一条客服回复口径。" },
-    { tone: "sand", ico: icon("M7 14a5 5 0 117.07-7.07L17 10a5 5 0 11-7.07 7.07z", "#d97706"), name: "关键词拓展", prompt: "围绕这个品拓展搜索词和标题词，不要编本店成交。" },
-    { tone: "lilac", ico: icon("M4 19h16v2H4zM6 10h3v7H6zm5-6h3v13h-3zm5 8h3v5h-3z", "#7c3aed"), name: "竞品分析", prompt: "没有外数时，竞品分析应看哪些公开信息和本站缺口？" },
-    { tone: "mint", ico: icon("M12 3l3 6 7 .8-5 4.4L18.5 21 12 17.8 5.5 21 7 14.2 2 9.8 9 9z", "#16a34a"), name: "活动方案", prompt: "给一场店铺活动写节奏：预热、爆发、收尾。" }
+    { name: "主图生成", prompt: "帮我规划一组商品主图：构图、卖点和测图顺序。" },
+    { name: "详情图生成", prompt: "按转化路径拆一套详情页模块和文案。" },
+    { name: "标题优化", prompt: "写三个高转化商品标题，并说明关键词怎么放。" },
+    { name: "卖点提炼", prompt: "从人群和场景出发，提炼五条商品卖点。" },
+    { name: "文案生成", prompt: "写一段主图短文案和一段详情页长文案。" },
+    { name: "评价回复", prompt: "给好评、中评、差评各写一条客服回复口径。" },
+    { name: "关键词拓展", prompt: "围绕这个品拓展搜索词和标题词，不要编本店成交。" },
+    { name: "竞品分析", prompt: "没有外数时，竞品分析应看哪些公开信息和本站缺口？" },
+    { name: "活动方案", prompt: "给一场店铺活动写节奏：预热、爆发、收尾。" }
   ];
 
   var CHIPS = [
@@ -133,8 +42,30 @@
     }
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = "/agents.css?v=0.1.149";
+    link.href = "/agents.css?v=0.1.151";
     document.head.appendChild(link);
+  }
+
+  function withAttr(html, attr) {
+    return String(html).replace("<button ", "<button " + attr + " ");
+  }
+
+  function withActionId(html, id) {
+    return String(html).replace('class="xm-ui-text-action"', 'class="xm-ui-text-action" id="' + id + '"');
+  }
+
+  function tableWithRowIds(html, rows) {
+    var i = 0;
+    return String(html).replace(/<tbody>([\s\S]*?)<\/tbody>/, function (_, body) {
+      return (
+        "<tbody>" +
+        body.replace(/<tr>/g, function () {
+          var row = rows[i++];
+          return row && row.id != null ? '<tr data-session="' + escapeHtml(row.id) + '">' : "<tr>";
+        }) +
+        "</tbody>"
+      );
+    });
   }
 
   function api(path, options) {
@@ -178,7 +109,7 @@
     const grid = [0, 0.25, 0.5, 0.75, 1]
       .map(function (ratio) {
         const y = (top + ratio * (h - top - bottom)).toFixed(1);
-        return '<line x1="' + left + '" x2="' + (w - right) + '" y1="' + y + '" y2="' + y + '" stroke="currentColor" stroke-opacity=".12"/>';
+        return '<line class="xm-ui-chart-grid-line" x1="' + left + '" x2="' + (w - right) + '" y1="' + y + '" y2="' + y + '" />';
       })
       .join("");
     const taskPts = pts("tasks", maxTasks);
@@ -192,24 +123,24 @@
           return "";
         }
         return (
-          '<text x="' +
+          '<text class="xm-ui-chart-axis-label" x="' +
           xAt(i).toFixed(1) +
           '" y="' +
           (h - 6) +
-          '" text-anchor="middle" font-size="9" fill="currentColor">' +
+          '" text-anchor="middle">' +
           escapeHtml(item.date) +
           "</text>"
         );
       })
       .join("");
     return (
-      '<svg class="agents-chart" viewBox="0 0 ' +
+      '<svg viewBox="0 0 ' +
       w +
       " " +
       h +
       '" role="img" aria-label="本模块任务与工时趋势">' +
       grid +
-      '<polygon fill="#2f7bff" fill-opacity=".12" points="' +
+      '<polygon fill="#1677ff" fill-opacity=".12" points="' +
       taskPts +
       " " +
       lastX +
@@ -220,22 +151,22 @@
       "," +
       (h - bottom) +
       '"/>' +
-      '<polyline fill="none" stroke="#2f7bff" stroke-width="2.4" stroke-linejoin="round" points="' +
+      '<polyline class="xm-ui-chart-line" points="' +
       taskPts +
       '"/>' +
-      '<polyline fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linejoin="round" points="' +
+      '<polyline fill="none" stroke="#12b76a" stroke-width="3" stroke-linejoin="round" points="' +
       hourPts +
       '"/>' +
       '<circle cx="' +
       lastX +
       '" cy="' +
       yAt(last.tasks, maxTasks).toFixed(1) +
-      '" r="3.5" fill="#2f7bff"/>' +
+      '" r="3.5" fill="#1677ff"/>' +
       '<circle cx="' +
       lastX +
       '" cy="' +
       yAt(last.hours, maxHours).toFixed(1) +
-      '" r="3.5" fill="#22c55e"/>' +
+      '" r="3.5" fill="#12b76a"/>' +
       labels +
       "</svg>"
     );
@@ -245,112 +176,157 @@
   window.XmModules["/agents"] = {
     mount: function (root) {
       ensureCss();
+      const ui = window.XmUI;
+      if (!ui) {
+        root.innerHTML = '<div class="xm-ui-scope"><p>界面组件未加载。</p></div>';
+        return function unmount() {
+          root.innerHTML = "";
+        };
+      }
+
       root.innerHTML =
-        '<main class="page agents-page is-home">' +
+        '<main class="xm-ui-scope agents-page is-home">' +
         '<section class="agents-home" aria-label="甄选智能体工作台">' +
-        '<header class="agents-hero">' +
-        "<div><p class=\"kicker\">甄选智能体</p><h1>电商运营智能体 " +
-        SPARK +
-        "</h1>" +
-        "<p class=\"lead\">你的 AI 电商运营团队：问答、创作、诊断、分析、监控，提升运营效率与经营结果。本店近30天、商学院、外数没有接口就不编。改价、退款、发版不会做。</p></div>" +
-        '<div class="agents-bot-wrap">' +
-        BOT +
-        "</div>" +
-        '<div class="agents-status-card"><div class="row"><span>智能体运行状态</span><span class="agents-pill" id="agents-run">检测中</span></div>' +
-        '<div class="agents-kpis">' +
-        '<div><span>今日任务</span><b id="kpi-tasks">0</b></div>' +
-        '<div><span>成功率</span><b id="kpi-rate">0%</b></div>' +
-        '<div><span>节省工时</span><b id="kpi-hours">0 h</b></div>' +
-        "</div><p class=\"agents-note\" id=\"kpi-note\"></p></div></header>" +
-        '<div class="agents-scenes" id="agents-scenes">' +
+        ui.PageContentHeader({
+          eyebrow: "甄选智能体",
+          title: "电商运营智能体",
+          description: "你的 AI 电商运营团队：问答、创作、诊断、分析、监控，提升运营效率与经营结果。本店近30天、商学院、外数没有接口就不编。改价、退款、发版不会做。"
+        }) +
+        '<div class="xm-ui-stat-grid" id="agents-kpis"></div>' +
+        '<div class="agents-scene-grid" id="agents-scenes">' +
         SCENES.map(function (item) {
           return (
-            '<button type="button" class="agents-scene ' +
-            item.id +
-            '" data-prompt="' +
+            '<div class="agents-scene-hit" data-prompt="' +
             escapeHtml(item.prompt) +
-            '"><span class="scene-head"><span class="ico">' +
-            item.ico +
-            "</span><strong>" +
-            escapeHtml(item.title) +
-            "</strong></span><p>" +
-            escapeHtml(item.text) +
-            '</p><span class="go">立即使用 →</span></button>'
+            '">' +
+            ui.ContentCard({
+              title: item.title,
+              description: item.text,
+              content: withAttr(ui.button({ label: "立即使用", size: "small", icon: "arrow" }), 'data-prompt="' + escapeHtml(item.prompt) + '"')
+            }) +
+            "</div>"
           );
         }).join("") +
         "</div>" +
         '<div class="agents-mid">' +
-        '<div class="agents-panel agents-ask"><div class="agents-ask-head">' +
-        '<div class="agents-mini-wrap"><span class="agents-hi">Hi</span>' +
-        MINI_BOT +
+        '<div id="agents-ask-card">' +
+        ui.ContentCard({
+          title: "嗨！我是甄选智能体",
+          description: "我可以帮你解决电商运营中的各种问题，支持问答、创作、分析、诊断和数据监控。",
+          content:
+            '<div class="agents-chips" id="agents-chips">' +
+            CHIPS.map(function (item) {
+              return withAttr(
+                ui.button({ label: item.label, variant: "secondary", size: "small" }),
+                'data-prompt="' + escapeHtml(item.prompt) + '"'
+              );
+            }).join("") +
+            "</div>" +
+            '<form class="agents-home-form" id="agents-home-form">' +
+            '<textarea id="agents-home-text" maxlength="2000" placeholder="请输入你的问题或任务，例如：帮我分析店铺 ROI 下降的原因"></textarea>' +
+            '<div class="agents-home-bar">' +
+            withAttr(ui.button({ label: "+ 上传", variant: "secondary", size: "small", id: "agents-home-pick" }), "") +
+            '<input type="file" id="agents-home-file" class="xm-ui-sr-only" />' +
+            '<span class="grow"></span>' +
+            '<label class="agents-toggle"><input type="checkbox" id="agents-deep" /> 深度分析</label>' +
+            ui.button({ label: "发送", type: "submit" }) +
+            "</div></form>" +
+            '<p class="agents-status" id="agents-home-status" role="status"></p>'
+        }) +
         "</div>" +
-        "<div><h2>嗨！我是甄选智能体</h2><p>我可以帮你解决电商运营中的各种问题，支持问答、创作、分析、诊断和数据监控。</p></div></div>" +
-        '<div class="agents-chips" id="agents-chips">' +
-        CHIPS.map(function (item) {
-          return '<button type="button" class="agents-chip-btn" data-prompt="' + escapeHtml(item.prompt) + '">' + escapeHtml(item.label) + "</button>";
-        }).join("") +
+        '<div id="agents-tools-card">' +
+        withActionId(
+          ui.ContentCard({
+            title: "常用工具",
+            action: "全部工具",
+            content:
+              '<div class="agents-tool-grid" id="agents-tools">' +
+              TOOLS.map(function (item) {
+                return withAttr(ui.button({ label: item.name, variant: "secondary", size: "small" }), 'data-prompt="' + escapeHtml(item.prompt) + '"');
+              }).join("") +
+              "</div>"
+          }),
+          "agents-all-tools"
+        ) +
         "</div>" +
-        '<form class="agents-home-form" id="agents-home-form">' +
-        '<textarea id="agents-home-text" maxlength="2000" placeholder="请输入你的问题或任务，例如：帮我分析店铺 ROI 下降的原因"></textarea>' +
-        '<div class="agents-home-bar"><label class="agents-upload">+ 上传<input type="file" id="agents-home-file" /></label>' +
-        '<span class="grow"></span><label class="agents-toggle"><input type="checkbox" id="agents-deep" /> 深度分析</label>' +
-        '<button type="submit">发送</button></div></form>' +
-        '<p class="agents-status" id="agents-home-status" role="status"></p></div>' +
-        '<div class="agents-panel"><div class="agents-panel-head"><h2>常用工具</h2><button type="button" id="agents-all-tools">全部工具</button></div>' +
-        '<div class="agents-tools" id="agents-tools">' +
-        TOOLS.map(function (item) {
-          return (
-            '<button type="button" class="agents-tool" data-prompt="' +
-            escapeHtml(item.prompt) +
-            '"><span class="tool-ico ' +
-            item.tone +
-            '">' +
-            item.ico +
-            "</span>" +
-            escapeHtml(item.name) +
-            "</button>"
-          );
-        }).join("") +
+        '<div id="agents-alerts-card">' +
+        withActionId(
+          ui.ContentCard({
+            title: "数据异常预警",
+            action: "全部预警",
+            content: '<div id="agents-alerts"></div>'
+          }),
+          "agents-all-alerts"
+        ) +
         "</div></div>" +
-        '<div class="agents-panel"><div class="agents-panel-head"><h2>数据异常预警 <span class="agents-badge" id="agents-alert-count">0</span></h2><button type="button" class="agents-link" id="agents-all-alerts">全部预警</button></div>' +
-        '<div class="agents-alerts" id="agents-alerts"><p class="agents-empty">正在读取…</p></div></div></div>' +
         '<div class="agents-low">' +
-        '<div class="agents-panel"><div class="agents-panel-head"><h2>智能体任务运行中</h2><button type="button" id="agents-open-chat">查看全部</button></div>' +
-        '<div id="agents-recent"></div></div>' +
-        '<div class="agents-panel"><h2>本月智能体使用数据</h2><p class="agents-note">只统计本模块对话，不是店铺成交。</p>' +
-        '<div class="agents-month" id="agents-month"></div></div>' +
-        '<div class="agents-panel"><div class="agents-panel-head"><h2>智能体价值趋势</h2><div class="agents-legend"><span class="is-tasks">任务数</span><span class="is-hours">节省工时(h)</span></div></div>' +
-        '<div id="agents-trend"></div></div></div></section>' +
+        '<div id="agents-recent-card">' +
+        withActionId(
+          ui.ContentCard({
+            title: "智能体任务运行中",
+            action: "查看全部",
+            content: '<div id="agents-recent"></div>'
+          }),
+          "agents-open-chat"
+        ) +
+        "</div>" +
+        '<div id="agents-month-card">' +
+        ui.ContentCard({
+          title: "本月智能体使用数据",
+          description: "只统计本模块对话，不是店铺成交。",
+          content: '<div class="xm-ui-stat-grid" id="agents-month"></div>'
+        }) +
+        "</div>" +
+        ui.ChartCard({
+          title: "智能体价值趋势",
+          legend: [
+            { label: "任务数", color: "#1677ff" },
+            { label: "节省工时(h)", color: "#12b76a" }
+          ],
+          content: '<div id="agents-trend"></div>'
+        }) +
+        "</div></section>" +
         '<div class="agents-workbench">' +
         '<aside class="agents-rail" aria-label="历史会话">' +
-        '<button type="button" class="agents-back" id="agents-back">← 工作台</button>' +
-        "<h2>历史会话</h2>" +
-        '<button type="button" class="agents-new" id="agents-new">新会话</button>' +
-        '<ul class="agents-threads" id="agents-sessions"></ul></aside>' +
+        ui.ContentCard({
+          title: "历史会话",
+          content:
+            ui.button({ label: "工作台", variant: "secondary", size: "small", id: "agents-back" }) +
+            ui.button({ label: "新会话", id: "agents-new" }) +
+            '<ul class="agents-threads" id="agents-sessions"></ul>'
+        }) +
+        "</aside>" +
         '<section class="agents-chat" aria-label="主脑问答台">' +
-        '<div class="agents-chat-head"><div><h2 id="agents-chat-title">主脑问答台</h2>' +
-        '<p id="agents-chat-lead">选品、做店、日常可聊；花名册三件事仍走本站。模型在后台，下拉只选 modelId。</p></div>' +
-        '<label class="agents-model">模型<select id="agents-model"></select></label></div>' +
-        '<details class="agents-connect" id="agents-connect"><summary>接入 GPT（密钥只留在服务器）</summary>' +
-        '<p class="agents-connect-note" id="agents-connect-note">下拉里灰色的 GPT 是还没接入。官方 OpenAI 填密钥即可；中转再填接口地址和模型名。</p>' +
-        '<form id="agents-connect-form">' +
-        '<label>密钥<input type="password" id="agents-key" name="apiKey" autocomplete="off" placeholder="只提交到本站后台，不会出现在模型列表" /></label>' +
-        '<label>接口地址<input type="url" id="agents-base" name="apiBase" placeholder="官方可留空，中转填 …/v1" /></label>' +
-        '<label>模型名单<input type="text" id="agents-models-text" name="modelsText" placeholder="可留空，默认 GPT-4o mini / GPT-4o" /></label>' +
-        '<div class="agents-connect-actions"><button type="submit" id="agents-connect-save">保存接入</button>' +
-        '<button type="button" class="agents-connect-clear" id="agents-connect-clear">清除接入</button></div></form></details>' +
-        '<div class="agents-log" id="agents-log"><p class="agents-empty">正在打开会话…</p></div>' +
-        '<p class="agents-status" id="agents-status" role="status"></p>' +
-        '<div class="agents-files" id="agents-files"></div>' +
-        '<form class="agents-composer" id="agents-form">' +
-        '<label class="agents-upload">上传<input type="file" id="agents-file" /></label>' +
-        '<textarea id="agents-text" name="text" rows="2" maxlength="2000" placeholder="像问主脑一样提问，回车发送，Shift+回车换行"></textarea>' +
-        '<button type="submit" id="agents-send">发送</button></form></section></div></main>';
+        ui.ContentCard({
+          title: "主脑问答台",
+          description: "选品、做店、日常可聊；花名册三件事仍走本站。模型在后台，下拉只选 modelId。",
+          content:
+            '<div class="xm-ui-filter-toolbar__controls">' +
+            '<label class="agents-model">模型<select class="xm-ui-select" id="agents-model"></select></label></div>' +
+            '<details class="agents-connect" id="agents-connect"><summary>接入 GPT（密钥只留在服务器）</summary>' +
+            '<p class="xm-ui-page-description" id="agents-connect-note">下拉里灰色的 GPT 是还没接入。官方 OpenAI 填密钥即可；中转再填接口地址和模型名。</p>' +
+            '<form id="agents-connect-form">' +
+            '<label class="xm-ui-field"><span>密钥</span><input type="password" id="agents-key" name="apiKey" autocomplete="off" placeholder="只提交到本站后台，不会出现在模型列表" /></label>' +
+            '<label class="xm-ui-field"><span>接口地址</span><input type="url" id="agents-base" name="apiBase" placeholder="官方可留空，中转填 …/v1" /></label>' +
+            '<label class="xm-ui-field"><span>模型名单</span><input type="text" id="agents-models-text" name="modelsText" placeholder="可留空，默认 GPT-4o mini / GPT-4o" /></label>' +
+            '<div class="agents-connect-actions">' +
+            ui.button({ label: "保存接入", type: "submit", id: "agents-connect-save" }) +
+            ui.button({ label: "清除接入", variant: "secondary", id: "agents-connect-clear" }) +
+            "</div></form></details>" +
+            '<div class="agents-log" id="agents-log"></div>' +
+            '<p class="agents-status" id="agents-status" role="status"></p>' +
+            '<div class="agents-files" id="agents-files"></div>' +
+            '<form class="agents-composer" id="agents-form">' +
+            withAttr(ui.button({ label: "上传", variant: "secondary", size: "small", id: "agents-pick" }), "") +
+            '<input type="file" id="agents-file" class="xm-ui-sr-only" />' +
+            '<textarea id="agents-text" name="text" rows="2" maxlength="2000" placeholder="像问主脑一样提问，回车发送，Shift+回车换行"></textarea>' +
+            ui.button({ label: "发送", type: "submit", id: "agents-send" }) +
+            "</form>"
+        }) +
+        "</section></div></main>";
 
       const pageEl = root.querySelector(".agents-page");
       const sessionsEl = root.querySelector("#agents-sessions");
-      const titleEl = root.querySelector("#agents-chat-title");
-      const leadEl = root.querySelector("#agents-chat-lead");
       const logEl = root.querySelector("#agents-log");
       const statusEl = root.querySelector("#agents-status");
       const homeStatusEl = root.querySelector("#agents-home-status");
@@ -369,6 +345,8 @@
       const connectFormEl = root.querySelector("#agents-connect-form");
       const connectKeyEl = root.querySelector("#agents-key");
       const connectClearEl = root.querySelector("#agents-connect-clear");
+      const chatTitleEl = root.querySelector(".agents-chat .xm-ui-section-title h2");
+      const chatLeadEl = root.querySelector(".agents-chat .xm-ui-section-title p");
       let dead = false;
       let models = [];
       let preferredModelId = "";
@@ -410,11 +388,6 @@
         if (!connectNoteEl || !info) {
           return;
         }
-        const pill = root.querySelector("#agents-run");
-        if (pill) {
-          pill.textContent = info.configured ? "运行正常" : "待接入 GPT";
-          pill.className = "agents-pill" + (info.configured ? "" : " is-off");
-        }
         if (info.locked) {
           connectNoteEl.textContent = "服务环境已接入，下拉可选 GPT。本页不能覆盖服务环境。";
           return;
@@ -452,22 +425,26 @@
 
       function renderSessions() {
         if (!sessions.length) {
-          sessionsEl.innerHTML = '<li class="agents-empty">还没有会话</li>';
+          sessionsEl.innerHTML = "<li>" + ui.EmptyState({ title: "还没有会话", description: "点新会话，或从工作台提问。" }) + "</li>";
           return;
         }
         sessionsEl.innerHTML = sessions
           .map(function (item) {
-            const on = current && Number(current.id) === Number(item.id) ? " is-active" : "";
+            const active = current && Number(current.id) === Number(item.id);
             return (
-              '<li><button type="button" class="agents-thread' +
-              on +
-              '" data-session="' +
-              escapeHtml(item.id) +
-              '"><span class="name">' +
-              escapeHtml(item.title) +
-              '</span><span class="meta">' +
-              escapeHtml(item.preview || item.updatedAt || "") +
-              "</span></button></li>"
+              "<li>" +
+              withAttr(
+                ui.button({
+                  label: item.title,
+                  variant: active ? undefined : "secondary",
+                  size: "small"
+                }),
+                'data-session="' + escapeHtml(item.id) + '"'
+              ) +
+              (item.preview
+                ? '<p class="xm-ui-page-description">' + escapeHtml(item.preview) + "</p>"
+                : "") +
+              "</li>"
             );
           })
           .join("");
@@ -480,28 +457,26 @@
         }
         filesEl.innerHTML = pendingFiles
           .map(function (item) {
-            return (
-              '<span class="agents-chip">#' +
-              escapeHtml(item.id) +
-              " " +
-              escapeHtml(item.filename) +
-              "</span>"
-            );
+            return ui.StatusBadge({ label: "#" + item.id + " " + item.filename, tone: "blue", dot: false });
           })
           .join("");
       }
 
       function renderMessages() {
+        if (chatTitleEl) {
+          chatTitleEl.textContent = current ? current.title || "主脑问答台" : "主脑问答台";
+        }
+        if (chatLeadEl) {
+          chatLeadEl.textContent = current
+            ? "后台模型聊运营；本店数字没有接口就不编。答案可引用文件 id。"
+            : "选品、做店、日常可聊；花名册三件事仍走本站。";
+        }
         if (!current) {
-          titleEl.textContent = "主脑问答台";
-          leadEl.textContent = "选品、做店、日常可聊；花名册三件事仍走本站。";
-          logEl.innerHTML = '<p class="agents-empty">点左侧新会话，或直接提问。</p>';
+          logEl.innerHTML = ui.EmptyState({ title: "点左侧新会话，或直接提问。", action: "新会话" });
           return;
         }
-        titleEl.textContent = current.title || "主脑问答台";
-        leadEl.textContent = "后台模型聊运营；本店数字没有接口就不编。答案可引用文件 id。";
         if (!messages.length) {
-          logEl.innerHTML = '<p class="agents-empty">开始提问。</p>';
+          logEl.innerHTML = ui.EmptyState({ title: "开始提问。" });
           return;
         }
         logEl.innerHTML = messages
@@ -523,20 +498,12 @@
         logEl.scrollTop = logEl.scrollHeight;
       }
 
-      function deltaHtml(value) {
+      function deltaNote(value) {
         if (value == null) {
-          return '<span class="delta is-flat">暂无上月对照</span>';
+          return "暂无上月对照";
         }
         const up = Number(value) >= 0;
-        return (
-          '<span class="delta ' +
-          (up ? "is-up" : "is-down") +
-          '">' +
-          (up ? "↑" : "↓") +
-          " " +
-          Math.abs(Number(value)) +
-          "%</span>"
-        );
+        return (up ? "↑ " : "↓ ") + Math.abs(Number(value)) + "%";
       }
 
       function renderOverview(data) {
@@ -544,70 +511,112 @@
         if (!overview) {
           return;
         }
-        root.querySelector("#kpi-tasks").textContent = String(overview.today.tasks);
-        root.querySelector("#kpi-rate").textContent = overview.today.successRate + "%";
-        root.querySelector("#kpi-hours").textContent = overview.today.savedHours + " h";
-        root.querySelector("#kpi-note").textContent = overview.today.note || "";
-        renderConnect(overview.gpt);
+        const gpt = overview.gpt || {};
+        root.querySelector("#agents-kpis").innerHTML =
+          ui.StatCard({ label: "今日任务", value: String(overview.today.tasks), icon: "file", tone: "blue", note: overview.today.note }) +
+          ui.StatCard({ label: "成功率", value: String(overview.today.successRate), unit: "%", icon: "award", tone: "green" }) +
+          ui.StatCard({ label: "节省工时", value: String(overview.today.savedHours), unit: "h", icon: "chart", tone: "orange" }) +
+          ui.StatCard({
+            label: "智能体运行状态",
+            value: gpt.configured ? "运行正常" : "待接入 GPT",
+            icon: "play",
+            tone: gpt.configured ? "green" : "orange"
+          });
+        renderConnect(gpt);
         const alerts = root.querySelector("#agents-alerts");
-        const countEl = root.querySelector("#agents-alert-count");
         const items = overview.alerts.available ? overview.alerts.items || [] : [];
-        countEl.textContent = String(items.length);
-        countEl.hidden = items.length === 0;
+        const alertBadge = items.length
+          ? '<div id="agents-alert-count">' + ui.StatusBadge({ label: String(items.length), tone: "warning" }) + "</div>"
+          : '<div id="agents-alert-count" hidden>0</div>';
         if (!overview.alerts.available) {
           alerts.innerHTML =
-            '<div class="agents-alert is-gap"><strong>还没有经营数字接口</strong><p>不会编推广费、转化率或退货异常。向数据中心开口后才能做实时预警。</p></div>' +
-            (overview.alerts.gaps || [])
-              .slice(0, 3)
-              .map(function (item) {
-                return '<div class="agents-alert"><strong>缺口</strong><p>' + escapeHtml(item) + "</p></div>";
+            alertBadge +
+            ui.EmptyState({
+              title: "还没有经营数字接口",
+              description: "不会编推广费、转化率或退货异常。向数据中心开口后才能做实时预警。"
+            }) +
+            ui.DataTable({
+              columns: [{ key: "gap", label: "缺口" }],
+              rows: (overview.alerts.gaps || []).slice(0, 3).map(function (gap) {
+                return { gap: gap };
               })
-              .join("");
+            });
         } else if (!items.length) {
-          alerts.innerHTML = '<p class="agents-empty">暂无预警。</p>';
+          alerts.innerHTML = alertBadge + ui.EmptyState({ title: "暂无预警。" });
+        } else {
+          alerts.innerHTML =
+            alertBadge +
+            ui.DataTable({
+              columns: [
+                { key: "title", label: "预警" },
+                { key: "status", label: "状态", type: "status" }
+              ],
+              rows: items.map(function (item) {
+                return {
+                  title: item.title || item.text || item.message || "预警",
+                  status: { label: item.status || "待处理", tone: "warning" }
+                };
+              })
+            });
         }
         const month = overview.month || {};
         const delta = month.delta || {};
         root.querySelector("#agents-month").innerHTML =
-          "<div><span>执行任务数</span><b>" +
-          escapeHtml(month.tasks) +
-          "</b>" +
-          deltaHtml(delta.tasks) +
-          "</div><div><span>处理工时</span><b>" +
-          escapeHtml(month.hours) +
-          " h</b>" +
-          deltaHtml(delta.hours) +
-          "</div><div><span>生成素材数</span><b>" +
-          escapeHtml(month.files) +
-          "</b>" +
-          deltaHtml(delta.files) +
-          "</div><div><span>会话数</span><b>" +
-          escapeHtml(month.sessions) +
-          "</b>" +
-          deltaHtml(delta.sessions) +
-          "</div>";
+          ui.StatCard({
+            label: "执行任务数",
+            value: String(month.tasks),
+            icon: "file",
+            tone: "blue",
+            note: deltaNote(delta.tasks),
+            trend: delta.tasks != null && Number(delta.tasks) >= 0 ? "up" : ""
+          }) +
+          ui.StatCard({
+            label: "处理工时",
+            value: String(month.hours),
+            unit: "h",
+            icon: "chart",
+            tone: "green",
+            note: deltaNote(delta.hours),
+            trend: delta.hours != null && Number(delta.hours) >= 0 ? "up" : ""
+          }) +
+          ui.StatCard({
+            label: "生成素材数",
+            value: String(month.files),
+            icon: "play",
+            tone: "purple",
+            note: deltaNote(delta.files)
+          }) +
+          ui.StatCard({
+            label: "会话数",
+            value: String(month.sessions),
+            icon: "users",
+            tone: "orange",
+            note: deltaNote(delta.sessions),
+            trend: delta.sessions != null && Number(delta.sessions) >= 0 ? "up" : ""
+          });
         const recent = overview.recent || [];
+        const recentRows = recent.map(function (item) {
+          return {
+            id: item.id,
+            title: item.title,
+            status: {
+              label: item.status === "进行中" ? "进行中" : "已完成",
+              tone: item.status === "进行中" ? "warning" : "success"
+            }
+          };
+        });
         root.querySelector("#agents-recent").innerHTML = recent.length
-          ? recent
-              .map(function (item) {
-                const running = item.status === "进行中";
-                const pct = running ? 60 : 100;
-                return (
-                  '<button type="button" class="agents-task" data-session="' +
-                  escapeHtml(item.id) +
-                  '"><span class="task-ico">' +
-                  (running ? "◌" : "✓") +
-                  '</span><div class="task-body"><div class="name">' +
-                  escapeHtml(item.title) +
-                  '</div><div class="bar"><i style="width:' +
-                  pct +
-                  '%"></i></div></div><span class="task-pct">' +
-                  (running ? "进行中" : "已完成") +
-                  "</span></button>"
-                );
-              })
-              .join("")
-          : '<p class="agents-empty">还没有任务。点上方场景或直接提问。</p>';
+          ? tableWithRowIds(
+              ui.DataTable({
+                columns: [
+                  { key: "title", label: "任务" },
+                  { key: "status", label: "状态", type: "status" }
+                ],
+                rows: recentRows
+              }),
+              recentRows
+            )
+          : ui.EmptyState({ title: "还没有任务。", description: "点上方场景或直接提问。" });
         root.querySelector("#agents-trend").innerHTML = chartSvg(overview.trend);
       }
 
@@ -830,11 +839,23 @@
         });
       }
 
-      root.querySelector("#agents-back").addEventListener("click", function () {
+      function onClick(selector, handler) {
+        const el = root.querySelector(selector);
+        if (el) {
+          el.addEventListener("click", handler);
+        }
+      }
+      onClick("#agents-back", function () {
         showHome();
         loadList().catch(function () {});
       });
-      root.querySelector("#agents-open-chat").addEventListener("click", function () {
+      onClick("#agents-all-tools", function () {
+        homeTextEl.focus();
+      });
+      onClick("#agents-all-alerts", function () {
+        ask("数据异常监控需要哪些只读接口？现在缺什么？");
+      });
+      onClick("#agents-open-chat", function () {
         showChat();
         if (!current && sessions.length) {
           openSession(sessions[0].id).catch(function (err) {
@@ -842,13 +863,13 @@
           });
         }
       });
-      root.querySelector("#agents-all-tools").addEventListener("click", function () {
-        homeTextEl.focus();
-      });
-      root.querySelector("#agents-all-alerts").addEventListener("click", function () {
-        ask("数据异常监控需要哪些只读接口？现在缺什么？");
-      });
       root.addEventListener("click", function (event) {
+        if (event.target.closest("#agents-log .xm-ui-button")) {
+          startSession().catch(function (err) {
+            setStatus(err.message || "无法开会话", true);
+          });
+          return;
+        }
         const promptBtn = event.target.closest("[data-prompt]");
         if (promptBtn && root.contains(promptBtn)) {
           ask(promptBtn.getAttribute("data-prompt"));
@@ -883,16 +904,22 @@
         });
       });
 
-      fileEl.addEventListener("change", function () {
-        const file = fileEl.files && fileEl.files[0];
-        fileEl.value = "";
-        uploadFile(file, false);
-      });
-      homeFileEl.addEventListener("change", function () {
-        const file = homeFileEl.files && homeFileEl.files[0];
-        homeFileEl.value = "";
-        uploadFile(file, true);
-      });
+      function bindPick(buttonId, inputEl, home) {
+        const btn = root.querySelector(buttonId);
+        if (!btn) {
+          return;
+        }
+        btn.addEventListener("click", function () {
+          inputEl.click();
+        });
+        inputEl.addEventListener("change", function () {
+          const file = inputEl.files && inputEl.files[0];
+          inputEl.value = "";
+          uploadFile(file, home);
+        });
+      }
+      bindPick("#agents-pick", fileEl, false);
+      bindPick("#agents-home-pick", homeFileEl, true);
 
       formEl.addEventListener("submit", function (event) {
         event.preventDefault();

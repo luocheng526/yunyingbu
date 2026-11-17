@@ -39,15 +39,24 @@ async function loginCookie() {
   return String(res.headers.get("set-cookie") || "").split(";")[0];
 }
 
-test("会话页挂 XmModules /agents，颜色走主题变量", () => {
+test("会话页挂 XmModules /agents，内容区走 XmUI", () => {
   assert.match(agentsJs, /XmModules\["\/agents"\]/);
+  assert.match(agentsJs, /xm-ui-scope/);
+  assert.match(agentsJs, /window\.XmUI/);
+  assert.match(agentsJs, /PageContentHeader/);
+  assert.match(agentsJs, /StatCard/);
+  assert.match(agentsJs, /ContentCard/);
+  assert.match(agentsJs, /DataTable/);
+  assert.match(agentsJs, /ChartCard/);
+  assert.match(agentsJs, /EmptyState/);
+  assert.match(agentsJs, /StatusBadge/);
   assert.match(agentsJs, /甄选智能体/);
   assert.match(agentsJs, /电商运营智能体/);
   assert.match(agentsJs, /常用工具/);
   assert.match(agentsJs, /嗨！我是甄选智能体/);
   assert.match(agentsJs, /立即使用/);
-  assert.match(agentsJs, /scene-head/);
-  assert.match(agentsCss, /scene-head/);
+  assert.match(agentsJs, /今日任务/);
+  assert.match(agentsJs, /智能体运行状态/);
   assert.match(agentsJs, /主脑问答台/);
   assert.match(agentsJs, /\/api\/agents\/chat/);
   assert.match(agentsJs, /\/api\/agents\/models/);
@@ -61,8 +70,10 @@ test("会话页挂 XmModules /agents，颜色走主题变量", () => {
   assert.doesNotMatch(agentsJs, /XM_AGENTS_API_KEY/);
   assert.doesNotMatch(agentsJs, /OPENAI_API_KEY/);
   assert.doesNotMatch(agentsJs, /sk-[A-Za-z0-9]{8,}/);
-  assert.match(agentsCss, /--xm-/);
-  assert.match(agentsCss, /data-theme/);
+  assert.doesNotMatch(agentsJs, /shared\/xm-ui\.(css|js)/);
+  assert.match(agentsCss, /xm-ui-scope/);
+  assert.match(agentsCss, /--xm-ui-/);
+  assert.doesNotMatch(agentsCss, /:root/);
   assert.match(agentsHtml, /甄选智能体/);
 });
 
