@@ -4,6 +4,7 @@ const JD_ROUTER = "https://api.jd.com/routerjson";
 const LOW_STOCK = 20;
 
 let jdFetchForTests = null;
+const warehouseNameCache = new Map();
 
 export function setJdFetchForTests(fn) {
   jdFetchForTests = fn;
@@ -11,6 +12,19 @@ export function setJdFetchForTests(fn) {
 
 export function resetJdStockForTests() {
   jdFetchForTests = null;
+  warehouseNameCache.clear();
+}
+
+export function shortWarehouseName(name, storeId) {
+  const text = String(name || "").trim();
+  const city = text.match(/^([\u4e00-\u9fff]{2,}?)(?=常温|[A-Za-z])/);
+  if (city) {
+    return `${city[1]}仓`;
+  }
+  if (text && !text.startsWith("京东仓")) {
+    return text;
+  }
+  return storeId ? `京东仓${storeId}` : "京东仓";
 }
 
 export function isJdExpress(features) {
@@ -76,6 +90,109 @@ export function warehouseLines(features, stocks) {
   }
   lines.sort((a, b) => a.usableNum - b.usableNum || String(a.warehouseId).localeCompare(String(b.warehouseId)));
   return { jdExpress: true, droppedNational, lines };
+}
+
+function warehouseLabel(line, duplicated) {
+  if (!duplicated) {
+    return line.warehouseName;
+  }
+  const numMatch = String(line.warehouseFullName || "").match(/(\d+)号/);
+  if (!numMatch) {
+    return `${line.warehouseName}${line.warehouseId}`;
+  }
+  return String(line.warehouseName || "").replace(/仓$/, `${numMatch[1]}号仓`);
+}
+
+export function groupSkuInventory(lines) {
+  const grouped = new Map();
+  for (const line of lines) {
+    const key = `${line.shopId || ""}:${line.skuId || ""}:${line.warehouseId}`;
+    const skuKey = `${line.shopId || ""}:${line.skuId || ""}`;
+    if (!grouped.has(skuKey)) {
+      grouped.set(skuKey, {
+        productId: line.productId || "",
+        productName: line.productName || "",
+        skuId: line.skuId || "",
+        shopId: line.shopId || "",
+        shopName: line.shopName || "",
+        tag: line.tag || "京东物流",
+        warehouses: [],
+        seen: new Set()
+      });
+    }
+    const row = grouped.get(skuKey);
+    if (row.seen.has(key)) {
+      continue;
+    }
+    row.seen.add(key);
+    row.warehouses.push({
+      warehouseId: line.warehouseId,
+      warehouseName: line.warehouseName,
+      warehouseFullName: line.warehouseFullName || line.warehouseName,
+      spotNum: line.spotNum,
+      bookingNum: line.bookingNum,
+      usableNum: line.usableNum
+    });
+  }
+  const records = [];
+  for (const row of grouped.values()) {
+    const counts = new Map();
+    for (const warehouse of row.warehouses) {
+      counts.set(warehouse.warehouseName, (counts.get(warehouse.warehouseName) || 0) + 1);
+    }
+    row.warehouses.sort((a, b) => b.usableNum - a.usableNum || a.warehouseName.localeCompare(b.warehouseName, "zh"));
+    const parts = row.warehouses.map((warehouse) => {
+      const label = warehouseLabel(warehouse, (counts.get(warehouse.warehouseName) || 0) > 1);
+      return `${label} ${warehouse.usableNum}个`;
+    });
+    const usableNum = row.warehouses.reduce((sum, warehouse) => sum + warehouse.usableNum, 0);
+    const spotNum = row.warehouses.reduce((sum, warehouse) => sum + warehouse.spotNum, 0);
+    const bookingNum = row.warehouses.reduce((sum, warehouse) => sum + warehouse.bookingNum, 0);
+    records.push({
+      productId: row.productId,
+      productName: row.productName,
+      skuId: row.skuId,
+      shopId: row.shopId,
+      shopName: row.shopName,
+      tag: row.tag,
+      usableNum,
+      spotNum,
+      bookingNum,
+      stockNum: usableNum,
+      stockLabel: stockLabelOf(usableNum),
+      warehouseText: parts.join("、"),
+      warehouses: row.warehouses.map(({ warehouseFullName, ...warehouse }) => warehouse)
+    });
+  }
+  records.sort((a, b) => {
+    const emptyA = a.usableNum === 0 ? 1 : 0;
+    const emptyB = b.usableNum === 0 ? 1 : 0;
+    return emptyA - emptyB || a.usableNum - b.usableNum || String(a.skuId).localeCompare(String(b.skuId));
+  });
+  return records;
+}
+
+export async function warehouseNameMap(auth) {
+  const key = String(auth?.appKey || "");
+  const hit = warehouseNameCache.get(key);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) {
+    return hit.map;
+  }
+  let map = {};
+  try {
+    const payload = await callJd(auth, "jingdong.store.findPartitionWhByIdAndStatus", { status: 1 });
+    const rows = payload?.jingdong_store_findPartitionWhByIdAndStatus_responce?.find_Partition_Warehouse_Result?.result || [];
+    for (const row of rows) {
+      if (row?.seq_num == null || !row?.name) {
+        continue;
+      }
+      map[String(row.seq_num)] = String(row.name).trim();
+    }
+  } catch {
+    map = hit?.map || {};
+  }
+  warehouseNameCache.set(key, { at: Date.now(), map });
+  return map;
 }
 
 export function shanghaiTimestamp(date = new Date()) {

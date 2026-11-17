@@ -42,11 +42,11 @@
       title: "京东库存监控",
       path: "/stores/inventory",
       api: "/api/stores/erp/inventory",
-      lead: "商品标签选京东物流，去掉全国仓，剩下的才是京仓库存。可用库存 = 现货 − 占用，小于等于 20 标低库存。",
+      lead: "商品标签选京东物流。库存总数 = 可用总数 − 全国仓。后面列出每个仓的库存，例如肇庆仓 7个。",
       kpis: [
-        { key: "jd", label: "本页京仓" },
-        { key: "usable", label: "可用库存" },
-        { key: "low", label: "本页低库存" }
+        { key: "jd", label: "商品" },
+        { key: "usable", label: "库存总数" },
+        { key: "low", label: "低库存" }
       ]
     }
   ];
@@ -87,13 +87,59 @@
   }
 
   function ensureCss() {
-    if (document.querySelector('link[href*="stores.css"]')) {
+    var link = document.querySelector('link[data-stores-css]');
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = "/stores.css";
+      link.setAttribute("data-stores-css", "1");
+    }
+    document.head.appendChild(link);
+  }
+
+  function ensureXmUi(done) {
+    if (!document.querySelector('link[href*="xm-ui.css"]')) {
+      var link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = "/shared/xm-ui.css";
+      document.head.appendChild(link);
+    }
+    if (window.XmUI) {
+      done();
       return;
     }
-    var link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "/stores.css";
-    document.head.appendChild(link);
+    var script = document.createElement("script");
+    script.src = "/shared/xm-ui.js";
+    script.onload = function () {
+      done();
+    };
+    script.onerror = function () {
+      done();
+    };
+    document.head.appendChild(script);
+  }
+
+  function uiButton(label, extra, variant) {
+    var attrs = String(extra || "");
+    var className = "";
+    var classMatch = attrs.match(/class="([^"]*)"/);
+    if (classMatch) {
+      className = classMatch[1];
+      attrs = attrs.replace(classMatch[0], "").trim();
+    }
+    var html = window.XmUI.button({
+      label: label,
+      size: "small",
+      variant: variant || "",
+      type: attrs.indexOf('type="submit"') >= 0 ? "submit" : "button"
+    });
+    if (className) {
+      html = html.replace('class="', 'class="' + className + " ");
+    }
+    if (attrs) {
+      html = html.replace("<button ", "<button " + attrs + " ");
+    }
+    return html;
   }
 
   function fetchJson(url) {
@@ -112,21 +158,21 @@
     });
   }
 
-  function pill(text, kind) {
-    return '<span class="stores-pill' + (kind ? " " + kind : "") + '">' + escapeHtml(text || "—") + "</span>";
-  }
-
-  function statusKind(label) {
+  function statusTone(label) {
     if (label === "待发货" || label === "低库存" || label === "下架" || label === "系统下架") {
-      return "keep";
+      return "warning";
     }
     if (label === "异常" || label === "库存异常" || label === "删除" || label === "已取消") {
-      return "stop";
+      return "danger";
     }
     if (label === "已发货" || label === "已完成" || label === "在售" || label === "正常") {
-      return "done";
+      return "success";
     }
-    return "";
+    return "neutral";
+  }
+
+  function statusCell(label) {
+    return window.XmUI.StatusBadge({ label: label || "—", tone: statusTone(label) });
   }
 
   function pageById(id) {
@@ -155,6 +201,32 @@
     return fallbackId || "reviews";
   }
 
+  function textColumn(key, label, format) {
+    return {
+      key: key,
+      label: label,
+      render: function (value) {
+        return format ? format(value) : none(value);
+      }
+    };
+  }
+
+  function tableColumns(id) {
+    var product = { key: "productName", label: "商品", render: function (_value, row) { return productNameCell(row); } };
+    var shop = { key: "shopName", label: "店铺", render: function (_value, row) { return shopCell(row); } };
+    var status = { key: "statusLabel", label: "状态", render: function (value) { return statusCell(value); } };
+    if (id === "reviews") {
+      return [product, shop, textColumn("oneStarNum", "一星", count), textColumn("salesVolume", "销量", count), textColumn("sevenDaysSalesVolume", "7日销量", count), status, textColumn("stockNum", "库存", count), textColumn("syncTime", "同步时间")];
+    }
+    if (id === "violations") {
+      return [product, shop, status, textColumn("stockNum", "库存", count), textColumn("offlineTime", "下架时间"), textColumn("syncTime", "同步时间")];
+    }
+    if (id === "shipping") {
+      return [textColumn("orderId", "订单号"), shop, status, textColumn("actualPrice", "金额", money), textColumn("payTime", "付款时间"), textColumn("skuName", "商品"), textColumn("skuCount", "件数", count), textColumn("buyerRemark", "买家备注")];
+    }
+    return [product, shop, textColumn("usableNum", "库存总数", count), textColumn("warehouseText", "各仓"), status];
+  }
+
   function productNameCell(row) {
     return (
       "<div>" +
@@ -170,114 +242,10 @@
     return "<div>" + none(row.shopName) + '</div><div class="stores-sub">' + none(row.shopId) + "</div>";
   }
 
-  function renderRows(id, rows) {
-    if (!rows.length) {
-      return '<tr><td colspan="8" class="empty">暂无数据</td></tr>';
-    }
-    return rows
-      .map(function (row) {
-        if (id === "reviews") {
-          return (
-            "<tr><td>" +
-            productNameCell(row) +
-            "</td><td>" +
-            shopCell(row) +
-            "</td><td>" +
-            count(row.oneStarNum) +
-            "</td><td>" +
-            count(row.salesVolume) +
-            "</td><td>" +
-            count(row.sevenDaysSalesVolume) +
-            "</td><td>" +
-            pill(row.statusLabel, statusKind(row.statusLabel)) +
-            "</td><td>" +
-            count(row.stockNum) +
-            "</td><td>" +
-            none(row.syncTime) +
-            "</td></tr>"
-          );
-        }
-        if (id === "violations") {
-          return (
-            "<tr><td>" +
-            productNameCell(row) +
-            "</td><td>" +
-            shopCell(row) +
-            "</td><td>" +
-            pill(row.statusLabel, statusKind(row.statusLabel)) +
-            "</td><td>" +
-            count(row.stockNum) +
-            "</td><td>" +
-            none(row.offlineTime) +
-            "</td><td>" +
-            none(row.syncTime) +
-            "</td></tr>"
-          );
-        }
-        if (id === "shipping") {
-          return (
-            "<tr><td>" +
-            none(row.orderId) +
-            "</td><td>" +
-            shopCell(row) +
-            "</td><td>" +
-            pill(row.statusLabel, statusKind(row.statusLabel)) +
-            "</td><td>" +
-            money(row.actualPrice) +
-            "</td><td>" +
-            none(row.payTime) +
-            "</td><td>" +
-            none(row.skuName) +
-            "</td><td>" +
-            count(row.skuCount) +
-            "</td><td>" +
-            none(row.buyerRemark) +
-            "</td></tr>"
-          );
-        }
-        return (
-          "<tr><td>" +
-          "<div>" +
-          none(row.productName) +
-          '</div><div class="stores-sub">SKU ' +
-          none(row.skuId) +
-          "</div></td><td>" +
-          shopCell(row) +
-          "</td><td>" +
-          none(row.warehouseName) +
-          '</td><td class="stores-sub">' +
-          none(row.warehouseId) +
-          "</td><td>" +
-          count(row.usableNum) +
-          "</td><td>" +
-          count(row.spotNum) +
-          "</td><td>" +
-          count(row.bookingNum) +
-          "</td><td>" +
-          pill(row.stockLabel, statusKind(row.stockLabel)) +
-          "</td></tr>"
-        );
-      })
-      .join("");
-  }
-
-  function tableHead(id) {
-    if (id === "reviews") {
-      return "<tr><th>商品</th><th>店铺</th><th>一星</th><th>销量</th><th>7日销量</th><th>状态</th><th>库存</th><th>同步时间</th></tr>";
-    }
-    if (id === "violations") {
-      return "<tr><th>商品</th><th>店铺</th><th>状态</th><th>库存</th><th>下架时间</th><th>同步时间</th></tr>";
-    }
-    if (id === "shipping") {
-      return "<tr><th>订单号</th><th>店铺</th><th>状态</th><th>金额</th><th>付款时间</th><th>商品</th><th>件数</th><th>买家备注</th></tr>";
-    }
-    return "<tr><th>商品</th><th>店铺</th><th>仓库</th><th>仓库编号</th><th>京仓库存</th><th>现货</th><th>占用</th><th>状态</th></tr>";
-  }
-
   function extraFilters(id, state) {
     if (id === "violations") {
       return (
-        '<label>状态<select name="productStatus">' +
+        '<label class="xm-ui-field">状态<select class="xm-ui-select" name="productStatus">' +
         '<option value=""' +
         (state.productStatus === "" ? " selected" : "") +
         ">系统下架 + 删除</option>" +
@@ -291,7 +259,7 @@
     }
     if (id === "shipping") {
       return (
-        '<label>状态<select name="orderStatus">' +
+        '<label class="xm-ui-field">状态<select class="xm-ui-select" name="orderStatus">' +
         '<option value=""' +
         (state.orderStatus === "" ? " selected" : "") +
         ">待发货 + 已发货</option>" +
@@ -310,7 +278,23 @@
   }
 
   function mountStores(root, initialId) {
+    var dead = false;
+    var stop = function () {};
     ensureCss();
+    ensureXmUi(function () {
+      if (dead || !window.XmUI) {
+        return;
+      }
+      ensureCss();
+      stop = startStores(root, initialId);
+    });
+    return function unmount() {
+      dead = true;
+      stop();
+    };
+  }
+
+  function startStores(root, initialId) {
     var state = {
       pageId: pageFromLocation(initialId),
       pageNum: 1,
@@ -327,52 +311,45 @@
     var dead = false;
 
     root.innerHTML =
-      '<main class="page stores-page">' +
-      '<p class="kicker">店铺维护中心</p>' +
-      '<h1 class="stores-sr" data-title></h1>' +
-      '<nav class="stores-subnav" aria-label="店铺维护页面">' +
-      PAGES.map(function (item) {
-        return (
-          '<button type="button" data-page="' +
-          escapeHtml(item.id) +
-          '">' +
-          escapeHtml(item.title) +
-          "</button>"
-        );
-      }).join("") +
-      "</nav>" +
-      '<p class="lead" data-lead></p>' +
-      '<section class="stores-main">' +
-      '<div class="kpi-grid" data-kpi></div>' +
-      '<form class="stores-toolbar" data-filter>' +
-      '<label>责权选择<select name="dutyId"><option value="">全部责权</option></select></label>' +
-      '<label>店铺<select name="shopId"><option value="">全部店铺</option></select></label>' +
-      '<label>搜索<input name="q" maxlength="64" placeholder="店名 / 关键词" /></label>' +
+      '<div class="xm-ui-scope">' +
+      '<div data-header></div>' +
+      '<div class="xm-ui-stat-grid" data-kpi></div>' +
+      '<div class="xm-ui-layout-grid">' +
+      '<div class="xm-ui-stack">' +
+      '<form class="xm-ui-filter-toolbar" data-filter>' +
+      '<div class="xm-ui-tabs" data-tabs role="tablist"></div>' +
+      '<div class="xm-ui-filter-toolbar__controls">' +
+      '<label class="xm-ui-field">责权选择<select class="xm-ui-select" name="dutyId"><option value="">全部责权</option></select></label>' +
+      '<label class="xm-ui-field">店铺<select class="xm-ui-select" name="shopId"><option value="">全部店铺</option></select></label>' +
+      '<label class="xm-ui-search">' +
+      window.XmUI.icon("search") +
+      '<span class="xm-ui-sr-only">搜索</span><input name="q" type="search" maxlength="64" placeholder="店名 / 关键词" /></label>' +
       '<span data-extra></span>' +
-      '<button type="submit">查询</button>' +
-      "</form>" +
-      '<p class="status" data-status role="status"></p>' +
-      '<div class="stores-work">' +
-      '<section class="panel stores-board"><div class="stores-table-wrap"><table><thead data-head></thead>' +
-      '<tbody data-body><tr><td colspan="8" class="empty">正在加载…</td></tr></tbody></table></div>' +
-      '<div class="stores-pager"><p data-pager></p>' +
-      '<p><button type="button" class="ghost" data-prev>上一页</button> ' +
-      '<button type="button" class="ghost" data-next>下一页</button></p></div></section>' +
-      '<aside class="stores-aside" aria-label="明细店铺">' +
-      "<h2>明细店铺</h2>" +
-      '<p class="stores-aside-meta" data-shop-total></p>' +
-      '<input class="stores-aside-q" data-shop-q maxlength="32" placeholder="筛选店名" />' +
-      '<button type="button" class="stores-aside-all" data-duty="" data-shop="">全部店铺</button>' +
-      '<p class="stores-aside-kicker">按责权分组</p>' +
+      uiButton("查询", 'type="submit"') +
+      "</div></form>" +
+      '<section class="xm-ui-card stores-board"><div class="xm-ui-card__body">' +
+      '<p data-status role="status"></p>' +
+      '<div data-table></div>' +
+      '<div class="stores-pager"><p data-pager></p><p>' +
+      uiButton("上一页", "data-prev", "secondary") +
+      uiButton("下一页", "data-next", "secondary") +
+      "</p></div></div></section></div>" +
+      '<aside class="xm-ui-card stores-aside" aria-label="明细店铺"><div class="xm-ui-card__body xm-ui-stack">' +
+      window.XmUI.SectionTitle({ title: "明细店铺", description: "店铺责权和明细" }) +
+      '<p class="xm-ui-page-description" data-shop-total></p>' +
+      '<label class="xm-ui-search">' +
+      window.XmUI.icon("search") +
+      '<span class="xm-ui-sr-only">筛选店名</span><input data-shop-q maxlength="32" placeholder="筛选店名" /></label>' +
+      uiButton("全部店铺", 'data-all="1" data-duty="" data-shop=""', "secondary") +
+      '<p class="xm-ui-eyebrow">按责权分组</p>' +
       '<div class="stores-duty-list" data-duties></div>' +
-      "</aside></div></section></main>";
+      "</div></aside></div></div>";
 
-    var titleEl = root.querySelector("[data-title]");
-    var leadEl = root.querySelector("[data-lead]");
+    var headerEl = root.querySelector("[data-header]");
+    var tabsEl = root.querySelector("[data-tabs]");
     var kpiEl = root.querySelector("[data-kpi]");
     var extraEl = root.querySelector("[data-extra]");
-    var headEl = root.querySelector("[data-head]");
-    var bodyEl = root.querySelector("[data-body]");
+    var tableEl = root.querySelector("[data-table]");
     var statusEl = root.querySelector("[data-status]");
     var pagerEl = root.querySelector("[data-pager]");
     var filterForm = root.querySelector("[data-filter]");
@@ -384,7 +361,7 @@
 
     function setStatus(message, isError) {
       statusEl.textContent = message || "";
-      statusEl.className = "status" + (isError ? " error" : message ? " ok" : "");
+      statusEl.className = isError ? "xm-ui-status xm-ui-status--danger" : "xm-ui-page-description";
     }
 
     function syncHash() {
@@ -397,19 +374,26 @@
 
     function renderChrome() {
       var page = pageById(state.pageId);
-      titleEl.textContent = page.title;
-      leadEl.textContent = page.lead;
-      extraEl.innerHTML = extraFilters(page.id, state);
-      headEl.innerHTML = tableHead(page.id);
-      root.querySelectorAll("[data-page]").forEach(function (btn) {
-        var on = btn.getAttribute("data-page") === page.id;
-        btn.classList.toggle("is-on", on);
-        if (on) {
-          btn.setAttribute("aria-current", "page");
-        } else {
-          btn.removeAttribute("aria-current");
-        }
+      headerEl.innerHTML = window.XmUI.PageContentHeader({
+        eyebrow: "店铺维护中心",
+        title: page.title,
+        description: page.lead
       });
+      tabsEl.innerHTML = PAGES.map(function (item) {
+        var on = item.id === page.id;
+        return (
+          '<button type="button" class="xm-ui-tab' +
+          (on ? " is-active" : "") +
+          '" data-page="' +
+          escapeHtml(item.id) +
+          '"' +
+          (on ? ' aria-current="page"' : "") +
+          ">" +
+          escapeHtml(item.title) +
+          "</button>"
+        );
+      }).join("");
+      extraEl.innerHTML = extraFilters(page.id, state);
       filterForm.q.value = state.q;
       dutySelect.value = state.dutyId;
       shopSelect.value = state.shopId;
@@ -419,20 +403,26 @@
     function renderKpi(summary) {
       var page = pageById(state.pageId);
       var data = summary || {};
+      var tones = ["blue", "orange", "purple"];
+      var icons = ["chart", "file", "award"];
       kpiEl.innerHTML = page.kpis
         .map(function (item, index) {
-          var warn = index === 1 ? " is-warn" : index === 2 ? " is-open" : "";
-          return (
-            '<article class="kpi-card' +
-            warn +
-            '"><div class="label">' +
-            escapeHtml(item.label) +
-            '</div><div class="value">' +
-            count(data[item.key]) +
-            "</div></article>"
-          );
+          return window.XmUI.StatCard({
+            label: item.label,
+            value: count(data[item.key]),
+            tone: tones[index] || "blue",
+            icon: icons[index] || "chart"
+          });
         })
         .join("");
+    }
+
+    function paintTable(pageId, rows, emptyTitle) {
+      if (!rows || !rows.length) {
+        tableEl.innerHTML = window.XmUI.EmptyState({ title: emptyTitle || "暂无数据" });
+        return;
+      }
+      tableEl.innerHTML = window.XmUI.DataTable({ columns: tableColumns(pageId), rows: rows });
     }
 
     function shopsInDuty(dutyId) {
@@ -496,9 +486,9 @@
     }
 
     function renderDuties() {
-      var allBtn = root.querySelector(".stores-aside-all");
+      var allBtn = root.querySelector("[data-all]");
       if (allBtn) {
-        allBtn.classList.toggle("is-on", !state.dutyId && !state.shopId);
+        allBtn.classList.toggle("is-active", !state.dutyId && !state.shopId);
       }
       var q = String(state.shopQ || "").trim().toLowerCase();
       var groups = state.groups
@@ -522,7 +512,7 @@
           ? "当前责权 " + count(shopsInDuty(state.dutyId).length)
           : "全部 " + count(state.shops.length)) + " 家店";
       if (!groups.length) {
-        dutyListEl.innerHTML = '<p class="empty">没有匹配的店铺</p>';
+        dutyListEl.innerHTML = window.XmUI.EmptyState({ title: "没有匹配的店铺" });
         return;
       }
       dutyListEl.innerHTML = groups
@@ -534,26 +524,29 @@
             (onDuty ? " is-on" : "") +
             (open ? " is-open" : "") +
             '">' +
-            '<button type="button" class="stores-duty-head" data-duty="' +
-            escapeHtml(group.id) +
-            '" data-shop=""><span>' +
-            escapeHtml(group.name) +
-            "</span><em>" +
-            count(group.shopCount) +
-            "</em></button><ul>" +
+            uiButton(
+              group.name + " " + count(group.shopCount),
+              'class="stores-duty-head" data-duty="' + escapeHtml(group.id) + '" data-shop=""',
+              "secondary"
+            ) +
+            "<ul>" +
             group.shops
               .map(function (shop) {
                 var onShop = String(shop.id) === String(state.shopId);
                 return (
-                  '<li><button type="button" class="stores-duty-shop' +
-                  (onShop ? " is-on" : "") +
-                  '" data-duty="' +
-                  escapeHtml(group.id) +
-                  '" data-shop="' +
-                  escapeHtml(shop.id) +
-                  '">' +
-                  escapeHtml(shop.shopName || shop.id) +
-                  "</button></li>"
+                  "<li>" +
+                  uiButton(
+                    shop.shopName || String(shop.id),
+                    'class="stores-duty-shop' +
+                      (onShop ? " is-on" : "") +
+                      '" data-duty="' +
+                      escapeHtml(group.id) +
+                      '" data-shop="' +
+                      escapeHtml(shop.id) +
+                      '"',
+                    "secondary"
+                  ) +
+                  "</li>"
                 );
               })
               .join("") +
@@ -563,7 +556,26 @@
         .join("");
     }
 
+    var loadSeq = 0;
+    var scanTimer = 0;
+
+    function stopScan() {
+      clearTimeout(scanTimer);
+      scanTimer = 0;
+    }
+
+    function scheduleScan() {
+      stopScan();
+      scanTimer = setTimeout(function () {
+        if (!dead && state.pageId === "inventory") {
+          load();
+        }
+      }, 2000);
+    }
+
     function load() {
+      var seq = ++loadSeq;
+      stopScan();
       var page = pageById(state.pageId);
       var params = new URLSearchParams();
       params.set("pageNum", String(state.pageNum));
@@ -587,27 +599,41 @@
         params.set("productStatus", state.productStatus);
       }
       setStatus("正在从 ERP 拉取…");
-      bodyEl.innerHTML = '<tr><td colspan="8" class="empty">正在加载…</td></tr>';
+      paintTable(page.id, [], "正在加载…");
       fetchJson(page.api + "?" + params.toString())
         .then(function (data) {
-          if (dead) {
+          if (dead || seq !== loadSeq) {
             return;
           }
           state.pages = Math.max(1, Number(data.totalPages || 1));
           state.pageNum = Math.max(1, Number(data.currentPage || state.pageNum));
           var rows = data.records || [];
-          bodyEl.innerHTML = renderRows(page.id, rows);
+          paintTable(page.id, rows, "暂无数据");
           renderKpi(data.summary || { total: data.total, listed: rows.length });
           pagerEl.textContent =
             "第 " + state.pageNum + " / " + state.pages + " 页，共 " + count(data.total) + " 条 · " + (data.source || "xingmai-erp");
+          if (page.id === "inventory" && data.scanning) {
+            setStatus(
+              "正在读取全部商品页，店铺 " +
+                count(data.shopsDone) +
+                " / " +
+                count(data.shopsTotal) +
+                "，商品页 " +
+                count(data.pagesRead) +
+                " / " +
+                count(data.pagesTotal)
+            );
+            scheduleScan();
+            return;
+          }
           setStatus(rows.length ? "" : "没有符合条件的记录");
         })
         .catch(function (err) {
-          if (dead) {
+          if (dead || seq !== loadSeq) {
             return;
           }
           renderKpi({});
-          bodyEl.innerHTML = '<tr><td colspan="8" class="empty">无法加载</td></tr>';
+          paintTable(page.id, [], "无法加载");
           pagerEl.textContent = "";
           setStatus(err.message || "ERP 拉取失败", true);
         });
@@ -694,7 +720,7 @@
       }
     }
 
-    root.querySelector(".stores-subnav").addEventListener("click", onNavClick);
+    tabsEl.addEventListener("click", onNavClick);
     filterForm.addEventListener("submit", onFilter);
     dutySelect.addEventListener("change", function () {
       applyScope(dutySelect.value, "");
@@ -729,6 +755,7 @@
 
     return function unmount() {
       dead = true;
+      stopScan();
       window.removeEventListener("hashchange", onHash);
       root.innerHTML = "";
     };
