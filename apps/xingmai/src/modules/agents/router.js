@@ -12,6 +12,7 @@ import {
   getUploadsForUser,
   hydrateAgentsRuntime,
   listSessions,
+  overviewForUser,
   readAgentsSettingsPublic,
   saveAgentsSettings,
   saveUpload
@@ -78,6 +79,15 @@ agentsRouter.get("/", async (req, res) => {
 agentsRouter.get("/models", async (_req, res) => {
   await hydrateAgentsRuntime();
   res.json({ ok: true, models: publicModels(), defaultModelId: defaultModelId() });
+});
+
+agentsRouter.get("/overview", requireAuth, async (req, res) => {
+  try {
+    await hydrateAgentsRuntime();
+    res.json({ ok: true, ...(await overviewForUser(req.user.username)) });
+  } catch (err) {
+    sendError(res, err);
+  }
 });
 
 agentsRouter.get("/settings", requireAuth, async (_req, res) => {

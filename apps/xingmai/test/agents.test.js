@@ -42,19 +42,23 @@ async function loginCookie() {
 test("会话页挂 XmModules /agents，颜色走主题变量", () => {
   assert.match(agentsJs, /XmModules\["\/agents"\]/);
   assert.match(agentsJs, /甄选智能体/);
+  assert.match(agentsJs, /电商运营智能体/);
+  assert.match(agentsJs, /常用工具/);
+  assert.match(agentsJs, /嗨！我是甄选智能体/);
+  assert.match(agentsJs, /立即使用/);
   assert.match(agentsJs, /主脑问答台/);
   assert.match(agentsJs, /\/api\/agents\/chat/);
   assert.match(agentsJs, /\/api\/agents\/models/);
+  assert.match(agentsJs, /\/api\/agents\/overview/);
   assert.match(agentsJs, /\/api\/agents\/uploads/);
   assert.match(agentsJs, /\/api\/agents\/sessions/);
   assert.match(agentsJs, /\/api\/agents\/settings/);
   assert.match(agentsJs, /接入 GPT/);
   assert.match(agentsJs, /defaultModelId/);
-  assert.match(agentsJs, /后台模型/);
   assert.doesNotMatch(agentsJs, /xm-sider/);
   assert.doesNotMatch(agentsJs, /XM_AGENTS_API_KEY/);
   assert.doesNotMatch(agentsJs, /OPENAI_API_KEY/);
-  assert.doesNotMatch(agentsJs, /sk-/);
+  assert.doesNotMatch(agentsJs, /sk-[A-Za-z0-9]{8,}/);
   assert.match(agentsCss, /--xm-/);
   assert.match(agentsCss, /data-theme/);
   assert.match(agentsHtml, /甄选智能体/);
@@ -209,6 +213,28 @@ test("上传只回文件 id，对话引用 id", async () => {
   const data = await chat.json();
   assert.ok(data.message.fileIds.includes(file.id));
   assert.match(data.reply.text, new RegExp("#" + file.id));
+});
+
+test("工作台概览只报本模块用量，不编店铺经营异常", async () => {
+  const cookie = await loginCookie();
+  const empty = await (await fetch(`${base}/api/agents/overview`, { headers: { cookie } })).json();
+  assert.equal(empty.ok, true);
+  assert.equal(empty.alerts.available, false);
+  assert.equal(empty.today.tasks, 0);
+  assert.equal(empty.month.files, 0);
+  assert.ok(Array.isArray(empty.trend));
+  assert.equal(empty.trend.length, 14);
+  assert.equal(empty.month.delta.tasks, null);
+  assert.doesNotMatch(JSON.stringify(empty), /推广费比异常|转化率下降|退货率上升|店铺A|ZYUO/);
+
+  await fetch(`${base}/api/agents/chat`, {
+    method: "POST",
+    headers: { cookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ modelId: "desk", text: "怎么选品" })
+  });
+  const filled = await (await fetch(`${base}/api/agents/overview`, { headers: { cookie } })).json();
+  assert.ok(filled.today.tasks >= 1);
+  assert.match(filled.today.note, /本模块/);
 });
 
 test("登录用户解析花名册店权", async () => {

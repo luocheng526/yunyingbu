@@ -1,5 +1,6 @@
 import { dbMode, query } from "../profile/auth.js";
 import { defaultModelId, parseModelList, remoteStatus, setRuntimeRemote } from "./models.js";
+import { PHASE2_GAPS } from "./tools.js";
 
 const MAX_TEXT = 2000;
 const MAX_TITLE = 40;
@@ -205,6 +206,141 @@ export async function listSessions(username) {
     .slice()
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)) || b.id - a.id)
     .map((item) => cloneSession(item, previewOf(item.id, messages)));
+}
+
+function hoursFromTurns(count) {
+  return Math.round((Number(count) || 0) * 80 / 60) / 10;
+}
+
+function shiftDay(ymd, delta) {
+  const [year, month, day] = String(ymd)
+    .split("-")
+    .map((item) => Number(item));
+  const utc = Date.UTC(year, month - 1, day + delta);
+  return new Date(utc).toISOString().slice(0, 10);
+}
+
+function shiftMonth(yyyyMm, delta) {
+  const [year, month] = String(yyyyMm)
+    .split("-")
+    .map((item) => Number(item));
+  const utc = Date.UTC(year, month - 1 + delta, 1);
+  return new Date(utc).toISOString().slice(0, 7);
+}
+
+function deltaPct(now, prev) {
+  const current = Number(now) || 0;
+  const last = Number(prev) || 0;
+  if (last <= 0 && current <= 0) {
+    return null;
+  }
+  if (last <= 0) {
+    return 100;
+  }
+  return Math.round(((current - last) / last) * 1000) / 10;
+}
+
+async function loadUserRows(username) {
+  const owner = String(username || "");
+  if (dbMode() === "mysql") {
+    const [sessRows] = await query(
+      "SELECT id, username, model_id, title, created_at, updated_at FROM agents_sessions WHERE username = ? ORDER BY updated_at DESC, id DESC",
+      [owner]
+    );
+    const sessionsOut = sessRows.map(sessionFromRow);
+    const ids = sessionsOut.map((item) => item.id);
+    let msgsOut = [];
+    if (ids.length) {
+      const [msgRows] = await query(
+        `SELECT id, session_id, role, text, file_ids, model_id, sources, created_at FROM agents_messages WHERE session_id IN (${ids
+          .map(() => "?")
+          .join(",")}) ORDER BY id ASC`,
+        ids
+      );
+      msgsOut = msgRows.map(messageFromRow);
+    }
+    const [fileRows] = await query(
+      "SELECT id, username, filename, mime, size, created_at FROM agents_uploads WHERE username = ?",
+      [owner]
+    );
+    return {
+      sessions: sessionsOut,
+      messages: msgsOut,
+      uploads: fileRows.map((row) => ({
+        id: Number(row.id),
+        createdAt: row.created_at
+      }))
+    };
+  }
+  const sessionsOut = sessions.filter((item) => item.username === owner);
+  return {
+    sessions: sessionsOut,
+    messages: messages.filter((item) => sessionsOut.some((session) => session.id === item.sessionId)),
+    uploads: uploads.filter((item) => item.username === owner).map((item) => ({ id: item.id, createdAt: item.createdAt }))
+  };
+}
+
+export async function overviewForUser(username) {
+  await ensureAgentsSchema();
+  const stamp = nowStamp();
+  const today = stamp.slice(0, 10);
+  const month = stamp.slice(0, 7);
+  const lastMonth = shiftMonth(month, -1);
+  const rows = await loadUserRows(username);
+  const userToday = rows.messages.filter((item) => item.role === "user" && String(item.createdAt).slice(0, 10) === today).length;
+  const asstToday = rows.messages.filter((item) => item.role === "assistant" && String(item.createdAt).slice(0, 10) === today).length;
+  const userMonth = rows.messages.filter((item) => item.role === "user" && String(item.createdAt).startsWith(month)).length;
+  const userPrev = rows.messages.filter((item) => item.role === "user" && String(item.createdAt).startsWith(lastMonth)).length;
+  const filesMonth = rows.uploads.filter((item) => String(item.createdAt).startsWith(month)).length;
+  const filesPrev = rows.uploads.filter((item) => String(item.createdAt).startsWith(lastMonth)).length;
+  const sessMonth = rows.sessions.filter((item) => String(item.createdAt).startsWith(month)).length;
+  const sessPrev = rows.sessions.filter((item) => String(item.createdAt).startsWith(lastMonth)).length;
+  const hoursMonth = hoursFromTurns(userMonth);
+  const hoursPrev = hoursFromTurns(userPrev);
+  const trend = [];
+  for (let offset = 13; offset >= 0; offset -= 1) {
+    const date = shiftDay(today, -offset);
+    const tasks = rows.messages.filter((item) => item.role === "user" && String(item.createdAt).slice(0, 10) === date).length;
+    trend.push({ date: date.slice(5), tasks, hours: hoursFromTurns(tasks) });
+  }
+  const recent = rows.sessions.slice(0, 4).map((item) => {
+    const last = rows.messages.filter((msg) => Number(msg.sessionId) === Number(item.id)).at(-1);
+    return {
+      id: item.id,
+      title: item.title,
+      preview: previewOf(item.id, rows.messages),
+      updatedAt: item.updatedAt,
+      status: last && last.role === "user" ? "进行中" : "已回复"
+    };
+  });
+  return {
+    today: {
+      tasks: userToday,
+      successRate: userToday ? Math.min(100, Math.round((asstToday / userToday) * 1000) / 10) : 0,
+      savedHours: hoursFromTurns(userToday),
+      note: "按本模块对话估算，每条约 8 分钟，不是店铺经营数字"
+    },
+    month: {
+      tasks: userMonth,
+      hours: hoursMonth,
+      files: filesMonth,
+      sessions: sessMonth,
+      delta: {
+        tasks: deltaPct(userMonth, userPrev),
+        hours: deltaPct(hoursMonth, hoursPrev),
+        files: deltaPct(filesMonth, filesPrev),
+        sessions: deltaPct(sessMonth, sessPrev)
+      }
+    },
+    trend,
+    recent,
+    alerts: {
+      available: false,
+      items: [],
+      gaps: PHASE2_GAPS
+    },
+    gpt: remoteStatus()
+  };
 }
 
 export async function getSession(id, username) {
