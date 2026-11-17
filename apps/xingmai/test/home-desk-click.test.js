@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildLiveView } from "../src/modules/home/jingmai.js";
+import { accountIdentity, bindDecision, buildLiveView } from "../src/modules/home/jingmai.js";
+import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
+import { reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/home/jingmai-runner.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
 import { collectFrameIds, deskUsable, loginOpenReady, loginPageAction, loginScreenState, sessionReady } from "../src/modules/home/jingmai-desk.js";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
@@ -260,6 +262,98 @@ test("typing the code aims at the confirm button and fills the field", () => {
   assert.equal(aim.kind, "button");
   assert.equal(aim.x, 140);
   assert.equal(aim.y, 236);
+});
+
+test("a login is bound only when the platform shop id matches", () => {
+  const body = {
+    data: {
+      currentBelongType: "200",
+      belongVos: [{ belongType: "200", belongBizId: "16107402", shopName: "DIKTT潮流生活旗舰店" }]
+    }
+  };
+  assert.deepEqual(accountIdentity(body), { shopId: "16107402", shopName: "DIKTT潮流生活旗舰店" });
+  const online = { authState: "ok", shopId: "16107402", cookies: [{ name: "thor", value: "kept" }] };
+  const wrong = bindDecision({ store: "UUMILO个人洗护旗舰店", shopId: "196509787" }, accountIdentity(body), null);
+  assert.equal(wrong.action, "reject");
+  const kept = bindDecision({ store: "DIKTT潮流生活旗舰店", shopId: "16107402" }, accountIdentity(body), online);
+  assert.equal(kept.action, "save");
+  const clash = bindDecision({ store: "UUMILO个人洗护旗舰店", shopId: "196509787" }, accountIdentity(body), online);
+  assert.equal(clash.action, "keep");
+  assert.match(clash.message, /DIKTT潮流生活旗舰店/);
+  const paused = bindDecision(
+    { store: "UUMILO个人洗护旗舰店", shopId: "196509787" },
+    accountIdentity(body),
+    { authState: "offline", shopId: "16107402", cookies: [{ name: "thor", value: "kept" }] }
+  );
+  assert.equal(paused.action, "keep");
+});
+
+test("a mismatched login keeps the cookies already saved for that shop", async () => {
+  await resetJingmaiStore();
+  await saveSession("DIKTT潮流生活旗舰店", {
+    cookies: [{ name: "thor", value: "live" }],
+    authState: "ok",
+    shopId: "16107402"
+  });
+  setJingmaiDeps({
+    desk: {
+      poll: async () => ({ status: "ok", cookies: [{ name: "thor", value: "other-shop" }] }),
+      close: async () => {}
+    },
+    client: {
+      fetchAccountIdentity: async () => ({ shopId: "196509787", shopName: "UUMILO个人洗护旗舰店" })
+    }
+  });
+  try {
+    const state = await reloginState("DIKTT潮流生活旗舰店");
+    assert.equal(state.status, "login");
+    assert.match(state.message, /原来的会话还在/);
+    const row = (await listSessions()).find((item) => item.store === "DIKTT潮流生活旗舰店");
+    assert.equal(row.cookies[0].value, "live");
+    assert.equal(row.authState, "ok");
+    assert.equal(row.shopId, "16107402");
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
+test("a mismatched login with no saved session is not written as this shop", async () => {
+  await resetJingmaiStore();
+  setJingmaiDeps({
+    desk: {
+      poll: async () => ({ status: "ok", cookies: [{ name: "thor", value: "other-shop" }] }),
+      close: async () => {}
+    },
+    client: {
+      fetchAccountIdentity: async () => ({ shopId: "16107402", shopName: "DIKTT潮流生活旗舰店" })
+    }
+  });
+  try {
+    const state = await reloginState("UUMILO个人洗护旗舰店");
+    assert.equal(state.status, "screen");
+    const row = (await listSessions()).find((item) => item.store === "UUMILO个人洗护旗舰店");
+    assert.equal(row.authState, "login_expired");
+    assert.equal(row.cookies.length, 0);
+    assert.match(row.authMessage, /DIKTT潮流生活旗舰店/);
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
+test("collector keeps each saved session and does not drop a shop that has no platform id yet", async () => {
+  await resetJingmaiStore();
+  await saveSession("DIKTT潮流生活旗舰店", {
+    cookies: [{ name: "thor", value: "live" }],
+    authState: "ok",
+    shopId: "16107402"
+  });
+  await saveSession("京贝优驱蚊专营店", {
+    cookies: [{ name: "pt_key", value: "live" }],
+    authState: "ok"
+  });
+  const targets = await listCollectTargets();
+  assert.deepEqual(targets.map((row) => row.store).sort(), ["DIKTT潮流生活旗舰店", "京贝优驱蚊专营店"]);
+  assert.equal(targets.find((row) => row.store === "DIKTT潮流生活旗舰店").shopId, "16107402");
 });
 
 test("a login form captcha is submitted with the 登录 button", () => {

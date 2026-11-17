@@ -1,6 +1,6 @@
 import { browserReady, ensureChrome, jingmaiDesk } from "./jingmai-desk.js";
 import { jingmaiClient } from "./jingmai-client.js";
-import { beijingParts, runTick, sampleFields } from "./jingmai.js";
+import { beijingParts, bindDecision, runTick, sampleFields, sessionStillValid } from "./jingmai.js";
 import { listCollectTargets, listSessions, markAuth, readJingmaiLive, saveSample, saveSession, setRoster } from "./jingmai-store.js";
 
 const INTERVAL_MS = 5 * 60 * 1000;
@@ -66,9 +66,10 @@ function rememberOrg(shops) {
     orgCache.set(shop.store, {
       store: shop.store,
       enabled: shop.enabled !== false,
-      login: shop.login,
-      password: shop.password
-    });
+        login: shop.login,
+        password: shop.password,
+        shopId: String(shop.shopId || "")
+      });
   });
 }
 
@@ -119,7 +120,8 @@ export async function loadOrgShops(cookie, fetchImpl = fetch) {
         manager: String((store && store.manager) || ""),
         enabled: store.statusKey === "operating" || (store.statusKey == null && store.remark === "运营中"),
         login: String(store.login || ""),
-        password: String(store.password || "")
+        password: String(store.password || ""),
+        shopId: String(store.shopId || store.storeId || "").trim()
       };
     })
     .filter(function (store) {
@@ -201,8 +203,49 @@ function publicState(state) {
   };
 }
 
-async function rememberLogin(store, cookies) {
-  await saveSession(store, { cookies: cookies, authState: "ok", authMessage: "", enabled: true });
+async function rememberLogin(store, cookies, expected) {
+  let identity = { shopId: "", shopName: "" };
+  try {
+    if (deps.client.fetchAccountIdentity) {
+      identity = (await deps.client.fetchAccountIdentity(cookies)) || identity;
+    }
+  } catch (error) {
+    if (error && error.code === "login") {
+      const sessions = await listSessions();
+      const existing = sessions.find(function (item) {
+        return item.store === store;
+      });
+      if (sessionStillValid(existing)) {
+        return "kept";
+      }
+      return "failed";
+    }
+  }
+  const sessions = await listSessions();
+  const existing = sessions.find(function (item) {
+    return item.store === store;
+  });
+  const decision = bindDecision(Object.assign({ store: store }, expected || {}), identity, existing);
+  if (decision.action === "keep") {
+    return "kept";
+  }
+  if (decision.action === "reject") {
+    await saveSession(store, {
+      cookies: [],
+      authState: "login_expired",
+      authMessage: decision.message,
+      enabled: true,
+      shopId: decision.shopId
+    });
+    return "failed";
+  }
+  await saveSession(store, {
+    cookies: cookies,
+    authState: "ok",
+    authMessage: "",
+    enabled: true,
+    shopId: decision.shopId
+  });
   try {
     const metrics = await deps.client.fetchHome(cookies);
     const now = beijingParts();
@@ -214,7 +257,7 @@ async function rememberLogin(store, cookies) {
     const message = String((error && error.message) || "采集超时").replace(/\s+/g, " ").slice(0, 180) || "采集超时";
     await markAuth(store, "offline", message);
   }
-  return true;
+  return "saved";
 }
 
 async function startQueued(shop) {
@@ -224,8 +267,11 @@ async function startQueued(shop) {
   shop.password = "";
   if (opened.status === "ok") {
     await deps.desk.close();
-    const kept = await rememberLogin(shop.store, opened.cookies || []);
-    if (!kept) {
+    const kept = await rememberLogin(shop.store, opened.cookies || [], { shopId: shop.shopId || "", store: shop.store });
+    if (kept === "kept") {
+      return publicState({ status: "login", store: shop.store, message: "这次登录到的不是这家店，原来的会话还在" });
+    }
+    if (kept !== "saved") {
       return advanceAfterFailure(shop.store, "登录没有通过，请再试一次");
     }
     return advanceAfterSuccess(shop.store);
@@ -274,7 +320,7 @@ async function queueShops(shops) {
     await deps.desk.close();
   }
   loginQueue = shops.map(function (shop) {
-    const copy = { store: shop.store, login: shop.login, password: shop.password };
+    const copy = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "" };
     shop.login = "";
     shop.password = "";
     return copy;
@@ -349,9 +395,13 @@ export async function reloginState(store) {
   const state = await deps.desk.poll(name);
   if (state.status === "ok") {
     const cookies = state.cookies || [];
-    const kept = await rememberLogin(name, cookies);
+    const cached = orgCache.get(name);
+    const kept = await rememberLogin(name, cookies, { store: name, shopId: (cached && cached.shopId) || "" });
     await deps.desk.close();
-    if (!kept) {
+    if (kept === "kept") {
+      return publicState({ status: "login", store: name, message: "这次登录到的不是这家店，原来的会话还在" });
+    }
+    if (kept !== "saved") {
       return publicState({ status: "screen", store: name, message: "登录没有通过，请再试一次" });
     }
     return advanceAfterSuccess(name);
@@ -425,10 +475,10 @@ export async function finishRelogin(store, authCode) {
       password: password,
       authCode: authCode || ""
     });
-    const metrics = await deps.client.fetchHome(jar);
-    await saveSession(name, { cookies: jar, authState: "ok", authMessage: "", enabled: true });
-    const now = beijingParts();
-    await saveSample(Object.assign({ store: name, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)));
+    const kept = await rememberLogin(name, jar, { store: name, shopId: pending.shopId || "" });
+    if (kept !== "saved") {
+      return { ok: true, store: name, status: "login", message: kept === "kept" ? "这次登录到的不是这家店，原来的会话还在" : "登录没有通过，请再试一次" };
+    }
     return { ok: true, store: name, status: "ok" };
   } catch (error) {
     const message = error && error.code === "login" ? error.message : "登录没有通过，请再试一次";
@@ -442,8 +492,8 @@ async function silentOne(shop) {
   shop.password = "";
   if (opened.status === "ok") {
     await deps.desk.close();
-    const kept = await rememberLogin(shop.store, opened.cookies || []);
-    return { store: shop.store, status: kept ? "ok" : "login" };
+    const kept = await rememberLogin(shop.store, opened.cookies || [], { shopId: shop.shopId || "", store: shop.store });
+    return { store: shop.store, status: kept === "saved" || kept === "kept" ? "ok" : "login" };
   }
   if (deps.desk && deps.desk.close) {
     await deps.desk.close();
