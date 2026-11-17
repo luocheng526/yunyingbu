@@ -1,4 +1,4 @@
-/* xm-module-releases 0.1.104-page2 */
+/* xm-module-releases 0.1.105-page2-bar */
 /* xm-china-time 0.1.27 */
 /* xm-upgrade-mask 0.1.45 */
 (function () {
@@ -133,13 +133,15 @@
       .oc-tab-num { display: block; margin: 0.15rem 0 0.05rem; font-size: 1.7rem; font-weight: 750; }
       .oc-tab p { display: block; margin: 0; font-size: 12px; }
       html body .xm-content .rg-subnav button.oc-tab {
-        min-height: 0; background: #fff !important; color: #334155 !important;
-        border: 1px solid #e8eef5 !important; border-radius: 999px !important; box-shadow: none !important; padding: 8px 16px !important;
+        min-height: 40px !important; background: #fff !important; color: #334155 !important;
+        border: 1px solid #e8eef5 !important; border-radius: 999px !important; box-shadow: none !important; padding: 10px 20px !important;
+        font-size: 14px !important;
       }
       html body .xm-content .rg-subnav button.oc-tab.active,
       html body .xm-content .rg-subnav button.oc-tab.active:hover {
         background: #1677ff !important; color: #fff !important; border-color: #1677ff !important;
       }
+      html body .xm-content .rg-filters label { flex-direction: row !important; align-items: center !important; }
       #failed-view table { table-layout: fixed; width: 100%; }
       #failed-view th:nth-child(4), #failed-view td.failed-sum { width: 16%; min-width: 10rem; }
       #failed-view th:nth-child(5), #failed-view td.failed-log { width: 38%; }
@@ -189,11 +191,11 @@
       <div id="lock-view" class="lock-box idle" hidden></div>
       <section class="oc-card panel rg-board">
         <nav class="rg-subnav" aria-label="记录页签" hidden>
-          <button type="button" class="oc-tab rg-sub" data-tab="history"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="rg-sub-label">发布记录</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="logs"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg><span class="rg-sub-label">运行日志</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="failed"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.3 3.2L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.2a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><span class="rg-sub-label">失败版本</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="compare"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M15.5 5.5A6 6 0 0 1 21 11M8.5 18.5A6 6 0 0 1 3 13"/></svg><span class="rg-sub-label">版本对比</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="rollback"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="rg-sub-label">回滚管理</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="history"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="rg-sub-label">发布记录</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="logs"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg><span class="rg-sub-label">运行日志</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="failed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.3 3.2L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.2a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><span class="rg-sub-label">失败版本</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="compare"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M15.5 5.5A6 6 0 0 1 21 11M8.5 18.5A6 6 0 0 1 3 13"/></svg><span class="rg-sub-label">版本对比</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="rollback"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="rg-sub-label">回滚管理</span></button>
         </nav>
         <div class="rg-filters" id="rg-filters" hidden>
           <label>版本号 <input id="flt-ver" type="search" placeholder="请输入版本号" autocomplete="off" /></label>
@@ -209,9 +211,11 @@
             <select id="flt-who"><option value="">全部</option></select>
           </label>
           <label>发布时间
-            <span class="rg-dates">
+            <span class="rg-dates" id="flt-dates">
+              <span class="rg-dates-ph">请选择日期范围</span>
               <input id="flt-from" type="date" />
               <input id="flt-to" type="date" />
+              <svg class="rg-dates-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>
             </span>
           </label>
           <button type="button" class="act" id="flt-go">查询</button>
@@ -271,7 +275,7 @@
     if (!document.querySelector('link[rel="stylesheet"][href*="/releases.css"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = "/releases.css?v=sc-ui-23";
+      link.href = "/releases.css?v=sc-ui-24";
       document.head.appendChild(link);
     }
   }
@@ -1048,6 +1052,14 @@
           to: String((document.getElementById("flt-to") || {}).value || "")
         };
       }
+      function paintDatePh() {
+        const box = document.getElementById("flt-dates");
+        if (!box) {
+          return;
+        }
+        const flt = readFilters();
+        box.classList.toggle("has-value", Boolean(flt.from || flt.to));
+      }
       function matchFilters(item, flt) {
         if (flt.ver && String(item.version || "").indexOf(flt.ver) < 0) {
           return false;
@@ -1717,6 +1729,15 @@
           }
         });
       });
+      ["flt-from", "flt-to"].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (!el) {
+          return;
+        }
+        el.addEventListener("change", paintDatePh);
+        el.addEventListener("input", paintDatePh);
+      });
+      paintDatePh();
       const cmpGo = document.getElementById("cmp-go");
       if (cmpGo) {
         cmpGo.addEventListener("click", function () {

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>版本发布中心</title>
-    <link rel="stylesheet" href="/releases.css?v=sc-ui-23" />
+    <link rel="stylesheet" href="/releases.css?v=sc-ui-24" />
     <style>
       #upgrade-mask,
       html > #upgrade-mask {
@@ -120,11 +120,11 @@
       <div id="lock-view" class="lock-box idle" hidden></div>
       <section class="oc-card panel rg-board">
         <nav class="rg-subnav" aria-label="记录页签" hidden>
-          <button type="button" class="oc-tab rg-sub" data-tab="history"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="rg-sub-label">发布记录</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="logs"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg><span class="rg-sub-label">运行日志</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="failed"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.3 3.2L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.2a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><span class="rg-sub-label">失败版本</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="compare"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M15.5 5.5A6 6 0 0 1 21 11M8.5 18.5A6 6 0 0 1 3 13"/></svg><span class="rg-sub-label">版本对比</span></button>
-          <button type="button" class="oc-tab rg-sub" data-tab="rollback"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="rg-sub-label">回滚管理</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="history"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="rg-sub-label">发布记录</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="logs"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg><span class="rg-sub-label">运行日志</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="failed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.3 3.2L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.2a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><span class="rg-sub-label">失败版本</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="compare"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M15.5 5.5A6 6 0 0 1 21 11M8.5 18.5A6 6 0 0 1 3 13"/></svg><span class="rg-sub-label">版本对比</span></button>
+          <button type="button" class="oc-tab rg-sub" data-tab="rollback"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="rg-sub-label">回滚管理</span></button>
         </nav>
         <div class="rg-filters" id="rg-filters" hidden>
           <label>版本号 <input id="flt-ver" type="search" placeholder="请输入版本号" autocomplete="off" /></label>
@@ -140,9 +140,11 @@
             <select id="flt-who"><option value="">全部</option></select>
           </label>
           <label>发布时间
-            <span class="rg-dates">
+            <span class="rg-dates" id="flt-dates">
+              <span class="rg-dates-ph">请选择日期范围</span>
               <input id="flt-from" type="date" />
               <input id="flt-to" type="date" />
+              <svg class="rg-dates-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>
             </span>
           </label>
           <button type="button" class="act" id="flt-go">查询</button>
@@ -956,6 +958,14 @@
           to: String((liveEl("flt-to") || {}).value || "")
         };
       }
+      function paintDatePh() {
+        const box = liveEl("flt-dates");
+        if (!box) {
+          return;
+        }
+        const flt = readFilters();
+        box.classList.toggle("has-value", Boolean(flt.from || flt.to));
+      }
       function matchFilters(item, flt) {
         if (flt.ver && String(item.version || "").indexOf(flt.ver) < 0) return false;
         if (flt.status === "success" && (item.status !== "success" || item.rolledBack)) return false;
@@ -1386,6 +1396,16 @@
           refresh().catch(function (err) { flash(err.message, true); });
         });
       }
+      ["flt-from", "flt-to"].forEach(function (id) {
+        const el = liveEl(id);
+        if (!el || el.dataset.bound === "1") {
+          return;
+        }
+        el.dataset.bound = "1";
+        el.addEventListener("change", paintDatePh);
+        el.addEventListener("input", paintDatePh);
+      });
+      paintDatePh();
       const cmpGo = liveEl("cmp-go");
       if (cmpGo && cmpGo.dataset.bound !== "1") {
         cmpGo.dataset.bound = "1";
