@@ -133,12 +133,11 @@
       ".hr-team{display:flex;flex-direction:column;gap:12px;}" +
       ".hr-team + .hr-team{margin-top:8px;padding-top:16px;border-top:1px solid var(--xm-line);}" +
       ".hr-team-title{margin:0;font-size:16px;font-weight:700;color:var(--xm-ink);}" +
-      ".hr-home{display:flex;flex-direction:column;gap:16px;padding:16px;border-radius:16px;background:#f4f7fb;color:#1d2939;font-family:\"PingFang SC\",\"Microsoft YaHei\",sans-serif;}" +
+      ".hr-home{display:flex;flex-direction:column;gap:16px;padding:16px;border-radius:16px;background:#f4f7fb;color:#1d2939;}" +
       ".hr-home-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:2px 4px;}" +
       ".hr-home-head h2{margin:0;font-size:22px;font-weight:700;color:#1d2939;}" +
       ".hr-home-head p{margin:6px 0 0;color:#98a2b3;font-size:13px;}" +
       ".hr-range{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid #e7edf5;border-radius:10px;background:#fff;color:#667085;font-size:13px;white-space:nowrap;box-shadow:0 1px 2px rgba(16,24,40,.04);}" +
-      ".hr-range::before{content:\"📅\";font-size:14px;}" +
       ".hr-range select{border:0;background:transparent;color:#1d2939;font:inherit;font-weight:650;}" +
       ".hr-home-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;}" +
       ".hr-home-kpi{display:flex;align-items:center;gap:12px;padding:16px 14px;border:0;border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(31,45,61,.06);min-width:0;}" +
@@ -199,9 +198,6 @@
       ".hr-meter{height:8px;border-radius:99px;background:#e8eef8;overflow:hidden;margin:12px 0;}" +
       ".hr-meter i{display:block;height:100%;background:linear-gradient(90deg,#5ee0a0,#2f6bff);}" +
       ".hr-home .hr-table-wrap{border:0;box-shadow:none;}" +
-      ".hr-home th{color:#98a2b3;font-size:12px;font-weight:600;}" +
-      ".hr-home td{color:#344054;font-size:13px;}" +
-      ".hr-line{background:repeating-linear-gradient(#fff 0 46px,#eef2f6 46px 47px);}" +
       ".hr-lead{margin:0 0 4px;color:#667085;font-size:13px;}" +
       ".hr-pill{border-radius:99px;padding:2px 8px;font-size:12px;font-weight:650;white-space:nowrap;}" +
       ".hr-pill-try{color:#d48806;background:#fff7e6;}" +
@@ -1412,12 +1408,6 @@
         if (person && staffForm) fillStaffForm(staffForm, person);
         return;
       }
-      var tabBtn = event.target.closest(".hr-tab");
-      if (tabBtn && root.contains(tabBtn)) {
-        event.preventDefault();
-        selectTab(root, state, tabBtn.getAttribute("data-tab"));
-        return;
-      }
       var btn = event.target.closest("[data-act='delete']");
       if (!btn || !root.contains(btn)) return;
       if (!window.confirm("删除这条记录？")) return;
@@ -1492,6 +1482,19 @@
         .then(function () { if (button) button.disabled = false; });
     }
 
+    function onTabPointer(event) {
+      if (!state.alive || !event.target || !event.target.closest) return;
+      var btn = event.target.closest(".hr-tab");
+      if (!btn && event.target.id === "xm-notice-mask") {
+        var tabs = root.querySelectorAll(".hr-tab");
+        for (var i = 0; i < tabs.length; i++) {
+          var box = tabs[i].getBoundingClientRect();
+          if (event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom) btn = tabs[i];
+        }
+      }
+      if (btn && root.contains(btn)) selectTab(root, state, btn.getAttribute("data-tab"));
+    }
+    window.addEventListener("click", onTabPointer, true);
     root.addEventListener("click", onClick);
     root.addEventListener("submit", onSubmit);
     root.addEventListener("input", function (event) {
@@ -1549,6 +1552,7 @@
     loadTab(root, state);
     return function unmount() {
       state.alive = false;
+      window.removeEventListener("click", onTabPointer, true);
       root.innerHTML = "";
     };
   }
