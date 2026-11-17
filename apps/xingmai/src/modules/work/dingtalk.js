@@ -7,6 +7,7 @@ const binds = new Map();
 let attendanceCache = new Map();
 let tokenCache = { value: "", until: 0 };
 let rememberedAgent = "";
+let rememberedAuth = { clientId: "", clientSecret: "" };
 let transport = globalThis.fetch;
 
 export function setDingTransport(fn) {
@@ -20,13 +21,14 @@ export function resetDingStore() {
   attendanceCache = new Map();
   tokenCache = { value: "", until: 0 };
   rememberedAgent = "";
+  rememberedAuth = { clientId: "", clientSecret: "" };
 }
 
 export function dingConfig() {
   return {
     corpId: String(process.env.DINGTALK_CORP_ID || "").trim(),
-    clientId: String(process.env.DINGTALK_CLIENT_ID || "").trim(),
-    clientSecret: String(process.env.DINGTALK_CLIENT_SECRET || "").trim(),
+    clientId: rememberedAuth.clientId || String(process.env.DINGTALK_CLIENT_ID || "").trim(),
+    clientSecret: rememberedAuth.clientSecret || String(process.env.DINGTALK_CLIENT_SECRET || "").trim(),
     agentId: String(process.env.DINGTALK_AGENT_ID || "").trim()
   };
 }
@@ -182,6 +184,7 @@ async function oapi(path, body) {
   if (data.errcode) {
     const error = new Error("钉钉接口失败");
     error.publicMessage = error.message;
+    error.code = Number(data.errcode);
     throw error;
   }
   return data.result === undefined ? data : data.result;
@@ -224,9 +227,15 @@ export async function readyDing() {
   rememberedAgent = "";
   if (agentRows[0]?.body) {
     try {
-      rememberedAgent = String(JSON.parse(agentRows[0].body).agentId || "");
+      const saved = JSON.parse(agentRows[0].body);
+      rememberedAgent = String(saved.agentId || "");
+      rememberedAuth = {
+        clientId: String(saved.clientId || ""),
+        clientSecret: String(saved.clientSecret || "")
+      };
     } catch {
       rememberedAgent = "";
+      rememberedAuth = { clientId: "", clientSecret: "" };
     }
   }
   const [sent] = await query("SELECT person_id, work_date FROM work_report_ding_remind");
@@ -495,12 +504,11 @@ function currentAgentId() {
   return dingConfig().agentId || rememberedAgent;
 }
 
-async function rememberAgent(agentId) {
-  rememberedAgent = String(agentId || "");
+async function persistDingApp() {
   if (dbMode() !== "mysql") {
     return;
   }
-  if (!rememberedAgent) {
+  if (!rememberedAgent && !rememberedAuth.clientId) {
     await query("DELETE FROM work_report_diary_meta WHERE meta_key = 'ding_agent'");
     return;
   }
@@ -508,8 +516,58 @@ async function rememberAgent(agentId) {
     `INSERT INTO work_report_diary_meta (meta_key, body, updated_at)
      VALUES ('ding_agent', ?, ?)
      ON DUPLICATE KEY UPDATE body = VALUES(body), updated_at = VALUES(updated_at)`,
-    [JSON.stringify({ agentId: rememberedAgent }), new Date().toISOString().slice(0, 19).replace("T", " ")]
+    [
+      JSON.stringify({
+        agentId: rememberedAgent,
+        clientId: rememberedAuth.clientId,
+        clientSecret: rememberedAuth.clientSecret
+      }),
+      new Date().toISOString().slice(0, 19).replace("T", " ")
+    ]
   );
+}
+
+async function rememberAgent(agentId) {
+  rememberedAgent = String(agentId || "");
+  await persistDingApp();
+}
+
+const USERID_CODES = new Set([33012, 40031, 49016, 60121]);
+
+export async function checkWorkNotice() {
+  try {
+    await sendWorkNotice("0");
+    return { ok: true };
+  } catch (error) {
+    if (USERID_CODES.has(Number(error.code))) {
+      return { ok: true };
+    }
+    return { ok: false, error: "工作通知还不能用" };
+  }
+}
+
+export async function saveAppConfig(input) {
+  const agentId = String(input?.agentId || "").trim();
+  const clientId = String(input?.clientId || "").trim();
+  const clientSecret = String(input?.clientSecret || "").trim();
+  if (!/^\d{4,20}$/.test(agentId) || !/^ding[a-z0-9]+$/i.test(clientId) || clientSecret.length < 10 || clientSecret.length > 128) {
+    return { ok: false, error: "应用凭证不完整" };
+  }
+  const prevAgent = rememberedAgent;
+  const prevAuth = { ...rememberedAuth };
+  rememberedAgent = agentId;
+  rememberedAuth = { clientId, clientSecret };
+  tokenCache = { value: "", until: 0 };
+  const check = await checkWorkNotice();
+  if (!check.ok) {
+    rememberedAgent = prevAgent;
+    rememberedAuth = prevAuth;
+    tokenCache = { value: "", until: 0 };
+    await persistDingApp();
+    return check;
+  }
+  await persistDingApp();
+  return { ok: true };
 }
 
 function appRows(payload) {
@@ -520,8 +578,7 @@ function appRows(payload) {
 }
 
 export async function discoverAgent() {
-  const envAgent = dingConfig().agentId;
-  if (envAgent) {
+  if (currentAgentId()) {
     return { ok: true, names: [], chosenName: "" };
   }
   let names = [];
@@ -535,8 +592,7 @@ export async function discoverAgent() {
     });
     const data = await res.json();
     if (data.code || data.errcode) {
-      await rememberAgent("");
-      return { ok: false, names: [], error: String(data.message || data.errmsg || "还读不到工作通知 AgentId").slice(0, 80) };
+      return { ok: false, names: [], error: "还读不到工作通知 AgentId" };
     }
     const rows = appRows(data.result || data).filter((app) => app && (app.agentId || app.agentid));
     names = rows.map((app) => String(app.name || app.appName || "未命名"));
@@ -551,7 +607,6 @@ export async function discoverAgent() {
     chosen = "";
   }
   if (!chosen) {
-    await rememberAgent("");
     return { ok: false, names, error: names.length > 1 ? "有多个企业内部应用，还不能确定用哪一个发提醒" : "还读不到工作通知 AgentId" };
   }
   await rememberAgent(chosen);

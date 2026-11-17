@@ -12,6 +12,7 @@ import {
   readyDing,
   releaseReminder,
   resetDingStore,
+  saveAppConfig,
   saveBinds,
   sendWorkNotice,
   shanghaiNow,
@@ -1182,6 +1183,28 @@ export async function activateDing(user, isAdmin) {
     operator: Boolean(attendance.ok),
     note: attendance.error || ""
   };
+  return settings;
+}
+
+export async function saveDingApp(user, input, isAdmin) {
+  await readyDiary();
+  if (!isAdmin) {
+    return fail(403, "只有罗成可以改日报设置");
+  }
+  const saved = await saveAppConfig(input || {});
+  if (!saved.ok) {
+    return fail(400, saved.error || "应用凭证不完整");
+  }
+  policy.delivery = {
+    ...policy.delivery,
+    revision: policy.delivery.revision + 1,
+    remind: true,
+    remindAt: policy.delivery.remindAt || "18:00"
+  };
+  policy.revision += 1;
+  await saveMeta("policy", policy);
+  const settings = await getDiarySettings(user, true);
+  settings.activation = { agent: true, remind: true };
   return settings;
 }
 

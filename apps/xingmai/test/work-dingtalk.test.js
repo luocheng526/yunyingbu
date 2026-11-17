@@ -4,9 +4,11 @@ import { resetPeopleStore } from "../src/modules/people/store.js";
 import {
   classifyLeave,
   classifySchedule,
+  dingPublic,
   inRemindWindow,
   proposeBinds,
   resetDingStore,
+  saveAppConfig,
   setDingTransport,
   shanghaiNow,
   shiftWindow
@@ -16,6 +18,26 @@ import { resetWorkStore, saveMembers } from "../src/modules/work/store.js";
 
 const luocheng = { username: "罗成", displayName: "罗成" };
 const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
+
+test("应用凭证只保存在服务端，返回值里没有密钥", async () => {
+  setDingTransport(async (url) => {
+    if (String(url).includes("accessToken")) {
+      return { json: async () => ({ accessToken: "token", expireIn: 7200 }) };
+    }
+    return { json: async () => ({ errcode: 33012, errmsg: "无效的USERID" }) };
+  });
+  try {
+    const saved = await saveAppConfig({ agentId: "10001", clientId: "dingabc123", clientSecret: "secret-value-1" });
+    assert.equal(saved.ok, true);
+    assert.equal(JSON.stringify(saved).includes("secret-value-1"), false);
+    assert.equal(dingPublic().agent, true);
+    const rejected = await saveAppConfig({ agentId: "1", clientId: "dingabc123", clientSecret: "secret-value-1" });
+    assert.equal(rejected.ok, false);
+  } finally {
+    resetDingStore();
+    setDingTransport(globalThis.fetch);
+  }
+});
 
 test("排班休息和排班上班按当天班次区分", () => {
   assert.equal(classifySchedule([]), "none");

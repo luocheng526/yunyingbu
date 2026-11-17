@@ -11,6 +11,7 @@ import {
   saveDiaryRest,
   saveDiarySettings,
   activateDing,
+  saveDingApp,
   saveDingBinds,
   startDiaryReminder,
   syncDingBinds
@@ -202,6 +203,13 @@ workRouter.put(
   "/diary/settings",
   wrap(async (req, res) => {
     sendResult(res, await saveDiarySettings(req.user, req.body || {}, isWorkAdmin(req.user)), 403);
+  })
+);
+
+workRouter.put(
+  "/diary/ding/app",
+  wrap(async (req, res) => {
+    sendResult(res, await saveDingApp(req.user, req.body || {}, isWorkAdmin(req.user)), 403);
   })
 );
 
