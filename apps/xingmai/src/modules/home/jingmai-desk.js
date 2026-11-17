@@ -1125,6 +1125,30 @@ async function pageText(ws) {
   return String(text || "");
 }
 
+export function deskUsable(desk) {
+  return Boolean(
+    desk &&
+    desk.ws &&
+    desk.ws.readyState === 1 &&
+    desk.chrome &&
+    desk.chrome.exitCode == null &&
+    desk.chrome.killed !== true
+  );
+}
+
+export function loginOpenReady(attempt, screen, hasCookie) {
+  if (hasCookie) {
+    return "ok";
+  }
+  if (screen && screen.status === "login") {
+    return "login";
+  }
+  if (attempt >= 1) {
+    return "show";
+  }
+  return "wait";
+}
+
 export function loginScreenState(text, formReady) {
   const source = String(text || "");
   if (/滑块|安全验证|请完成验证/.test(source)) {
@@ -1186,29 +1210,55 @@ export function resetDesk() {
   stopCurrent();
 }
 
+async function acquireDesk(store) {
+  if (deskUsable(current)) {
+    current.store = store;
+    current.password = "";
+    try {
+      await send(current.ws, "Network.clearBrowserCookies");
+      return current;
+    } catch {
+      stopCurrent();
+    }
+  }
+  const desk = await launchChrome();
+  desk.store = store;
+  current = desk;
+  await send(desk.ws, "Page.enable");
+  await send(desk.ws, "Network.enable");
+  await send(desk.ws, "Emulation.setDeviceMetricsOverride", {
+    width: 1100,
+    height: 720,
+    deviceScaleFactor: 1,
+    mobile: false
+  });
+  return desk;
+}
+
 export async function closeDesk() {
-  stopCurrent();
+  if (!deskUsable(current)) {
+    stopCurrent();
+    return;
+  }
+  const desk = current;
+  desk.store = "";
+  desk.password = "";
+  try {
+    await send(desk.ws, "Network.clearBrowserCookies");
+    await send(desk.ws, "Page.navigate", { url: "about:blank" });
+  } catch {
+    stopCurrent();
+  }
 }
 
 export async function openDesk({ store, loginName, password }) {
-  stopCurrent();
   let desk = null;
   try {
-    desk = await launchChrome();
-    desk.store = store;
-    current = desk;
-    await send(desk.ws, "Page.enable");
-    await send(desk.ws, "Network.enable");
-    await send(desk.ws, "Emulation.setDeviceMetricsOverride", {
-      width: 1100,
-      height: 720,
-      deviceScaleFactor: 1,
-      mobile: false
-    });
+    desk = await acquireDesk(store);
     await send(desk.ws, "Page.navigate", { url: LOGIN_URL });
     let ready = false;
-    for (let attempt = 0; attempt < 24; attempt += 1) {
-      await sleep(700);
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      await sleep(250);
       ready = Boolean(await evaluate(desk.ws, "!![...document.querySelectorAll('input')].find((node) => (node.placeholder || '').includes('账号'))"));
       if (ready) {
         break;
@@ -1226,28 +1276,27 @@ export async function openDesk({ store, loginName, password }) {
     }
     let cookies = [];
     let screen = { status: "verify", message: "" };
-    for (let attempt = 0; attempt < 18; attempt += 1) {
-      await sleep(attempt === 0 ? 1200 : 1000);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await sleep(attempt === 0 ? 400 : 300);
       try {
         cookies = await readCookies(desk.ws);
       } catch {
         cookies = [];
-      }
-      if (hasSession(cookies)) {
-        stopCurrent();
-        return { status: "ok", cookies: cookies };
       }
       try {
         screen = await readScreenState(desk.ws);
       } catch {
         screen = { status: "verify", message: "" };
       }
-      if (screen.status === "login") {
-        stopCurrent();
+      const decision = loginOpenReady(attempt, screen, hasSession(cookies));
+      if (decision === "ok") {
+        return { status: "ok", cookies: cookies };
+      }
+      if (decision === "login") {
         return screen;
       }
-      if (screen.message && /滑块|验证码|安全验证|请过一会儿再试/.test(screen.message)) {
-        return screen;
+      if (decision === "show") {
+        return screen.status === "verify" ? screen : { status: "verify", message: screen.message || "" };
       }
     }
     return screen;

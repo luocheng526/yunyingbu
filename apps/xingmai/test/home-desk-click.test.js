@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { loginPageAction, loginScreenState } from "../src/modules/home/jingmai-desk.js";
+import { deskUsable, loginOpenReady, loginPageAction, loginScreenState } from "../src/modules/home/jingmai-desk.js";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
 
 const homeJs = readFileSync(new URL("../public/shared/modules/home.js", import.meta.url), "utf8");
@@ -110,6 +110,32 @@ test("typing the code aims at the confirm button and fills the field", () => {
   assert.equal(aim.kind, "button");
   assert.equal(aim.x, 140);
   assert.equal(aim.y, 236);
+});
+
+test("the login picture is shown as soon as the page is up", () => {
+  assert.equal(loginOpenReady(0, { status: "verify", message: "" }, false), "wait");
+  assert.equal(loginOpenReady(1, { status: "verify", message: "" }, false), "show");
+  assert.equal(loginOpenReady(1, { status: "verify", message: "" }, true), "ok");
+  assert.equal(loginOpenReady(0, { status: "login", message: "账号或密码不正确" }, false), "login");
+});
+
+test("a live browser can be reused for the next shop", () => {
+  assert.equal(deskUsable(null), false);
+  assert.equal(deskUsable({
+    ws: { readyState: 1 },
+    chrome: { exitCode: null, killed: false }
+  }), true);
+  assert.equal(deskUsable({
+    ws: { readyState: 3 },
+    chrome: { exitCode: null, killed: false }
+  }), false);
+});
+
+test("the old client shows the login picture while the page is still opening", () => {
+  const old = "      function showDesk(st) {\n        state.desk = st || {};\n        state.desk = { open: true, status: \"opening\", store: name, message: \"正在打开「\" + name + \"」的登录画面\" };\n        if (!dead) {\n          paint(root, state);\n        }\n        api(\"/api/home/live-login/one\", { store: name }).then(function (st) {";
+  const next = patchHomeClientSource(old);
+  assert.match(next, /watchOpeningShot\(seq, name\)/);
+  assert.match(next, /preview: true/);
 });
 
 test("clicking the login picture keeps the dialog open", () => {

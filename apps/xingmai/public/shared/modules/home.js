@@ -5106,6 +5106,7 @@
               return;
             }
             next.open = true;
+            next.preview = false;
             next.store = next.store || keptStore;
             if (!next.message) {
               next.message = keptMessage;
@@ -5129,6 +5130,30 @@
           paint(root, state);
         }
       }
+      function watchOpeningShot(seq, name) {
+        var timer = window.setInterval(function () {
+          if (dead || seq !== deskSeq || !state.desk || !state.desk.preview) {
+            window.clearInterval(timer);
+            return;
+          }
+          var probe = new Image();
+          probe.onload = function () {
+            if (dead || seq !== deskSeq || !state.desk || !state.desk.preview) {
+              return;
+            }
+            state.desk.status = "screen";
+            var img = root.querySelector("#xm-hm-desk-shot");
+            if (!img) {
+              paint(root, state);
+              img = root.querySelector("#xm-hm-desk-shot");
+            }
+            if (img && img.getAttribute("src") !== probe.src) {
+              img.src = probe.src;
+            }
+          };
+          probe.src = "/api/home/live-login/screen?store=" + encodeURIComponent(name) + "&t=" + Date.now();
+        }, 600);
+      }
       function openShopLogin(shop) {
         var name = String(shop || "").trim();
         if (!name) {
@@ -5137,16 +5162,18 @@
         var seq = ++deskSeq;
         window.clearInterval(deskTimer);
         deskTimer = 0;
-        state.desk = { open: true, status: "opening", store: name, message: "正在打开「" + name + "」的登录画面" };
+        state.desk = { open: true, status: "opening", store: name, preview: true, message: "正在打开「" + name + "」的登录画面" };
         if (!dead) {
           paint(root, state);
         }
+        watchOpeningShot(seq, name);
         api("/api/home/live-login/one", { store: name }).then(function (st) {
           if (dead || seq !== deskSeq) {
             return;
           }
           var next = st || { status: "login", message: "登录没有打开" };
           next.open = true;
+          next.preview = false;
           next.store = next.store || name;
           showDesk(next);
         });

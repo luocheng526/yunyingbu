@@ -42,6 +42,43 @@ const KEPT_SHOW_DESK =
   "        if (state.desk.status !== \"ok\" && state.desk.status !== \"done\" && state.desk.status !== \"verify\") {\n" +
   "          state.desk.status = \"screen\";\n" +
   "        }\n";
+const OLD_OPENING =
+  "        state.desk = { open: true, status: \"opening\", store: name, message: \"正在打开「\" + name + \"」的登录画面\" };\n" +
+  "        if (!dead) {\n" +
+  "          paint(root, state);\n" +
+  "        }\n" +
+  "        api(\"/api/home/live-login/one\", { store: name }).then(function (st) {";
+const KEPT_OPENING =
+  "      function watchOpeningShot(seq, name) {\n" +
+  "        var timer = window.setInterval(function () {\n" +
+  "          if (dead || seq !== deskSeq || !state.desk || !state.desk.preview) {\n" +
+  "            window.clearInterval(timer);\n" +
+  "            return;\n" +
+  "          }\n" +
+  "          var probe = new Image();\n" +
+  "          probe.onload = function () {\n" +
+  "            if (dead || seq !== deskSeq || !state.desk || !state.desk.preview) {\n" +
+  "              return;\n" +
+  "            }\n" +
+  "            state.desk.status = \"screen\";\n" +
+  "            var img = root.querySelector(\"#xm-hm-desk-shot\");\n" +
+  "            if (!img) {\n" +
+  "              paint(root, state);\n" +
+  "              img = root.querySelector(\"#xm-hm-desk-shot\");\n" +
+  "            }\n" +
+  "            if (img && img.getAttribute(\"src\") !== probe.src) {\n" +
+  "              img.src = probe.src;\n" +
+  "            }\n" +
+  "          };\n" +
+  "          probe.src = \"/api/home/live-login/screen?store=\" + encodeURIComponent(name) + \"&t=\" + Date.now();\n" +
+  "        }, 600);\n" +
+  "      }\n" +
+  "        state.desk = { open: true, status: \"opening\", store: name, preview: true, message: \"正在打开「\" + name + \"」的登录画面\" };\n" +
+  "        if (!dead) {\n" +
+  "          paint(root, state);\n" +
+  "        }\n" +
+  "        watchOpeningShot(seq, name);\n" +
+  "        api(\"/api/home/live-login/one\", { store: name }).then(function (st) {";
 const OLD_CLICK_POINT =
   "            y: Math.round((event.clientY - rect.top) * scaleY)\n" +
   "          }).then(function (st) {";
@@ -59,6 +96,7 @@ export function patchHomeClientSource(text) {
   return source
     .replace(OLD_SHOW_DESK, KEPT_SHOW_DESK)
     .replace(OLD_CLICK_POINT, KEPT_CLICK_POINT)
+    .replace(OLD_OPENING, KEPT_OPENING)
     .replaceAll("0.1.1039-loginpop", "0.1.1043-deskkeep");
 }
 
