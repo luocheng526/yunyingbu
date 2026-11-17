@@ -67,6 +67,15 @@ test("壳把 /work 交给工作汇报模块", () => {
   assert.equal(html.includes("工作汇报"), true);
 });
 
+test("今天未交时侧栏工作汇报右上角是 1，交了就去掉", () => {
+  const js = readFileSync(join(root, "../public/shared/modules/work.js"), "utf8");
+  assert.match(js, /function paintNavBadge\(\)/);
+  assert.match(js, /a\.xm-menu-item\[href="\/work"\]/);
+  assert.match(js, /badge\.textContent = "1"/);
+  assert.match(js, /if \(!state\.todoOpen\)/);
+  assert.match(js, /\.xm-work-badge\{position:absolute;top:2px;right:8px/);
+});
+
 test("nav.js 把工作汇报放进主栏而不是底栏", () => {
   const js = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
   assert.match(js, /0\.1\.772-feedback/);
