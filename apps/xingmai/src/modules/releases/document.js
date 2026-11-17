@@ -29,10 +29,14 @@ export const SHELL_FILES = [
   "public/shared/nav.js",
   "public/shared/layout.css",
   "public/shared/xingmai-logo.png",
-  "src/modules/home/nav-items.js"
+  "public/shared/xm-ui.css",
+  "public/shared/xm-ui.js",
+  "src/modules/home/nav-items.js",
+  "docs/XM_UI_DESIGN_SYSTEM.md",
+  ".cursor/rules/xm-ui-design.mdc"
 ];
 const SHELL_RE =
-  /(^|\/)(public\/shared\/(nav\.js|layout\.css|xingmai-logo\.png)|src\/modules\/home\/nav-items\.js)$/;
+  /(^|\/)(public\/shared\/(nav\.js|layout\.css|xingmai-logo\.png|xm-ui\.css|xm-ui\.js)|src\/modules\/home\/nav-items\.js|docs\/XM_UI_DESIGN_SYSTEM\.md|\.cursor\/rules\/xm-ui-design\.mdc)$/;
 
 export function listedShellFiles(input) {
   return normalizeFiles(input).filter((item) => SHELL_RE.test(String(item).replace(/\\/g, "/")));

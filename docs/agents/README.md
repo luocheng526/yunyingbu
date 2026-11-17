@@ -8,6 +8,7 @@
 | 文件 | 给谁 |
 |---|---|
 | [00-module-charter.md](00-module-charter.md) | **所有人先读**（嵌入式合同 + 边界 + 闸） |
+| [../XM_UI_DESIGN_SYSTEM.md](../XM_UI_DESIGN_SYSTEM.md) | **改页面先读**（业务内容区唯一母版，壳子不动） |
 | [00-release-rules.md](00-release-rules.md) | 交单格式、闸、排队 |
 | [00-main-framework.md](00-main-framework.md) | 主框架（壳 + 内核 + 闸） |
 | [00-left-nav-others.md](00-left-nav-others.md) | 非主框架：不要重做侧栏 |

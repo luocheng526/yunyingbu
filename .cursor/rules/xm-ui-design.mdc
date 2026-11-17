@@ -1,0 +1,34 @@
+---
+description: 业务内容区统一用 XM Light Tech Admin，壳子保持不动
+alwaysApply: true
+---
+
+# 业务内容区 UI
+
+开始改页面之前，先读 `docs/XM_UI_DESIGN_SYSTEM.md`，并查看 `apps/xingmai/public/shared/xm-ui.js` 里已有的 `window.XmUI`。
+
+这套规范只用于 Main Content。顶部 Header 和左侧 Sidebar 保持现状。不得更换导航，不得按参考图重做系统外壳。
+
+## 必须遵守
+
+- 只改这次点名的业务页。其他页面、路由、权限和数据接口保持原样。
+- 该页挂进 `#xm-content` 的根节点加 `class="xm-ui-scope"`，然后调用已有公共组件。
+- 优先复用 `PageContentHeader`、`StatCard`、`ContentCard`、`SectionTitle`、`FilterToolbar`、`DataTable`、`StatusBadge`、`ChartCard`、`ProgressCard`、`EmptyState`。
+- 不要另做一套卡片、表格或按钮。不要引入新的 UI 框架。不要写未经批准的全局 CSS，不要把 `--xm-ui-*` 挪到 `:root`。
+- 壳子已经加载 `/shared/xm-ui.css` 和 `/shared/xm-ui.js`。业务页不要再引一次。
+- 登录页不加载这套组件。展示页 `/ui-design-system.html` 不进导航。
+
+## 谁可以改公共文件
+
+只许主框架修改：
+
+- `apps/xingmai/public/shared/xm-ui.css`
+- `apps/xingmai/public/shared/xm-ui.js`
+- `docs/XM_UI_DESIGN_SYSTEM.md`
+- `.cursor/rules/xm-ui-design.mdc`
+
+各业务对话只改自己负责的页面。不要同时覆盖上述公共文件。新增通用组件先交给主框架，按设计规范加进 `XmUI` 后再使用。独立分支先接上已验收的壳和公共母版，再改业务页。
+
+## 做完
+
+打开被改的页面，核对主要操作、空状态和原有字段。主脑说「要预览图」或「要录屏」时再出图。

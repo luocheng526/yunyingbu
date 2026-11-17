@@ -69,7 +69,7 @@ Cookie: 登录会话
 - 禁止 SSH、禁止 `push-xingmai-to-ecs.sh`、禁止 `systemctl restart`、禁止自己覆盖 `/opt/mengkai`。
 - **禁止瘦 `src/app.js`。** 非主框架不得把 `src/app.js` 写进 `files`。完整入口必须含 `attachProfile`、`attachHome`、`createReleasesRouter`、`/api/health`。点「通过」时再验一遍。
 - **禁止空 `files` 全量落地。**
-- **壳只由主框架交。** `public/shared/nav.js`、`public/shared/layout.css`、`public/shared/xingmai-logo.png`、`src/modules/home/nav-items.js`。
+- **壳只由主框架交。** `public/shared/nav.js`、`public/shared/layout.css`、`public/shared/xingmai-logo.png`、`public/shared/xm-ui.css`、`public/shared/xm-ui.js`、`src/modules/home/nav-items.js`、`docs/XM_UI_DESIGN_SYSTEM.md`、`.cursor/rules/xm-ui-design.mdc`。
 - **内核只由主框架交。** `src/app.js`、`src/server.js`、`src/boot-dirs.js`。
 - **`src/modules/profile/auth.js` 只许主框架或个人中心。**
 - **`src/modules/home/pages.js` 与 `src/modules/profile/middleware.js` 必须成套提交。**

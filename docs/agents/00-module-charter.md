@@ -16,8 +16,11 @@
 ### 业务模块不要做
 
 - 自己的侧栏、顶栏、折叠条、第二套 layout
+- 按设计参考图重做系统外壳或更换导航组件
 - 在 `public/*.html` 里再复制一整页壳
-- 改 `public/shared/nav.js` / `layout.css` / `xingmai-logo.png` / `src/modules/home/nav-items.js`
+- 改 `public/shared/nav.js` / `layout.css` / `xingmai-logo.png` / `xm-ui.css` / `xm-ui.js` / `src/modules/home/nav-items.js`
+- 改 `docs/XM_UI_DESIGN_SYSTEM.md` 或 `.cursor/rules/xm-ui-design.mdc`
+- 另做一套卡片、表格、按钮，或引入新的 UI 框架，或写未经批准的全局 CSS
 - 改 `src/app.js` / `src/server.js` / `src/boot-dirs.js`
 - 给登录页加 `nav.js`
 - 空 `files` 全量同步
@@ -27,7 +30,7 @@
 
 - 内容脚本：`public/shared/modules/<id>.js`，挂 `window.XmModules["/<path>"] = { mount, unmount }`
 - 自己的 API：`src/modules/<id>/`，前缀 `/api/<id>`
-- 自己的样式：只写内容区。新改的页面用 `var(--xm-*)`，主色只用 `--xm-primary`，不新造颜色，不改壳子，不改内容和接口
+- 自己的样式：只写内容区。新改的页面先读 `docs/XM_UI_DESIGN_SYSTEM.md`，根节点加 `xm-ui-scope`，优先用 `window.XmUI`。主色只用规范里的 `--xm-ui-primary` / `--xm-primary`，不新造颜色，不改壳子，不改内容和接口
 - 交单：`files` 列出路径，`contents` 是路径→正文，模块名填自己
 
 ## 已删除：`cursor/home-nav-workbench-e50e`
@@ -58,9 +61,19 @@
 
 主框架已认识：侧栏第一项「首页」`/home`（`/` 仍跳首页）；「边界数据中心」`/bound`；「星脉数据中心」`/data`（交单名仍是数据中心）；「甄选商学院」带子菜单培训课程 / 培训考试 / 运营手册；「甄选智能体」`/agents`；「工作汇报」`/work`；「月度大会」`/meeting`；「需求与反馈」`/feedback`；底部「组织中心 / 智能人事 / 版本发布中心 / 个人中心」，智能人事路径 `/hr`。要再加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
 
+## 业务内容区
+
+全员先读 [XM_UI_DESIGN_SYSTEM.md](../XM_UI_DESIGN_SYSTEM.md)。这是业务内容区的唯一母版，名字是 XM Light Tech Admin。顶部和左侧保持现状。只优化 `#xm-content` 里面被点名的页面。
+
+壳子已经引入 `/shared/xm-ui.css` 和 `/shared/xm-ui.js`。业务页不要再引，也不要把 `xm-ui-scope` 加到整页壳上。只在自己的内容根节点加这个 class，然后用 `window.XmUI` 的 `PageContentHeader`、`StatCard`、`ContentCard`、`SectionTitle`、`FilterToolbar`、`DataTable`、`StatusBadge`、`ChartCard`、`ProgressCard`、`EmptyState`。
+
+公共组件和设计变量只由主框架维护。各业务对话只改自己的页面，不要同时覆盖 `xm-ui.css`、`xm-ui.js` 或规范文件。要加通用组件，交给主框架检查后再进 `XmUI`。独立分支先接上已验收的壳和公共母版，再改业务页。
+
+做完必须核对被改的那一页，字段、按钮、表格列和接口保持原样。主脑说「要预览图」或「要录屏」时再出图。
+
 ## 页面颜色
 
-新改的页面用公共变量 `var(--xm-*)`，不新造主色，不改壳子，不改内容和接口。
+新改的页面用公共变量 `var(--xm-*)`，不新造主色，不改壳子，不改内容和接口。业务内容区优先用 `docs/XM_UI_DESIGN_SYSTEM.md` 里的 `--xm-ui-*`，作用域只在 `.xm-ui-scope`。
 
 - 主色只用 `--xm-primary`。悬停、浅底、按下用 `--xm-primary-hover`、`--xm-primary-soft`、`--xm-primary-deep`。不要再写一套蓝，也不要在业务页里写死 `#1677ff`。
 - 页面底、字、边框、卡片、表头、成功、警告、危险用已有的 `--xm-bg`、`--xm-ink`、`--xm-muted`、`--xm-line`、`--xm-card`、`--xm-table-head`、`--xm-success`、`--xm-warning`、`--xm-danger`。
@@ -77,10 +90,11 @@
 3. 第一条消息只贴自己的 brief，不要让它改壳：
 
 ```
-你是独立 Agent「甄选商学院」。先读 docs/agents/00-module-charter.md 和 docs/agents/08-academy.md。
-你只改 academy 目录和 public/shared/modules/academy.js。不要改侧栏、nav.js、src/app.js。
-新改的页面用 var(--xm-*)，主色只用 --xm-primary，不新造颜色。不改壳子，不改内容和接口。
-做完用模块名「甄选商学院」交单，申请人 罗成运营部主脑。
+你是独立 Agent「甄选商学院」。先读 docs/agents/00-module-charter.md、docs/XM_UI_DESIGN_SYSTEM.md 和 docs/agents/08-academy.md。
+你只改 academy 目录和 public/shared/modules/academy.js。不要改 Header、Sidebar、nav.js、layout.css、xm-ui.css、xm-ui.js、src/app.js。
+业务内容区用 window.XmUI，根节点加 xm-ui-scope。不要另做卡片、表格、按钮，不要引入新的 UI 框架。
+不改原有字段和接口。只改被点名的页面。
+做完打开该页核对，用模块名「甄选商学院」交单，申请人 罗成运营部主脑。
 ```
 
 智能体对话框把上面两处换成 `09-agents.md`、`agents`、`甄选智能体`。智能人事换成 `10-hr.md`、`hr`、`智能人事`。工作汇报换成 `12-work.md`、`work`、`工作汇报`。需求与反馈换成 `11-feedback.md`、`feedback`、`需求与反馈`。月度大会换成 `13-meeting.md`、`meeting`、`月度大会`。边界数据中心换成 `14-bound.md`、`bound`、`边界数据中心`。
