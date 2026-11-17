@@ -3,7 +3,7 @@ import { resetBoundStore as resetMemory } from "./persist.js";
 import { setBoundClock } from "./time.js";
 
 export { setBoundFetch, startLink, pollLink, pickAccount, qrBytes, linkStatus, tick, ensureCollectLoop } from "./collect.js";
-export { readView, savePagePref, saveRowMark, exportView, catalogBody, coverageBody } from "./view.js";
+export { readView, savePagePref, saveRowMark, exportView, catalogBody, coverageBody, progressBody } from "./view.js";
 export { setBoundClock } from "./time.js";
 
 export function resetBoundStore() {

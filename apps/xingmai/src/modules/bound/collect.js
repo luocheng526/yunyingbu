@@ -201,7 +201,8 @@ export async function linkStatus() {
     message: current.message,
     userName: current.userName,
     accounts: current.accounts || [],
-    qrReady: Boolean(current.qrUrl)
+    qrReady: Boolean(current.qrUrl),
+    cursor: current.cursor || null
   };
 }
 
@@ -624,6 +625,9 @@ export async function tick() {
       return { ok: true, idle: true, phase: current.phase };
     }
     current.phase = "collecting";
+    current.cursor = unit.type === "master"
+      ? { id: unit.master.id, label: unit.master.label, page: "基础资料", dim: "all", start: "2026-09-01", end: shanghaiToday(), pageNo: unit.page || 1 }
+      : { id: unit.report.id, label: unit.report.label, page: unit.report.pageLabel || "", dim: unit.dim || "all", start: unit.scope.start, end: unit.scope.end, pageNo: unit.page || 1 };
     await saveSession(current);
     if (unit.type === "master") {
       await runMaster(current, unit);

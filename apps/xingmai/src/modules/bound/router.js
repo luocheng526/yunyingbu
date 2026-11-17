@@ -3,6 +3,7 @@ import { isHrDesk } from "../home/nav-items.js";
 import {
   catalogBody,
   coverageBody,
+  progressBody,
   ensureCollectLoop,
   exportView,
   isBoundAdmin,
@@ -86,6 +87,13 @@ boundRouter.get("/board", async (req, res) => {
     today: coverage.today,
     reports: coverage.reports
   });
+});
+
+boundRouter.get("/progress", async (req, res) => {
+  if (!requireAdmin(req, res)) {
+    return;
+  }
+  res.json(await progressBody());
 });
 
 boundRouter.get("/coverage", async (req, res) => {

@@ -450,3 +450,160 @@ test("页面只请求边界接口，并画出四个模块", async () => {
   stop();
   assert.equal(root.innerHTML, "");
 });
+
+test("采集进度只数表头，扫码页标出正在采集的表", async () => {
+  resetBoundStore();
+  await writeState("session", {
+    phase: "collecting",
+    message: "已登录。从 2026-09-01 按北京时间补采，页面查询不会再打旧站。",
+    deviceId: "device-progress",
+    cursor: { id: "qdzl_yj", label: "业绩对比", page: "渠道总览", dim: "all", start: "2026-09-01", end: "2026-09-01", pageNo: 1 }
+  });
+  await writeSheet({
+    reportId: "qdzl_lb",
+    dim: "all",
+    startOn: "2026-09-01",
+    endOn: "2026-09-01",
+    pageNo: 1,
+    status: "done",
+    kind: "list",
+    totalRows: 1,
+    pageSize: 50,
+    rowCount: 1,
+    payload: { rows: [{ name: "京东", payAmount: 12 }] }
+  });
+  const { base, close } = await listen(appFor({ username: "罗成", displayName: "罗成" }));
+  const other = await listen(appFor({ username: "店员", displayName: "店员" }));
+  try {
+    const body = await (await fetch(`${base}/api/bound/progress`)).json();
+    assert.equal(body.erp, false);
+    assert.equal(body.source, "crawler");
+    assert.equal(body.phase, "collecting");
+    assert.equal(body.cursor.id, "qdzl_yj");
+    const ready = body.items.find((item) => item.id === "qdzl_lb");
+    assert.equal(ready.readyDays, 1);
+    assert.equal(ready.status, "partial");
+    assert.equal(body.items.some((item) => item.status === "pending"), true);
+    assert.equal((await fetch(`${other.base}/api/bound/progress`)).status, 403);
+  } finally {
+    await close();
+    await other.close();
+  }
+
+  const js = readFileSync(clientPath, "utf8");
+  const root = {
+    html: "",
+    set innerHTML(value) {
+      this.html = String(value);
+    },
+    get innerHTML() {
+      return this.html;
+    },
+    addEventListener(type, fn) {
+      if (type === "click") {
+        this.onclick = fn;
+      }
+    },
+    removeEventListener() {},
+    querySelector() {
+      return null;
+    }
+  };
+  const context = vm.createContext({
+    window: {},
+    document: {
+      getElementById() {
+        return null;
+      },
+      createElement() {
+        return { id: "", textContent: "" };
+      },
+      head: { appendChild() {} }
+    },
+    URLSearchParams,
+    setInterval() {
+      return 1;
+    },
+    clearInterval() {},
+    fetch(url) {
+      const href = String(url);
+      if (href.startsWith("/api/bound/progress")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            ok: true,
+            phase: "collecting",
+            startOn: "2026-09-01",
+            today: "2026-11-17",
+            dayCount: 78,
+            total: 2,
+            counts: { done: 0, partial: 1, failed: 0, pending: 1 },
+            cursor: { id: "qdzl_yj", label: "业绩对比", page: "渠道总览", dim: "all", start: "2026-09-01", end: "2026-09-01" },
+            items: [
+              { id: "qdzl_lb", dim: "all", page: "渠道总览", tab: "渠道列表", readyDays: 40, failedDays: 0, latest: "2026-10-10", status: "partial" },
+              { id: "qdzl_yj", dim: "all", page: "渠道总览", tab: "业绩对比", readyDays: 0, failedDays: 2, latest: "", status: "failed" }
+            ]
+          })
+        });
+      }
+      if (href.startsWith("/api/bound/view")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            page: { id: "channelOverview", label: "渠道总览", ops: ["date", "tabs"] },
+            tab: { id: "qdzl_lb", label: "渠道列表" },
+            tabs: [{ id: "qdzl_lb", label: "渠道列表" }],
+            range: { from: "2026-11-16", to: "2026-11-16" },
+            coverage: { status: "missing", missing: [], failed: [] },
+            columns: [],
+            rows: [],
+            shops: [],
+            total: 0,
+            pageNo: 1
+          })
+        });
+      }
+      if (href.startsWith("/api/bound/catalog")) {
+        return Promise.resolve({ ok: true, json: async () => publicCatalog() });
+      }
+      if (href === "/api/bound") {
+        return Promise.resolve({ ok: true, json: async () => ({ ok: true, module: "bound", source: "crawler", erp: false }) });
+      }
+      if (href.startsWith("/api/bound/link")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ phase: "collecting", deviceId: "device-progress", message: "已登录。从 2026-09-01 按北京时间补采，页面查询不会再打旧站。", qrReady: true })
+        });
+      }
+      return Promise.reject(new Error(href));
+    }
+  });
+  vm.runInContext(js, context);
+  const stop = context.window.XmModules["/bound"].mount(root);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  root.onclick({
+    target: {
+      closest() {
+        return {
+          getAttribute(name) {
+            if (name === "data-act") {
+              return "page";
+            }
+            if (name === "data-page") {
+              return "link";
+            }
+            return "";
+          }
+        };
+      }
+    }
+  });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.match(root.innerHTML, /采集进度/);
+  assert.match(root.innerHTML, /正在采集：渠道总览 \/ 业绩对比/);
+  assert.match(root.innerHTML, /正在采/);
+  assert.match(root.innerHTML, /渠道列表/);
+  assert.doesNotMatch(root.innerHTML, /bd-qr/);
+  stop();
+});

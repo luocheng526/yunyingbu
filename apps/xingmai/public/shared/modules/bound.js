@@ -132,6 +132,11 @@
       ".bd-panel{margin:0 0 12px;padding:10px 12px;background:#fff;border:1px solid #eceff5;border-radius:6px;}",
       ".bd-panel label{display:flex;gap:6px;align-items:center;margin:4px 12px 4px 0;font-size:12px;}",
       ".bd-qr{width:180px;height:180px;object-fit:contain;background:#fff;}",
+      ".bd-now{margin:0 0 8px;font-size:13px;}",
+      ".bd-meter{height:8px;margin:8px 0 12px;background:#f2f3f5;border-radius:4px;overflow:hidden;}",
+      ".bd-meter i{display:block;height:100%;background:#3b6cff;}",
+      ".bd-progress{max-height:420px;overflow:auto;}",
+      ".bd-progress td.is-current{color:#3b6cff;font-weight:650;}",
       ".bd-detail{white-space:normal;text-align:left;font-size:12px;line-height:1.6;color:#4e5969;}",
       "@media(max-width:900px){.bd-app{grid-template-columns:1fr}.bd-head{flex-direction:column}.bd-gallery{grid-template-columns:1fr 1fr}}"
     ].join("");
@@ -696,13 +701,44 @@
     return "";
   }
 
+  function renderProgress() {
+    var progress = state.progress;
+    if (!progress || !progress.items) {
+      return '<section class="bd-block"><h2 class="bd-block-title">采集进度</h2><p class="bd-miss">正在读取本库进度。</p></section>';
+    }
+    var counts = progress.counts || {};
+    var done = counts.done || 0;
+    var total = progress.total || progress.items.length || 1;
+    var width = Math.max(0, Math.min(100, Math.round(done / total * 100)));
+    var cursor = progress.cursor || {};
+    var phase = progress.phase || "";
+    var now = "采集还没开始。";
+    if (phase === "collecting" && cursor.label) {
+      now = "正在采集：" + (cursor.page || "") + " / " + cursor.label + "，" + (cursor.start || "") + (cursor.end && cursor.end !== cursor.start ? " 至 " + cursor.end : "");
+    } else if (phase === "collecting") {
+      now = "正在采集。这一页每几秒刷新一次。";
+    } else if (phase === "logged_in") {
+      now = progress.message || "已补到今天。之后按天增量。";
+    } else if (phase === "needs_scan" || phase === "waiting_scan") {
+      now = "采集停住，等扫码。下面是已经入库的进度。";
+    }
+    var labels = { done: "已完成", partial: "进行中", failed: "失败", pending: "还没开始" };
+    var rows = progress.items.map(function (item) {
+      var current = cursor.id === item.id && (cursor.dim || "all") === (item.dim || "all");
+      var dim = item.dim && item.dim !== "all" ? " " + item.dim.toUpperCase() : "";
+      return '<tr class="' + (current ? "bd-total" : "") + '"><td class="' + (current ? "is-current" : "") + '">' + esc(item.page) + "</td><td>" + esc(item.tab + dim) + "</td><td>" + esc(item.readyDays) + "/" + esc(progress.dayCount) + "</td><td>" + esc(item.failedDays) + "</td><td>" + esc(item.latest || "—") + "</td><td>" + esc(current ? "正在采" : (labels[item.status] || item.status)) + "</td></tr>";
+    }).join("");
+    return '<section class="bd-block"><h2 class="bd-block-title">采集进度</h2><p class="bd-now">' + esc(now) + "</p><div class=\"bd-meter\"><i style=\"width:" + width + "%\"></i></div><p class=\"bd-status\">已完成 " + esc(done) + " / " + esc(total) + " 张表。进行中 " + esc(counts.partial || 0) + "，失败 " + esc(counts.failed || 0) + "，还没开始 " + esc(counts.pending || 0) + "。范围 " + esc(progress.startOn) + " 至 " + esc(progress.today) + "。</p><div class=\"bd-progress\"><table class=\"bd-table\"><tr><th>页面</th><th>表</th><th>已采天数</th><th>失败</th><th>最近一天</th><th>状态</th></tr>" + rows + "</table></div></section>";
+  }
+
   function renderLink() {
     var link = state.link || {};
-    var qr = link.qrReady ? '<img class="bd-qr" alt="旧站登录二维码" src="/api/bound/link/qr?ts=' + Date.now() + '">' : "";
+    var showQr = link.qrReady && (link.phase === "waiting_scan" || link.phase === "needs_scan" || link.phase === "choose_account");
+    var qr = showQr ? '<img class="bd-qr" alt="旧站登录二维码" src="/api/bound/link/qr?ts=' + Date.now() + '">' : "";
     var accounts = (link.accounts || []).map(function (account) {
       return '<button type="button" data-act="pick" data-company="' + esc(account.companyId) + '">' + esc(account.companyName || account.name || account.companyId) + "</button>";
     }).join("");
-    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>扫码连接旧站</h1><p class="bd-sub">二维码来自旧站官方登录接口，和登录页同一张。扫码后服务器沿用这个会话补采，页面查询不再打旧站。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + "</p></div></header><section class=\"bd-block\"><p>" + esc(link.message || "") + "</p>" + qr + '<div class="bd-tools"><button type="button" data-act="scan" data-provider="WECHAT">微信</button><button type="button" data-act="scan" data-provider="FEISHU">飞书</button><button type="button" data-act="scan" data-provider="DINGTALK">钉钉</button><button type="button" data-act="scan" data-provider="QYWX">企业微信</button>' + accounts + "</div></section></section>";
+    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>扫码连接旧站</h1><p class="bd-sub">二维码来自旧站官方登录接口，和登录页同一张。扫码后服务器沿用这个会话补采，页面查询不再打旧站。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + "</p></div></header><section class=\"bd-block\"><p>" + esc(link.message || "") + "</p>" + qr + '<div class="bd-tools"><button type="button" data-act="scan" data-provider="WECHAT">微信</button><button type="button" data-act="scan" data-provider="FEISHU">飞书</button><button type="button" data-act="scan" data-provider="DINGTALK">钉钉</button><button type="button" data-act="scan" data-provider="QYWX">企业微信</button>' + accounts + "</div></section>" + renderProgress() + "</section>";
   }
 
   function renderMain() {
@@ -786,9 +822,10 @@
   async function load(root, token) {
     state.error = "";
     var stamp = await fetch("/api/bound");
-    var view = await fetch("/api/bound/view?" + queryString());
+    var view = state.page === "link" ? null : await fetch("/api/bound/view?" + queryString());
     var catalog = state.catalog ? null : await fetch("/api/bound/catalog");
     var link = await fetch("/api/bound/link");
+    var progress = state.page === "link" ? await fetch("/api/bound/progress") : null;
     if (token !== active) {
       return;
     }
@@ -800,7 +837,10 @@
     if (catalog) {
       state.catalog = await catalog.json();
     }
-    if (view.ok) {
+    if (progress && progress.ok) {
+      state.progress = await progress.json();
+    }
+    if (view && view.ok) {
       state.viewData = await view.json();
       if (state.viewData.page && state.viewData.page.id && state.page !== "link") {
         state.page = state.viewData.page.id;
@@ -810,7 +850,7 @@
         state.to = state.viewData.range.to;
         state.daysType = state.viewData.daysType || state.daysType;
       }
-    } else {
+    } else if (view) {
       state.viewData = null;
       state.error = "这一页没有读到";
     }

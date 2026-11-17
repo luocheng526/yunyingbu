@@ -17,7 +17,7 @@ import {
   publicCatalog,
   tabById
 } from "./catalog.js";
-import { listMasters, listSheets, readMarks, readPref, writeMark, writePref } from "./persist.js";
+import { listMasters, listSheetHeads, listSheets, readMarks, readPref, readState, writeMark, writePref } from "./persist.js";
 import { shanghaiToday } from "./time.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -651,6 +651,99 @@ export async function exportView(query) {
 
 export function catalogBody() {
   return publicCatalog();
+}
+
+function reportProgress(heads, reportId, dim) {
+  const groups = new Map();
+  heads.forEach((row) => {
+    if (row.reportId !== reportId || row.dim !== dim || row.pageNo <= 0) {
+      return;
+    }
+    const key = `${row.startOn}|${row.endOn}`;
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key).push(row);
+  });
+  let readyDays = 0;
+  let failedDays = 0;
+  let months = 0;
+  let latest = "";
+  groups.forEach((pages, key) => {
+    const [startOn, endOn] = key.split("|");
+    const state = scopeStatus(pages);
+    if (startOn === endOn) {
+      if (state.status === "ready") {
+        readyDays += 1;
+        if (startOn > latest) {
+          latest = startOn;
+        }
+      } else if (state.status === "failed") {
+        failedDays += 1;
+      }
+      return;
+    }
+    if (state.status === "ready") {
+      months += 1;
+    } else if (state.status === "failed") {
+      failedDays += 1;
+    }
+  });
+  return { readyDays, failedDays, months, latest };
+}
+
+export async function progressBody() {
+  const heads = await listSheetHeads();
+  const session = (await readState("session", {})) || {};
+  const today = shanghaiToday();
+  const dayCount = eachDay(START_ON, today).length;
+  const items = [];
+  PAGES.forEach((page) => {
+    const tabs = page.cards ? [page.cards].concat(page.tabs || []) : page.tabs || [];
+    tabs.forEach((tab) => {
+      (tab.dims || ["all"]).forEach((dim) => {
+        const stats = reportProgress(heads, tab.id, dim);
+        let status = "pending";
+        if (stats.readyDays >= dayCount && stats.failedDays === 0) {
+          status = "done";
+        } else if (stats.failedDays > 0 && stats.readyDays === 0 && stats.months === 0) {
+          status = "failed";
+        } else if (stats.readyDays || stats.failedDays || stats.months) {
+          status = "partial";
+        }
+        items.push({
+          id: tab.id,
+          dim,
+          page: page.label,
+          tab: tab.label,
+          readyDays: stats.readyDays,
+          failedDays: stats.failedDays,
+          months: stats.months,
+          latest: stats.latest,
+          status
+        });
+      });
+    });
+  });
+  const counts = { done: 0, partial: 0, failed: 0, pending: 0 };
+  items.forEach((item) => {
+    counts[item.status] += 1;
+  });
+  return {
+    ok: true,
+    module: "bound",
+    source: "crawler",
+    erp: false,
+    phase: session.phase || "idle",
+    message: session.message || "",
+    cursor: session.cursor || null,
+    startOn: START_ON,
+    today,
+    dayCount,
+    total: items.length,
+    counts,
+    items
+  };
 }
 
 export async function coverageBody() {
