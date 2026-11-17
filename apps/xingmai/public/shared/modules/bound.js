@@ -50,6 +50,10 @@
       .replace(/"/g, "&quot;");
   }
 
+  function xm() {
+    return window.XmUI || null;
+  }
+
   function ensureStyle() {
     if (!document.getElementById || document.getElementById("bd-page-style")) {
       return;
@@ -62,7 +66,7 @@
       ".bd-mod{margin:12px 14px 4px;color:#86909c;font-size:12px;}",
       ".bd-side button{display:block;width:100%;height:30px;padding:0 10px;border:0;background:transparent;color:#1f2329;text-align:left;cursor:pointer;font-size:12px;}",
       ".bd-side button.is-on{background:#e8f1ff;color:#3b6cff;font-weight:650;}",
-      ".bd-main{min-width:0;padding:16px 16px 24px;}",
+      ".bd-main{min-width:0;padding:24px;}",
       ".bd-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:12px;}",
       ".bd-head h1{margin:0;font-size:18px;font-weight:650;line-height:1.3;}",
       ".bd-sub,.bd-status{margin:4px 0 0;color:#86909c;font-size:12px;line-height:1.5;}",
@@ -655,14 +659,15 @@
     } else if (coverage.status === "denied") {
       bad = "当前账号没有这个菜单。";
     }
-    return '<p class="bd-status">爬虫，非 ERP。</p>' + (bad ? '<p class="bd-banner">' + bad + "</p>" : "");
+    var line = xm() ? "" : '<p class="bd-status">爬虫，非 ERP。</p>';
+    return line + (bad ? '<p class="bd-banner">' + bad + "</p>" : "");
   }
 
   function renderCards(data) {
     if (!data || !data.cards || !data.cards.length || state.panel === "cards") {
       return "";
     }
-    var cards = data.cards.filter(function (card) { return card.on; }).map(function (card) {
+    var cards = data.cards.filter(function (card) { return card.on; }).map(function (card, index) {
       var rangeMissing = data.cardStatus !== "ready";
       var empty = card.value == null || card.value === "";
       var text = rangeMissing ? "未采完" : (empty ? "—" : formatCard(card));
@@ -674,14 +679,38 @@
         tone = "is-up";
       }
       var sub = card.note != null ? card.note : (card.rate ? "" : "达成率 —");
-      return '<article class="bd-kpi"><span>' + esc(card.label) + '</span><b class="' + tone + '">' + text + "</b><em>" + (sub || "&nbsp;") + "</em></article>";
+      var ui = xm();
+      if (ui) {
+        var tones = ["blue", "green", "orange", "purple"];
+        var icons = ["chart", "file", "users", "award"];
+        return ui.StatCard({
+          label: card.label,
+          value: text,
+          note: sub || "",
+          tone: tones[index % tones.length],
+          icon: icons[index % icons.length],
+          trend: tone === "is-up" ? "up" : ""
+        });
+      }
+      return '<article class="bd-kpi"><span>' + esc(card.label) + '</span><b class="' + tone + '">' + text + "</b><em>" + esc(sub || "") + "</em></article>";
     });
     var title = cardTitle(data.page && data.page.id);
     var channelCount = data.channelCount != null ? data.channelCount : data.total;
     var shopCount = data.shopCount != null ? data.shopCount : (data.shops || []).length;
+    var ui = xm();
+    var grid = cards.join("");
+    var meta = "渠道 " + channelCount + " 个 · 店铺 " + shopCount + " 个";
+    var action = '<button type="button" class="bd-primary" data-act="panel" data-panel="cards">设定指标</button>';
+    if (ui) {
+      return ui.ContentCard({
+        title: title,
+        description: meta,
+        content: '<div class="xm-ui-stat-grid">' + grid + "</div>" + action
+      });
+    }
     var first = cards.slice(0, 9).join("");
     var rest = cards.slice(9).join("");
-    return '<section class="bd-kpis"><div class="bd-kpi-head"><strong>' + esc(title) + '</strong><span>渠道 ' + esc(channelCount) + ' 个</span><span>店铺 ' + esc(shopCount) + ' 个</span><button type="button" class="bd-primary" data-act="panel" data-panel="cards">设定指标</button></div><div class="bd-kpi-row">' + first + "</div>" + (rest ? '<div class="bd-kpi-row">' + rest + "</div>" : "") + "</section>";
+    return '<section class="bd-kpis"><div class="bd-kpi-head"><strong>' + esc(title) + '</strong><span>渠道 ' + esc(channelCount) + ' 个</span><span>店铺 ' + esc(shopCount) + ' 个</span>' + action + '</div><div class="bd-kpi-row">' + first + "</div>" + (rest ? '<div class="bd-kpi-row">' + rest + "</div>" : "") + "</section>";
   }
 
   function chips(items, key) {
@@ -883,7 +912,16 @@
       return '<p class="bd-miss">这个分组的字段还没进本地库。</p>';
     }
     if (state.view === "chart" && rows == null) {
-      return renderBars(data, list);
+      var bars = renderBars(data, list);
+      var chart = xm();
+      if (!chart) {
+        return bars;
+      }
+      return chart.ChartCard({
+        title: (data.tab && data.tab.label) || "图表",
+        ariaLabel: "渠道图表",
+        content: bars
+      });
     }
     if (state.view === "gallery" && rows == null) {
       if (!list.length) {
@@ -912,6 +950,41 @@
           return state.sortDir === "asc" ? cmp : -cmp;
         });
       }
+    }
+    var ui = xm();
+    if (ui && !showOpener) {
+      if (!list.length) {
+        return ui.EmptyState({
+          title: data.coverage.status === "ready" ? "这个范围内没有记录。" : "未采完",
+          description: data.coverage.status === "ready" ? "" : "汇总留空，不当成 0。"
+        });
+      }
+      var table = ui.DataTable({
+        columns: cols.map(function (column) {
+          return {
+            key: column.key,
+            label: column.label + (suffix && column.numeric ? suffix : ""),
+            render: function (_value, row) {
+              var value = formatCell(metricOf(row, column), column);
+              if (column.key === "name") {
+                var shown = row.name === "全部" && data.page && data.page.id === "channelOverview" ? "全渠道" : row.name;
+                value = channelDot(shown) + (shown === row.name ? value : formatCell(shown, column));
+              }
+              if (column.key === "platform") {
+                value = channelDot(row.platform || row.name) + value;
+              }
+              return value;
+            }
+          };
+        }),
+        rows: list
+      });
+      var index = 0;
+      return table.replace(/<th>([\s\S]*?)<\/th>/g, function (_all, inner) {
+        var column = cols[index++] || {};
+        var mark = state.sortKey === column.key ? (state.sortDir === "asc" ? " ↑" : " ↓") : "";
+        return '<th><button type="button" data-act="sort" data-key="' + esc(column.key) + '">' + inner + mark + "</button></th>";
+      });
     }
     var head = "<tr>" + (showOpener ? "<th></th>" : "") + cols.map(function (column) {
       var label = column.label + (suffix && column.numeric ? suffix : "");
@@ -955,15 +1028,24 @@
     var shopPay = source.reduce(function (sum, row) {
       return sum + (Number((row.metrics || {}).payAmount) || 0);
     }, 0);
+    var uiShop = xm();
+    function shopCard(content) {
+      if (!uiShop) {
+        return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2></div>' + content + "</section>";
+      }
+      return uiShop.ContentCard({ title: "店铺列表", content: content });
+    }
     if (source.length && channelPay > 0 && shopPay === 0) {
-      return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2></div><p class="bd-banner">这一天的店铺明细金额是 0，和渠道支付 ' + esc(sumCell(data.allSum, "payAmount")) + " 对不上。这是明细没采全，不会把缺失显示成真实的 0。已安排补采。</p></section>";
+      var mismatch = "这一天的店铺明细金额是 0，和渠道支付 " + sumCell(data.allSum, "payAmount") + " 对不上。这是明细没采全，不会把缺失显示成真实的 0。已安排补采。";
+      return shopCard(uiShop ? uiShop.EmptyState({ title: "店铺明细缺失", description: mismatch }) : '<p class="bd-banner">' + esc(mismatch) + "</p>");
     }
     if (!source.length) {
       if (gapNote) {
-        return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2></div>' + gapNote + "</section>";
+        var gapText = "店铺明细缺失：" + gaps.join("、") + "。这些天的金额没有采全，不会按 0 计入店铺汇总，已安排补采。";
+        return shopCard(uiShop ? uiShop.EmptyState({ title: "店铺明细缺失", description: gapText }) : gapNote);
       }
       var waiting = data.shopStatus && data.shopStatus !== "ready" ? "店铺列表还没采完。" : "这个范围内没有店铺记录。";
-      return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2></div><p class="bd-miss">' + waiting + "</p></section>";
+      return shopCard(uiShop ? uiShop.EmptyState({ title: waiting }) : '<p class="bd-miss">' + waiting + "</p>");
     }
     var columns = [{ key: "shop", label: "店铺", numeric: false, aliases: ["shopName"] }, { key: "platform", label: "渠道", numeric: false, aliases: [] }].concat((data.columns || []).filter(function (column) {
       return column.on && column.key !== "name";
@@ -982,7 +1064,8 @@
       return (left.name === "汇总" ? 0 : 1) - (right.name === "汇总" ? 0 : 1);
     });
     var shopBody = state.shopView === "chart" ? renderBars(data, rows) : renderTable(data, rows, columns);
-    return '<section class="bd-block"><div class="bd-block-bar"><h2>店铺列表</h2><div class="bd-tools"><button type="button" data-act="shop-view" data-view="list" class="' + (state.shopView === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="shop-view" data-view="chart" class="' + (state.shopView === "chart" ? "is-on" : "") + '">图表</button><a href="/api/bound/export?' + esc(queryString()) + '">导出</a></div></div>' + gapNote + shopBody + "</section>";
+    var shopTools = '<div class="bd-tools"><button type="button" data-act="shop-view" data-view="list" class="' + (state.shopView === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="shop-view" data-view="chart" class="' + (state.shopView === "chart" ? "is-on" : "") + '">图表</button><a href="/api/bound/export?' + esc(queryString()) + '">导出</a></div>';
+    return shopCard(shopTools + gapNote + shopBody);
   }
 
   function isTotalName(row) {
@@ -1098,6 +1181,13 @@
     var tabs = visibleTabs.map(function (tab) {
       return '<button type="button" data-act="tab" data-tab="' + esc(tab.id) + '" class="' + (data.tab && data.tab.id === tab.id ? "is-on" : "") + '">' + esc(tab.label) + "</button>";
     }).join("");
+    var ui = xm();
+    var tabBar = tabs ? (ui ? ui.FilterToolbar({
+      tabs: visibleTabs.map(function (tab) {
+        return { label: tab.label, value: tab.id, active: !!(data.tab && data.tab.id === tab.id) };
+      }),
+      search: false
+    }) : '<div class="bd-tabs">' + tabs + "</div>") : "";
     var shopPrompt = data.page.id === "channelAnalysis" ? "选择渠道/店铺/分组" : "全部店铺";
     var shops = '<option value="">' + shopPrompt + "</option>" + (data.shops || []).map(function (shop) {
       return '<option value="' + esc(shop) + '"' + (shop === state.shop ? " selected" : "") + ">" + esc(shop) + "</option>";
@@ -1106,27 +1196,36 @@
     var channelPage = data.page.id === "channelOverview" || data.page.id === "channelAnalysis";
     var tabLabel = data.page.id === "teamSkills" ? "团队成员" : (data.tab && data.tab.label ? data.tab.label : data.page.label);
     var profileOnly = data.page.id === "personalCenter" || data.page.id === "myProjects";
-    var tableBlock = profileOnly ? "" : '<section class="bd-block"><div class="bd-block-bar"><h2>' + esc(tabLabel) + '</h2><div class="bd-tools">' +
+    var tableBlock = profileOnly ? "" : '<div class="bd-tools">' +
       (ops.indexOf("dim") >= 0 ? '<button type="button" data-act="dim" data-dim="spu" class="' + (state.dim === "spu" ? "is-on" : "") + '">SPU</button><button type="button" data-act="dim" data-dim="sku" class="' + (state.dim === "sku" ? "is-on" : "") + '">SKU</button>' : "") +
       (channelPage ? '<button type="button" data-act="panel" data-panel="cards">目标</button><button type="button" data-act="view" data-view="list" class="' + (state.view === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="view" data-view="chart" class="' + (state.view === "chart" ? "is-on" : "") + '">图表</button><button type="button" data-act="panel" data-panel="columns">默认视窗</button>' : "") +
       (ops.indexOf("views") >= 0 ? '<button type="button" data-act="view" data-view="list" class="' + (state.view === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="view" data-view="period" class="' + (state.view === "period" ? "is-on" : "") + '">周期</button><button type="button" data-act="view" data-view="gallery" class="' + (state.view === "gallery" ? "is-on" : "") + '">大图</button>' : "") +
       (ops.indexOf("export") >= 0 ? '<a href="/api/bound/export?' + esc(queryString()) + '">' + (data.page.id === "productStock" ? "导出表格数据" : "导出") + "</a>" : "") +
       (data.page.id === "productOverview" ? '<button type="button" data-act="panel" data-panel="columns">自定义数据字段</button><button type="button" data-act="panel" data-panel="batch" data-field="follow">设置跟进</button><button type="button" data-act="panel" data-panel="batch" data-field="target">设置目标</button><button type="button" data-act="panel" data-panel="batch" data-field="tag">批量打标</button>' : "") +
       (data.page.id === "productOperation" ? '<button type="button" data-act="panel" data-panel="upload">上传报表</button>' : "") +
-      '<button type="button" data-act="panel" data-panel="columns">更多</button></div></div>' +
+      '<button type="button" data-act="panel" data-panel="columns">更多</button></div>' +
       renderTable(data) +
       renderSums(data) +
-      '<div class="bd-pager"><span>共 ' + esc(data.total) + ' 条</span><span>50条/页</span><button type="button" data-act="page-no" data-delta="-1">上一页</button><span>第 ' + esc(data.pageNo) + ' 页</span><button type="button" data-act="page-no" data-delta="1">下一页</button></div></section>';
-    return '<section class="bd-main" data-bound-erp="false" data-page="' + esc(data.page.id) + '" data-coverage="' + esc(data.coverage.status) + '">' +
-      '<header class="bd-head"><div><h1>' + esc(data.page.label) + '</h1><p class="bd-sub">' + esc(BLURBS[data.page.id] || "") + "</p>" + renderStatus(data) + "</div>" +
-      '<div class="bd-filters">' +
-      (ops.indexOf("date") >= 0 ? renderDateBar(data) : "") +
+      '<div class="bd-pager"><span>共 ' + esc(data.total) + ' 条</span><span>50条/页</span><button type="button" data-act="page-no" data-delta="-1">上一页</button><span>第 ' + esc(data.pageNo) + ' 页</span><button type="button" data-act="page-no" data-delta="1">下一页</button></div>';
+    if (!profileOnly && ui) {
+      tableBlock = ui.ContentCard({ title: tabLabel, content: tableBlock });
+    } else if (!profileOnly) {
+      tableBlock = '<section class="bd-block"><div class="bd-block-bar"><h2>' + esc(tabLabel) + "</h2></div>" + tableBlock + "</section>";
+    }
+    var filters = (ops.indexOf("date") >= 0 ? renderDateBar(data) : "") +
       (ops.indexOf("shop") >= 0 ? "<select data-act=\"shop\">" + shops + "</select>" : "") +
       (ops.indexOf("search") >= 0 ? '<input data-act="q" value="' + esc(state.q) + '" placeholder="' + esc(searchPlaceholder(data.page.id)) + '">' : "") +
-      (data.cards && data.cards.length ? "" : '<button type="button" class="bd-primary" data-act="panel" data-panel="' + setting + '">设定指标</button>') + "</div></header>" +
+      (data.cards && data.cards.length ? "" : '<button type="button" class="bd-primary" data-act="panel" data-panel="' + setting + '">设定指标</button>');
+    var heading = ui
+      ? ui.PageContentHeader({ eyebrow: "爬虫，非 ERP", title: data.page.label, description: BLURBS[data.page.id] || "" })
+      : '<div><h1>' + esc(data.page.label) + '</h1><p class="bd-sub">' + esc(BLURBS[data.page.id] || "") + "</p></div>";
+    return '<section class="bd-main" data-bound-erp="false" data-page="' + esc(data.page.id) + '" data-coverage="' + esc(data.coverage.status) + '">' +
+      '<header class="bd-head">' + heading +
+      '<div class="bd-filters">' + filters + "</div></header>" +
+      renderStatus(data) +
       renderCards(data) +
       renderPanel(data) +
-      (tabs ? '<div class="bd-tabs">' + tabs + "</div>" : "") +
+      tabBar +
       renderExtras(data) +
       renderTeamExtra(data) +
       renderSpecial(data) +
@@ -1135,7 +1234,7 @@
   }
 
   function render(root) {
-    root.innerHTML = '<div class="bd-app" data-bound-erp="false"><nav class="bd-side" aria-label="边界数据中心">' + renderNav() + '</nav>' + renderMain() + "</div>";
+    root.innerHTML = '<div class="bd-app xm-ui-scope" data-bound-erp="false"><nav class="bd-side" aria-label="边界数据中心">' + renderNav() + '</nav>' + renderMain() + "</div>";
   }
 
   function paint(root) {
@@ -1212,6 +1311,14 @@
 
   function listen(root, token) {
     function onClick(event) {
+      var tabNode = event.target.closest ? event.target.closest("[data-xm-ui-tab]") : null;
+      var tabValue = tabNode && tabNode.getAttribute("data-xm-ui-tab");
+      if (tabValue && token === active) {
+        state.tab = tabValue;
+        state.pageNo = 1;
+        load(root, token);
+        return;
+      }
       var node = event.target.closest ? event.target.closest("[data-act]") : null;
       if (!node || token !== active) {
         return;
@@ -1479,7 +1586,10 @@
     mount: function (root) {
       var token = ++active;
       ensureStyle();
-      root.innerHTML = '<div class="bd-app" data-bound-erp="false"><nav class="bd-side" aria-label="边界数据中心"></nav><section class="bd-main"><p class="bd-note">爬虫，非 ERP</p></section></div>';
+      if (root.classList) {
+        root.classList.add("xm-ui-scope");
+      }
+      root.innerHTML = '<div class="bd-app xm-ui-scope" data-bound-erp="false"><nav class="bd-side" aria-label="边界数据中心"></nav><section class="bd-main"><p class="bd-note">爬虫，非 ERP</p></section></div>';
       detach = listen(root, token);
       load(root, token);
       if (typeof setInterval === "function") {
