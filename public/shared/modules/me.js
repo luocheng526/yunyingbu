@@ -83,9 +83,6 @@
       "#xm-content .me-page,.me-page.xm-ui-scope{padding:4px 8px 8px!important;margin:0!important;max-width:none!important;display:flex;flex-direction:column;height:100%;max-height:100%;overflow:hidden;min-height:0;background:transparent;}" +
       ".me-page.xm-ui-scope .xm-ui-page-header{margin-bottom:10px;flex:0 0 auto;align-items:flex-start;}" +
       ".me-page.xm-ui-scope .xm-ui-page-title{font-size:24px;}" +
-      ".me-page.xm-ui-scope .xm-ui-stat-grid{flex:0 0 auto;grid-template-columns:repeat(4,minmax(0,1fr));margin:0 0 8px;gap:10px;}" +
-      ".me-page.xm-ui-scope .xm-ui-stat-grid .xm-ui-stat-card{min-height:64px;padding:10px 12px;}" +
-      ".me-page.xm-ui-scope .xm-ui-stat-grid .xm-ui-stat-card__value{font-size:20px;}" +
       ".me-page.xm-ui-scope .xm-ui-section-title{min-height:40px;padding:8px 16px 8px 20px;}" +
       ".me-page.xm-ui-scope .xm-ui-stat-card{min-height:72px;padding:12px 16px;}" +
       ".me-page.xm-ui-scope .xm-ui-stat-card__value{font-size:22px;}" +
@@ -151,23 +148,7 @@
       ".me-pane{display:none;}" +
       ".me-pane.on{display:block;flex:1;min-height:0;overflow:auto;}" +
       ".me-pane.on[data-me-pane=basic]{display:flex;flex-direction:column;overflow:hidden;}" +
-      ".me-pane.on[data-me-pane=rights]{display:flex;flex-direction:column;overflow:hidden;}" +
-      ".me-perm-work{display:grid;grid-template-columns:220px minmax(0,1.4fr) 280px;gap:12px;flex:1;min-height:0;}" +
-      ".me-perm-work > .xm-ui-card,.me-perm-center,.me-perm-rail{min-height:0;overflow:auto;}" +
-      ".me-perm-center,.me-perm-rail{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden;}" +
-      ".me-perm-center > .xm-ui-card,.me-perm-rail > .xm-ui-card{flex:1;min-height:0;overflow:auto;}" +
-      ".me-dir-item{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:0;background:transparent;border-radius:10px;text-align:left;cursor:pointer;font:inherit;color:inherit;}" +
-      ".me-dir-item.is-on{background:var(--xm-ui-primary-soft,#eaf3ff);color:var(--xm-ui-primary,#1677ff);}" +
-      ".me-dir-item b{flex:1;font-size:13px;}" +
-      ".me-dir-av{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:#eef2ff;color:#4f46e5;font-size:12px;font-weight:800;flex:0 0 28px;}" +
-      ".me-perm-split{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:16px;}" +
-      ".me-check{display:flex;align-items:center;gap:8px;padding:7px 0;font-size:13px;}" +
-      ".me-check input{width:16px;height:16px;margin:0;}" +
-      ".me-tree-item{padding:8px 0;border-bottom:1px solid var(--xm-ui-border,#e4ebf5);display:flex;align-items:center;gap:8px;font-size:13px;}" +
-      ".me-picked{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--xm-ui-border,#e4ebf5);font-size:13px;}" +
-      ".me-q4{display:grid;grid-template-columns:1fr 1fr;gap:8px;}" +
-      ".me-q4 .xm-ui-button{flex-direction:column;align-items:flex-start;min-height:72px!important;height:auto!important;padding:10px!important;white-space:normal;text-align:left;}" +
-      ".me-note{margin:0;color:var(--xm-ui-text-secondary,#52617a);font-size:12px;line-height:1.7;}" +
+      ".me-pane.on[data-me-pane=rights]{display:flex;flex-direction:column;overflow:auto;}" +
       ".me-page.xm-ui-scope .xm-ui-table th,.me-page.xm-ui-scope .xm-ui-table td{height:32px;padding:0 8px;font-size:12px;}" +
       "#device-list,.me-col > .xm-ui-card:has(#device-list) .xm-ui-card__body{overflow:auto;}" +
       "@media (max-width:900px){.me-banner,.me-split,.me-actions{grid-template-columns:1fr;}.me-page{height:auto;max-height:none;overflow:auto;}}";
@@ -356,26 +337,8 @@
         '<div class="me-page xm-ui-scope">' +
         UI.PageContentHeader({
           title: "个人中心",
-          description: "管理个人信息、账号安全、偏好设置与系统授权。责权按本人账号展示，不改他人权限。"
+          description: "管理个人信息、账号安全、偏好设置与系统授权"
         }) +
-        '<div class="xm-ui-stat-grid" id="me-stats">' +
-        UI.StatCard({ icon: "users", tone: "blue", label: "已授权模块", value: "0" }).replace(
-          'xm-ui-stat-card__value">',
-          'xm-ui-stat-card__value" id="me-stat-mod">'
-        ) +
-        UI.StatCard({ icon: "check", tone: "green", label: "已授权功能", value: "0" }).replace(
-          'xm-ui-stat-card__value">',
-          'xm-ui-stat-card__value" id="me-stat-on">'
-        ) +
-        UI.StatCard({ icon: "close", tone: "orange", label: "未授权", value: "0" }).replace(
-          'xm-ui-stat-card__value">',
-          'xm-ui-stat-card__value" id="me-stat-off">'
-        ) +
-        UI.StatCard({ icon: "award", tone: "purple", label: "范围", value: "仅本人" }).replace(
-          'xm-ui-stat-card__value">',
-          'xm-ui-stat-card__value" id="me-stat-scope">'
-        ) +
-        "</div>" +
         '<div class="me-banner">' +
         profileCard +
         safeCard +
@@ -402,59 +365,12 @@
         }) +
         "</div>" +
         '<div class="me-pane" data-me-pane="rights">' +
-        '<div class="me-perm-work">' +
         UI.ContentCard({
-          title: "权限目录",
-          description: "我的责权清单",
-          content: '<div id="perm-dir"></div>'
-        }) +
-        '<div class="me-perm-center">' +
-        UI.FilterToolbar({
-          search: false,
-          tabs: [
-            { label: "功能权限", value: "func", active: true },
-            { label: "数据权限", value: "data" },
-            { label: "操作权限", value: "ops" },
-            { label: "权限模板", value: "tpl" }
-          ]
-        }).replace('class="xm-ui-filter-toolbar"', 'class="xm-ui-filter-toolbar" id="perm-subtabs"') +
-        UI.ContentCard({
-          title: "模块权限配置",
-          description: "查看当前账号可访问的系统模块及功能",
-          content:
-            '<div class="me-perm-func"><div class="me-perm-split"><div id="duties"></div><div id="perm-features"></div></div></div>' +
-            '<div class="me-perm-sub" data-perm-sub="data" hidden>' +
-            UI.EmptyState({ title: "数据权限", description: "个人中心按责权清单展示功能授权，数据范围以各业务模块为准。" }) +
-            "</div>" +
-            '<div class="me-perm-sub" data-perm-sub="ops" hidden>' +
-            UI.EmptyState({ title: "操作权限", description: "操作类授权已合并在功能权限中。" }) +
-            "</div>" +
-            '<div class="me-perm-sub" data-perm-sub="tpl" hidden>' +
-            UI.EmptyState({ title: "权限模板", description: "模板配置不在个人中心，这里只读本人已授权项。" }) +
-            "</div>"
+          title: "我的责权清单",
+          description: "灰色表示当前角色未授予",
+          content: '<div id="duties"></div>'
         }) +
         "</div>" +
-        '<div class="me-perm-rail">' +
-        UI.ContentCard({
-          title: "已选权限",
-          content: '<p class="me-note">共 <span id="perm-picked-count">0</span> 项</p><div id="perm-picked"></div>'
-        }) +
-        UI.ContentCard({
-          title: "快捷操作",
-          content:
-            '<div class="me-q4">' +
-            quick("修改密码", 'data-go="security"', '<path d="M8 11V8a4 4 0 1 1 8 0v3M6 11h12v9H6z"/>', "#1677ff") +
-            quick("头像设置", 'id="go-avatar-2"', '<circle cx="12" cy="8" r="3"/><path d="M5 19c.8-3 3.4-5 7-5s6.2 2 7 5"/>', "#7a5af8") +
-            quick("退出登录", 'data-go="security"', '<path d="M9 21H5V3h4M16 17l5-5-5-5M21 12H9"/>', "#e5484d") +
-            quick("强制刷新", 'id="me-hard-reload-2"', '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>', "#1677ff") +
-            "</div>"
-        }) +
-        UI.ContentCard({
-          title: "权限说明",
-          content:
-            '<p class="me-note">· 勾选仅用于展示当前账号已授予的功能，不会改他人权限。<br>· 未勾选表示当前角色未授予。<br>· 保存个人信息、改密仍在基本信息 / 账号安全。</p>'
-        }) +
-        "</div></div></div>" +
         '<div class="me-pane" data-me-pane="devices">' +
         UI.ContentCard({
           title: "登录设备管理",
@@ -593,139 +509,42 @@
         showAvatar(uploaded, name);
       }
 
-      let dutyGroups = [];
-      let dutyIndex = 0;
-
-      function renderDutyWorkbench() {
-        const groups = dutyGroups;
+      function fillDuties(groups) {
         const granted = [];
-        let total = 0;
-        let grantedGroups = 0;
-        groups.forEach(function (group) {
-          let any = false;
+        (groups || []).forEach(function (group) {
           (group.items || []).forEach(function (item) {
-            total += 1;
             if (item.granted) {
-              granted.push({ group: group.name, label: item.label });
-              any = true;
+              granted.push(item.label);
             }
           });
-          if (any) {
-            grantedGroups += 1;
-          }
         });
-        const count = granted.length || 0;
+        const count = Math.max(granted.length, 12);
         root.querySelector("#perm-name").textContent = "运营管理权限组";
         root.querySelector("#perm-desc").textContent =
-          "包含：店铺数据、商品管理、推广管理、运营报表等 " + Math.max(count, 12) + " 项权限";
-        const statMod = root.querySelector("#me-stat-mod");
-        const statOn = root.querySelector("#me-stat-on");
-        const statOff = root.querySelector("#me-stat-off");
-        if (statMod) {
-          statMod.textContent = String(grantedGroups);
-        }
-        if (statOn) {
-          statOn.textContent = String(count);
-        }
-        if (statOff) {
-          statOff.textContent = String(Math.max(total - count, 0));
-        }
-        const pickedCount = root.querySelector("#perm-picked-count");
-        if (pickedCount) {
-          pickedCount.textContent = String(count);
-        }
-        const dir = root.querySelector("#perm-dir");
-        const dutiesEl = root.querySelector("#duties");
-        const featEl = root.querySelector("#perm-features");
-        const pickedEl = root.querySelector("#perm-picked");
-        if (!groups.length) {
-          dutiesEl.innerHTML = UI.EmptyState({ title: "责权清单暂未从服务端同步" });
-          dir.innerHTML = "";
-          featEl.innerHTML = "";
-          pickedEl.innerHTML = "";
+          "包含：店铺数据、商品管理、推广管理、运营报表等 " + count + " 项权限";
+        if (!groups || !groups.length) {
+          root.querySelector("#duties").innerHTML = UI.EmptyState({ title: "责权清单暂未从服务端同步" });
           return;
         }
-        if (dutyIndex >= groups.length) {
-          dutyIndex = 0;
-        }
-        dir.innerHTML = groups
-          .map(function (group, index) {
-            const gcount = (group.items || []).filter(function (item) {
-              return item.granted;
-            }).length;
-            return (
-              '<button type="button" class="me-dir-item' +
-              (index === dutyIndex ? " is-on" : "") +
-              '" data-duty-index="' +
-              index +
-              '"><span class="me-dir-av">' +
-              escapeHtml(String(group.name || "权").slice(0, 1)) +
-              "</span><b>" +
-              escapeHtml(group.name) +
-              "</b>" +
-              UI.StatusBadge({
-                label: gcount ? "已配 " + gcount : "未配",
-                tone: gcount ? "success" : "warning"
-              }) +
-              "</button>"
-            );
-          })
-          .join("");
-        const current = groups[dutyIndex] || groups[0];
-        dutiesEl.innerHTML = (groups || [])
-          .map(function (group, index) {
-            return (
-              '<label class="me-tree-item"><input type="checkbox" data-duty-index="' +
-              index +
-              '"' +
-              (index === dutyIndex ? " checked" : "") +
-              " /> <span>" +
-              escapeHtml(group.name) +
-              "</span></label>"
-            );
-          })
-          .join("");
-        const items = current.items || [];
-        const onCount = items.filter(function (item) {
-          return item.granted;
-        }).length;
-        featEl.innerHTML =
-          "<strong>" +
-          escapeHtml(current.name) +
-          " · 功能权限</strong><p class=\"me-note\">全选（" +
-          onCount +
-          "/" +
-          items.length +
-          "）已授予项只读</p>" +
-          items
-            .map(function (item) {
-              return (
-                '<label class="me-check"><input type="checkbox" disabled' +
-                (item.granted ? " checked" : "") +
-                " /> <span>" +
-                escapeHtml(item.label) +
-                "</span></label>"
-              );
-            })
-            .join("");
-        pickedEl.innerHTML = granted.length
-          ? granted
+        root.querySelector("#duties").innerHTML = groups
+          .map(function (group) {
+            const tags = (group.items || [])
               .map(function (item) {
-                return (
-                  '<div class="me-picked"><span>' +
-                  escapeHtml(item.group) +
-                  "</span><span>" +
-                  escapeHtml(item.label) +
-                  "</span></div>"
-                );
+                return UI.StatusBadge({
+                  label: item.label,
+                  tone: item.granted ? "success" : "neutral"
+                });
               })
-              .join("")
-          : UI.EmptyState({ title: "暂无已授权项" });
-      }
-
-      function fillDuties(groups) {
-        dutyGroups = groups || [];
-        renderDutyWorkbench();
+              .join("");
+            return (
+              '<div class="me-group"><h3>' +
+              escapeHtml(group.name) +
+              '</h3><div class="me-tags">' +
+              tags +
+              "</div></div>"
+            );
+          })
+          .join("");
       }
 
       async function api(path, options) {
@@ -785,49 +604,6 @@
           }
         });
       });
-      root.querySelector("#perm-dir").addEventListener("click", function (event) {
-        const btn = event.target.closest("[data-duty-index]");
-        if (!btn) {
-          return;
-        }
-        dutyIndex = Number(btn.getAttribute("data-duty-index")) || 0;
-        renderDutyWorkbench();
-      });
-      root.querySelector("#duties").addEventListener("change", function (event) {
-        const box = event.target.closest("[data-duty-index]");
-        if (!box) {
-          return;
-        }
-        dutyIndex = Number(box.getAttribute("data-duty-index")) || 0;
-        renderDutyWorkbench();
-      });
-      root.querySelector("#perm-subtabs").addEventListener("click", function (event) {
-        const btn = event.target.closest("[data-xm-ui-tab]");
-        if (!btn) {
-          return;
-        }
-        const id = btn.getAttribute("data-xm-ui-tab");
-        root.querySelectorAll("#perm-subtabs [data-xm-ui-tab]").forEach(function (tab) {
-          tab.classList.toggle("is-active", tab === btn);
-        });
-        const func = root.querySelector(".me-perm-func");
-        func.hidden = id !== "func";
-        root.querySelectorAll("[data-perm-sub]").forEach(function (pane) {
-          pane.hidden = pane.getAttribute("data-perm-sub") !== id;
-        });
-      });
-      const avatar2 = root.querySelector("#go-avatar-2");
-      if (avatar2) {
-        avatar2.addEventListener("click", function () {
-          root.querySelector("#who-avatar-file").click();
-        });
-      }
-      const hard2 = root.querySelector("#me-hard-reload-2");
-      if (hard2) {
-        hard2.addEventListener("click", function () {
-          root.querySelector("#me-hard-reload").click();
-        });
-      }
       root.querySelector("#device-list-all").addEventListener("click", function (event) {
         const kick = event.target.closest(".me-dev-out");
         if (!kick) {
