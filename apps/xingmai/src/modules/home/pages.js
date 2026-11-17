@@ -11,6 +11,7 @@ import { boundRouter } from "../bound/router.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
 // xm-fast-shell 0.1.786-mebust
+// xm-ui 内容区公共组件随壳加载，必须和 profile/middleware.js 成套发。
 // xm-login-session 登录会话回读必须和 profile/middleware.js 成套发。
 // login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
 

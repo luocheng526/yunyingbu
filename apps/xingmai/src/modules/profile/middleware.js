@@ -209,7 +209,9 @@ export function renderAppShell(href, user) {
 ${PHONE_HEAD}
     <link rel="icon" type="image/png" sizes="32x32" href="${TAB_ICON}" />
     <link rel="shortcut icon" href="/favicon.ico?v=${SHELL_ASSET_VER}" />
-${css}    <link rel="preload" href="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" as="script" />
+${css}    <link rel="stylesheet" href="/shared/xm-ui.css?v=${SHELL_ASSET_VER}" />
+    <script src="/shared/xm-ui.js?v=${SHELL_ASSET_VER}"></script>
+    <link rel="preload" href="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" as="script" />
 ${boot}    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer data-xm-mod="${key}"></script>
   </head>
   <body class="xm-app xm-app-shell">
@@ -255,6 +257,8 @@ const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..
 const SHELL_ASSET_FILES = {
   "/shared/nav.js": "shared/nav.js",
   "/shared/layout.css": "shared/layout.css",
+  "/shared/xm-ui.css": "shared/xm-ui.css",
+  "/shared/xm-ui.js": "shared/xm-ui.js",
   "/login.css": "login.css",
   "/releases.css": "releases.css"
 };
@@ -323,6 +327,8 @@ function versionShellAssets(text) {
   return String(text || "")
     .replace(/\/shared\/layout\.css(?:\?[^"'>\s]*)?/g, `/shared/layout.css?v=${SHELL_ASSET_VER}`)
     .replace(/\/shared\/nav\.js(?:\?[^"'>\s]*)?/g, `/shared/nav.js?v=${SHELL_ASSET_VER}`)
+    .replace(/\/shared\/xm-ui\.css(?:\?[^"'>\s]*)?/g, `/shared/xm-ui.css?v=${SHELL_ASSET_VER}`)
+    .replace(/\/shared\/xm-ui\.js(?:\?[^"'>\s]*)?/g, `/shared/xm-ui.js?v=${SHELL_ASSET_VER}`)
     .replace(/\/shared\/modules\/([a-z]+)\.js(?:\?[^"'>\s]*)?/g, `/shared/modules/$1.js?v=${SHELL_ASSET_VER}`)
     .replace(/\/releases\.css(?:\?[^"'>\s]*)?/g, `/releases.css?v=${SHELL_ASSET_VER}`);
 }
@@ -416,14 +422,27 @@ export function isLoginHtml(html) {
   );
 }
 
+export function isUiShowcaseHtml(html) {
+  return /xm-ui-showcase/.test(String(html || ""));
+}
+
 export function withSharedShell(html) {
   const text = String(html || "");
   if (isLoginHtml(text)) {
     return versionShellAssets(withThemeBoot(applyPhoneHead(applyTabIcon(text))));
   }
+  if (isUiShowcaseHtml(text)) {
+    return versionShellAssets(applyPhoneHead(applyTabIcon(text)));
+  }
   let out = applyPhoneHead(text);
   if (out.includes("</head>")) {
     const extras = [];
+    if (!out.includes("/shared/xm-ui.css")) {
+      extras.push(`    <link rel="stylesheet" href="/shared/xm-ui.css?v=${SHELL_ASSET_VER}" />`);
+    }
+    if (!out.includes("/shared/xm-ui.js")) {
+      extras.push(`    <script src="/shared/xm-ui.js?v=${SHELL_ASSET_VER}"></script>`);
+    }
     if (!out.includes("/shared/layout.css")) {
       extras.push(`    <link rel="stylesheet" href="/shared/layout.css?v=${SHELL_ASSET_VER}" />`);
     } else if (!out.includes('rel="preload" href="/shared/layout.css')) {

@@ -7,6 +7,8 @@
 - `public/shared/nav.js`
 - `public/shared/layout.css`
 - `public/shared/xingmai-logo.png`
+- `public/shared/xm-ui.css`、`public/shared/xm-ui.js`（业务内容区公共组件，只许主框架改）
+- `docs/XM_UI_DESIGN_SYSTEM.md`、`.cursor/rules/xm-ui-design.mdc`
 - `src/modules/home/nav-items.js`（菜单数据，文件虽在 home 目录，归属主框架）
 - `src/app.js` / `src/server.js` / `src/boot-dirs.js`（必须整文件是完整内核）
 - `src/modules/releases/document.js`、`router.js`（只补丁线上闸，禁止用仓库简化版整文件覆盖）
@@ -35,7 +37,9 @@
 
 ## 页面颜色
 
-公共颜色在 `layout.css` 的 `--xm-*`。新页面用这些变量，主色只用 `--xm-primary`。换肤只改变量，不改侧栏宽、顶栏高、菜单和页签结构，也不改业务页的内容和接口。业务页里写死的颜色，由那个模块下次改自己的页面时再换。
+公共颜色在 `layout.css` 的 `--xm-*`。业务内容区另有 `docs/XM_UI_DESIGN_SYSTEM.md` 和 `xm-ui.css` 的 `--xm-ui-*`，只作用在 `.xm-ui-scope` 里。换肤只改变量，不改侧栏宽、顶栏高、菜单和页签结构，也不改业务页的内容和接口。业务页里写死的颜色，由那个模块下次改自己的页面时再换。
+
+主框架维护公共组件。不替业务模块改页面。业务对话不得覆盖 `xm-ui.css`、`xm-ui.js` 和设计规范。
 
 ## 交单
 
