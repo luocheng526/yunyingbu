@@ -497,7 +497,11 @@ function currentAgentId() {
 
 async function rememberAgent(agentId) {
   rememberedAgent = String(agentId || "");
-  if (!rememberedAgent || dbMode() !== "mysql") {
+  if (dbMode() !== "mysql") {
+    return;
+  }
+  if (!rememberedAgent) {
+    await query("DELETE FROM work_report_diary_meta WHERE meta_key = 'ding_agent'");
     return;
   }
   await query(
@@ -516,44 +520,35 @@ function appRows(payload) {
 }
 
 export async function discoverAgent() {
-  if (currentAgentId()) {
-    return { ok: true, names: [] };
+  const envAgent = dingConfig().agentId;
+  if (envAgent) {
+    return { ok: true, names: [], chosenName: "" };
   }
   let names = [];
   let chosen = "";
   let chosenName = "";
-  const pick = (list) => {
-    const rows = appRows(list).filter((app) => app && (app.agentId || app.agentid));
+  try {
+    await oapi("/topapi/v2/department/listsub", { dept_id: 1 });
+    const res = await transport("https://api.dingtalk.com/v1.0/microApp/allInnerApps", {
+      headers: { "x-acs-dingtalk-access-token": tokenCache.value },
+      signal: AbortSignal.timeout(8000)
+    });
+    const data = await res.json();
+    const rows = appRows(data).filter((app) => app && (app.agentId || app.agentid));
     names = rows.map((app) => String(app.name || app.appName || "未命名"));
     const enabled = rows.filter((app) => app.appStatus === undefined || Number(app.appStatus) === 1);
     const pool = enabled.length ? enabled : rows;
-    const prefer = pool.length === 1 ? pool[0] : pool.find((app) => /日报|汇报|考勤|工作/.test(String(app.name || app.appName || "")));
+    const prefer = pool.length === 1 ? pool[0] : pool.find((app) => /日报|汇报|考勤/.test(String(app.name || app.appName || "")));
     if (prefer) {
       chosen = String(prefer.agentId || prefer.agentid);
       chosenName = String(prefer.name || prefer.appName || "未命名");
     }
-  };
-  try {
-    pick(await oapi("/microapp/list", {}));
   } catch {
     chosen = "";
   }
   if (!chosen) {
-    try {
-      const res = await transport("https://api.dingtalk.com/v1.0/microApp/allInnerApps", {
-        headers: { "x-acs-dingtalk-access-token": tokenCache.value },
-        signal: AbortSignal.timeout(8000)
-      });
-      const data = await res.json();
-      if (!data.code && !data.errcode) {
-        pick(data);
-      }
-    } catch {
-      chosen = "";
-    }
-  }
-  if (!chosen) {
-    return { ok: false, names, error: names.length > 1 ? "有多个企业应用，还不能确定用哪一个发提醒" : "还读不到工作通知 AgentId" };
+    await rememberAgent("");
+    return { ok: false, names, error: names.length > 1 ? "有多个企业内部应用，还不能确定用哪一个发提醒" : "还读不到工作通知 AgentId" };
   }
   await rememberAgent(chosen);
   return { ok: true, names, chosenName };

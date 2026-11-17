@@ -1166,9 +1166,7 @@ export async function activateDing(user, isAdmin) {
   if (attendance.leaveOk) {
     policy.delivery = { ...policy.delivery, useLeave: true };
   }
-  if (agent.ok) {
-    policy.delivery = { ...policy.delivery, remind: true };
-  }
+  policy.delivery = { ...policy.delivery, remind: Boolean(agent.ok) };
   policy.revision += 1;
   await saveMeta("policy", policy);
   const settings = await getDiarySettings(user, true);
