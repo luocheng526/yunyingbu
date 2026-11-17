@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.1090-paidon */
+/* xm-module-home 0.1.1125-connect */
 (function () {
-  var HOME_JS_STAMP = "0.1.1090-paidon";
+  var HOME_JS_STAMP = "0.1.1125-connect";
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
@@ -2868,6 +2868,8 @@
       ".xm-hm-desk-row{display:flex;gap:8px;margin-top:8px;align-items:center}" +
       ".xm-hm-desk-row input{flex:1;min-width:0;height:32px;padding:0 8px;border:1px solid #d7e3f5;border-radius:8px}" +
       ".xm-hm-desk-row button{height:32px;padding:0 12px;border:0;border-radius:8px;background:#2f6fed;color:#fff;cursor:pointer}" +
+      ".xm-hm-desk-shops{list-style:none;margin:8px 0 0;padding:0;max-height:320px;overflow:auto}" +
+      ".xm-hm-desk-shops button{display:block;width:100%;margin:0 0 6px;padding:8px 10px;text-align:left;border:1px solid #d7e3f5;border-radius:8px;background:#fff;color:#123;cursor:pointer}" +
       "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm.is-chief .xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}" +
       "@media (max-width:720px){.xm-hm-sales.xm-hm-live-charts,.xm-hm-live .xm-hm-live-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;overflow:visible;margin:0 0 12px;padding:0}.xm-hm-sales.xm-hm-live-charts>.xm-hm-chart,.xm-hm-live .xm-hm-live-charts>.xm-hm-chart{min-width:0;max-width:none;width:auto;padding:10px 10px 8px;box-sizing:border-box}.xm-hm-live-charts .xm-hm-card-head{align-items:flex-start;gap:4px}.xm-hm-live-charts .xm-hm-card-head>span:first-child{min-width:0;flex:1;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;font-size:12px;line-height:1.3}.xm-hm-live-charts .xm-hm-legs{display:none}.xm-hm-live-charts .xm-hm-index-num{margin:8px 0 2px;font-size:20px}.xm-hm-live-charts .xm-hm-yest-now,.xm-hm-live-charts .xm-hm-trend{font-size:12px;margin-top:4px}.xm-hm-sales.xm-hm-live-charts .xm-hm-line,.xm-hm-live .xm-hm-live-charts .xm-hm-line{display:none;height:0;margin:0}.xm-hm-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}}"
     );
@@ -3031,24 +3033,49 @@
       return "";
     }
     var status = desk.status;
-    var shot =
-      status === "screen" || status === "verify"
-        ? '<img id="xm-hm-desk-shot" alt="服务器登录画面" draggable="false" src="/api/home/live-login/screen?store=' +
-          encodeURIComponent(desk.store || "") +
-          "&t=" +
-          Date.now() +
-          '" />'
-        : "";
+    var title = desk.store || "连接京麦";
+    var message = desk.message || "";
+    if (status === "failed" && desk.step) {
+      message = desk.step + "：" + (desk.message || "没有完成");
+    }
+    if (status === "done") {
+      message = message || "全部店铺已连接";
+    }
+    var shot = "";
+    var extra = "";
     var tools =
-      status === "screen" || status === "verify"
-        ? '<div class="xm-hm-desk-row"><input id="xm-hm-desk-text" placeholder="验证码" /><button type="button" data-desk-type>输入</button><button type="button" data-desk-cancel>取消</button></div>'
-        : '<div class="xm-hm-desk-row"><button type="button" data-desk-cancel>关闭</button></div>';
+      '<div class="xm-hm-desk-row"><button type="button" data-desk-cancel>关闭</button></div>';
+    if (status === "pick") {
+      extra = (desk.shops || [])
+        .map(function (shop) {
+          var name = String((shop && shop.store) || shop || "").trim();
+          if (!name) {
+            return "";
+          }
+          return '<li><button type="button" data-desk-shop="' + escapeHtml(name) + '">' + escapeHtml(name) + "</button></li>";
+        })
+        .join("");
+      extra = extra ? '<ul class="xm-hm-desk-shops">' + extra + "</ul>" : "";
+    } else if (status === "failed") {
+      tools =
+        '<div class="xm-hm-desk-row"><button type="button" data-desk-retry>重试本店</button><button type="button" data-desk-switch>换一家店</button><button type="button" data-desk-cancel>关闭</button></div>';
+    } else if (status === "screen" || status === "verify") {
+      shot =
+        '<img id="xm-hm-desk-shot" alt="服务器登录画面" draggable="false" src="/api/home/live-login/screen?store=' +
+        encodeURIComponent(desk.store || "") +
+        "&t=" +
+        Date.now() +
+        '" />';
+      tools =
+        '<div class="xm-hm-desk-row"><input id="xm-hm-desk-text" placeholder="验证码" /><button type="button" data-desk-type>输入</button><button type="button" data-desk-cancel>取消</button></div>';
+    }
     return (
       '<div class="xm-hm-desk-mask" data-desk-mask><div class="xm-hm-desk" role="dialog" aria-modal="true"><button type="button" class="xm-hm-desk-x" data-desk-cancel aria-label="关闭">×</button><h3>' +
-      escapeHtml(desk.store || "登录店铺") +
+      escapeHtml(title) +
       '</h3><p id="xm-hm-desk-msg">' +
-      escapeHtml(desk.message || "点一下只会点到服务器上的登录页，这个窗口不会关掉。") +
+      escapeHtml(message || "点一下只会点到服务器上的登录页，这个窗口不会关掉。") +
       "</p>" +
+      extra +
       shot +
       tools +
       "</div></div>"
@@ -5215,30 +5242,81 @@
           probe.src = "/api/home/live-login/screen?store=" + encodeURIComponent(name) + "&t=" + Date.now();
         }, 1500);
       }
+      function connectCandidates(serverShops) {
+        var allowed = {};
+        var limited = state.shops && state.shops.length;
+        (state.shops || []).forEach(function (row) {
+          var name = String((row && (row.shop || row.shopName)) || "").trim();
+          if (!name || row.online === true) {
+            return;
+          }
+          if (row.offline === true || row.loginExpired === true || !row.capturedAt) {
+            allowed[name] = true;
+          }
+        });
+        return (serverShops || []).filter(function (shop) {
+          var name = String((shop && shop.store) || shop || "").trim();
+          if (!name) {
+            return false;
+          }
+          return !limited || allowed[name] === true;
+        });
+      }
+      function failDesk(seq, name, step, message) {
+        if (dead || seq !== deskSeq) {
+          return;
+        }
+        window.clearInterval(deskTimer);
+        deskTimer = 0;
+        state.desk = {
+          open: true,
+          status: "failed",
+          store: name || "连接京麦",
+          step: step || "打开京麦登录页",
+          message: message || "没有完成"
+        };
+        paint(root, state);
+      }
       function openConnectJingmai() {
         var seq = ++deskSeq;
         window.clearInterval(deskTimer);
         deskTimer = 0;
-        state.desk = { open: true, status: "opening", store: "全部店铺", message: "正在打开还没有登录的店铺" };
+        state.desk = { open: true, status: "pick", store: "连接京麦", message: "正在列出还没有登录的店铺", shops: [] };
         if (!dead) {
           paint(root, state);
         }
+        var timed = window.setTimeout(function () {
+          if (dead || seq !== deskSeq || !state.desk || state.desk.status !== "pick" || (state.desk.shops && state.desk.shops.length)) {
+            return;
+          }
+          failDesk(seq, "连接京麦", "列出待连接店铺", "列出店铺超时");
+        }, 12000);
         api("/api/home/live-login", {}).then(function (st) {
+          window.clearTimeout(timed);
           if (dead || seq !== deskSeq) {
             return;
           }
-          var next = st || { status: "login", message: "登录没有打开" };
-          next.open = true;
-          if (next.status === "done" || next.status === "ok") {
-            state.desk = null;
-            if (!dead) {
-              paint(root, state);
-              pullLive();
-            }
+          if (!st) {
+            failDesk(seq, "连接京麦", "列出待连接店铺", "没有取到待连接店铺");
             return;
           }
-          next.store = next.store || "全部店铺";
-          showDesk(next);
+          if (st.status === "done" || st.status === "ok") {
+            state.desk = { open: true, status: "done", store: "连接京麦", message: "全部店铺已连接" };
+            paint(root, state);
+            return;
+          }
+          var shops = connectCandidates(st.shops || []);
+          if (!shops.length) {
+            state.desk = { open: true, status: "done", store: "连接京麦", message: "全部店铺已连接" };
+            paint(root, state);
+            return;
+          }
+          if (shops.length === 1) {
+            openShopLogin((shops[0] && shops[0].store) || shops[0]);
+            return;
+          }
+          state.desk = { open: true, status: "pick", store: "连接京麦", message: "选择要登录的店铺", shops: shops };
+          paint(root, state);
         });
       }
       function openShopLogin(shop) {
@@ -5249,20 +5327,86 @@
         var seq = ++deskSeq;
         window.clearInterval(deskTimer);
         deskTimer = 0;
-        state.desk = { open: true, status: "opening", store: name, preview: true, message: "正在打开「" + name + "」的登录画面" };
+        state.desk = { open: true, status: "opening", store: name, preview: true, step: "打开京麦登录页", message: "正在打开「" + name + "」的登录画面" };
         if (!dead) {
           paint(root, state);
         }
         watchOpeningShot(seq, name);
+        var wait = window.setInterval(function () {
+          if (dead || seq !== deskSeq || !state.desk || state.desk.status === "screen" || state.desk.status === "verify" || state.desk.status === "failed") {
+            window.clearInterval(wait);
+            return;
+          }
+          api("/api/home/live-login/state?store=" + encodeURIComponent(name)).then(function (row) {
+            if (dead || seq !== deskSeq || !row || !state.desk) {
+              return;
+            }
+            if (row.status === "failed") {
+              window.clearTimeout(timed);
+              window.clearInterval(wait);
+              failDesk(seq, row.store || name, row.step || "打开京麦登录页", row.message || "登录没有打开");
+              return;
+            }
+            if (row.status === "screen" || row.status === "verify") {
+              window.clearTimeout(timed);
+              window.clearInterval(wait);
+              row.open = true;
+              row.store = row.store || name;
+              showDesk(row);
+              return;
+            }
+            if (row.status === "ok" || row.status === "done") {
+              window.clearTimeout(timed);
+              window.clearInterval(wait);
+              state.desk = null;
+              paint(root, state);
+              pullLive();
+            }
+          });
+        }, 2000);
+        var timed = window.setTimeout(function () {
+          if (dead || seq !== deskSeq || !state.desk) {
+            return;
+          }
+          if (state.desk.status === "screen" || state.desk.status === "verify") {
+            return;
+          }
+          failDesk(seq, name, state.desk.step || "打开京麦登录页", "这一步超时，登录画面没有回来");
+        }, 45000);
         api("/api/home/live-login/one", { store: name }).then(function (st) {
           if (dead || seq !== deskSeq) {
             return;
           }
-          var next = st || { status: "login", message: "登录没有打开" };
-          next.open = true;
-          next.preview = false;
-          next.store = next.store || name;
-          showDesk(next);
+          if (!st) {
+            window.clearTimeout(timed);
+            failDesk(seq, name, "打开京麦登录页", "服务器没有返回登录结果");
+            return;
+          }
+          if (st.status === "done" || st.status === "ok") {
+            window.clearTimeout(timed);
+            state.desk = null;
+            paint(root, state);
+            pullLive();
+            return;
+          }
+          if (st.status === "failed" || st.status === "missing") {
+            window.clearTimeout(timed);
+            failDesk(seq, st.store || name, st.step || "打开京麦登录页", st.message || "登录没有打开");
+            return;
+          }
+          if (st.status === "screen" || st.status === "verify") {
+            window.clearTimeout(timed);
+            st.open = true;
+            st.store = st.store || name;
+            showDesk(st);
+            return;
+          }
+          state.desk.step = st.step || state.desk.step;
+          state.desk.message = st.message || state.desk.message;
+          var msg = root.querySelector("#xm-hm-desk-msg");
+          if (msg) {
+            msg.textContent = state.desk.message;
+          }
         });
       }
       var boardSeq = 0;
@@ -5432,6 +5576,24 @@
         }
         if (event.target.closest("[data-desk-cancel]")) {
           closeDesk();
+          return;
+        }
+        var pickedShop = event.target.closest("[data-desk-shop]");
+        if (pickedShop) {
+          openShopLogin(pickedShop.getAttribute("data-desk-shop"));
+          return;
+        }
+        if (event.target.closest("[data-desk-retry]")) {
+          var retryName = state.desk && state.desk.store;
+          if (!retryName || retryName === "连接京麦" || retryName === "全部店铺") {
+            openConnectJingmai();
+          } else {
+            openShopLogin(retryName);
+          }
+          return;
+        }
+        if (event.target.closest("[data-desk-switch]")) {
+          openConnectJingmai();
           return;
         }
         if (event.target.closest("[data-desk-mask]") && !event.target.closest(".xm-hm-desk")) {

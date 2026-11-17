@@ -1032,11 +1032,6 @@ export async function runTick(deps) {
   await Promise.all(jobs);
 }
 
-function offlineMessage(error) {
-  const classified = classifyTransportError(error);
-  return String(classified.message || "采集超时").replace(/\s+/g, " ").slice(0, 180) || "采集超时";
-}
-
 async function collectOne(shop, deps) {
   const now = deps.now();
   try {
@@ -1046,17 +1041,21 @@ async function collectOne(shop, deps) {
     await deps.saveSample(
       Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics))
     );
-    if (metrics.dealAmount == null) {
-      await deps.markAuth(shop.store, "offline", metrics.dealNote || "京麦首页没有成交字段");
-    } else if (shop.authState === "offline") {
+    if (shop.authState === "offline") {
       await deps.markAuth(shop.store, "ok", "");
     }
   } catch (error) {
-    const classified = classifyTransportError(error);
-    if (classified.code === "login") {
-      await deps.markAuth(shop.store, "login_expired", "登录已失效，请重新登录");
-      return;
+    const decision = collectAuthDecision(error);
+    if (decision.authState === "login_expired") {
+      await deps.markAuth(shop.store, "login_expired", decision.authMessage);
     }
-    await deps.markAuth(shop.store, "offline", offlineMessage(classified));
   }
+}
+
+export function collectAuthDecision(error) {
+  const classified = classifyTransportError(error);
+  if (classified.code === "login") {
+    return { authState: "login_expired", authMessage: "登录已失效，请重新登录" };
+  }
+  return { authState: "ok", authMessage: "" };
 }

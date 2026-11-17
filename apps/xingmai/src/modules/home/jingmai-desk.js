@@ -1423,7 +1423,7 @@ export async function openDesk({ store, loginName, password }) {
 
 export async function pollDesk(store) {
   if (!current || current.store !== store || !current.ws || current.ws.readyState !== 1) {
-    return { status: "screen", message: "" };
+    return { status: "opening", message: "正在打开「" + (store || "") + "」的登录画面" };
   }
   try {
     const cookies = await readCookies(current.ws);

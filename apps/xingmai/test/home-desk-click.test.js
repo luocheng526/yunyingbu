@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { accountIdentity, bindDecision, buildLiveView } from "../src/modules/home/jingmai.js";
+import { accountIdentity, bindDecision, buildLiveView, collectAuthDecision } from "../src/modules/home/jingmai.js";
+import { beginRelogin, beginReloginAll, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/home/jingmai-runner.js";
+import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
-import { reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/home/jingmai-runner.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
 import { collectFrameIds, deskUsable, loginOpenReady, loginPageAction, loginScreenState, sessionReady } from "../src/modules/home/jingmai-desk.js";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
@@ -354,6 +355,103 @@ test("collector keeps each saved session and does not drop a shop that has no pl
   const targets = await listCollectTargets();
   assert.deepEqual(targets.map((row) => row.store).sort(), ["DIKTT潮流生活旗舰店", "京贝优驱蚊专营店"]);
   assert.equal(targets.find((row) => row.store === "DIKTT潮流生活旗舰店").shopId, "16107402");
+});
+
+test("连接京麦 lists shops that still need a login and does not open the browser", async () => {
+  await resetJingmaiStore();
+  await saveSession("DIKTT潮流生活旗舰店", {
+    cookies: [{ name: "thor", value: "live" }],
+    authState: "ok",
+    shopId: "16107402"
+  });
+  let opened = false;
+  setJingmaiDeps({
+    loadOrg: async () => [
+      { store: "DIKTT潮流生活旗舰店", enabled: true, login: "diktt", password: "secret", shopId: "16107402" },
+      { store: "UUMILO个人洗护旗舰店", enabled: true, login: "uumilo", password: "secret", shopId: "196509787" }
+    ],
+    desk: {
+      open: async () => {
+        opened = true;
+        return { status: "verify", message: "登录页已打开" };
+      },
+      close: async () => {},
+      poll: async () => ({ status: "screen", message: "登录页已打开" })
+    }
+  });
+  try {
+    const listed = await beginReloginAll("cookie");
+    assert.equal(listed.status, "pick");
+    assert.deepEqual(listed.shops, [{ store: "UUMILO个人洗护旗舰店", shopId: "196509787" }]);
+    assert.equal(opened, false);
+    const kept = await beginRelogin("DIKTT潮流生活旗舰店", "cookie");
+    assert.equal(kept.status, "done");
+    assert.match(kept.message, /已连接/);
+    assert.equal(opened, false);
+    const row = (await listSessions()).find((item) => item.store === "DIKTT潮流生活旗舰店");
+    assert.equal(row.cookies[0].value, "live");
+    const started = Date.now();
+    const opening = await beginRelogin("UUMILO个人洗护旗舰店", "cookie");
+    assert.equal(opening.status, "opening");
+    assert.equal(opening.store, "UUMILO个人洗护旗舰店");
+    assert.ok(Date.now() - started < 1000);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const screen = await reloginState("UUMILO个人洗护旗舰店");
+    assert.equal(screen.status, "screen");
+    assert.equal(screen.step, "京麦登录页");
+    assert.equal(screen.store, "UUMILO个人洗护旗舰店");
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
+test("a shop that fails to open keeps other shops logged in and names the step", async () => {
+  await resetJingmaiStore();
+  await saveSession("DIKTT潮流生活旗舰店", {
+    cookies: [{ name: "thor", value: "live" }],
+    authState: "ok",
+    shopId: "16107402"
+  });
+  setJingmaiDeps({
+    loadOrg: async () => [
+      { store: "UUMILO个人洗护旗舰店", enabled: true, login: "uumilo", password: "secret", shopId: "196509787" }
+    ],
+    desk: {
+      open: async () => ({ status: "login", message: "服务器没有打开京麦登录页" }),
+      close: async () => {},
+      poll: async () => ({ status: "screen" })
+    }
+  });
+  try {
+    await beginRelogin("UUMILO个人洗护旗舰店", "cookie");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const failed = await reloginState("UUMILO个人洗护旗舰店");
+    assert.equal(failed.status, "failed");
+    assert.equal(failed.step, "打开京麦登录页");
+    assert.match(failed.message, /没有打开京麦登录页/);
+    const row = (await listSessions()).find((item) => item.store === "DIKTT潮流生活旗舰店");
+    assert.equal(row.authState, "ok");
+    assert.equal(row.cookies[0].value, "live");
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
+test("one collect timeout or an empty deal does not mark the login offline", () => {
+  assert.equal(collectAuthDecision({ code: "timeout", message: "采集超时" }).authState, "ok");
+  assert.equal(collectAuthDecision({ code: "login", message: "登录已失效" }).authState, "login_expired");
+});
+
+test("the connect picker patch turns the old all-shop opener into a shop list", () => {
+  assert.match(homeJs, /data-desk-shop/);
+  assert.match(homeJs, /全部店铺已连接/);
+  assert.match(homeJs, /重试本店/);
+  assert.match(homeJs, /换一家店/);
+  assert.match(homeJs, /列出待连接店铺/);
+  assert.equal(patchConnectPicker(homeJs), homeJs);
+  const old = 'state.desk = { open: true, status: "opening", store: "全部店铺", message: "正在打开还没有登录的店铺" };';
+  assert.match(homeJs, /正在列出还没有登录的店铺/);
+  assert.equal(homeJs.includes(old), false);
 });
 
 test("a login form captcha is submitted with the 登录 button", () => {
