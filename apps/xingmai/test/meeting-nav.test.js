@@ -61,7 +61,7 @@ test("侧栏在工作汇报后面挂月度大会，不进底部", () => {
 
 test("壳把 /meeting 交给月度大会模块", () => {
   assert.equal(APP_MODULES["/meeting"], "meeting");
-  assert.equal(SHELL_ASSET_VER, "0.1.777-parentgo");
+  assert.equal(SHELL_ASSET_VER, "0.1.778-nochild");
   const html = renderAppShell("/meeting", luocheng);
   assert.equal(html.includes("/shared/modules/meeting.js"), true);
   assert.equal(html.includes("月度大会"), true);
