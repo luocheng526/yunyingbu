@@ -1,6 +1,7 @@
 /* 工作汇报填报。 */
 import { dbMode, query } from "../profile/auth.js";
 import { bindRoster, diaryObligation, loadOrg, obligationBundle, readyDiary, resetDiaryStore } from "./diary.js";
+import { resetTaskStore } from "./tasks.js";
 
 export const WORK_DEPTS = [
   { code: "ops", name: "运营部" },
@@ -151,6 +152,7 @@ export function resetWorkStore() {
   templates = new Map();
   rows = new Map();
   resetDiaryStore();
+  resetTaskStore();
 }
 
 async function ignoreDuplicate(work) {
@@ -245,7 +247,7 @@ async function readyStore() {
   ready = true;
 }
 
-async function orgPeople() {
+export async function orgPeople() {
   const packed = await loadOrg();
   const list = packed.people;
   let usernameById = new Map();

@@ -1717,9 +1717,16 @@
    (state.tab === "todo") +
    '">待办事项' +
    (state.todoOpen ? '<i class="work-dot">1</i>' : "") +
-   "</button></div>";
+   "</button>" +
+   tabBtn("taskPublish", "发布任务") +
+   tabBtn("taskMine", "我的任务") +
+   tabBtn("taskReview", "待检查任务") +
+   "</div>";
+  var taskTab = state.tab === "taskPublish" || state.tab === "taskMine" || state.tab === "taskReview";
   var body =
-   state.tab === "settings" && admin
+   taskTab
+    ? '<div data-task-host></div>'
+    : state.tab === "settings" && admin
     ? renderSettings()
     : state.tab === "summary"
      ? renderSummary()
@@ -1762,6 +1769,33 @@
    }
   }
   paintNavBadge();
+  if (taskTab) mountTasks(root, state.tab);
+ }
+
+ function mountTasks(root, tab) {
+  var host = root.querySelector("[data-task-host]");
+  if (!host) return;
+  function run() {
+   if (!host.isConnected || state.tab !== tab || !window.XmWorkTasks) return;
+   window.XmWorkTasks.mount(host, tab);
+  }
+  if (window.XmWorkTasks) {
+   run();
+   return;
+  }
+  var existing = document.querySelector("script[data-work-tasks]");
+  if (existing) {
+   existing.addEventListener("load", run);
+   return;
+  }
+  var script = document.createElement("script");
+  script.src = "/shared/modules/work-tasks.js?v=task2";
+  script.setAttribute("data-work-tasks", "");
+  script.onload = run;
+  script.onerror = function () {
+   if (host.isConnected) host.innerHTML = '<div class="work-card"><div class="work-empty">任务页面没有载入</div></div>';
+  };
+  document.head.appendChild(script);
  }
 
  function paintNavBadge() {

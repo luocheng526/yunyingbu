@@ -17,6 +17,7 @@ import {
   syncDingBinds
 } from "./diary.js";
 import { getReport, getSettings, isWorkAdmin, saveMembers, saveReport, saveTemplate, snapshot } from "./store.js";
+import { actTask, listTasks, publishTask, readTaskFile, taskContext } from "./tasks.js";
 
 export const workRouter = Router();
 startDiaryReminder();
@@ -127,6 +128,45 @@ function parseMultipart(buffer, boundary) {
   return { fields, file };
 }
 
+function parseTaskForm(buffer, boundary) {
+  const text = buffer.toString("latin1");
+  const parts = text.split(`--${boundary}`).slice(1, -1);
+  const fields = {};
+  const files = [];
+  for (const part of parts) {
+    const splitAt = part.indexOf("\r\n\r\n");
+    if (splitAt < 0) {
+      continue;
+    }
+    const head = Buffer.from(part.slice(0, splitAt), "latin1").toString("utf8");
+    let body = part.slice(splitAt + 4);
+    if (body.endsWith("\r\n")) {
+      body = body.slice(0, -2);
+    }
+    const name = /name="([^"]+)"/.exec(head)?.[1] || "";
+    const filename = /filename="([^"]*)"/.exec(head)?.[1];
+    const mime = /Content-Type:\s*([^\r\n]+)/i.exec(head)?.[1] || "";
+    if (filename) {
+      files.push({ name: filename, mime: mime.trim(), bytes: Buffer.from(body, "latin1") });
+    } else if (name) {
+      fields[name] = Buffer.from(body, "latin1").toString("utf8");
+    }
+  }
+  return { ...fields, files };
+}
+
+async function readTaskBody(req) {
+  const type = String(req.headers["content-type"] || "");
+  if (!type.includes("multipart/form-data")) {
+    return req.body || {};
+  }
+  const boundary = /boundary=(?:"([^"]+)"|([^;]+))/.exec(type);
+  if (!boundary) {
+    return { ok: false, statusCode: 400, error: "附件格式不对" };
+  }
+  return parseTaskForm(await readBody(req, 8 * 1024 * 1024), (boundary[1] || boundary[2] || "").trim());
+}
+
 workRouter.get(
   "/diary",
   wrap(async (req, res) => {
@@ -231,5 +271,50 @@ workRouter.put(
   "/diary/ding",
   wrap(async (req, res) => {
     sendResult(res, await saveDingBinds(req.user, req.body || {}, isWorkAdmin(req.user)), 403);
+  })
+);
+
+workRouter.get(
+  "/tasks/context",
+  wrap(async (req, res) => {
+    sendResult(res, await taskContext(req.user));
+  })
+);
+
+workRouter.get(
+  "/tasks/file",
+  wrap(async (req, res) => {
+    sendResult(res, await readTaskFile(req.user, req.query?.id), 404);
+  })
+);
+
+workRouter.get(
+  "/tasks",
+  wrap(async (req, res) => {
+    sendResult(res, await listTasks(req.user, req.query?.queue));
+  })
+);
+
+workRouter.post(
+  "/tasks/publish",
+  wrap(async (req, res) => {
+    const body = await readTaskBody(req);
+    if (body?.ok === false) {
+      sendResult(res, body);
+      return;
+    }
+    sendResult(res, await publishTask(req.user, body));
+  })
+);
+
+workRouter.post(
+  "/tasks/action",
+  wrap(async (req, res) => {
+    const body = await readTaskBody(req);
+    if (body?.ok === false) {
+      sendResult(res, body);
+      return;
+    }
+    sendResult(res, await actTask(req.user, body));
   })
 );

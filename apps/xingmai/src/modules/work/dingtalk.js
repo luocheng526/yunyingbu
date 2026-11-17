@@ -685,6 +685,31 @@ export async function probeAttendance(people) {
   return { ok: true, personId: opened.personId, rows: opened.rows, leaveOk };
 }
 
+export function dingUserOf(personId) {
+  return binds.get(Number(personId))?.userid || "";
+}
+
+export async function sendTaskNotice(userid, title, markdown) {
+  const agentId = currentAgentId();
+  if (!agentId || !userid) {
+    return false;
+  }
+  await oapi("/topapi/message/corpconversation/asyncsend_v2", {
+    agent_id: Number(agentId) || agentId,
+    userid_list: userid,
+    msg: {
+      msgtype: "action_card",
+      action_card: {
+        title: String(title || "工作任务").slice(0, 64),
+        markdown: String(markdown || "").slice(0, 500),
+        single_title: "打开工作汇报",
+        single_url: WORK_URL
+      }
+    }
+  });
+  return true;
+}
+
 export async function sendWorkNotice(userid) {
   const agentId = currentAgentId();
   if (!agentId) {

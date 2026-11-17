@@ -10,6 +10,7 @@ import { APP_MODULES, renderAppShell, SHELL_ASSET_VER } from "../src/modules/pro
 import { resetPeopleStore } from "../src/modules/people/store.js";
 import { workRouter } from "../src/modules/work/router.js";
 import { resetWorkStore } from "../src/modules/work/store.js";
+import { setTaskNotifier } from "../src/modules/work/tasks.js";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const luocheng = { username: "罗成", displayName: "罗成" };
@@ -81,6 +82,15 @@ test("填写日报页用看板，空的时候仍能写下日报", () => {
   assert.match(js, /function renderDiarySettings\(\)/);
   assert.match(js, /function renderSummary\(\)/);
   assert.match(js, /function renderDuty\(\)/);
+  assert.match(js, /tabBtn\("taskPublish", "发布任务"\)/);
+  assert.match(js, /tabBtn\("taskMine", "我的任务"\)/);
+  assert.match(js, /tabBtn\("taskReview", "待检查任务"\)/);
+  assert.match(js, /data-task-host/);
+  const tasks = readFileSync(join(root, "../public/shared/modules/work-tasks.js"), "utf8");
+  assert.match(tasks, /queue === "publish" \? "published"/);
+  assert.match(tasks, /优先跟进/);
+  assert.match(tasks, /已逾期/);
+  assert.match(tasks, /退回必须填写原因|检查意见/);
 });
 
 test("今天未交时侧栏工作汇报右上角是 1，交了就去掉", () => {
@@ -439,6 +449,214 @@ test("人事按模板填报，免报和移出不计入未报", async () => {
   } finally {
     await admin.close();
     await staff.close();
+  }
+});
+
+test("发布、执行、退回、再提交、检查通过走同一条任务", async () => {
+  resetPeopleStore();
+  resetWorkStore();
+  const notices = [];
+  setTaskNotifier(async (personId, title, text) => {
+    notices.push({ personId: String(personId), title, text });
+    return true;
+  });
+  let current = luocheng;
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    req.user = current;
+    next();
+  });
+  app.use("/api/work", workRouter);
+  const { base, close } = await listen(app);
+  const chen = { username: "陈明婧", displayName: "陈明婧" };
+  const body = {
+    id: "task-role-1",
+    title: "核对活动价",
+    description: "把今天的活动价整理出来",
+    criteria: "表格里每个 SPU 都有价格",
+    assignee: "4",
+    reviewer: "2",
+    start_at: "2026-11-17T09:00",
+    due_at: "2026-11-17T18:00",
+    files: [{ name: "要求.txt", data: Buffer.from("完成要求附件").toString("base64") }]
+  };
+  try {
+    const same = await json(base, "/api/work/tasks/publish", { method: "POST", body: { ...body, assignee: "4", reviewer: "4" } });
+    assert.equal(same.status, 400);
+    assert.match(same.data.error, /不同人员/);
+    const early = await json(base, "/api/work/tasks/publish", {
+      method: "POST",
+      body: { ...body, id: "task-role-early", due_at: "2026-11-17T08:00" }
+    });
+    assert.equal(early.status, 400);
+    assert.match(early.data.error, /截止时间不能早于开始时间/);
+
+    const published = await json(base, "/api/work/tasks/publish", { method: "POST", body });
+    assert.equal(published.status, 200);
+    assert.equal(published.data.task.status, "待执行");
+    const again = await json(base, "/api/work/tasks/publish", { method: "POST", body });
+    assert.equal(again.status, 200);
+    assert.equal(again.data.duplicate, true);
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].personId, "4");
+    assert.match(notices[0].text, /核对活动价/);
+
+    current = zhang;
+    const mine = await json(base, "/api/work/tasks?queue=mine");
+    assert.equal(mine.data.rows.length, 1);
+    assert.equal(mine.data.rows[0].title, "核对活动价");
+    const started = await json(base, "/api/work/tasks/action", {
+      method: "POST",
+      body: { id: "task-role-1", revision: 1, action: "start" }
+    });
+    assert.equal(started.data.task.status, "进行中");
+    assert.equal(notices.length, 1);
+    const emptyResult = await json(base, "/api/work/tasks/action", {
+      method: "POST",
+      body: { id: "task-role-1", revision: 2, action: "submit", note: "  " }
+    });
+    assert.equal(emptyResult.status, 400);
+    const submitted = await json(base, "/api/work/tasks/action", {
+      method: "POST",
+      body: {
+        id: "task-role-1",
+        revision: 2,
+        action: "submit",
+        note: "价格已填完",
+        files: [{ name: "结果.txt", data: Buffer.from("执行结果附件").toString("base64") }]
+      }
+    });
+    assert.equal(submitted.data.task.status, "待检查");
+    const repeat = await json(base, "/api/work/tasks/action", {
+      method: "POST",
+      body: { id: "task-role-1", revision: 2, action: "submit", note: "价格已填完" }
+    });
+    assert.equal(repeat.status, 400);
+    assert.match(repeat.data.error, /刷新/);
+    assert.equal(notices.length, 2);
+    assert.equal(notices[1].personId, "2");
+
+    current = han;
+    const review = await json(base, "/api/work/tasks?queue=review");
+    const waiting = review.data.rows[0];
+    assert.equal(waiting.status, "待检查");
+    assert.equal(waiting.criteria, "表格里每个 SPU 都有价格");
+    assert.match(waiting.events.map((event) => event.note).join("\n"), /价格已填完/);
+    assert.equal(waiting.events.some((event) => event.files.some((file) => file.name === "结果.txt")), true);
+    const noReason = await json(base, "/api/work/tasks/action", {
+      method: "POST",
+      body: { id: "task-role-1", revision: waiting.revision, action: "return", note: "" }
+    });
+    assert.equal(noReason.status, 400);
+    assert.match(noReason.data.error, /原因/);
+    const returned = await json(base, "/api/work/tasks/action", {
+      method: "POST",
+      body: { id: "task-role-1", revision: waiting.revision, action: "return", note: "少了两个 SPU" }
+    });
+    assert.equal(returned.data.task.status, "已退回");
+    assert.equal(notices.at(-1).personId, "4");
+    assert.match(notices.at(-1).text, /少了两个 SPU/);
+
+    current = zhang;
+    const bounced = await json(base, "/api/work/tasks?queue=mine");
+    assert.equal(bounced.data.rows[0].status, "已退回");
+    assert.match(bounced.data.rows[0].events.map((event) => event.note).join("\n"), /少了两个 SPU/);
+    const resubmitted = await json(base, "/api/work/tasks/action", {
+      method: "POST",
+      body: { id: "task-role-1", revision: bounced.data.rows[0].revision, action: "submit", note: "两个 SPU 已补上" }
+    });
+    assert.equal(resubmitted.data.task.status, "待检查");
+
+    current = han;
+    const pending = await json(base, "/api/work/tasks?queue=review");
+    assert.equal(pending.data.rows[0].status, "待检查");
+    const approved = await json(base, "/api/work/tasks/action", {
+      method: "POST",
+      body: { id: "task-role-1", revision: pending.data.rows[0].revision, action: "approve", note: "可以了" }
+    });
+    assert.equal(approved.data.task.status, "已完成");
+    assert.equal(notices.filter((item) => item.title === "任务待检查").length, 2);
+    assert.equal(notices.some((item) => item.title.includes("通过")), false);
+    const handled = pending.data.rows;
+    const after = await json(base, "/api/work/tasks?queue=review");
+    const done = after.data.rows[0];
+    assert.equal(done.status, "已完成");
+    assert.equal(handled[0].id, done.id);
+    assert.equal(done.events.some((event) => event.actor === "2" && event.action === "检查通过"), true);
+
+    current = zhang;
+    const finished = await json(base, "/api/work/tasks?queue=mine");
+    assert.equal(finished.data.rows[0].status, "已完成");
+    current = luocheng;
+    const publishedList = await json(base, "/api/work/tasks?queue=published");
+    assert.equal(publishedList.data.rows[0].status, "已完成");
+    assert.equal(publishedList.data.rows[0].events[0].action, "发布任务");
+    assert.equal(publishedList.data.rows[0].events[0].actor, "3");
+    const fileId = publishedList.data.rows[0].files[0].id;
+    const file = await json(base, `/api/work/tasks/file?id=${fileId}`);
+    assert.equal(Buffer.from(file.data.data, "base64").toString(), "完成要求附件");
+
+    current = chen;
+    const hidden = await json(base, `/api/work/tasks/file?id=${fileId}`);
+    assert.equal(hidden.status, 404);
+    const outsider = await json(base, "/api/work/tasks?queue=mine");
+    assert.equal(outsider.data.rows.length, 0);
+
+    current = luocheng;
+    const diary = await json(base, "/api/work");
+    assert.equal(diary.status, 200);
+    assert.equal(diary.data.isAdmin, true);
+  } finally {
+    resetWorkStore();
+    await close();
+  }
+});
+
+test("任务附件用表单上传，重复发布不新增", async () => {
+  resetPeopleStore();
+  resetWorkStore();
+  const notices = [];
+  setTaskNotifier(async (personId) => {
+    notices.push(String(personId));
+    return true;
+  });
+  const app = express();
+  app.use(express.json());
+  app.use("/api/work", withUser(luocheng), workRouter);
+  const { base, close } = await listen(app);
+  try {
+    const form = new FormData();
+    form.set("id", "task-form-600e");
+    form.set("title", "上传附件的任务");
+    form.set("description", "说明");
+    form.set("criteria", "要求");
+    form.set("assignee", "4");
+    form.set("reviewer", "2");
+    form.set("start_at", "2026-11-17T09:00");
+    form.set("due_at", "2026-11-18T09:00");
+    form.append("files", new Blob(["表单附件"]), "brief.txt");
+    const first = await fetch(`${base}/api/work/tasks/publish`, { method: "POST", body: form });
+    const firstData = await first.json();
+    assert.equal(first.status, 200);
+    assert.equal(firstData.task.files[0].name, "brief.txt");
+    const second = new FormData();
+    second.set("id", "task-form-600e");
+    second.set("title", "另一条");
+    second.set("assignee", "4");
+    second.set("reviewer", "2");
+    second.set("start_at", "2026-11-17T09:00");
+    second.set("due_at", "2026-11-18T09:00");
+    const again = await fetch(`${base}/api/work/tasks/publish`, { method: "POST", body: second });
+    const againData = await again.json();
+    assert.equal(againData.duplicate, true);
+    assert.equal(againData.task.title, "上传附件的任务");
+    assert.equal(notices.length, 1);
+    const list = await json(base, "/api/work/tasks?queue=published");
+    assert.equal(list.data.rows.length, 1);
+  } finally {
+    resetWorkStore();
+    await close();
   }
 });
 
