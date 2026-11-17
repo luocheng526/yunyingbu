@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { accountIdentity, bindDecision, buildLiveView, collectAuthDecision } from "../src/modules/home/jingmai.js";
 import { beginRelogin, beginReloginAll, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/home/jingmai-runner.js";
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginScreenState, sessionReady } from "../src/modules/home/jingmai-desk.js";
+import { browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginScreenState, sessionReady, unpackDebBuffer } from "../src/modules/home/jingmai-desk.js";
+import { tmpdir } from "node:os";
+import zlib from "node:zlib";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
 
 const homeJs = readFileSync(new URL("../public/shared/modules/home.js", import.meta.url), "utf8");
@@ -670,6 +672,106 @@ test("old homepage client keeps a saved login online after the sample goes stale
   assert.match(next, /row\.loginExpired === true/);
   assert.match(next, /kind: ""/);
   assert.match(next, /offline: row && row.offline === true/);
+});
+
+function tarHeader(name, size, type, link) {
+  const header = Buffer.alloc(512);
+  header.write(name);
+  header.write("0000644\0", 100);
+  header.write("0000000\0", 108);
+  header.write("0000000\0", 116);
+  header.write(size.toString(8).padStart(11, "0") + "\0", 124);
+  header.write("00000000000\0", 136);
+  header[156] = type.charCodeAt(0);
+  if (link) {
+    header.write(link, 157);
+  }
+  header.write("ustar\0", 257);
+  header.write("00", 263);
+  let sum = 0;
+  for (let i = 0; i < 512; i += 1) {
+    sum += i >= 148 && i < 156 ? 32 : header[i];
+  }
+  header.write(sum.toString(8).padStart(6, "0") + "\0 ", 148);
+  return header;
+}
+
+function arMember(name, body) {
+  const header = Buffer.alloc(60);
+  header.write(name.padEnd(16, " "));
+  header.write("0".padEnd(12, " "), 16);
+  header.write("0".padEnd(6, " "), 28);
+  header.write("0".padEnd(6, " "), 34);
+  header.write("100644".padEnd(8, " "), 40);
+  header.write(String(body.length).padEnd(10, " "), 48);
+  header.write("`\n", 58);
+  const pad = body.length % 2 ? Buffer.from([10]) : Buffer.alloc(0);
+  return Buffer.concat([header, body, pad]);
+}
+
+test("a zstd library package unpacks the soname without python or dpkg", () => {
+  assert.equal(typeof zlib.zstdCompressSync, "function");
+  const file = Buffer.from("elf-atk");
+  const tar = Buffer.concat([
+    tarHeader("./usr/lib/x86_64-linux-gnu/", 0, "5"),
+    tarHeader("./usr/lib/x86_64-linux-gnu/libatk-bridge-2.0.so.0.0.0", file.length, "0"),
+    file,
+    Buffer.alloc((512 - (file.length % 512)) % 512),
+    tarHeader("./usr/lib/x86_64-linux-gnu/libatk-bridge-2.0.so.0", 0, "2", "libatk-bridge-2.0.so.0.0.0"),
+    Buffer.alloc(1024)
+  ]);
+  const deb = Buffer.concat([
+    Buffer.from("!<arch>\n"),
+    arMember("debian-binary", Buffer.from("2.0\n")),
+    arMember("data.tar.zst", zlib.zstdCompressSync(tar))
+  ]);
+  const dest = mkdtempSync(tmpdir() + "/atk-deb-");
+  try {
+    unpackDebBuffer(deb, dest);
+    const link = readFileSync(dest + "/usr/lib/x86_64-linux-gnu/libatk-bridge-2.0.so.0");
+    assert.equal(link.toString(), "elf-atk");
+  } finally {
+    rmSync(dest, { recursive: true, force: true });
+  }
+});
+
+test("a browser that cannot start does not mark the shop offline", async () => {
+  await resetJingmaiStore();
+  await saveSession("飒望生活日用旗舰店", {
+    cookies: [{ name: "thor", value: "keep" }],
+    authState: "login_expired",
+    shopId: "13341301"
+  });
+  await saveSession("DIKTT潮流生活旗舰店", {
+    cookies: [{ name: "thor", value: "live" }],
+    authState: "ok",
+    shopId: "16107402"
+  });
+  setJingmaiDeps({
+    loadOrg: async () => [
+      { store: "飒望生活日用旗舰店", enabled: true, login: "sa", password: "secret", shopId: "13341301" }
+    ],
+    desk: {
+      open: async () => ({ status: "login", message: browserStartFailure() }),
+      close: async () => {},
+      poll: async () => ({ status: "failed" })
+    }
+  });
+  try {
+    await beginRelogin("飒望生活日用旗舰店", "cookie");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const state = await reloginState("飒望生活日用旗舰店");
+    assert.equal(state.status, "failed");
+    assert.equal(state.message, "服务器浏览器启动失败");
+    const row = (await listSessions()).find((item) => item.store === "飒望生活日用旗舰店");
+    assert.equal(row.authState, "login_expired");
+    assert.equal(row.cookies[0].value, "keep");
+    const other = (await listSessions()).find((item) => item.store === "DIKTT潮流生活旗舰店");
+    assert.equal(other.authState, "ok");
+    assert.equal(other.cookies[0].value, "live");
+  } finally {
+    resetJingmaiDeps();
+  }
 });
 
 test("clicking the login picture keeps the dialog open", () => {
