@@ -144,6 +144,7 @@ test("login 罗成 sets cookie; GET /api/auth/me 200; wrong password 401", async
     assert.match(moduleJs.text, /点击上传头像/);
     assert.match(moduleJs.text, /所属部门/);
     assert.match(moduleJs.text, /快捷操作/);
+    assert.match(moduleJs.text, /登录设备管理/);
     assert.match(moduleJs.text, /virtualAvatar/);
     assert.match(moduleJs.text, /data:image\/svg\+xml/);
     assert.match(moduleJs.text, /我的权限/);

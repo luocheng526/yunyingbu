@@ -133,7 +133,8 @@
       ".me-tabs button{border:1px solid #eef2f7!important;background:#fff!important;border-radius:999px!important;padding:10px 18px!important;font:inherit;font-size:15px!important;font-weight:700!important;cursor:pointer;color:#64748b;display:inline-flex;align-items:center;gap:8px;box-shadow:0 2px 8px rgba(15,23,42,.04);height:auto!important;}" +
       ".me-tabs button svg{width:20px!important;height:20px!important;}" +
       ".me-tabs button.on{background:#1677ff!important;color:#fff!important;border-color:#1677ff!important;box-shadow:0 8px 16px rgba(22,119,255,.28);}" +
-      ".me-split{display:grid;grid-template-columns:minmax(240px,1fr) minmax(240px,1fr) minmax(320px,1.15fr);gap:16px;align-items:start;}" +
+      ".me-split{display:grid;grid-template-columns:minmax(0,.88fr) minmax(0,1fr) minmax(0,1.22fr);gap:14px;align-items:start;width:100%;min-width:0;}" +
+      ".me-col{min-width:0;}" +
       ".me-col > .me-card + .me-card{margin-top:16px;}" +
       ".me-card{background:#fff;border:1px solid #e8eef7;border-radius:20px;padding:18px 22px 12px;box-shadow:0 8px 24px rgba(15,23,42,.04);}" +
       ".me-card + .me-card{margin-top:16px;}" +
@@ -142,28 +143,29 @@
       ".me-edit{border:1px solid #e2e8f0!important;background:#fff!important;color:#334155!important;border-radius:999px!important;padding:7px 14px!important;font:inherit;font-size:14px!important;font-weight:700!important;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:auto!important;}" +
       ".me-edit svg{width:16px!important;height:16px!important;}" +
       ".me-link{border:0!important;background:transparent!important;color:#1677ff!important;cursor:pointer;font:inherit;font-size:14px!important;font-weight:800!important;height:auto!important;padding:0!important;}" +
-      ".me-kv div{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px;padding:16px 0;border-top:1px solid #f1f5f9;font-size:16px;align-items:center;}" +
+      ".me-kv div{display:grid;grid-template-columns:84px minmax(0,1fr);gap:10px;padding:12px 0;border-top:1px solid #f1f5f9;font-size:15px;align-items:center;}" +
       ".me-kv div:first-child{border-top:0;}" +
       ".me-kv em{font-style:normal;color:#64748b;font-size:15px;font-weight:700;}" +
       ".me-kv strong{font-weight:800;color:#0f172a;display:inline-flex;align-items:center;gap:8px;font-size:16px;}" +
       ".me-ico-btn{border:0!important;background:transparent!important;color:#94a3b8!important;cursor:pointer;padding:0!important;display:inline-flex;height:auto!important;}" +
       ".me-ico-btn svg{width:18px!important;height:18px!important;}" +
-      ".me-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:12px 0 16px;}" +
-      ".me-act{border:0!important;background:#f7f9fc!important;border-radius:16px!important;padding:22px 8px 18px!important;cursor:pointer;font:inherit;color:#1e293b;height:auto!important;display:flex;flex-direction:column;align-items:center;}" +
-      ".me-act i{display:grid;place-items:center;height:36px;margin-bottom:10px;font-style:normal;}" +
-      ".me-act i svg{width:28px!important;height:28px!important;}" +
-      ".me-act span{font-size:14px;font-weight:800;}" +
+      ".me-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px 0 12px;}" +
+      ".me-act{border:0!important;background:#f7f9fc!important;border-radius:14px!important;padding:14px 4px 12px!important;cursor:pointer;font:inherit;color:#1e293b;height:auto!important;display:flex;flex-direction:column;align-items:center;min-width:0;}" +
+      ".me-act i{display:grid;place-items:center;height:28px;margin-bottom:6px;font-style:normal;}" +
+      ".me-act i svg{width:22px!important;height:22px!important;}" +
+      ".me-act span{font-size:13px;font-weight:800;white-space:nowrap;}" +
       ".me-perm{display:flex;gap:14px;align-items:flex-start;padding:16px;border-radius:16px;background:#eef6ff;margin:8px 0 16px;}" +
       ".me-perm-ico{width:48px;height:48px;border-radius:14px;background:#fff;display:grid;place-items:center;flex:0 0 48px;color:#1677ff;box-shadow:0 2px 8px rgba(22,119,255,.12);}" +
       ".me-perm-ico svg{width:24px!important;height:24px!important;}" +
       ".me-perm strong{display:block;margin-bottom:6px;font-size:16px;font-weight:800;}" +
       ".me-perm p{margin:0;color:#475569;font-size:14px;line-height:1.55;font-weight:700;}" +
-      ".me-dev{display:grid;grid-template-columns:minmax(0,1.4fr) 80px 148px 22px;gap:10px;align-items:center;padding:14px 0;border-top:1px solid #f1f5f9;font-size:15px;font-weight:700;}" +
+      ".me-dev{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:8px;align-items:center;padding:12px 0;border-top:1px solid #f1f5f9;font-size:14px;font-weight:700;}" +
       ".me-dev:first-of-type{border-top:0;}" +
-      ".me-dev-n{display:inline-flex;align-items:center;gap:10px;min-width:0;font-weight:800;}" +
-      ".me-dev-n svg{width:20px!important;height:20px!important;flex:0 0 20px;}" +
-      ".me-now{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#16a34a;font-size:12px;font-weight:800;}" +
-      ".me-city,.me-time{color:#64748b;font-size:14px;text-align:right;font-weight:700;}" +
+      ".me-dev-n{display:inline-flex;align-items:center;gap:8px;min-width:0;font-weight:800;flex-wrap:wrap;}" +
+      ".me-dev-n svg{width:18px!important;height:18px!important;flex:0 0 18px;}" +
+      ".me-now{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#16a34a;font-size:12px;font-weight:800;white-space:nowrap;}" +
+      ".me-city,.me-time{color:#64748b;font-size:13px;text-align:right;font-weight:700;white-space:nowrap;}" +
+      ".me-dev-out{border:1px solid #fecdd3!important;background:#fff!important;color:#e11d48!important;border-radius:999px!important;padding:4px 10px!important;font-size:12px!important;font-weight:700!important;height:auto!important;}" +
       ".me-muted{color:#94a3b8;text-align:right;font-weight:700;}" +
       ".me-page input:not([type=file]){display:block;width:100%;margin:0 0 10px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;font:inherit;font-weight:700;background:#fff;box-sizing:border-box;}" +
       ".me-page button.me-btn{display:block;width:100%;border:0!important;border-radius:10px!important;padding:12px 14px!important;font:inherit;font-size:16px!important;font-weight:800!important;background:#1677ff!important;color:#fff!important;cursor:pointer;height:auto!important;}" +
@@ -180,8 +182,7 @@
       ".me-empty{color:#94a3b8;font-size:15px;padding:12px 0;font-weight:700;}" +
       ".me-pane{display:none;}" +
       ".me-pane.on{display:block;}" +
-      "@media (max-width:1280px){.me-split{grid-template-columns:1fr 1fr;}.me-split .me-col:last-child{grid-column:1/-1;}}" +
-      "@media (max-width:900px){.me-banner,.me-split,.me-actions{grid-template-columns:1fr;}.me-split .me-col:last-child{grid-column:auto;}.me-who{padding-right:0;}.me-dev{grid-template-columns:1fr 1fr;}}";
+      "@media (max-width:900px){.me-banner,.me-split,.me-actions{grid-template-columns:1fr;}.me-who{padding-right:0;}.me-dev{grid-template-columns:1fr auto;}}";
   }
 
   function maskPhone(phone) {
@@ -245,18 +246,15 @@
         '<button type="button" class="on" data-me-tab="basic">' +
         ico('<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>', "currentColor", 20) +
         "基本信息</button>" +
-        '<button type="button" data-me-tab="security">' +
-        ico('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', "currentColor", 20) +
-        "账号安全</button>" +
         '<button type="button" data-me-tab="notice">' +
         ico('<path d="M6 9a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/>', "currentColor", 20) +
         "消息通知</button>" +
-        '<button type="button" data-me-tab="prefs">' +
-        ico('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/>', "currentColor", 20) +
-        "系统偏好</button>" +
         '<button type="button" data-me-tab="rights">' +
         ico('<path d="M12 3 20 7v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/>', "currentColor", 20) +
         "我的权限</button>" +
+        '<button type="button" data-me-tab="devices">' +
+        ico('<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/>', "currentColor", 20) +
+        "登录设备管理</button>" +
         '<button type="button" data-me-tab="logs">' +
         ico('<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>', "currentColor", 20) +
         "操作日志</button></nav>" +
@@ -326,14 +324,17 @@
         ico('<path d="M12 3 20 7v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/>', "#1677ff", 24) +
         '</div><div><strong id="perm-name">运营管理权限组</strong><p id="perm-desc"></p></div></div></section>' +
         '<section class="me-card"><div class="me-card-h"><h3><i class="me-bar-title"></i>登录与设备</h3>' +
-        '<button class="me-link" type="button" data-go="logs">查看全部 ></button></div>' +
+        '<button class="me-link" type="button" data-go="devices">查看全部 ></button></div>' +
         '<div id="device-list"></div></section></div></div></div>' +
         '<div class="me-pane" data-me-pane="notice"><section class="me-card"><p class="me-empty">消息通知设置即将开放</p></section></div>' +
-        '<div class="me-pane" data-me-pane="prefs"><section class="me-card"><p class="me-empty">系统偏好设置即将开放</p></section></div>' +
         '<div class="me-pane" data-me-pane="rights"><section class="me-card">' +
         '<div class="me-card-h"><h3><i class="me-bar-title"></i>我的责权清单</h3><p class="me-muted">灰色表示当前角色未授予</p></div>' +
         '<div id="duties"></div></section></div>' +
-        '<div class="me-pane" data-me-pane="logs"><section class="me-card"><p class="me-empty">操作日志即将开放。设备列表见基本信息。</p></section></div></div>';
+        '<div class="me-pane" data-me-pane="devices"><section class="me-card">' +
+        '<div class="me-card-h"><h3><i class="me-bar-title"></i>登录设备管理</h3></div>' +
+        '<p class="me-empty" style="padding-top:0">当前登录过的设备。可退出非本机会话。</p>' +
+        '<div id="device-list-all"></div></section></div>' +
+        '<div class="me-pane" data-me-pane="logs"><section class="me-card"><p class="me-empty">操作日志即将开放。设备列表见登录设备管理。</p></section></div></div>';
 
       const statusEl = root.querySelector("#status");
       const whoStatus = root.querySelector("#who-status");
@@ -354,8 +355,9 @@
 
       function showTab(id) {
         const paneId = id === "security" ? "basic" : id;
+        const tabId = id === "security" ? "basic" : id;
         root.querySelectorAll("[data-me-tab]").forEach(function (btn) {
-          btn.classList.toggle("on", btn.getAttribute("data-me-tab") === id);
+          btn.classList.toggle("on", btn.getAttribute("data-me-tab") === tabId);
         });
         root.querySelectorAll("[data-me-pane]").forEach(function (pane) {
           pane.classList.toggle("on", pane.getAttribute("data-me-pane") === paneId);
@@ -411,16 +413,28 @@
         root.querySelector("#edit-name").value = user.displayName || name;
         root.querySelector("#edit-phone").value = user.phone || "";
         root.querySelector("#edit-email").value = user.email || "";
-        root.querySelector("#device-list").innerHTML =
+        const compact =
           '<div class="me-dev"><span class="me-dev-n">' +
-          ico('<rect x="3" y="5" width="18" height="12" rx="2"/>', "#64748b", 20) +
+          ico('<rect x="3" y="5" width="18" height="12" rx="2"/>', "#64748b", 18) +
           " Windows · Chrome<span class=\"me-now\">当前设备</span></span><span class=\"me-city\">深圳市</span><span class=\"me-time\">2026-11-17 10:24</span><span class=\"me-muted\">⋯</span></div>" +
           '<div class="me-dev"><span class="me-dev-n">' +
-          ico('<rect x="8" y="3" width="8" height="18" rx="2"/>', "#64748b", 20) +
+          ico('<rect x="8" y="3" width="8" height="18" rx="2"/>', "#64748b", 18) +
           " iPhone 15</span><span class=\"me-city\">深圳市</span><span class=\"me-time\">2026-11-16 21:08</span><span class=\"me-muted\">⋯</span></div>" +
           '<div class="me-dev"><span class="me-dev-n">' +
-          ico('<rect x="3" y="5" width="18" height="12" rx="2"/>', "#64748b", 20) +
+          ico('<rect x="3" y="5" width="18" height="12" rx="2"/>', "#64748b", 18) +
           " Mac · Safari</span><span class=\"me-city\">广州市</span><span class=\"me-time\">2026-11-15 18:32</span><span class=\"me-muted\">⋯</span></div>";
+        const managed =
+          '<div class="me-dev"><span class="me-dev-n">' +
+          ico('<rect x="3" y="5" width="18" height="12" rx="2"/>', "#64748b", 18) +
+          " Windows · Chrome<span class=\"me-now\">当前设备</span></span><span class=\"me-city\">深圳市</span><span class=\"me-time\">2026-11-17 10:24</span><span class=\"me-muted\">本机</span></div>" +
+          '<div class="me-dev"><span class="me-dev-n">' +
+          ico('<rect x="8" y="3" width="8" height="18" rx="2"/>', "#64748b", 18) +
+          " iPhone 15</span><span class=\"me-city\">深圳市</span><span class=\"me-time\">2026-11-16 21:08</span><button type=\"button\" class=\"me-dev-out\">退出此设备</button></div>" +
+          '<div class="me-dev"><span class="me-dev-n">' +
+          ico('<rect x="3" y="5" width="18" height="12" rx="2"/>', "#64748b", 18) +
+          " Mac · Safari</span><span class=\"me-city\">广州市</span><span class=\"me-time\">2026-11-15 18:32</span><button type=\"button\" class=\"me-dev-out\">退出此设备</button></div>";
+        root.querySelector("#device-list").innerHTML = compact;
+        root.querySelector("#device-list-all").innerHTML = managed;
         let uploaded = "";
         try {
           uploaded = sessionStorage.getItem("xm-me-avatar-" + (user.username || "")) || "";
@@ -518,10 +532,20 @@
       });
       root.querySelectorAll("[data-soon]").forEach(function (btn) {
         btn.addEventListener("click", function () {
-          showTab("prefs");
-          root.querySelector('[data-me-pane="prefs"] .me-empty').textContent =
+          showTab("notice");
+          root.querySelector('[data-me-pane="notice"] .me-empty').textContent =
             btn.getAttribute("data-soon") + "即将开放";
         });
+      });
+      root.querySelector("#device-list-all").addEventListener("click", function (event) {
+        const kick = event.target.closest(".me-dev-out");
+        if (!kick) {
+          return;
+        }
+        const row = kick.closest(".me-dev");
+        if (row) {
+          row.remove();
+        }
       });
       root.querySelector("#toggle-phone").addEventListener("click", function () {
         phoneOpen = !phoneOpen;
