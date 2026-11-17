@@ -1,4 +1,4 @@
-import { browserReady, ensureChrome, jingmaiDesk, LOGIN_SCREEN_MESSAGE, PAGE_WAIT_MESSAGE } from "./jingmai-desk.js";
+import { browserReady, browserStartFailure, ensureChrome, jingmaiDesk, launchNote, LOGIN_SCREEN_MESSAGE, PAGE_WAIT_MESSAGE } from "./jingmai-desk.js";
 import { jingmaiClient } from "./jingmai-client.js";
 import { beijingParts, bindDecision, runTick, sampleFields, sessionStillValid } from "./jingmai.js";
 import { listCollectTargets, listSessions, markAuth, readJingmaiLive, saveSample, saveSession, setRoster } from "./jingmai-store.js";
@@ -199,14 +199,16 @@ export async function jingmaiLive() {
 function publicState(state) {
   return {
     ok: true,
-    build: "clock",
+    build: "open12",
     store: state.store || loginCursor.store,
     status: state.status,
     message: state.message || "",
     step: state.step || loginCursor.step || "",
     shops: state.shops || [],
     index: state.index || loginCursor.index,
-    total: state.total || loginCursor.total
+    total: state.total || loginCursor.total,
+    openingMs: openingMark ? Date.now() - openingMark : 0,
+    note: state.note || launchNote() || ""
   };
 }
 
@@ -298,12 +300,15 @@ async function startQueued(shop, epoch) {
   markOpening();
   loginCursor.message = "正在启动浏览器";
   let opened;
+  const boot = typeof AbortController === "function" ? new AbortController() : null;
+  let openTimer = null;
   try {
-    opened = await deps.desk.open({
+    const opening = deps.desk.open({
       store: shop.store,
       loginName: shop.login,
       password: shop.password,
       reveal: true,
+      signal: boot ? boot.signal : undefined,
       onStep: function (message) {
         if (epoch != null && epoch !== loginEpoch) {
           return;
@@ -312,8 +317,29 @@ async function startQueued(shop, epoch) {
         loginCursor.message = message;
       }
     });
+    opening.catch(function () {});
+    opened = await Promise.race([
+      opening,
+      new Promise(function (resolve) {
+        openTimer = setTimeout(function () {
+          try {
+            if (boot) {
+              boot.abort();
+            }
+          } catch {
+            /* ignore */
+          }
+          resolve({
+            status: "login",
+            message: launchNote() || browserStartFailure()
+          });
+        }, deps.startLimitMs || 12000);
+      })
+    ]);
   } catch {
-    opened = { status: "login", message: "服务器没有打开京麦登录页" };
+    opened = { status: "login", message: launchNote() || "服务器没有打开京麦登录页" };
+  } finally {
+    clearTimeout(openTimer);
   }
   shop.login = "";
   shop.password = "";
@@ -527,22 +553,34 @@ export async function reloginState(store) {
   } else if (idle || loginCursor.phase === "failed" || loginCursor.phase === "screen") {
     clearOpening();
   }
-  const startLimit = deps.startLimitMs || 15000;
+  const startLimit = deps.startLimitMs || 12000;
   const openingFor = openingMark ? Date.now() - openingMark : 0;
   if (!idle && loginCursor.phase === "opening" && openingFor > startLimit) {
-    const peeked = await deps.desk.poll(name);
+    let peeked = null;
+    try {
+      peeked = await Promise.race([
+        deps.desk.poll(name),
+        new Promise(function (resolve) {
+          setTimeout(function () {
+            resolve(null);
+          }, 800);
+        })
+      ]);
+    } catch {
+      peeked = null;
+    }
     if (peeked && (peeked.status === "verify" || peeked.status === "screen" || peeked.status === "ok")) {
       /* 浏览器已经开了，交给下面的正常判断 */
     } else {
-      const note = peeked && peeked.message && peeked.message !== "正在启动浏览器" ? peeked.message : "";
+      const note = (peeked && peeked.message && peeked.message !== "正在启动浏览器" ? peeked.message : "") || launchNote();
       loginEpoch += 1;
       clearOpening();
       loginCursor.failed = true;
       loginCursor.phase = "failed";
       loginCursor.step = "启动浏览器";
-      loginCursor.message = note || "服务器浏览器启动失败";
+      loginCursor.message = note || browserStartFailure();
       if (deps.desk && deps.desk.close) {
-        await deps.desk.close();
+        Promise.resolve(deps.desk.close()).catch(function () {});
       }
       return publicState({ status: "failed", store: name, step: "启动浏览器", message: loginCursor.message });
     }
