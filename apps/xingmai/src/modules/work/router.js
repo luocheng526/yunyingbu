@@ -17,7 +17,7 @@ import {
   syncDingBinds
 } from "./diary.js";
 import { getReport, getSettings, isWorkAdmin, myTodoCount, saveMembers, saveReport, saveTemplate, snapshot } from "./store.js";
-import { dingUserOf, popupTo } from "./dingtalk.js";
+import { dingUserOf, popupTo, saveNotifyWebhook } from "./dingtalk.js";
 import { actTask, listTasks, publishTask, readTaskFile, taskContext, taskCounts } from "./tasks.js";
 
 export const workRouter = Router();
@@ -265,6 +265,17 @@ workRouter.post(
   "/diary/ding/sync",
   wrap(async (req, res) => {
     sendResult(res, await syncDingBinds(req.user, isWorkAdmin(req.user)), 403);
+  })
+);
+
+workRouter.put(
+  "/diary/ding/webhook",
+  wrap(async (req, res) => {
+    if (!isWorkAdmin(req.user)) {
+      sendResult(res, { ok: false, statusCode: 403, error: "只有罗成可以改通知群" });
+      return;
+    }
+    sendResult(res, await saveNotifyWebhook(req.body?.webhook));
   })
 );
 

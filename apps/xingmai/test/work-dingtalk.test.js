@@ -9,6 +9,7 @@ import {
   proposeBinds,
   resetDingStore,
   saveAppConfig,
+  saveNotifyWebhook,
   sendTaskNotice,
   setDingTransport,
   shanghaiNow,
@@ -199,6 +200,34 @@ test("同一员工同一天的未交提醒只发一次", async () => {
     setDingTransport(globalThis.fetch);
     resetDingStore();
     resetWorkStore();
+  }
+});
+
+test("通知群地址只收钉钉域名，保存后 @ 走这条地址", async () => {
+  resetDingStore();
+  delete process.env.DINGTALK_NOTIFY_WEBHOOK;
+  const bad = await saveNotifyWebhook("https://example.com/robot/send?access_token=abcdefghij1234567890");
+  assert.equal(bad.ok, false);
+  const saved = await saveNotifyWebhook("https://oapi.dingtalk.com/robot/send?access_token=abcdefghij1234567890");
+  assert.equal(saved.ok, true);
+  delete process.env.DINGTALK_NOTIFY_WEBHOOK;
+  const called = [];
+  setDingTransport(async (url, options) => {
+    called.push(String(url));
+    const body = JSON.parse(options.body);
+    assert.deepEqual(body.at.atUserIds, ["u4"]);
+    assert.equal(body.at.isAtAll, false);
+    return { json: async () => ({ errcode: 0, errmsg: "ok" }) };
+  });
+  try {
+    const channel = await sendTaskNotice("u4", "新的工作任务", "保存后的通知群。", "https://zx.xingmaierp.cc/work?tab=todo");
+    assert.equal(channel, "at");
+    assert.equal(called.length, 1);
+    assert.match(called[0], /^https:\/\/oapi\.dingtalk\.com\/robot\/send\?/);
+  } finally {
+    delete process.env.DINGTALK_NOTIFY_WEBHOOK;
+    setDingTransport(globalThis.fetch);
+    resetDingStore();
   }
 });
 

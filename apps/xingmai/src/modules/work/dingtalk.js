@@ -19,6 +19,7 @@ let attendanceCache = new Map();
 let tokenCache = { value: "", until: 0 };
 let rememberedAgent = "";
 let rememberedAuth = { clientId: "", clientSecret: "" };
+let rememberedWebhook = "";
 let transport = globalThis.fetch;
 
 export function setDingTransport(fn) {
@@ -33,6 +34,7 @@ export function resetDingStore() {
   tokenCache = { value: "", until: 0 };
   rememberedAgent = "";
   rememberedAuth = { clientId: "", clientSecret: "" };
+  rememberedWebhook = "";
 }
 
 export function dingConfig() {
@@ -249,9 +251,14 @@ export async function readyDing() {
         clientId: String(saved.clientId || ""),
         clientSecret: String(saved.clientSecret || "")
       };
+      rememberedWebhook = validHook(saved.webhook);
+      if (rememberedWebhook) {
+        process.env.DINGTALK_NOTIFY_WEBHOOK = rememberedWebhook;
+      }
     } catch {
       rememberedAgent = "";
       rememberedAuth = { clientId: "", clientSecret: "" };
+      rememberedWebhook = "";
     }
   }
   const [sent] = await query("SELECT person_id, work_date FROM work_report_ding_remind");
@@ -524,7 +531,7 @@ async function persistDingApp() {
   if (dbMode() !== "mysql") {
     return;
   }
-  if (!rememberedAgent && !rememberedAuth.clientId) {
+  if (!rememberedAgent && !rememberedAuth.clientId && !rememberedWebhook) {
     await query("DELETE FROM work_report_diary_meta WHERE meta_key = 'ding_agent'");
     return;
   }
@@ -536,7 +543,8 @@ async function persistDingApp() {
       JSON.stringify({
         agentId: rememberedAgent,
         clientId: rememberedAuth.clientId,
-        clientSecret: rememberedAuth.clientSecret
+        clientSecret: rememberedAuth.clientSecret,
+        webhook: rememberedWebhook
       }),
       new Date().toISOString().slice(0, 19).replace("T", " ")
     ]
@@ -724,20 +732,36 @@ function mentionText(userid, title, markdown, url, button) {
   return `工作汇报 @${userid} ${head}\n${text}\n${action}：${link}`.slice(0, 500);
 }
 
-function notifyWebhook() {
-  const raw = String(process.env.DINGTALK_NOTIFY_WEBHOOK || "").trim();
-  if (!raw) {
+function validHook(raw) {
+  const text = String(raw || "").trim();
+  if (!text) {
     return "";
   }
   try {
-    const url = new URL(raw);
-    if (url.protocol === "https:" && url.hostname === "oapi.dingtalk.com") {
+    const url = new URL(text);
+    const token = url.searchParams.get("access_token") || "";
+    if (url.protocol === "https:" && url.hostname === "oapi.dingtalk.com" && url.pathname === "/robot/send" && token.length >= 10) {
       return url.toString();
     }
   } catch {
     return "";
   }
   return "";
+}
+
+function notifyWebhook() {
+  return validHook(process.env.DINGTALK_NOTIFY_WEBHOOK || rememberedWebhook);
+}
+
+export async function saveNotifyWebhook(raw) {
+  const hook = validHook(raw);
+  if (!hook) {
+    return { ok: false, statusCode: 400, error: "通知群地址不对" };
+  }
+  rememberedWebhook = hook;
+  process.env.DINGTALK_NOTIFY_WEBHOOK = hook;
+  await persistDingApp();
+  return { ok: true };
 }
 
 async function sendMention(userid, title, markdown, url, button) {
