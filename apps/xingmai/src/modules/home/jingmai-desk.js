@@ -679,13 +679,13 @@ export function ensureChrome() {
   });
 }
 
-function send(ws, method, params, sessionId) {
+function send(ws, method, params, sessionId, timeoutMs) {
   const id = ws.__seq = (ws.__seq || 0) + 1;
   return new Promise(function (resolve, reject) {
     const timer = setTimeout(function () {
       ws.removeEventListener("message", onMessage);
       reject(new Error(method + " timeout"));
-    }, 15000);
+    }, timeoutMs || 15000);
     function onMessage(event) {
       let message;
       try {
@@ -1323,20 +1323,45 @@ export async function pollDesk(store) {
     if (hasSession(cookies)) {
       return { status: "ok", cookies: cookies };
     }
-    return readScreenState(current.ws);
   } catch {
-    return { status: "login", message: "服务器登录中断了" };
+    /* the login page is navigating; keep the window open */
   }
+  return { status: "screen", message: "" };
+}
+
+let shotCache = { at: 0, store: "", image: null };
+let shotTask = null;
+let shotHold = 0;
+
+function holdShots(ms) {
+  shotHold = Date.now() + ms;
 }
 
 export async function shotDesk(store) {
   if (!current || current.store !== store || !current.ws) {
     return null;
   }
+  const now = Date.now();
+  if (shotCache.store === store && shotCache.image && (now - shotCache.at < 1600 || now < shotHold)) {
+    return shotCache.image;
+  }
+  if (shotTask) {
+    return shotTask;
+  }
+  shotTask = captureShot(store).finally(function () {
+    shotTask = null;
+  });
+  return shotTask;
+}
+
+async function captureShot(store) {
+  if (!current || current.store !== store || !current.ws) {
+    return shotCache.store === store ? shotCache.image : null;
+  }
   try {
-    const params = { format: "jpeg", quality: 72, fromSurface: true, captureBeyondViewport: false };
+    const params = { format: "jpeg", quality: 60, fromSurface: true, captureBeyondViewport: false };
     try {
-      const metrics = await send(current.ws, "Page.getLayoutMetrics");
+      const metrics = await send(current.ws, "Page.getLayoutMetrics", {}, undefined, 2500);
       const view = (metrics && (metrics.cssVisualViewport || metrics.cssLayoutViewport)) || {};
       const width = Math.round(view.clientWidth || view.width || 0);
       const height = Math.round(view.clientHeight || view.height || 0);
@@ -1346,10 +1371,15 @@ export async function shotDesk(store) {
     } catch {
       /* fall back to the viewport screenshot */
     }
-    const shot = await send(current.ws, "Page.captureScreenshot", params);
-    return Buffer.from(shot.data || "", "base64");
+    const shot = await send(current.ws, "Page.captureScreenshot", params, undefined, 4000);
+    const image = Buffer.from(shot.data || "", "base64");
+    if (!image.length) {
+      return shotCache.store === store ? shotCache.image : null;
+    }
+    shotCache = { at: Date.now(), store: store, image: image };
+    return image;
   } catch {
-    return null;
+    return shotCache.store === store ? shotCache.image : null;
   }
 }
 
@@ -1464,7 +1494,7 @@ export function loginPageAction(doc, action) {
     let best = null;
     let bestDist = 20;
     docsOf(root).forEach(function (item) {
-      const nodes = item.querySelectorAll ? item.querySelectorAll("button, a, [role=button], input, div, span") : [];
+      const nodes = item.querySelectorAll ? item.querySelectorAll("button, a, [role=button], input[type=button], input[type=submit]") : [];
       for (let i = 0; i < nodes.length; i += 1) {
         const node = nodes[i];
         if (!visible(node) || !isConfirm(node)) {
@@ -1484,9 +1514,10 @@ export function loginPageAction(doc, action) {
   }
   function confirmAround(input) {
     let node = input && input.parentElement;
-    for (let depth = 0; node && depth < 6; depth += 1) {
-      const nodes = node.querySelectorAll ? node.querySelectorAll("button, a, [role=button], div, span") : [];
-      for (let i = 0; i < nodes.length; i += 1) {
+    for (let depth = 0; node && depth < 4; depth += 1) {
+      const nodes = node.querySelectorAll ? node.querySelectorAll("button, a, [role=button], input[type=button], input[type=submit], div, span") : [];
+      const limit = Math.min(nodes.length, 40);
+      for (let i = 0; i < limit; i += 1) {
         if (nodes[i] !== input && visible(nodes[i]) && isConfirm(nodes[i])) {
           return nodes[i];
         }
@@ -1583,38 +1614,11 @@ async function mouseClick(ws, x, y, sessionId) {
   await send(ws, "Input.dispatchMouseEvent", Object.assign({ type: "mouseReleased", buttons: 0 }, point), sessionId);
 }
 
-async function pierceClick(ws, x, y) {
-  try {
-    await send(ws, "DOM.enable");
-    await send(ws, "DOM.getDocument", { pierce: true, depth: 1 });
-    const located = await send(ws, "DOM.getNodeForLocation", {
-      x: Math.max(0, Math.round(x)),
-      y: Math.max(0, Math.round(y)),
-      pierce: true
-    });
-    const resolved = await send(ws, "DOM.resolveNode", {
-      nodeId: located && located.nodeId,
-      backendNodeId: located && located.backendNodeId
-    });
-    const objectId = resolved && resolved.object && resolved.object.objectId;
-    if (!objectId) {
-      return "";
-    }
-    const clicked = await send(ws, "Runtime.callFunctionOn", {
-      objectId: objectId,
-      returnByValue: true,
-      functionDeclaration: "function(){ let node = this; for (let i = 0; node && i < 8; i += 1) { const tag = String(node.tagName || '').toUpperCase(); const text = String(node.innerText || node.value || '').replace(/\\s+/g, ''); const role = node.getAttribute ? String(node.getAttribute('role') || '') : ''; const type = String(node.type || '').toLowerCase(); const confirm = text && text.length <= 12 && !/获取|发送|重新|取消|关闭/.test(text) && (/确定|提交|确认|完成/.test(text) || text === '验证'); if (tag === 'BUTTON' || tag === 'A' || role === 'button' || type === 'button' || type === 'submit' || confirm) { node.click(); return 'button'; } node = node.parentElement; } return 'point'; }"
-    });
-    return clicked && clicked.result ? clicked.result.value : "";
-  } catch {
-    return "";
-  }
-}
-
 export async function clickDesk(store, x, y, image) {
   if (!current || current.store !== store || !current.ws) {
     return;
   }
+  holdShots(900);
   const point = await cssPoint(current.ws, x, y, image);
   let aim = { kind: "point", x: point.x, y: point.y };
   try {
@@ -1626,10 +1630,6 @@ export async function clickDesk(store, x, y, image) {
     aim = { kind: "point", x: point.x, y: point.y };
   }
   await mouseClick(current.ws, aim.x, aim.y);
-  if (aim.kind !== "button") {
-    await pierceClick(current.ws, point.x, point.y);
-  }
-  await sleep(250);
 }
 
 export async function typeDesk(store, text) {
@@ -1650,9 +1650,9 @@ export async function typeDesk(store, text) {
     await send(current.ws, "Input.insertText", { text: value });
   }
   if (aim && aim.kind === "button") {
+    holdShots(900);
     await mouseClick(current.ws, aim.x, aim.y);
   }
-  await sleep(250);
 }
 
 function watchShopData(ws) {

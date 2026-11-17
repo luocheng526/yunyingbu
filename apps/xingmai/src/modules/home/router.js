@@ -71,7 +71,7 @@ const KEPT_OPENING =
   "            }\n" +
   "          };\n" +
   "          probe.src = \"/api/home/live-login/screen?store=\" + encodeURIComponent(name) + \"&t=\" + Date.now();\n" +
-  "        }, 600);\n" +
+  "        }, 1500);\n" +
   "      }\n" +
   "        state.desk = { open: true, status: \"opening\", store: name, preview: true, message: \"正在打开「\" + name + \"」的登录画面\" };\n" +
   "        if (!dead) {\n" +
@@ -79,6 +79,36 @@ const KEPT_OPENING =
   "        }\n" +
   "        watchOpeningShot(seq, name);\n" +
   "        api(\"/api/home/live-login/one\", { store: name }).then(function (st) {";
+const OLD_DESK_PAINT =
+  "        if (!dead) {\n" +
+  "          paint(root, state);\n" +
+  "        }\n" +
+  "        var status = state.desk && state.desk.status;\n" +
+  "        if (status === \"screen\" || status === \"verify\") {\n" +
+  "          pollDesk();\n" +
+  "        }\n";
+const KEPT_DESK_PAINT =
+  "        var status = state.desk && state.desk.status;\n" +
+  "        var img = root.querySelector(\"#xm-hm-desk-shot\");\n" +
+  "        if (!dead && !(status === \"screen\" && img)) {\n" +
+  "          paint(root, state);\n" +
+  "        }\n" +
+  "        if (status === \"screen\" || status === \"verify\") {\n" +
+  "          pollDesk();\n" +
+  "        }\n";
+const OLD_DESK_SRC = "              img.src = \"/api/home/live-login/screen?t=\" + Date.now();\n";
+const KEPT_DESK_SRC =
+  "              if (!img.dataset.busy) {\n" +
+  "                img.dataset.busy = \"1\";\n" +
+  "                var nextSrc = \"/api/home/live-login/screen?t=\" + Date.now();\n" +
+  "                var probe = new Image();\n" +
+  "                probe.onload = function () {\n" +
+  "                  img.dataset.busy = \"\";\n" +
+  "                  if (img.isConnected) img.src = nextSrc;\n" +
+  "                };\n" +
+  "                probe.onerror = function () { img.dataset.busy = \"\"; };\n" +
+  "                probe.src = nextSrc;\n" +
+  "              }\n";
 const OLD_CLICK_POINT =
   "            y: Math.round((event.clientY - rect.top) * scaleY)\n" +
   "          }).then(function (st) {";
@@ -95,6 +125,8 @@ export function patchHomeClientSource(text) {
   }
   return source
     .replace(OLD_SHOW_DESK, KEPT_SHOW_DESK)
+    .replace(OLD_DESK_PAINT, KEPT_DESK_PAINT)
+    .replace(OLD_DESK_SRC, KEPT_DESK_SRC)
     .replace(OLD_CLICK_POINT, KEPT_CLICK_POINT)
     .replace(OLD_OPENING, KEPT_OPENING)
     .replaceAll("0.1.1039-loginpop", "0.1.1043-deskkeep");
