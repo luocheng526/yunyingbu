@@ -1,6 +1,6 @@
-/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-acl-live v0.4.18 — 侧栏按服务器网站权限显示 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild 0.1.779-acl-live v0.4.18 — 侧栏按服务器网站权限立刻显示 */
 (function () {
-  const ASSET_VER = "0.1.775-acl-live";
+  const ASSET_VER = "0.1.779-acl-live";
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
@@ -129,35 +129,11 @@
       });
   }
 
-  function startSiteAclWatch() {
-    if (window.__xmSiteAclWatch) {
-      return;
+  function aclSignature() {
+    if (!siteAclNav) {
+      return "";
     }
-    window.__xmSiteAclWatch = 1;
-    function refresh() {
-      const prev = JSON.stringify(siteAclNav);
-      loadSiteAcl().then(function () {
-        if (JSON.stringify(siteAclNav) === prev) {
-          return;
-        }
-        const sider = document.querySelector(".xm-sider");
-        if (sider) {
-          sider.innerHTML = siderHtml();
-        }
-        bindChrome(document.getElementById("xm-username") && document.getElementById("xm-username").textContent, currentStaffUser());
-        const here = normalize(window.location.pathname);
-        if (!allowSitePath(here) && !allowSitePath(here + window.location.search)) {
-          go(deskHome(), false);
-        }
-      });
-    }
-    window.setInterval(refresh, 8000);
-    window.addEventListener("pageshow", refresh);
-    document.addEventListener("visibilitychange", function () {
-      if (!document.hidden) {
-        refresh();
-      }
-    });
+    return String(Boolean(siteAclNav.configured)) + ":" + JSON.stringify(siteAclNav.paths || {});
   }
 
   function footItems(user) {
@@ -286,12 +262,55 @@
     return window.__xmBootUser || null;
   }
 
+  function textLooksHr(value) {
+    const text = String(value || "").trim();
+    if (!text || text.indexOf("人员管理") >= 0) {
+      return false;
+    }
+    const lower = text.toLowerCase();
+    if (lower === "hrtech" || lower === "hr") {
+      return true;
+    }
+    if (text === "人事" || text.indexOf("人事部") >= 0 || text.indexOf("人事部门") >= 0 || text.indexOf("人事和技术") >= 0) {
+      return true;
+    }
+    return /人事(专员|主管|经理|总监)$/.test(text);
+  }
+
+  function textLooksTech(value) {
+    const text = String(value || "").trim();
+    if (!text) {
+      return false;
+    }
+    const lower = text.toLowerCase();
+    return lower === "backend" || text === "技术" || text.indexOf("技术部") >= 0;
+  }
+
+  function personLooksHr(person) {
+    if (!person) {
+      return false;
+    }
+    const board = String(person.board || "").trim().toLowerCase();
+    if (board === "hrtech") {
+      return !(textLooksTech(person.department) || textLooksTech(person.center) || textLooksTech(person.role));
+    }
+    return (
+      textLooksHr(person.department) ||
+      textLooksHr(person.center) ||
+      textLooksHr(person.role) ||
+      textLooksHr(person.board)
+    );
+  }
+
   function isHrDesk(user) {
     const who = user || currentStaffUser();
     if (!who || canSeeStaffNav(who)) {
       return false;
     }
-    return String(who.desk || "") === "hr";
+    if (String(who.desk || "") === "hr") {
+      return true;
+    }
+    return personLooksHr(who);
   }
 
   function deskHome(user) {
@@ -764,6 +783,11 @@
   let centerScopePack = null;
   let centerScopePending = null;
 
+  function invalidateCenterScope() {
+    centerScopePack = null;
+    centerScopePending = null;
+  }
+
   function loadCenterScope() {
     if (centerScopePack) {
       return Promise.resolve(centerScopePack);
@@ -907,6 +931,22 @@
       "<span>退出登录</span></button>" +
       '<p class="xm-version">v0.4.30</p></nav>'
     );
+  }
+
+  let scopeKey = "";
+
+  function scopeSignature(user) {
+    const who = user || {};
+    const shops = Array.isArray(who.visibleShops) ? who.visibleShops.join(",") : "";
+    return [who.desk || "", who.board || "", who.department || "", who.center || "", who.role || "", shops, aclSignature()].join("|");
+  }
+
+  function paintSider() {
+    const sider = document.querySelector(".xm-sider");
+    if (!sider) {
+      return;
+    }
+    sider.innerHTML = siderHtml();
   }
 
   function contentRoot() {
@@ -1505,7 +1545,7 @@
     }
     window.__xmTabsRestored = 1;
     const key = leafRoute(dest || "");
-    if (isHrDesk() && leafRoute(current) === deskHome() && key !== deskHome()) {
+    if (leafRoute(current) === deskHome() && key !== deskHome()) {
       return;
     }
     if (!key || key === current || !MODULES[key] || PARENT_HOME[key]) {
@@ -1672,11 +1712,13 @@
     const groups = document.querySelectorAll(".xm-menu-group[data-xm-group]");
     Array.prototype.forEach.call(groups, function (group) {
       const prefix = group.getAttribute("data-xm-group");
-      const open = groupOpen(prefix, current);
-      group.classList.toggle("is-open", open);
+      const on = groupOpen(prefix, current);
+      group.classList.toggle("is-current", on);
+      group.classList.toggle("is-open", on);
       const parent = group.querySelector(".xm-menu-parent");
       if (parent) {
-        parent.setAttribute("aria-expanded", open ? "true" : "false");
+        parent.classList.toggle("is-active", on);
+        parent.setAttribute("aria-expanded", on ? "true" : "false");
       }
     });
   }
@@ -3256,28 +3298,109 @@
     }
   }
 
+  function relinkSider() {
+    const collapseBtn = document.getElementById("xm-collapse");
+    if (collapseBtn && !collapseBtn.dataset.bound) {
+      collapseBtn.dataset.bound = "1";
+      collapseBtn.addEventListener("click", function () {
+        const next = !document.documentElement.classList.contains("xm-collapsed");
+        applyCollapsed(next);
+        persistPrefsSoon();
+      });
+    }
+    const logoutBtn = document.getElementById("xm-logout");
+    if (logoutBtn && !logoutBtn.dataset.bound) {
+      logoutBtn.dataset.bound = "1";
+      logoutBtn.addEventListener("click", function () {
+        clearOpenTabs();
+        fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { Accept: "application/json" }
+        }).finally(function () {
+          window.location.replace("/login?out=1");
+        });
+      });
+    }
+    applyCollapsed(bootPrefs().siderCollapsed === true);
+    bindBrandHome();
+    bindMenu(document);
+    pinHomeTab();
+  }
+
+  function applyScopeUser(user, force) {
+    if (!user || !(user.username || user.displayName || user.name)) {
+      return;
+    }
+    const nextUser = Object.assign({}, user);
+    if (!siteAclConfigured() && personLooksHr(nextUser) && !canSeeStaffNav(nextUser)) {
+      nextUser.desk = "hr";
+    }
+    rememberStaffUser(nextUser);
+    const next = scopeSignature(nextUser);
+    if (!force && next === scopeKey) {
+      return;
+    }
+    if (next !== scopeKey) {
+      invalidateCenterScope();
+    }
+    scopeKey = next;
+    paintSider();
+    relinkSider();
+    ensureOpenTabs();
+    paintTabs();
+    if (isHrDesk(nextUser) && !allowDeskRoute(current)) {
+      go(deskHome(nextUser));
+    }
+  }
+
+  function readScopeMe() {
+    fetch("/api/auth/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (res) {
+        if (res.status === 401) {
+          window.location.replace("/login");
+          return null;
+        }
+        return res.ok ? res.json() : null;
+      })
+      .then(function (payload) {
+        if (!payload) {
+          return loadSiteAcl();
+        }
+        const user = payload.user || payload;
+        return loadSiteAcl().then(function () {
+          applyScopeUser(user);
+          const here = normalize(window.location.pathname);
+          if (!allowSitePath(here) && !allowSitePath(here + window.location.search)) {
+            go(deskHome(), false);
+          }
+        });
+      })
+      .catch(function () {
+        /* keep current sider */
+      });
+  }
+
+  function watchScope() {
+    if (window.__xmScopeWatch) {
+      return;
+    }
+    window.__xmScopeWatch = 1;
+    setInterval(function () {
+      if (document.visibilityState === "visible") {
+        readScopeMe();
+      }
+    }, 2500);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") {
+        readScopeMe();
+      }
+    });
+    window.addEventListener("focus", readScopeMe);
+  }
+
   function applyStaffNav(user) {
-    if (siteAclConfigured()) {
-      return;
-    }
-    if (!user) {
-      return;
-    }
-    if (canSeeStaffNav(user)) {
-      return;
-    }
-    const releases = document.querySelector('.xm-menu a[href="/releases"]');
-    if (releases) {
-      releases.remove();
-    }
-    const peopleGroup = document.querySelector('.xm-menu-group[data-xm-group="/people"]');
-    if (peopleGroup) {
-      peopleGroup.remove();
-    }
-    const people = document.querySelector('.xm-menu a[href="/people"]');
-    if (people) {
-      people.remove();
-    }
+    applyScopeUser(user);
   }
 
   function ensureOrgNavCss() {
@@ -3342,20 +3465,8 @@
     } else {
       document.documentElement.removeAttribute("data-xm-org-pending");
     }
-    if (orgFlags.resolved || orgFlags.known) {
-      if (!orgFlags.shen) {
-        const shen = document.querySelector('.xm-menu-group[data-xm-group="/shen"]');
-        if (shen) {
-          shen.remove();
-        }
-      }
-      if (!orgFlags.han) {
-        const han = document.querySelector('.xm-menu-group[data-xm-group="/han"]');
-        if (han) {
-          han.remove();
-        }
-      }
-    }
+    paintSider();
+    relinkSider();
     const here = centerOfPath(current);
     if (orgFlags.resolved && here && !orgFlags[here] && typeof window.__xmGo === "function") {
       window.__xmGo(homeForOrg());
@@ -3396,12 +3507,19 @@
               director: person.director,
               managerName: person.managerName,
               username: person.username,
-              name: person.name
+              name: person.name,
+              board: person.board,
+              role: person.role,
+              visibleShops: person.visibleShops
             };
             break;
           }
         }
         const merged = Object.assign({}, user || {}, row || {});
+        if (personLooksHr(merged) && !canSeeStaffNav(merged)) {
+          merged.desk = "hr";
+        }
+        applyScopeUser(merged, true);
         if (canSeeStaffNav(merged)) {
           applyOrgNav({ shen: true, han: true, known: true, resolved: true });
           return;
@@ -3600,49 +3718,20 @@
       document.addEventListener("DOMContentLoaded", paintNow);
       return;
     }
-    function finish(userLabel, user) {
-      rememberStaffUser(user, userLabel);
-      loadSiteAcl().then(function () {
-        mountShell();
-        bindChrome(userLabel, user);
-        const here = normalize(window.location.pathname);
-        if (!allowSitePath(here) && !allowSitePath(here + window.location.search)) {
-          go(deskHome(), false);
-        }
-        startSiteAclWatch();
-        if (document.readyState === "loading") {
-          document.addEventListener("DOMContentLoaded", bootCurrentModule);
-        } else {
-          bootCurrentModule();
-        }
-      });
-    }
-    const boot = window.__xmBootUser;
-    if (boot && (boot.displayName || boot.username)) {
-      finish(boot.displayName || boot.username, boot);
-      return;
-    }
-    fetch("/api/auth/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
-      .then(function (res) {
-        if (res.status === 401) {
-          window.location.replace("/login");
-          return null;
-        }
-        if (!res.ok) {
-          return null;
-        }
-        return res.json();
-      })
-      .then(function (payload) {
-        if (!payload) {
-          finish("", currentStaffUser());
-          return;
-        }
-        finish(payload.displayName || payload.username || "用户", payload);
-      })
-      .catch(function () {
-        finish("", currentStaffUser());
-      });
+    loadSiteAcl().then(function () {
+      mountShell();
+      const boot = window.__xmBootUser;
+      if (boot && (boot.displayName || boot.username)) {
+        bindChrome(boot.displayName || boot.username, boot);
+      }
+      watchScope();
+      readScopeMe();
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", bootCurrentModule);
+      } else {
+        bootCurrentModule();
+      }
+    });
   }
 
   window.addEventListener("popstate", function () {

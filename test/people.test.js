@@ -2022,7 +2022,8 @@ test("site acl maps paths and live nav follows the saved server sheet", async ()
   const navJs = fs.readFileSync("public/shared/nav.js", "utf8");
   assert.match(navJs, /\/api\/people\/org\/site-acl\/me/);
   assert.match(navJs, /function allowSitePath/);
-  assert.match(navJs, /startSiteAclWatch/);
+  assert.match(navJs, /function loadSiteAcl/);
+  assert.match(navJs, /aclSignature/);
 
   await withServer(async (base) => {
     const open = await fetch(`${base}/people?actor=${encodeURIComponent("张文静")}`, { redirect: "manual" });
