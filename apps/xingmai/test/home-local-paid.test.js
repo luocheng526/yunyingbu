@@ -600,7 +600,8 @@ test("jingmai org loader keeps every team and hides passwords", async () => {
   assert.deepEqual(packed.records.map((row) => row.shopName), ["韩店"]);
   assert.equal(packed.records[0].source, "jingmai-han");
   assert.equal(packed.records[0].loginExpired, false);
-  assert.equal(packed.records[0].offline, false);
+  assert.equal(packed.records[0].offline, true);
+  assert.equal(packed.records[0].offlineReason, "组织中心有账号，京麦会话还没有");
   assert.equal(JSON.stringify(packed).includes("secret"), false);
 });
 
@@ -667,7 +668,8 @@ test("local-paid route reads jingmai sessions for every org shop", async () => {
     assert.equal(data.records.find((row) => row.shopName === "韩店").source, "jingmai-han");
     assert.equal(data.records.find((row) => row.shopName === "沈店").source, "jingmai-shen");
     assert.equal(data.records.find((row) => row.shopName === "未登录店").loginExpired, false);
-    assert.equal(data.records.find((row) => row.shopName === "未登录店").offline, false);
+    assert.equal(data.records.find((row) => row.shopName === "未登录店").offline, true);
+    assert.equal(data.records.find((row) => row.shopName === "未登录店").offlineReason, "组织中心有账号，京麦会话还没有");
     assert.equal(data.records.find((row) => row.shopName === "未登录店").paidAmount, null);
     assert.deepEqual(data.from, ["jingmai"]);
     assert.equal(JSON.stringify(data).includes("password"), false);
