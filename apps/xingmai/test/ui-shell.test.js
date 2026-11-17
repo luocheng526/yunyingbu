@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createApp } from "../src/app.js";
+import { SHELL_ASSET_VER } from "../src/modules/profile/middleware.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const server = createApp().listen(0);
@@ -197,7 +198,7 @@ test("home page html is the xingmai sider template", async () => {
   assert.match(html, /培训系统/);
   assert.match(html, /xm-menu-parent/);
   assert.match(html, /xm-caret/);
-  assert.match(html, /\/shared\/nav\.js\?v=0\.1\.772-tab2/);
+  assert.match(html, new RegExp(`/shared/nav\\.js\\?v=${SHELL_ASSET_VER.replaceAll(".", "\\.")}`));
   assert.match(html, /data-xm-style="pink"/);
   assert.match(html, /aria-label="页面风格"/);
   assert.match(html, /data-xm-queue-badge/);
@@ -485,8 +486,8 @@ test("page renderer injects shared shell onto module html", async () => {
     '<!DOCTYPE html><html><head></head><body class="oc-page"><div class="oc-tab">待上线</div></body></html>'
   );
   assert.match(injected, /\/shared\/layout\.css/);
-  assert.match(injected, /\/shared\/nav\.js\?v=0\.1\.772-tab2/);
-  assert.match(injected, /rel="preload" href="\/shared\/nav\.js\?v=0\.1\.772-tab2"/);
+  assert.match(injected, new RegExp(`/shared/nav\\.js\\?v=${SHELL_ASSET_VER.replaceAll(".", "\\.")}`));
+  assert.match(injected, new RegExp(`rel="preload" href="/shared/nav\\.js\\?v=${SHELL_ASSET_VER.replaceAll(".", "\\.")}"`));
   assert.match(injected, /u&&u\.prefs&&u\.prefs\.theme/);
   const login = withSharedShell('<html><head></head><body class="login-page"></body></html>');
   assert.doesNotMatch(login, /\/shared\/nav\.js/);
@@ -537,7 +538,7 @@ test("page renderer injects shared shell onto module html", async () => {
   assert.match(shell, /rel="icon" type="image\/png"/);
   assert.match(shell, /<title>星脉甄选运营中心<\/title>/);
   assert.match(shell, /xm-app-shell/);
-  assert.match(shell, /\/shared\/modules\/data\.js\?v=0\.1\.772-tab2/);
+  assert.match(shell, new RegExp(`/shared/modules/data\\.js\\?v=${SHELL_ASSET_VER.replaceAll(".", "\\.")}`));
   assert.match(shell, /data-xm-style="pink"/);
   assert.match(shell, /<span>首页<\/span>/);
   assert.match(shell, /href="\/home"/);
