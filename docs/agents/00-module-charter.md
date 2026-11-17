@@ -27,7 +27,7 @@
 
 - 内容脚本：`public/shared/modules/<id>.js`，挂 `window.XmModules["/<path>"] = { mount, unmount }`
 - 自己的 API：`src/modules/<id>/`，前缀 `/api/<id>`
-- 自己的样式：只写内容区，颜色用 `--xm-*` 和 `html[data-theme]`
+- 自己的样式：只写内容区。新改的页面用 `var(--xm-*)`，主色只用 `--xm-primary`，不新造颜色，不改壳子，不改内容和接口
 - 交单：`files` 列出路径，`contents` 是路径→正文，模块名填自己
 
 ## 已删除：`cursor/home-nav-workbench-e50e`
@@ -58,6 +58,16 @@
 
 主框架已认识：侧栏第一项「首页」`/home`（`/` 仍跳首页）；「边界数据中心」`/bound`；「星脉数据中心」`/data`（交单名仍是数据中心）；「甄选商学院」带子菜单培训课程 / 培训考试 / 运营手册；「甄选智能体」`/agents`；「工作汇报」`/work`；「月度大会」`/meeting`；「需求与反馈」`/feedback`；底部「组织中心 / 智能人事 / 版本发布中心 / 个人中心」，智能人事路径 `/hr`。要再加子菜单或改 `src/app.js` 挂新 API，问主框架，不要自己改壳。
 
+## 页面颜色
+
+新改的页面用公共变量 `var(--xm-*)`，不新造主色，不改壳子，不改内容和接口。
+
+- 主色只用 `--xm-primary`。悬停、浅底、按下用 `--xm-primary-hover`、`--xm-primary-soft`、`--xm-primary-deep`。不要再写一套蓝，也不要在业务页里写死 `#1677ff`。
+- 页面底、字、边框、卡片、表头、成功、警告、危险用已有的 `--xm-bg`、`--xm-ink`、`--xm-muted`、`--xm-line`、`--xm-card`、`--xm-table-head`、`--xm-success`、`--xm-warning`、`--xm-danger`。
+- 侧栏、顶栏、页签、`nav.js`、`layout.css` 只许主框架改。业务页只改自己的内容区。
+- 只改样子时，字段、按钮、表格列和接口保持原样。
+- 旧页面里已经写死的色值先留着，等那一页下次被改到时再换成变量。不要为了换色去翻别人的页面。
+
 ## 怎么新建独立对话框并对接
 
 每个新业务面单独开一个 **Cursor Cloud Agent**（新对话），不要挤在主框架或别人的对话框里。
@@ -69,6 +79,7 @@
 ```
 你是独立 Agent「甄选商学院」。先读 docs/agents/00-module-charter.md 和 docs/agents/08-academy.md。
 你只改 academy 目录和 public/shared/modules/academy.js。不要改侧栏、nav.js、src/app.js。
+新改的页面用 var(--xm-*)，主色只用 --xm-primary，不新造颜色。不改壳子，不改内容和接口。
 做完用模块名「甄选商学院」交单，申请人 罗成运营部主脑。
 ```
 
