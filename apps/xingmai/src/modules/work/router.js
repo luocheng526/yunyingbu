@@ -9,11 +9,15 @@ import {
   saveDiary,
   saveDiaryImage,
   saveDiaryRest,
-  saveDiarySettings
+  saveDiarySettings,
+  saveDingBinds,
+  startDiaryReminder,
+  syncDingBinds
 } from "./diary.js";
 import { getReport, getSettings, isWorkAdmin, saveMembers, saveReport, saveTemplate, snapshot } from "./store.js";
 
 export const workRouter = Router();
+startDiaryReminder();
 
 function sendResult(res, result, fallbackStatus = 400) {
   if (!result || result.ok === false) {
@@ -197,5 +201,19 @@ workRouter.put(
   "/diary/settings",
   wrap(async (req, res) => {
     sendResult(res, await saveDiarySettings(req.user, req.body || {}, isWorkAdmin(req.user)), 403);
+  })
+);
+
+workRouter.post(
+  "/diary/ding/sync",
+  wrap(async (req, res) => {
+    sendResult(res, await syncDingBinds(req.user, isWorkAdmin(req.user)), 403);
+  })
+);
+
+workRouter.put(
+  "/diary/ding",
+  wrap(async (req, res) => {
+    sendResult(res, await saveDingBinds(req.user, req.body || {}, isWorkAdmin(req.user)), 403);
   })
 );

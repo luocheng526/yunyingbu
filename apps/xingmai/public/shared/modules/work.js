@@ -44,7 +44,7 @@
 
   function ensureStyle() {
     var style = document.getElementById("work-page-style");
-    if (style && style.getAttribute("data-rev") === "sum4") {
+    if (style && style.getAttribute("data-rev") === "ding1") {
       return;
     }
     if (!style) {
@@ -52,14 +52,14 @@
       style.id = "work-page-style";
       document.head.appendChild(style);
     }
-    style.setAttribute("data-rev", "sum4");
+    style.setAttribute("data-rev", "ding1");
     style.textContent =
-      ".work-page{color:var(--xm-ink);font-size:13px;}.work-bar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 10px;}.work-page h1{margin:0;font-size:18px;font-weight:650;}.work-lead{margin:4px 0 0;color:var(--xm-muted);font-size:12px;}.work-page h2{margin:0 0 6px;padding:0;font-size:13px;font-weight:650;}.work-page h3{margin:0 0 6px;font-size:13px;font-weight:650;}.work-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px;}.work-tab{position:relative;appearance:none;border:1px solid var(--xm-line);border-radius:8px;background:var(--xm-card);color:var(--xm-ink);font:inherit;font-size:13px;padding:6px 12px;cursor:pointer;white-space:nowrap;}.work-dot{position:absolute;top:-7px;right:-8px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#e23b3b;color:#fff;font-size:11px;line-height:16px;font-weight:700;font-style:normal;text-align:center;}.work-tab[aria-selected='true']{border:0;color:#fff;font-weight:650;background:linear-gradient(90deg,#245bdb,#4b7cff);box-shadow:0 6px 14px rgba(36,91,219,.18);}.work-page button:focus-visible,.work-page input:focus-visible,.work-page select:focus-visible,.work-page textarea:focus-visible{outline:2px solid var(--xm-primary);outline-offset:1px;}.work-panel{display:flex;flex-direction:column;gap:8px;}.work-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;}.work-kpi{border:0;border-radius:12px;min-height:92px;padding:14px 14px 12px;color:#fff;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:0 8px 18px rgba(22,119,255,.12);}button.work-kpi{appearance:none;width:100%;cursor:pointer;font:inherit;text-align:left;}.work-kpi b,.work-kpi strong{display:block;font-size:28px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;color:#fff;}.work-kpi span{display:block;margin-top:8px;color:rgba(255,255,255,.92);font-size:13px;font-weight:600;}.work-c0{background:linear-gradient(135deg,#2f6fe4,#5b94f5);}.work-c1{background:linear-gradient(135deg,#1faa5a,#3dce78);}.work-c2{background:linear-gradient(135deg,#f08a1e,#ffb04a);}.work-c3{background:linear-gradient(135deg,#7468ff,#9b8cff);}.work-c4{background:linear-gradient(135deg,#1fb8c9,#2fd3c0);}.work-c5{background:linear-gradient(135deg,#e23b3b,#ff6b6b);}.work-quiet{background:var(--xm-card);color:var(--xm-ink);border:1px solid var(--xm-line);}.work-quiet b" +
-      "{color:var(--xm-primary);}.work-quiet span{color:var(--xm-muted);}.work-card{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;box-shadow:var(--xm-shadow);padding:10px 12px;}.work-cardhead{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 4px;}.work-lane .work-field{margin-top:8px;max-width:720px;}.work-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;}.work-form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;}.work-field{display:flex;flex-direction:column;gap:4px;min-width:140px;color:var(--xm-muted);font-size:12px;}.work-field input,.work-field select,.work-tools select{height:28px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;}.work-field textarea,.work-table textarea{min-height:56px;width:100%;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:6px 8px;font:inherit;font-size:13px;resize:vertical;box-sizing:border-box;}.work-primary{height:28px;border:0;border-radius:6px;background:var(--xm-primary);color:#fff;padding:0 12px;font:inherit;font-size:12px;cursor:pointer;}.work-primary:disabled{opacity:.6;cursor:default;}.work-mini{height:26px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;cursor:pointer;}.work-mini.is-on{border:0;color:#fff;background:linear-gradient(90deg,#245bdb,#4b7cff);}.work-table-wrap{overflow:auto;}.work-roster-scroll{max-height:360px;overflow:auto;}.work-table{width:100%;border-collapse:collapse;font-size:12px;}.work-table th{text-align:left;color:var(--xm-muted);font-weight:600;padding:4px 6px;border-bottom:1px solid var(--xm-line);white-space:nowrap;}.work-table td{padding:4px 6px;border-bottom:1px solid var(--xm-line);vertical-align:middle;}td.work-check{width:48px;text-align:center;}td.work-check input{width:16px;height:16px;margin:0;accent-color:var(--xm-primary);cursor:pointer;}.work-empty{padding:18px 12px;text-align:center;color:var(--xm-muted);}.work-empty b{display:block;margin-bottom:6px;font-size:15px;color:var(--xm-ink);}.work-msg{min-height:16px;margin:0 0 6px;color:var(--xm-muted);font-size:12px;}.work-msg.is-error{color:#cf1322;}.work-ok{color:#12b36a;font-weight:650;white-space:nowrap;}.wor" +
-      "k-miss{color:#cf1322;font-weight:650;white-space:nowrap;}.work-depts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}.work-dept{min-height:88px;text-align:left;border:0;border-radius:12px;padding:14px;cursor:pointer;color:#fff;font:inherit;box-shadow:0 8px 18px rgba(22,119,255,.12);}.work-dept.is-on{box-shadow:0 0 0 3px #fff,0 0 0 5px rgba(20,40,80,.45);}.work-dept b{display:block;font-size:16px;font-weight:700;}.work-dept span{display:block;margin-top:6px;color:rgba(255,255,255,.9);font-size:12px;}.work-muted{color:var(--xm-muted);font-size:12px;}.work-filters{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;align-items:center;}.work-filters .work-mini{flex:none;width:auto;}.work-chiprow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}.work-sub{display:block;margin-top:2px;font-size:12px;line-height:1.45;opacity:.92;}.work-duty{min-width:140px;max-width:280px;white-space:normal;line-height:1.45;}.work-count{margin-left:auto;color:var(--xm-muted);font-size:12px;}.work-field.is-grow{flex:1;min-width:200px;}.work-checks{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;}.work-checks label{display:inline-flex;align-items:center;gap:5px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:5px;padding:4px 7px;font-size:13px;cursor:pointer;}.work-context{display:flex;align-items:center;flex-wrap:wrap;gap:10px 22px;font-size:13px;color:var(--xm-muted);}.work-context .work-field{flex-direction:row;align-items:center;gap:8px;min-width:0;}.work-context .work-field input{height:34px;}.work-filler strong{margin-left:4px;color:var(--xm-ink);font-weight:650;}.work-dutybadge{margin-left:auto;border-radius:20px;background:var(--xm-card);color:var(--xm-ink);border:1px solid var(--xm-line);padding:3px 10px;font-size:12px;}.work-sheet{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;box-shadow:var(--xm-shadow);min-width:0;}.work-storebar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:18px 22px;border-bottom:1px solid var(--xm-line);}.work-storetitle,.work-storeactions{display:flex;align-items:center;gap:10px;min-width:0;}.work-storetitle{flex-wrap:wrap;}.work-storeicon{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(36,91,219,.1);color:var(--xm-primary);flex:none;}.work-storetitle small{display:block;font-siz" +
-      "e:12px;color:var(--xm-muted);}.work-storetitle h3{margin:0;font-size:18px;font-weight:670;}.work-storetitle select{border:0;background:transparent;color:var(--xm-ink);font:inherit;font-size:16px;font-weight:650;max-width:320px;}.work-badge{border-radius:6px;background:rgba(20,40,80,.06);color:var(--xm-muted);padding:2px 8px;font-size:12px;}.work-storeactions{margin-left:auto;}.work-storeactions select{height:32px;border:1px solid var(--xm-primary);border-radius:6px;background:var(--xm-card);color:var(--xm-primary);padding:0 10px;font:inherit;font-size:13px;font-weight:650;}.work-link{border:0;background:transparent;color:var(--xm-muted);font:inherit;font-size:12px;cursor:pointer;padding:6px 4px;}.work-groups{display:flex;gap:22px;padding:0 22px;border-bottom:1px solid var(--xm-line);flex-wrap:wrap;}.work-groups button{display:inline-flex;gap:7px;align-items:center;min-height:48px;padding:0 3px;cursor:pointer;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--xm-muted);font:inherit;font-size:14px;font-weight:650;}.work-groups button.is-on{color:var(--xm-primary);border-bottom-color:var(--xm-primary);}.work-section{padding:18px 22px 8px;}.work-lanes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;align-items:start;}.work-lanes.is-single{grid-template-columns:minmax(0,1fr);}.work-lane{min-width:0;}.work-lane-title{margin:0 0 5px;padding:7px 10px;border-radius:5px;background:rgba(20,40,80,.05);font-size:13px;color:var(--xm-muted);font-weight:650;}.work-diary-item{padding:0 4px;border-bottom:1px solid var(--xm-line);}.work-item-line{min-height:55px;display:grid;align-items:center;column-gap:8px;grid-template-columns:minmax(0,1fr) minmax(62px,92px) 69px;font-size:14px;}.work-item-line>span{font-weight:550;overflow-wrap:anywhere;}.work-metric-num{display:flex;align-items:center;gap:5px;}.work-metric-num input{width:72px;height:33px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:15px;font-weight:650;font-variant-numeric:tabular-nums;box-sizing:border-box;}.work-metric-num small{color:var(--xm-muted);font-size:12px;}.work-more{display:inline-flex;align-items:center;justify-self:end;gap:5px;padding:6px 2px;font:inherit;font-size:12px;background:transparent;color:var(--xm-muted);border:0;cursor:pointer;}.work-more.is-open,.work-more:hov" +
-      "er{color:var(--xm-primary);}.work-more i{width:6px;height:6px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:translateY(-2px) rotate(45deg);}.work-more.is-open i{transform:translateY(2px) rotate(225deg);}.work-diary-more{display:grid;gap:10px;margin:0 0 12px;padding:12px;background:rgba(20,40,80,.04);border-radius:7px;}.work-diary-more[hidden]{display:none;}.work-orders{display:grid;grid-template-columns:minmax(200px,.8fr) minmax(0,1.2fr);gap:28px;align-items:start;}.work-order{min-width:0;}.work-order header{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;border-bottom:1px solid var(--xm-line);padding-bottom:9px;margin-bottom:12px;}.work-order h4{margin:0;font-size:15px;}.work-order textarea,.work-diary-more textarea{min-height:70px;width:100%;box-sizing:border-box;}.work-shot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}.work-shot img{max-width:148px;max-height:72px;object-fit:cover;border:0;border-radius:8px;}.work-submitbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:2px 2px 0;}.work-submitbar strong{color:var(--xm-muted);font-size:12px;font-weight:650;}.work-submitbar .work-primary,.work-submitbar .work-mini{min-height:38px;padding:7px 16px;font-weight:650;}.work-sum-table th,.work-sum-table td{white-space:nowrap;}.work-modal{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;background:rgba(15,23,42,.45);}.work-dialog{width:min(920px,100%);background:var(--xm-card);color:var(--xm-ink);border-radius:12px;box-shadow:var(--xm-shadow);padding:16px 18px;}.work-dialog-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 12px;}.work-sum-split{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(280px,1.6fr);gap:14px;align-items:start;}.work-fold{margin:0 0 8px;}.work-fold summary{cursor:pointer;font-weight:650;}.work-total{margin:0 0 8px;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;}.work-people{display:flex;flex-direction:column;gap:8px;}.work-person{color:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 8px 18px rgba(20,40,80,.12);display:flex;align-items:center;gap:16px;}.work-person.tone-ok{background:linear-gradient(90deg,#1faa5a,#3dce78);}.work-person.tone-miss{background:linear-gradient(90deg,#e23" +
-      "b3b,#ff6b6b);}.work-person.tone-rest{background:linear-gradient(90deg,#f08a1e,#ffb04a);}.work-person.tone-free{background:linear-gradient(90deg,#2f6fe4,#5b94f5);}.work-who{flex:0 0 140px;min-width:0;}.work-who b{display:block;font-size:16px;}.work-who span,.work-main{font-size:12px;color:rgba(255,255,255,.92);line-height:1.45;}.work-main{flex:1;min-width:0;}.work-person .work-mini{background:#fff;color:#245bdb;border:0;font-weight:650;}@media (max-width:980px){.work-stats,.work-depts,.work-lanes,.work-orders,.work-sum-split{grid-template-columns:1fr}.work-person{flex-wrap:wrap}.work-sum-split{grid-template-columns:1fr}}";
+      ".work-page{color:var(--xm-ink);font-size:13px;}.work-bar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 10px;}.work-page h1{margin:0;font-size:18px;font-weight:650;}.work-lead{margin:4px 0 0;color:var(--xm-muted);font-size:12px;}.work-page h2{margin:0 0 6px;padding:0;font-size:13px;font-weight:650;}.work-page h3{margin:0 0 6px;font-size:13px;font-weight:650;}.work-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px;}.work-tab{position:relative;appearance:none;border:1px solid var(--xm-line);border-radius:8px;background:var(--xm-card);color:var(--xm-ink);font:inherit;font-size:13px;padding:6px 12px;cursor:pointer;white-space:nowrap;}.work-dot{position:absolute;top:-7px;right:-8px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#e23b3b;color:#fff;font-size:11px;line-height:16px;font-weight:700;font-style:normal;text-align:center;}.work-tab[aria-selected='true']{border:0;color:#fff;font-weight:650;background:linear-gradient(90deg,#245bdb,#4b7cff);}.work-panel{display:flex;flex-direction:column;gap:8px;}.work-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;}.work-kpi{border:0;border-radius:12px;min-height:92px;padding:14px 14px 12px;color:#fff;display:flex;flex-direction:column;justify-content:flex-end;}button.work-kpi{appearance:none;width:100%;cursor:pointer;font:inherit;text-align:left;}.work-kpi b,.work-kpi strong{display:block;font-size:28px;line-height:1;font-weight:700;color:#fff;}.work-kpi span{display:block;margin-top:8px;color:rgba(255,255,255,.92);font-size:13px;font-weight:600;}.work-c0{background:linear-gradient(135deg,#2f6fe4,#5b94f5);}.work-c1{background:linear-gradient(135deg,#1faa5a,#3dce78);}.work-c2{background:linear-gradient(135deg,#f08a1e,#ffb04a);}.work-c4{background:linear-gradient(135deg,#1fb8c9,#2fd3c0);}.work-c5{background:linear-gradient(135deg,#e23b3b,#ff6b6b);}.work-quiet{background:var(--xm-card);color:var(--xm-ink);border:1px solid var(--xm-line);}.work-quiet b" +
+      "{color:var(--xm-primary);}.work-quiet span{color:var(--xm-muted);}.work-card{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;padding:10px 12px;}.work-cardhead{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 4px;}.work-lane .work-field{margin-top:8px;max-width:720px;}.work-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;}.work-form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;}.work-field{display:flex;flex-direction:column;gap:4px;min-width:140px;color:var(--xm-muted);font-size:12px;}.work-field input,.work-field select,.work-tools select{height:28px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;}.work-field textarea,.work-table textarea{min-height:56px;width:100%;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:6px 8px;font:inherit;font-size:13px;resize:vertical;box-sizing:border-box;}.work-primary{height:28px;border:0;border-radius:6px;background:var(--xm-primary);color:#fff;padding:0 12px;font:inherit;font-size:12px;cursor:pointer;}.work-primary:disabled{opacity:.6;cursor:default;}.work-mini{height:26px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:12px;cursor:pointer;}.work-mini.is-on{border:0;color:#fff;background:linear-gradient(90deg,#245bdb,#4b7cff);}.work-table-wrap{overflow:auto;}.work-roster-scroll{max-height:360px;overflow:auto;}.work-table{width:100%;border-collapse:collapse;font-size:12px;}.work-table th{text-align:left;color:var(--xm-muted);font-weight:600;padding:4px 6px;border-bottom:1px solid var(--xm-line);white-space:nowrap;}.work-table td{padding:4px 6px;border-bottom:1px solid var(--xm-line);vertical-align:middle;}td.work-check{width:48px;text-align:center;}td.work-check input{width:16px;height:16px;margin:0;accent-color:var(--xm-primary);cursor:pointer;}.work-empty{padding:18px 12px;text-align:center;color:var(--xm-muted);}.work-empty b{display:block;margin-bottom:6px;font-size:15px;color:var(--xm-ink);}.work-msg{min-height:16px;margin:0 0 6px;color:var(--xm-muted);font-size:12px;}.work-msg.is-error{color:#cf1322;}.work-ok{color:#12b36a;font-weight:650;white-space:nowrap;}.wor" +
+      "k-miss{color:#cf1322;font-weight:650;white-space:nowrap;}.work-depts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}.work-dept{min-height:88px;text-align:left;border:0;border-radius:12px;padding:14px;cursor:pointer;color:#fff;font:inherit;}.work-dept b{display:block;font-size:16px;font-weight:700;}.work-dept span{display:block;margin-top:6px;color:rgba(255,255,255,.9);font-size:12px;}.work-muted{color:var(--xm-muted);font-size:12px;}.work-filters{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;align-items:center;}.work-filters .work-mini{flex:none;width:auto;}.work-chiprow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}.work-sub{display:block;margin-top:2px;font-size:12px;line-height:1.45;opacity:.92;}.work-duty{min-width:140px;max-width:280px;white-space:normal;line-height:1.45;}.work-count{margin-left:auto;color:var(--xm-muted);font-size:12px;}.work-field.is-grow{flex:1;min-width:200px;}.work-checks{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;}.work-checks label{display:inline-flex;align-items:center;gap:5px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:5px;padding:4px 7px;font-size:13px;cursor:pointer;}.work-context{display:flex;align-items:center;flex-wrap:wrap;gap:10px 22px;font-size:13px;color:var(--xm-muted);}.work-context .work-field{flex-direction:row;align-items:center;gap:8px;min-width:0;}.work-context .work-field input{height:34px;}.work-filler strong{margin-left:4px;color:var(--xm-ink);font-weight:650;}.work-dutybadge{margin-left:auto;border-radius:20px;background:var(--xm-card);color:var(--xm-ink);border:1px solid var(--xm-line);padding:3px 10px;font-size:12px;}.work-sheet{background:var(--xm-card);border:1px solid var(--xm-line);border-radius:12px;min-width:0;}.work-storebar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:18px 22px;border-bottom:1px solid var(--xm-line);}.work-storetitle,.work-storeactions{display:flex;align-items:center;gap:10px;min-width:0;}.work-storetitle{flex-wrap:wrap;}.work-storeicon{display:grid;place-items:center;width:38px;height:38px;color:var(--xm-primary);flex:none;}.work-storetitle small{display:block;font-siz" +
+      "e:12px;color:var(--xm-muted);}.work-storetitle h3{margin:0;font-size:18px;font-weight:670;}.work-storetitle select{border:0;background:transparent;color:var(--xm-ink);font:inherit;font-size:16px;font-weight:650;max-width:320px;}.work-badge{border-radius:6px;background:rgba(20,40,80,.06);color:var(--xm-muted);padding:2px 8px;font-size:12px;}.work-storeactions{margin-left:auto;}.work-storeactions select{height:32px;border:1px solid var(--xm-primary);border-radius:6px;background:var(--xm-card);color:var(--xm-primary);padding:0 10px;font:inherit;font-size:13px;font-weight:650;}.work-link{border:0;background:transparent;color:var(--xm-muted);font:inherit;font-size:12px;cursor:pointer;padding:6px 4px;}.work-groups{display:flex;gap:22px;padding:0 22px;border-bottom:1px solid var(--xm-line);flex-wrap:wrap;}.work-groups button{display:inline-flex;gap:7px;align-items:center;min-height:48px;padding:0 3px;cursor:pointer;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--xm-muted);font:inherit;font-size:14px;font-weight:650;}.work-groups button.is-on{color:var(--xm-primary);border-bottom-color:var(--xm-primary);}.work-section{padding:18px 22px 8px;}.work-lanes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;align-items:start;}.work-lanes.is-single{grid-template-columns:minmax(0,1fr);}.work-lane{min-width:0;}.work-lane-title{margin:0 0 5px;padding:7px 10px;border-radius:5px;background:rgba(20,40,80,.05);font-size:13px;color:var(--xm-muted);font-weight:650;}.work-diary-item{padding:0 4px;border-bottom:1px solid var(--xm-line);}.work-item-line{min-height:55px;display:grid;align-items:center;column-gap:8px;grid-template-columns:minmax(0,1fr) minmax(62px,92px) 69px;font-size:14px;}.work-item-line>span{font-weight:550;overflow-wrap:anywhere;}.work-metric-num{display:flex;align-items:center;gap:5px;}.work-metric-num input{width:72px;height:33px;border:1px solid var(--xm-line);border-radius:6px;background:var(--xm-card);color:var(--xm-ink);padding:0 8px;font:inherit;font-size:15px;font-weight:650;box-sizing:border-box;}.work-metric-num small{color:var(--xm-muted);font-size:12px;}.work-more{display:inline-flex;align-items:center;justify-self:end;gap:5px;padding:6px 2px;font:inherit;font-size:12px;background:transparent;color:var(--xm-muted);border:0;cursor:pointer;}.work-more.is-open,.work-more:hov" +
+      "er{color:var(--xm-primary);}.work-more i{width:6px;height:6px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:translateY(-2px) rotate(45deg);}.work-more.is-open i{transform:translateY(2px) rotate(225deg);}.work-diary-more{display:grid;gap:10px;margin:0 0 12px;padding:12px;background:rgba(20,40,80,.04);border-radius:7px;}.work-diary-more[hidden]{display:none;}.work-orders{display:grid;grid-template-columns:minmax(200px,.8fr) minmax(0,1.2fr);gap:28px;align-items:start;}.work-order{min-width:0;}.work-order header{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;border-bottom:1px solid var(--xm-line);padding-bottom:9px;margin-bottom:12px;}.work-order h4{margin:0;font-size:15px;}.work-order textarea,.work-diary-more textarea{min-height:70px;width:100%;box-sizing:border-box;}.work-shot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}.work-shot img{max-width:148px;max-height:72px;object-fit:cover;border:0;border-radius:8px;}.work-submitbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:2px 2px 0;}.work-submitbar strong{color:var(--xm-muted);font-size:12px;font-weight:650;}.work-submitbar .work-primary,.work-submitbar .work-mini{min-height:38px;padding:7px 16px;font-weight:650;}.work-sum-table th,.work-sum-table td{white-space:nowrap;}.work-modal{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;background:rgba(15,23,42,.45);}.work-dialog{width:min(920px,100%);background:var(--xm-card);color:var(--xm-ink);border-radius:12px;padding:16px 18px;}.work-dialog-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 12px;}.work-sum-split{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(280px,1.6fr);gap:14px;align-items:start;}.work-fold{margin:0 0 8px;}.work-fold summary{cursor:pointer;font-weight:650;}.work-total{margin:0 0 8px;font-size:22px;font-weight:700;}.work-people{display:flex;flex-direction:column;gap:8px;}.work-person{color:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 8px 18px rgba(20,40,80,.12);display:flex;align-items:center;gap:16px;}.work-person.tone-ok{background:linear-gradient(90deg,#1faa5a,#3dce78);}.work-person.tone-miss{background:linear-gradient(90deg,#e23" +
+      "b3b,#ff6b6b);}.work-person.tone-rest{background:linear-gradient(90deg,#f08a1e,#ffb04a);}.work-person.tone-free{background:linear-gradient(90deg,#2f6fe4,#5b94f5);}.work-who{flex:0 0 140px;min-width:0;}.work-who b{display:block;font-size:16px;}.work-who span,.work-main{font-size:12px;color:rgba(255,255,255,.92);line-height:1.45;}.work-main{flex:1;min-width:0;}.work-person .work-mini{background:#fff;color:#245bdb;border:0;font-weight:650;}@media (max-width:980px){.work-stats,.work-depts,.work-lanes,.work-orders,.work-sum-split{grid-template-columns:1fr}.work-person{flex-wrap:wrap}}";
   }
 
   function api(path, options) {
@@ -420,7 +420,7 @@
   function renderAdminTable(date) {
     var rows = (state.report && state.report.rows) || [];
     if (!rows.length) {
-      return '<div class="work-card"><div class="work-empty">这一天还没有人需要汇报。先到部门设置里按责权把人排进运营部、人事部或技术部。</div></div>';
+      return '<div class="work-card"><div class="work-empty">这一天还没有人需要汇报。</div></div>';
     }
     var q = String(state.boardQuery || "").trim().toLowerCase();
     var visiblePeople = 0;
@@ -547,19 +547,8 @@
     return state.diaryDraft[state.diaryShop] || null;
   }
 
-  function diaryIcon(kind) {
-    var paths = {
-      goods: '<path d="m3 7 7-4 7 4v7l-7 4-7-4zM3 7l7 4 7-4M10 11v7"/>',
-      ops: '<path d="M3 16h14M4 13V9m5 4V5m5 8V7"/>',
-      orders: '<rect x="4" y="3" width="12" height="14" rx="2"/><path d="M7 7h6m-6 4h4"/>',
-      other: '<path d="M4 4h12v9l-4 4H4zM8 8h5m-5 3h3"/>',
-      store: '<path d="M3 8l2-4h10l2 4M4 10v6h12v-6M8 16v-4h4v4M3 8c0 3 3 3 4 1 1 2 4 2 5 0 1 2 5 2 5-1"/>'
-    };
-    return (
-      '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round">' +
-      (paths[kind] || paths.other) +
-      "</svg>"
-    );
+  function diaryIcon() {
+    return '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h12v12H4z"/></svg>';
   }
 
   function quantityField(node, current) {
@@ -1240,18 +1229,23 @@
       if (status === "免报") {
         return "tone-rest";
       }
+      if (status === "待核对") {
+        return "tone-free";
+      }
       return "tone-free";
     }
     var rows = (data.rows || [])
       .map(function (row) {
-        var rest =
-          row.status !== "自愿"
+        var restLabel = row.manualRest ? "取消休息" : "登记休息";
+        var restOn = row.manualRest ? "0" : "1";
+        var showRest = row.manualRest || row.status === "未报" || row.status === "待核对" || row.status === "已报";
+        var rest = showRest
             ? '<button type="button" class="work-mini" data-rest="' +
               esc(row.personId) +
               '" data-rest-on="' +
-              (row.status === "免报" ? "0" : "1") +
+              restOn +
               '">' +
-              (row.status === "免报" ? "取消休息" : "登记休息") +
+              restLabel +
               "</button>"
             : "";
         return (
@@ -1286,6 +1280,7 @@
       kpi(2, sum.exempt || 0, "免报") +
       kpi(4, sum.shops || 0, "已交店铺数") +
       "</div>" +
+      (sum.pending ? '<p class="work-lead">考勤待核对 ' + esc(sum.pending) + " 人，未计入未报。</p>" : "") +
       '<div class="work-people">' +
       (rows || '<div class="work-card"><div class="work-empty"><b>这一天没有需要汇报的人</b></div></div>') +
       "</div></div>"
@@ -1313,6 +1308,19 @@
       })
       .join("");
     var delivery = policy.delivery || {};
+    var link = policy.integration || {};
+    var dingLead = link.app
+      ? "已关联 " + (link.bound || 0) + " 人。排班休息、整天请假免报；半天假仍要交。未绑定或接口失败会标明原因。"
+      : "密钥只放服务器环境变量，不在这里填写。";
+    var operatorOptions = (data.binds || []).filter(function (row) { return row.confirmed; }).map(function (row) {
+      return '<option value="' + row.personId + '"' + (Number(delivery.operatorPersonId) === Number(row.personId) ? " selected" : "") + ">" + esc(row.name) + "</option>";
+    }).join("");
+    var bindRows = (data.binds || []).map(function (row) {
+      var options = (row.candidates || []).map(function (item) {
+        return '<option value="' + esc(item.userid) + '">' + esc(item.name) + "</option>";
+      }).join("");
+      return "<tr><td>" + esc(row.name) + "</td><td>" + esc(row.employeeNo || "") + '</td><td><input data-ding-user data-person="' + row.personId + '" value="' + esc(row.userid || "") + '">' + (options ? '<select data-ding-fill="' + row.personId + '"><option value="">待核对</option>' + options + "</select>" : "") + "</td><td>" + esc(row.match || "") + "</td></tr>";
+    }).join("");
     var catalogNodes = (data.catalog && data.catalog.nodes) || [];
     function sectionTitle(node) {
       var current = node;
@@ -1346,10 +1354,13 @@
       })
       .join("");
     return (
-      '<div class="work-panel"><div class="work-card"><h2>必须提交店铺日报的岗位</h2><p class="work-lead">勾选岗位、并且已经排进运营部、人事部或技术部、名下有店的人，当天要交店铺日报。登记休息后当天免报。移出汇报名单的人不再计入部门应报。</p><div class="work-checks">' +
+      '<div class="work-panel"><div class="work-card"><h2>必须提交店铺日报的岗位</h2><p class="work-lead">勾选岗位，并且已排进运营部、人事部或技术部、名下有店的人，当天要交店铺日报。登记休息后免报。</p><div class="work-checks">' +
       positions +
       '</div><button type="button" class="work-primary" data-save-positions>保存岗位设置</button></div>' +
-      '<div class="work-card"><h2>考勤与提醒</h2><p class="work-lead">新站还没有钉钉企业应用，休息登记在这里生效，提醒不会发到钉钉。</p><div class="work-checks"><label><input type="checkbox" data-delivery="useSchedule"' +
+      '<div class="work-card"><h2>考勤与提醒</h2><p class="work-lead">' +
+      dingLead +
+      (link.app && !link.agent ? " 待配置工作通知 AgentId。" : "") +
+      '</p><div class="work-checks"><label><input type="checkbox" data-delivery="useSchedule"' +
       (delivery.useSchedule ? " checked" : "") +
       '> 按钉钉排班识别休息日</label><label><input type="checkbox" data-delivery="useLeave"' +
       (delivery.useLeave ? " checked" : "") +
@@ -1357,8 +1368,16 @@
       (delivery.remind ? " checked" : "") +
       '> 提醒未交日报</label></div><label class="work-field">每日提醒时间（北京时间）<input data-remind-at type="time" value="' +
       esc(delivery.remindAt || "18:00") +
-      '"></label><button type="button" class="work-primary" data-save-delivery>保存考勤与提醒</button></div>' +
-      '<div class="work-card"><h2>填报项目</h2><p class="work-lead">四个栏目：商品与评价、活动与库存、订单处置、其他与备注。停用后，已经提交的记录仍可在工作汇总里看。</p><div class="work-table-wrap"><table class="work-table"><thead><tr><th>栏目</th><th>名称</th><th>单位</th><th>启用</th></tr></thead><tbody>' +
+      '"></label><label class="work-field">排班查询人<select data-ding-operator><option value="">请选择</option>' +
+      operatorOptions +
+      '</select></label><button type="button" class="work-primary" data-save-delivery>保存考勤与提醒</button>' +
+      (link.app
+        ? '<div class="work-table-wrap"><table class="work-table"><thead><tr><th>姓名</th><th>工号</th><th>钉钉 userId</th><th>核对</th></tr></thead><tbody>' +
+          (bindRows || '<tr><td colspan="4" class="work-empty">没有在职人员</td></tr>') +
+          '</tbody></table></div><button type="button" class="work-mini" data-ding-sync>从钉钉核对员工</button><button type="button" class="work-primary" data-ding-save>保存员工绑定</button>'
+        : "") +
+      "</div>" +
+      '<div class="work-card"><h2>填报项目</h2><p class="work-lead">停用后，已经提交的记录仍可在工作汇总里看。</p><div class="work-table-wrap"><table class="work-table"><thead><tr><th>栏目</th><th>名称</th><th>单位</th><th>启用</th></tr></thead><tbody>' +
       nodes +
       '</tbody></table></div><button type="button" class="work-primary" data-save-catalog>保存填报内容</button></div></div>'
     );
@@ -1380,8 +1399,11 @@
     if (row.status === "已报") {
       return "已交";
     }
+    if (row.status === "待核对") {
+      return "待核对" + (row.statusNote ? "（" + row.statusNote + "）" : "");
+    }
     if (row.status === "未报") {
-      return "应交 · 待提交";
+      return "应交 · 待提交" + (row.statusNote ? "（" + row.statusNote + "）" : "");
     }
     return "自愿填报";
   }
@@ -1543,7 +1565,7 @@
       .concat([{ code: "none", name: "未分部门" }]);
     return (
       '<div class="work-card"><h2>按责权加人</h2>' +
-      '<p class="work-lead">名单来自组织中心在职人员。组织部门只作参考：人事和技术在那边是同一张表，这里要拆成人事部或技术部。勾上的人才按当前部门的模板每天填表。</p>' +
+      '<p class="work-lead">名单来自组织中心在职人员。勾上的人按当前部门模板填报。</p>' +
       '<div class="work-form"><label class="work-field is-grow">搜索<input data-roster-q data-keep-focus="roster" value="' +
       esc(state.rosterQuery) +
       '" placeholder="姓名、中心、店铺、主管"></label><span class="work-count" data-roster-count>显示 ' +
@@ -2046,13 +2068,50 @@
           delivery[box.getAttribute("data-delivery")] = box.checked;
         });
         delivery.remindAt = (root.querySelector("[data-remind-at]") || {}).value || "18:00";
+        delivery.operatorPersonId = Number((root.querySelector("[data-ding-operator]") || {}).value) || 0;
         api("/api/work/diary/settings", {
           method: "PUT",
           body: { delivery: delivery }
         })
           .then(function (data) {
             state.diarySettings = data;
-            setMsg("考勤与提醒已保存。钉钉企业应用未接入，不会外发。");
+            var ready = data.policy && data.policy.integration && data.policy.integration.app;
+            setMsg(ready ? "考勤与提醒已保存" : "已保存。企业应用未配置，暂不查询钉钉。");
+            paint(root);
+          })
+          .catch(function (err) {
+            setMsg(err.message, true);
+            paint(root);
+          });
+        return;
+      }
+      var dingSync = event.target.closest("[data-ding-sync]");
+      if (dingSync) {
+        api("/api/work/diary/ding/sync", { method: "POST", body: {} })
+          .then(function (data) {
+            state.diarySettings = data;
+            setMsg("工号已自动绑定，重名请人工确认");
+            paint(root);
+          })
+          .catch(function (err) {
+            setMsg(err.message, true);
+            paint(root);
+          });
+        return;
+      }
+      var dingSave = event.target.closest("[data-ding-save]");
+      if (dingSave) {
+        api("/api/work/diary/ding", {
+          method: "PUT",
+          body: {
+            binds: [].slice.call(root.querySelectorAll("[data-ding-user]")).map(function (input) {
+              return { personId: Number(input.getAttribute("data-person")), userid: input.value || "" };
+            })
+          }
+        })
+          .then(function (data) {
+            state.diarySettings = data;
+            setMsg("员工绑定已保存");
             paint(root);
           })
           .catch(function (err) {
@@ -2308,6 +2367,16 @@
             setMsg(err.message, true);
             paint(root);
           });
+      }
+    });
+    root.addEventListener("change", function (event) {
+      var pick = event.target.closest("[data-ding-fill]");
+      if (!pick) {
+        return;
+      }
+      var input = root.querySelector('[data-ding-user][data-person="' + pick.getAttribute("data-ding-fill") + '"]');
+      if (input && pick.value) {
+        input.value = pick.value;
       }
     });
     root.addEventListener("input", function (event) {

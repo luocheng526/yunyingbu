@@ -1,0 +1,523 @@
+/* 工作汇报的钉钉排班、请假和工作通知。密钥只读环境变量。 */
+import { dbMode, query } from "../profile/auth.js";
+
+const WORK_URL = "https://zx.xingmaierp.cc/work";
+const sentKeys = new Set();
+const binds = new Map();
+let attendanceCache = new Map();
+let tokenCache = { value: "", until: 0 };
+let transport = globalThis.fetch;
+
+export function setDingTransport(fn) {
+  transport = fn || globalThis.fetch;
+  tokenCache = { value: "", until: 0 };
+}
+
+export function resetDingStore() {
+  sentKeys.clear();
+  binds.clear();
+  attendanceCache = new Map();
+  tokenCache = { value: "", until: 0 };
+}
+
+export function dingConfig() {
+  return {
+    corpId: String(process.env.DINGTALK_CORP_ID || "").trim(),
+    clientId: String(process.env.DINGTALK_CLIENT_ID || "").trim(),
+    clientSecret: String(process.env.DINGTALK_CLIENT_SECRET || "").trim(),
+    agentId: String(process.env.DINGTALK_AGENT_ID || "").trim()
+  };
+}
+
+export function dingPublic() {
+  const cfg = dingConfig();
+  return {
+    app: Boolean(cfg.clientId && cfg.clientSecret),
+    agent: Boolean(cfg.agentId),
+    corp: Boolean(cfg.corpId)
+  };
+}
+
+export function classifySchedule(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) {
+    return "none";
+  }
+  const working = list.some((row) => String(row.is_rest || row.isRest || "N").toUpperCase() !== "Y");
+  return working ? "work" : "rest";
+}
+
+export function shiftWindow(rows) {
+  const times = (Array.isArray(rows) ? rows : [])
+    .filter((row) => String(row.is_rest || row.isRest || "N").toUpperCase() !== "Y")
+    .map((row) => Date.parse(String(row.plan_check_time || row.planCheckTime || "").replace(" ", "T") + "+08:00"))
+    .filter((value) => Number.isFinite(value));
+  if (times.length < 2) {
+    return null;
+  }
+  return { start: Math.min(...times), end: Math.max(...times) };
+}
+
+export function classifyLeave(records, shift) {
+  let full = false;
+  let half = false;
+  for (const row of Array.isArray(records) ? records : []) {
+    const percent = Number(row.duration_percent ?? row.durationPercent);
+    const start = Number(row.start_time ?? row.startTime);
+    const end = Number(row.end_time ?? row.endTime);
+    if (shift && start && end) {
+      if (start <= shift.start && end >= shift.end) {
+        full = true;
+      } else if (end > shift.start && start < shift.end) {
+        half = true;
+      }
+    } else if (percent >= 100) {
+      full = true;
+    } else if (percent > 0) {
+      half = true;
+    }
+  }
+  if (full) {
+    return "full";
+  }
+  if (half) {
+    return "half";
+  }
+  return "none";
+}
+
+export function proposeBinds(people, users) {
+  const byJob = new Map();
+  const byName = new Map();
+  for (const user of users || []) {
+    const job = String(user.jobNumber || user.job_number || "").trim();
+    const name = String(user.name || "").trim();
+    if (job) {
+      const list = byJob.get(job) || [];
+      list.push(user);
+      byJob.set(job, list);
+    }
+    if (name) {
+      const list = byName.get(name) || [];
+      list.push(user);
+      byName.set(name, list);
+    }
+  }
+  return (people || []).map((person) => {
+    const jobHits = person.employeeNo ? byJob.get(String(person.employeeNo).trim()) || [] : [];
+    const nameHits = byName.get(String(person.name || "").trim()) || [];
+    if (jobHits.length === 1) {
+      return { personId: Number(person.id), userid: jobHits[0].userid, match: "工号", confirmed: true, candidates: [] };
+    }
+    if (jobHits.length > 1) {
+      return { personId: Number(person.id), userid: "", match: "工号重复", confirmed: false, candidates: publicUsers(jobHits) };
+    }
+    if (nameHits.length > 1) {
+      return { personId: Number(person.id), userid: "", match: "重名待核对", confirmed: false, candidates: publicUsers(nameHits) };
+    }
+    if (nameHits.length === 1) {
+      return { personId: Number(person.id), userid: "", match: "姓名待核对", confirmed: false, candidates: publicUsers(nameHits) };
+    }
+    return { personId: Number(person.id), userid: "", match: "未找到", confirmed: false, candidates: [] };
+  });
+}
+
+function publicUsers(users) {
+  return users.map((user) => ({
+    userid: String(user.userid || ""),
+    name: String(user.name || ""),
+    jobNumber: String(user.jobNumber || user.job_number || "")
+  }));
+}
+
+function dayStart(date) {
+  return Date.parse(`${date}T00:00:00+08:00`);
+}
+
+async function oapi(path, body) {
+  const cfg = dingConfig();
+  if (!cfg.clientId || !cfg.clientSecret) {
+    const error = new Error("钉钉企业应用未配置");
+    error.publicMessage = error.message;
+    throw error;
+  }
+  if (!tokenCache.value || Date.now() >= tokenCache.until) {
+    const res = await transport("https://api.dingtalk.com/v1.0/oauth2/accessToken", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appKey: cfg.clientId, appSecret: cfg.clientSecret }),
+      signal: AbortSignal.timeout(5000)
+    });
+    const data = await res.json();
+    if (!data.accessToken) {
+      const error = new Error("钉钉接口失败");
+      error.publicMessage = error.message;
+      throw error;
+    }
+    tokenCache = {
+      value: data.accessToken,
+      until: Date.now() + Math.max(60, Number(data.expireIn) || 7200 - 120) * 1000
+    };
+  }
+  const res = await transport(`https://oapi.dingtalk.com${path}?access_token=${encodeURIComponent(tokenCache.value)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+    signal: AbortSignal.timeout(8000)
+  });
+  const data = await res.json();
+  if (data.errcode) {
+    const error = new Error("钉钉接口失败");
+    error.publicMessage = error.message;
+    throw error;
+  }
+  return data.result === undefined ? data : data.result;
+}
+
+export async function readyDing() {
+  if (dbMode() !== "mysql") {
+    return;
+  }
+  await query(
+    `CREATE TABLE IF NOT EXISTS work_report_ding_bind (
+      person_id INT NOT NULL PRIMARY KEY,
+      dingtalk_user_id VARCHAR(64) NOT NULL,
+      match_by VARCHAR(16) NOT NULL,
+      confirmed TINYINT NOT NULL,
+      updated_at VARCHAR(40) NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  );
+  await query(
+    `CREATE TABLE IF NOT EXISTS work_report_ding_remind (
+      person_id INT NOT NULL,
+      work_date CHAR(10) NOT NULL,
+      sent_at VARCHAR(40) NOT NULL,
+      PRIMARY KEY (person_id, work_date)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  );
+  const [rows] = await query("SELECT person_id, dingtalk_user_id, match_by, confirmed FROM work_report_ding_bind");
+  binds.clear();
+  for (const row of rows) {
+    if (!Number(row.confirmed)) {
+      continue;
+    }
+    binds.set(Number(row.person_id), {
+      userid: String(row.dingtalk_user_id || ""),
+      match: String(row.match_by || ""),
+      confirmed: true
+    });
+  }
+  const [sent] = await query("SELECT person_id, work_date FROM work_report_ding_remind");
+  sentKeys.clear();
+  for (const row of sent) {
+    sentKeys.add(`${Number(row.person_id)}|${row.work_date}`);
+  }
+}
+
+export function bindingOf(personId) {
+  return binds.get(Number(personId)) || null;
+}
+
+export function confirmedBinds() {
+  return [...binds.entries()].map(([personId, row]) => ({ personId, ...row }));
+}
+
+export async function saveBinds(rows) {
+  for (const row of rows || []) {
+    const personId = Number(row.personId);
+    const userid = String(row.userid || "").trim().slice(0, 64);
+    if (!personId) {
+      continue;
+    }
+    if (!userid) {
+      binds.delete(personId);
+      if (dbMode() === "mysql") {
+        await query("DELETE FROM work_report_ding_bind WHERE person_id = ?", [personId]);
+      }
+      continue;
+    }
+    const next = { userid, match: row.match || "人工", confirmed: true };
+    binds.set(personId, next);
+    if (dbMode() === "mysql") {
+      await query(
+        `INSERT INTO work_report_ding_bind (person_id, dingtalk_user_id, match_by, confirmed, updated_at)
+         VALUES (?, ?, ?, 1, ?)
+         ON DUPLICATE KEY UPDATE dingtalk_user_id = VALUES(dingtalk_user_id), match_by = VALUES(match_by), confirmed = 1, updated_at = VALUES(updated_at)`,
+        [personId, userid, next.match, new Date().toISOString().slice(0, 19).replace("T", " ")]
+      );
+    }
+  }
+}
+
+async function listDingUsers() {
+  const departments = [1];
+  const queue = [1];
+  while (queue.length && departments.length < 30) {
+    const deptId = queue.shift();
+    const result = await oapi("/topapi/v2/department/listsub", { dept_id: deptId });
+    const rows = Array.isArray(result) ? result : [];
+    for (const row of rows) {
+      const id = Number(row.dept_id);
+      if (id && !departments.includes(id)) {
+        departments.push(id);
+        queue.push(id);
+      }
+    }
+  }
+  const seen = new Map();
+  for (const deptId of departments) {
+    let cursor = 0;
+    for (let page = 0; page < 20; page += 1) {
+      const result = await oapi("/topapi/v2/user/list", { dept_id: deptId, cursor, size: 100 });
+      for (const user of result.list || []) {
+        if (user.userid) {
+          seen.set(String(user.userid), {
+            userid: String(user.userid),
+            name: String(user.name || ""),
+            jobNumber: String(user.job_number || "")
+          });
+        }
+      }
+      if (!result.has_more) {
+        break;
+      }
+      cursor = result.next_cursor || 0;
+    }
+  }
+  return [...seen.values()];
+}
+
+export async function syncBinds(people) {
+  const users = await listDingUsers();
+  const proposals = proposeBinds(people, users);
+  await saveBinds(proposals.filter((row) => row.confirmed && row.userid));
+  return proposals.map((row) => {
+    const saved = binds.get(row.personId);
+    if (saved && saved.confirmed) {
+      return { ...row, userid: saved.userid, match: saved.match, confirmed: true };
+    }
+    return row;
+  });
+}
+
+async function schedulesFor(userids, date, operatorId) {
+  const grouped = new Map();
+  for (let index = 0; index < userids.length; index += 50) {
+    const slice = userids.slice(index, index + 50);
+    const result = await oapi("/topapi/attendance/schedule/listbyusers", {
+      op_user_id: operatorId,
+      userids: slice.join(","),
+      from_date_time: dayStart(date),
+      to_date_time: dayStart(date) + 24 * 3600 * 1000 - 1
+    });
+    const rows = Array.isArray(result) ? result : result?.schedules || [];
+    for (const row of rows) {
+      const id = String(row.userid || row.user_id || "");
+      const list = grouped.get(id) || [];
+      list.push(row);
+      grouped.set(id, list);
+    }
+  }
+  return grouped;
+}
+
+async function leavesFor(userids, date) {
+  const grouped = new Map();
+  const start = dayStart(date);
+  const end = start + 24 * 3600 * 1000 - 1;
+  for (let index = 0; index < userids.length; index += 100) {
+    const slice = userids.slice(index, index + 100);
+    let offset = 0;
+    for (let page = 0; page < 20; page += 1) {
+      const result = await oapi("/topapi/attendance/getleavestatus", {
+        userid_list: slice.join(","),
+        start_time: start,
+        end_time: end,
+        offset,
+        size: 20
+      });
+      const rows = result.leave_status || result.leave_status_list || [];
+      for (const row of rows) {
+        const id = String(row.userid || "");
+        const list = grouped.get(id) || [];
+        list.push(row);
+        grouped.set(id, list);
+      }
+      if (!result.has_more) {
+        break;
+      }
+      offset += rows.length || 20;
+    }
+  }
+  return grouped;
+}
+
+export async function loadAttendance({ date, people, useSchedule, useLeave, operatorPersonId, fresh }) {
+  const map = new Map();
+  if (!useSchedule && !useLeave) {
+    return map;
+  }
+  const key = `${date}|${useSchedule ? 1 : 0}|${useLeave ? 1 : 0}`;
+  const cached = attendanceCache.get(key);
+  if (!fresh && cached && Date.now() - cached.at < 60000) {
+    return cached.map;
+  }
+  const wanted = (people || []).filter((person) => person.status !== "离职");
+  if (!dingPublic().app) {
+    return map;
+  }
+  const bound = [];
+  for (const person of wanted) {
+    const row = binds.get(Number(person.id));
+    if (!row || !row.confirmed || !row.userid) {
+      map.set(Number(person.id), { pending: false, exempt: false, half: false, reason: "未绑定钉钉" });
+      continue;
+    }
+    bound.push({ personId: Number(person.id), userid: row.userid });
+  }
+  const operator = binds.get(Number(operatorPersonId));
+  let scheduleError = "";
+  let schedules = new Map();
+  if (useSchedule) {
+    if (!operator || !operator.userid) {
+      scheduleError = "待配置排班查询人";
+    } else {
+      try {
+        schedules = await schedulesFor(bound.map((row) => row.userid), date, operator.userid);
+      } catch (error) {
+        scheduleError = error.publicMessage || "钉钉排班接口失败";
+      }
+    }
+  }
+  let leaveError = "";
+  let leaves = new Map();
+  if (useLeave) {
+    try {
+      leaves = await leavesFor(bound.map((row) => row.userid), date);
+    } catch (error) {
+      leaveError = error.publicMessage || "钉钉请假接口失败";
+    }
+  }
+  for (const row of bound) {
+    const shiftRows = schedules.get(row.userid) || [];
+    const schedule = scheduleError ? "error" : classifySchedule(shiftRows);
+    const leave = leaveError ? "error" : classifyLeave(leaves.get(row.userid) || [], shiftWindow(shiftRows));
+    let pending = false;
+    let exempt = false;
+    let half = false;
+    let reason = "";
+    if (useSchedule) {
+      if (scheduleError) {
+        pending = true;
+        reason = scheduleError;
+      } else if (schedule === "none") {
+        pending = true;
+        reason = "没有排班数据";
+      } else if (schedule === "rest") {
+        exempt = true;
+        reason = "钉钉排班休息";
+      }
+    }
+    if (useLeave && !exempt) {
+      if (leaveError) {
+        pending = true;
+        reason = reason || leaveError;
+      } else if (leave === "full") {
+        exempt = true;
+        pending = false;
+        reason = "钉钉请假";
+      } else if (leave === "half") {
+        half = true;
+        reason = reason || "钉钉半天假，当天仍要交";
+      }
+    }
+    map.set(row.personId, { pending: pending && !exempt, exempt, half, reason });
+  }
+  attendanceCache.set(key, { at: Date.now(), map });
+  return map;
+}
+
+export async function claimReminder(personId, date) {
+  const key = `${Number(personId)}|${date}`;
+  if (sentKeys.has(key)) {
+    return false;
+  }
+  sentKeys.add(key);
+  if (dbMode() === "mysql") {
+    try {
+      await query("INSERT INTO work_report_ding_remind (person_id, work_date, sent_at) VALUES (?, ?, ?)", [
+        Number(personId),
+        date,
+        new Date().toISOString().slice(0, 19).replace("T", " ")
+      ]);
+    } catch (error) {
+      if (error?.code === "ER_DUP_ENTRY" || error?.errno === 1062) {
+        return false;
+      }
+      sentKeys.delete(key);
+      throw error;
+    }
+  }
+  return true;
+}
+
+export async function releaseReminder(personId, date) {
+  const key = `${Number(personId)}|${date}`;
+  sentKeys.delete(key);
+  if (dbMode() === "mysql") {
+    await query("DELETE FROM work_report_ding_remind WHERE person_id = ? AND work_date = ?", [Number(personId), date]);
+  }
+}
+
+export async function sendWorkNotice(userid) {
+  const cfg = dingConfig();
+  if (!cfg.agentId) {
+    const error = new Error("待配置工作通知 AgentId");
+    error.publicMessage = error.message;
+    throw error;
+  }
+  await oapi("/topapi/message/corpconversation/asyncsend_v2", {
+    agent_id: Number(cfg.agentId) || cfg.agentId,
+    userid_list: userid,
+    msg: {
+      msgtype: "action_card",
+      action_card: {
+        title: "今天的日报还没提交",
+        markdown: "今天的工作日报还没交，请在今天提交。",
+        single_title: "去填日报",
+        single_url: WORK_URL
+      }
+    }
+  });
+}
+
+export function shanghaiNow(now = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23"
+    })
+      .formatToParts(now)
+      .map((part) => [part.type, part.value])
+  );
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, hm: `${parts.hour}:${parts.minute}` };
+}
+
+export function inRemindWindow(remindAt, hm) {
+  const toMinutes = (value) => {
+    const [hour, minute] = String(value || "").split(":");
+    return Number(hour) * 60 + Number(minute);
+  };
+  const target = toMinutes(remindAt);
+  const current = toMinutes(hm);
+  if (!Number.isFinite(target) || !Number.isFinite(current)) {
+    return false;
+  }
+  const diff = current - target;
+  return diff >= 0 && diff <= 15;
+}

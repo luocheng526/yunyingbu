@@ -1,6 +1,20 @@
 /* 工作汇报店铺日报。 */
 import { dbMode, query } from "../profile/auth.js";
 import { listGrants, listPeople, listShops } from "../people/store.js";
+import {
+  claimReminder,
+  confirmedBinds,
+  dingPublic,
+  inRemindWindow,
+  loadAttendance,
+  readyDing,
+  releaseReminder,
+  resetDingStore,
+  saveBinds,
+  sendWorkNotice,
+  shanghaiNow,
+  syncBinds
+} from "./dingtalk.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -55,7 +69,7 @@ let catalog = { revision: 1, nodes: cloneNodes(DEFAULT_NODES) };
 let policy = {
   revision: 1,
   positions: ["运营", "助理"],
-  delivery: { revision: 1, useSchedule: false, useLeave: false, remind: false, remindAt: "18:00" }
+  delivery: { revision: 1, useSchedule: false, useLeave: false, remind: false, remindAt: "18:00", operatorPersonId: 0 }
 };
 let reports = new Map();
 let images = new Map();
@@ -100,12 +114,13 @@ export function bindRoster(reader) {
 
 export function resetDiaryStore() {
   resetOrgMemo();
+  resetDingStore();
   ready = false;
   catalog = { revision: 1, nodes: cloneNodes(DEFAULT_NODES) };
   policy = {
     revision: 1,
     positions: ["运营", "助理"],
-    delivery: { revision: 1, useSchedule: false, useLeave: false, remind: false, remindAt: "18:00" }
+    delivery: { revision: 1, useSchedule: false, useLeave: false, remind: false, remindAt: "18:00", operatorPersonId: 0 }
   };
   reports = new Map();
   images = new Map();
@@ -375,7 +390,8 @@ async function hydrateMysql() {
           useSchedule: Boolean(body.delivery?.useSchedule),
           useLeave: Boolean(body.delivery?.useLeave),
           remind: Boolean(body.delivery?.remind),
-          remindAt: String(body.delivery?.remindAt || "18:00")
+          remindAt: String(body.delivery?.remindAt || "18:00"),
+          operatorPersonId: Number(body.delivery?.operatorPersonId) || 0
         }
       };
     }
@@ -436,6 +452,7 @@ export async function readyDiary() {
   if (dbMode() === "mysql") {
     await ensureTables();
     await hydrateMysql();
+    await readyDing();
   }
   if (legacyCatalog(catalog.nodes)) {
     catalog = { revision: Number(catalog.revision || 1) + 1, nodes: cloneNodes(DEFAULT_NODES) };
@@ -470,23 +487,34 @@ function reportsByPersonOn(date) {
   return map;
 }
 
-export async function obligationBundle(date) {
+export async function obligationBundle(date, options = {}) {
   await readyDiary();
-  return { bundle: await orgBundle(), reportsByPerson: reportsByPersonOn(date) };
+  const bundle = await orgBundle();
+  const attendance = await loadAttendance({
+    date,
+    people: bundle.people,
+    useSchedule: policy.delivery.useSchedule,
+    useLeave: policy.delivery.useLeave,
+    operatorPersonId: Number(policy.delivery.operatorPersonId) || 0,
+    fresh: Boolean(options.fresh)
+  });
+  return { bundle, reportsByPerson: reportsByPersonOn(date), attendance };
 }
 
-export async function diaryObligation({ person, date, onRoster, templateFilled, templateLabels, bundle, reportsByPerson }) {
+export async function diaryObligation({ person, date, onRoster, templateFilled, templateLabels, bundle, reportsByPerson, attendance }) {
   await readyDiary();
   const packed = bundle || (await orgBundle());
-  const exempt = Boolean(rests.get(restKey(person.id, date)));
+  const manualRest = Boolean(rests.get(restKey(person.id, date)));
   const ownShops = shopsFor(person.id, date, packed.shops, packed.grants);
-  const shopRequired = !exempt && onRoster && positionRequired(person) && ownShops.length > 0;
-  const templateRequired = !exempt && onRoster;
   const mine = reportsByPerson
     ? reportsByPerson.get(Number(person.id)) || []
     : [...reports.values()].filter((row) => row.personId === Number(person.id) && row.date === date && row.shopKey !== PERSONAL);
   const shopDone = mine.some((row) => row.status === "已提交");
   const shopDraft = mine.some((row) => row.status === "草稿");
+  const mark = attendance && attendance.get ? attendance.get(Number(person.id)) : attendance || null;
+  let exempt = manualRest || Boolean(mark && mark.exempt);
+  let shopRequired = !exempt && onRoster && positionRequired(person) && ownShops.length > 0;
+  let templateRequired = !exempt && onRoster;
   let status = "自愿";
   if (exempt) {
     status = "免报";
@@ -495,9 +523,21 @@ export async function diaryObligation({ person, date, onRoster, templateFilled, 
     const shopOk = !shopRequired || shopDone;
     status = templateOk && shopOk ? "已报" : "未报";
   }
+  let note = shopRequired && !shopDone ? "店铺日报未交" : templateRequired && !templateFilled ? "部门事项未填" : "";
+  if (manualRest) {
+    note = "已登记休息";
+  } else if (mark && mark.exempt) {
+    note = mark.reason || "免报";
+  } else if (mark && mark.pending && status === "未报") {
+    status = "待核对";
+    note = mark.reason || "待核对钉钉考勤";
+  } else if (mark && mark.reason) {
+    note = note ? note + " · " + mark.reason : mark.reason;
+  }
   return {
     status,
-    exempt,
+    exempt: status === "免报",
+    manualRest,
     onRoster,
     shopRequired,
     templateRequired,
@@ -506,7 +546,7 @@ export async function diaryObligation({ person, date, onRoster, templateFilled, 
     shopCount: ownShops.length,
     submittedShops: mine.filter((row) => row.status === "已提交").length,
     sharedLabels: sharedLabels(templateLabels),
-    note: shopRequired && !shopDone ? "店铺日报未交" : templateRequired && !templateFilled ? "部门事项未填" : ""
+    note
   };
 }
 
@@ -918,13 +958,13 @@ export async function diaryDuty(user, queryInput, isAdmin) {
   if (!date) {
     return fail(400, "日期不合法");
   }
-  const bundle = await orgBundle();
+  const packed = await obligationBundle(date);
+  const bundle = packed.bundle;
   const me = bundle.people.find((person) => namesMatch(user, person));
   if (!me || !isLeader(me, isAdmin, bundle.people, bundle.shops, bundle.grants, date)) {
     return fail(403, "只有负责人可以看提交情况");
   }
   const roster = await rosterReader();
-  const reportsByPerson = reportsByPersonOn(date);
   const rows = [];
   for (const person of bundle.people) {
     const dept = roster.memberDept(person.id);
@@ -938,7 +978,8 @@ export async function diaryDuty(user, queryInput, isAdmin) {
       templateFilled: filled,
       templateLabels: labels,
       bundle,
-      reportsByPerson
+      reportsByPerson: packed.reportsByPerson,
+      attendance: packed.attendance
     });
     if (!onRoster && !obligation.shopRequired && obligation.status === "自愿" && !obligation.shopDraft && !obligation.shopDone) {
       continue;
@@ -956,6 +997,7 @@ export async function diaryDuty(user, queryInput, isAdmin) {
       diary: obligation.shopRequired ? (obligation.shopDone ? "已交" : obligation.shopDraft ? "草稿" : "未交") : obligation.shopDone ? "已交" : "不用",
       shops: obligation.submittedShops,
       shopCount: obligation.shopCount,
+      manualRest: obligation.manualRest,
       note: obligation.note
     });
   }
@@ -969,6 +1011,7 @@ export async function diaryDuty(user, queryInput, isAdmin) {
       done,
       miss: counted.length - done,
       exempt: rows.filter((row) => row.status === "免报").length,
+      pending: rows.filter((row) => row.status === "待核对").length,
       people: counted.length,
       shops: rows.reduce((sum, row) => sum + Number(row.shops || 0), 0)
     },
@@ -1028,12 +1071,147 @@ function cleanCatalog(input) {
   return { ok: true, nodes };
 }
 
+function bindRows(people, proposals) {
+  const proposed = new Map((proposals || []).map((row) => [Number(row.personId), row]));
+  return people
+    .filter((person) => person.status !== "离职")
+    .map((person) => {
+      const saved = confirmedBinds().find((row) => row.personId === Number(person.id));
+      const proposal = proposed.get(Number(person.id));
+      return {
+        personId: Number(person.id),
+        name: person.name,
+        employeeNo: person.employeeNo || "",
+        department: person.department || "",
+        userid: saved?.userid || "",
+        match: saved?.match || proposal?.match || "",
+        confirmed: Boolean(saved),
+        candidates: proposal?.candidates || []
+      };
+    });
+}
+
 export async function getDiarySettings(user, isAdmin) {
   await readyDiary();
   if (!isAdmin) {
     return fail(403, "只有罗成可以改日报设置");
   }
-  return { ok: true, catalog: publicCatalog(), policy: publicPolicy() };
+  const bundle = await orgBundle();
+  const flags = dingPublic();
+  const saved = confirmedBinds();
+  return {
+    ok: true,
+    catalog: publicCatalog(),
+    policy: {
+      ...publicPolicy(),
+      integration: {
+        ...flags,
+        bound: saved.length,
+        operator: saved.some((row) => row.personId === Number(policy.delivery.operatorPersonId))
+      }
+    },
+    binds: bindRows(bundle.people)
+  };
+}
+
+export async function syncDingBinds(user, isAdmin) {
+  await readyDiary();
+  if (!isAdmin) {
+    return fail(403, "只有罗成可以改日报设置");
+  }
+  if (!dingPublic().app) {
+    return fail(400, "钉钉企业应用未配置");
+  }
+  const bundle = await orgBundle();
+  let proposals = [];
+  try {
+    proposals = await syncBinds(bundle.people);
+  } catch (error) {
+    return fail(502, error.publicMessage || "钉钉接口失败");
+  }
+  const settings = await getDiarySettings(user, true);
+  settings.binds = bindRows(bundle.people, proposals);
+  return settings;
+}
+
+export async function saveDingBinds(user, input, isAdmin) {
+  await readyDiary();
+  if (!isAdmin) {
+    return fail(403, "只有罗成可以改日报设置");
+  }
+  const bundle = await orgBundle();
+  const known = new Set(bundle.people.map((person) => Number(person.id)));
+  const rows = (Array.isArray(input?.binds) ? input.binds : []).filter((row) => known.has(Number(row.personId)));
+  await saveBinds(rows.map((row) => ({ personId: row.personId, userid: row.userid, match: "人工" })));
+  return getDiarySettings(user, true);
+}
+
+export async function reminderTargets(date) {
+  await readyDiary();
+  const packed = await obligationBundle(date, { fresh: true });
+  const roster = await rosterReader();
+  const targets = [];
+  for (const person of packed.bundle.people) {
+    if (!roster.memberDept(person.id)) {
+      continue;
+    }
+    const obligation = await diaryObligation({
+      person,
+      date,
+      onRoster: true,
+      templateFilled: roster.templateFilled(person, date),
+      templateLabels: roster.templateLabels(person, date),
+      bundle: packed.bundle,
+      reportsByPerson: packed.reportsByPerson,
+      attendance: packed.attendance
+    });
+    const bind = confirmedBinds().find((row) => row.personId === Number(person.id));
+    if (obligation.status === "未报" && bind?.userid) {
+      targets.push({ personId: Number(person.id), userid: bind.userid });
+    }
+  }
+  return targets;
+}
+
+export async function runDiaryReminder(now = new Date()) {
+  await readyDiary();
+  const delivery = policy.delivery;
+  if (!delivery.remind || !dingPublic().app || !dingPublic().agent) {
+    return { sent: 0 };
+  }
+  const clock = shanghaiNow(now);
+  if (!inRemindWindow(delivery.remindAt, clock.hm)) {
+    return { sent: 0 };
+  }
+  const targets = await reminderTargets(clock.date);
+  let sent = 0;
+  for (const target of targets) {
+    const claimed = await claimReminder(target.personId, clock.date);
+    if (!claimed) {
+      continue;
+    }
+    try {
+      await sendWorkNotice(target.userid);
+      sent += 1;
+    } catch (error) {
+      await releaseReminder(target.personId, clock.date);
+      console.error("日报提醒未发出", error.publicMessage || "钉钉接口失败");
+    }
+  }
+  return { sent };
+}
+
+let reminderTimer = null;
+export function startDiaryReminder() {
+  if (reminderTimer) {
+    return;
+  }
+  reminderTimer = setInterval(() => {
+    runDiaryReminder().catch((error) => {
+      console.error("日报提醒未发出", error.publicMessage || error.message || "失败");
+    });
+  }, 30000);
+  reminderTimer.unref?.();
 }
 
 export async function saveDiarySettings(user, input, isAdmin) {
@@ -1058,7 +1236,8 @@ export async function saveDiarySettings(user, input, isAdmin) {
       useSchedule: Boolean(input.delivery.useSchedule),
       useLeave: Boolean(input.delivery.useLeave),
       remind: Boolean(input.delivery.remind),
-      remindAt
+      remindAt,
+      operatorPersonId: Number(input.delivery.operatorPersonId) || 0
     };
     policy.revision += 1;
   }

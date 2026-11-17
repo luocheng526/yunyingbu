@@ -589,7 +589,8 @@ async function applyDayStatus(row, person, date, ctx) {
     templateFilled: row.templateFilled,
     templateLabels: row.items.map((item) => item.label),
     bundle: ctx && ctx.bundle,
-    reportsByPerson: ctx && ctx.reportsByPerson
+    reportsByPerson: ctx && ctx.reportsByPerson,
+    attendance: ctx && ctx.attendance
   });
   row.submitted = obligation.status === "已报";
   row.status = obligation.status;
