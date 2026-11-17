@@ -794,6 +794,9 @@ export function packJingmaiShops(view, org) {
     .filter((shop) => shop && shop.enabled !== false && shop.shop)
     .map((shop) => {
       const meta = byName.get(shop.shop) || {};
+      const savedAccount = Boolean(meta.login && meta.password);
+      const sessionMissing = shop.online !== true && shop.offline !== true && shop.loginExpired !== true && !shop.capturedAt;
+      const offline = shop.offline === true || (savedAccount && sessionMissing);
       return {
         shopName: shop.shop,
         source: teamSource(meta.team, meta.manager),
@@ -802,8 +805,8 @@ export function packJingmaiShops(view, org) {
         paidDeal: asNum(shop.paidDeal),
         roi: asNum(shop.paidRoi),
         online: shop.online === true,
-        offline: shop.offline === true,
-        offlineReason: shop.offlineReason || "",
+        offline: offline,
+        offlineReason: shop.offlineReason || (savedAccount && sessionMissing ? "组织中心有账号，京麦会话还没有" : ""),
         loginExpired: shop.loginExpired === true,
         capturedAt: shop.capturedAt || "",
         platformUpdatedAt: shop.platformUpdatedAt || ""

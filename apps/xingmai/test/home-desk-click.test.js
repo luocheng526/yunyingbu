@@ -97,7 +97,9 @@ test("a sample older than fifteen minutes is offline the way the paid center is"
   const packed = packJingmaiShops(view, [{ store: "未登录店", enabled: true, login: "a", password: "b" }]);
   assert.equal(packed.records.find((row) => row.shopName === "已登录店").offline, true);
   assert.equal(packed.records.find((row) => row.shopName === "未登录店").loginExpired, false);
-  assert.equal(packed.records.find((row) => row.shopName === "未登录店").offline, false);
+  assert.equal(packed.records.find((row) => row.shopName === "未登录店").offline, true);
+  const bare = packJingmaiShops(view, [{ store: "没账号店", enabled: true }]);
+  assert.equal(bare.records.find((row) => row.shopName === "没账号店").offline, false);
   assert.equal(packed.summary.liveAmount, null);
 });
 
