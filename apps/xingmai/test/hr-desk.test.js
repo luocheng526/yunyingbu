@@ -4,8 +4,8 @@ import test from "node:test";
 import { createApp } from "../src/app.js";
 import { addUserForTests, resetStoreForTests } from "../src/modules/profile/auth.js";
 import { navMarkup } from "../src/modules/home/nav-items.js";
-import { resetPeopleStore } from "../src/modules/people/store.js";
-import { resetWorkStore, saveMembers } from "../src/modules/work/store.js";
+import { createPerson, resetPeopleStore } from "../src/modules/people/store.js";
+import { hrDeskFromOrg, resetWorkStore, saveMembers } from "../src/modules/work/store.js";
 
 const luocheng = { username: "罗成", displayName: "罗成" };
 
@@ -145,4 +145,122 @@ test("罗成全菜单不受人事台影响", () => {
   assert.match(html, />智能人事</);
   assert.match(html, />工作汇报</);
   assert.match(html, />个人中心</);
+});
+
+test("组织中心人事和技术部门 board 的人进人事台，下属也进", () => {
+  const people = [
+    { id: 3, name: "罗成", username: "罗成", board: "ops", department: "人员管理", managerId: null },
+    {
+      id: 62,
+      name: "张璇",
+      username: "张璇",
+      board: "hrTech",
+      department: "其他",
+      center: "其他",
+      role: "主管",
+      managerId: 3
+    },
+    {
+      id: 80,
+      name: "人事新人",
+      username: "人事新人",
+      board: "ops",
+      department: "其他",
+      center: "其他",
+      role: "助理",
+      managerId: 62
+    },
+    {
+      id: 4,
+      name: "张文静",
+      username: "张文静",
+      board: "ops",
+      department: "沈子晗运营中心",
+      center: "沈子晗运营中心",
+      role: "运营",
+      managerId: 1
+    },
+    {
+      id: 90,
+      name: "郝晨淼",
+      username: "郝晨淼",
+      board: "backend",
+      department: "其他",
+      center: "其他",
+      role: "主管",
+      managerId: 3
+    }
+  ];
+  assert.equal(hrDeskFromOrg({ username: "张璇", displayName: "张璇" }, people), "hr");
+  assert.equal(hrDeskFromOrg({ username: "人事新人" }, people), "hr");
+  assert.equal(hrDeskFromOrg({ username: "张文静" }, people), "");
+  assert.equal(hrDeskFromOrg({ username: "郝晨淼" }, people), "");
+  assert.equal(hrDeskFromOrg({ username: "罗成" }, people), "");
+  assert.equal(hrDeskFromOrg({ username: "韩梦凯" }, people), "");
+  assert.equal(hrDeskFromOrg({ username: "沈子晗" }, people), "");
+});
+
+test("组织中心花名册写人事部门的账号登录只进智能人事", async () => {
+  resetStoreForTests();
+  resetPeopleStore();
+  resetWorkStore();
+  const made = await createPerson({
+    name: "李栖彤",
+    role: "主管",
+    center: "其他",
+    department: "人事部门"
+  });
+  assert.equal(made.ok, true);
+  addUserForTests({ username: "李栖彤", displayName: "李栖彤", password: "ChangeMe123!" });
+
+  const app = createApp();
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, "127.0.0.1", () => resolve(s));
+  });
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  try {
+    const hr = await login(base, "李栖彤");
+    assert.equal(hr.status, 200);
+    assert.equal(hr.data.user.desk, "hr");
+    assert.equal(hr.data.user.home, "/hr");
+
+    const bounced = await fetch(`${base}/data/overview`, { headers: { cookie: hr.cookie }, redirect: "manual" });
+    assert.equal(bounced.status, 302);
+    assert.equal(bounced.headers.get("location"), "/hr");
+
+    const page = await fetch(`${base}/hr`, { headers: { cookie: hr.cookie } });
+    const body = await page.text();
+    assert.equal(page.status, 200);
+    assert.match(body, />智能人事</);
+    assert.match(body, />个人中心</);
+    assert.doesNotMatch(body, />首页</);
+    assert.doesNotMatch(body, />星脉数据中心</);
+    assert.doesNotMatch(body, />边界数据中心</);
+    assert.doesNotMatch(body, />工作汇报</);
+    assert.doesNotMatch(body, />组织中心</);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("沈子晗中心运营账号不进人事台", async () => {
+  resetStoreForTests();
+  resetPeopleStore();
+  resetWorkStore();
+  addUserForTests({ username: "张文静", displayName: "张文静", password: "ChangeMe123!" });
+
+  const app = createApp();
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, "127.0.0.1", () => resolve(s));
+  });
+  const { port } = server.address();
+  try {
+    const ops = await login(`http://127.0.0.1:${port}`, "张文静");
+    assert.equal(ops.status, 200);
+    assert.equal(ops.data.user.desk, "");
+    assert.equal(ops.data.user.home, "/data");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });

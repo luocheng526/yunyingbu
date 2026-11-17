@@ -197,22 +197,50 @@ async function readyStore() {
   ready = true;
 }
 
-async function orgPeople() {
-  const list = await listPeople();
-  let usernameById = new Map();
-  if (dbMode() === "mysql") {
+async function loadOrgExtra() {
+  if (dbMode() !== "mysql") {
+    return new Map();
+  }
+  const tries = [
+    "SELECT id, username, board, manager_id FROM people",
+    "SELECT id, username, board FROM people",
+    "SELECT id, username FROM people"
+  ];
+  for (const sql of tries) {
     try {
-      const [rows] = await query("SELECT id, username FROM people");
-      usernameById = new Map(rows.map((row) => [Number(row.id), String(row.username || "").trim()]));
+      const [rows] = await query(sql);
+      return new Map(
+        rows.map((row) => [
+          Number(row.id),
+          {
+            username: String(row.username || "").trim(),
+            board: String(row.board || "").trim(),
+            managerId: row.manager_id == null || row.manager_id === "" ? null : Number(row.manager_id)
+          }
+        ])
+      );
     } catch {
-      usernameById = new Map();
+      // 线上组织中心表有 board，本地演示表可能没有。
     }
   }
+  return new Map();
+}
+
+async function orgPeople() {
+  const list = await listPeople();
+  const extraById = await loadOrgExtra();
   return list.map((person) => {
+    const extra = extraById.get(Number(person.id)) || {};
     const username =
-      usernameById.get(Number(person.id)) ||
+      extra.username ||
       person.username ||
       (person.employeeNo === "XM001" || person.center === "人员管理" ? "罗成" : "");
+    const managerId =
+      extra.managerId != null
+        ? extra.managerId
+        : person.managerId == null || person.managerId === ""
+          ? null
+          : Number(person.managerId);
     return {
       id: Number(person.id),
       name: String(person.name || ""),
@@ -221,6 +249,8 @@ async function orgPeople() {
       department: String(person.department || ""),
       employeeNo: String(person.employeeNo || ""),
       managerName: String(person.managerName || ""),
+      managerId,
+      board: String(extra.board || person.board || ""),
       status: String(person.status || ""),
       username,
       visibleShops: Array.isArray(person.visibleShops) ? person.visibleShops.map((item) => String(item)) : [],
@@ -246,10 +276,65 @@ function textLooksHr(value) {
   if (!text || text.includes("人员管理")) {
     return false;
   }
-  if (text === "人事" || text.includes("人事部")) {
+  const lower = text.toLowerCase();
+  if (lower === "hrtech" || lower === "hr") {
+    return true;
+  }
+  if (text === "人事" || text.includes("人事部") || text.includes("人事部门") || text.includes("人事和技术")) {
     return true;
   }
   return /人事(专员|主管|经理|总监)$/.test(text);
+}
+
+function textLooksTech(value) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return false;
+  }
+  const lower = text.toLowerCase();
+  return lower === "backend" || text === "技术" || text.includes("技术部");
+}
+
+export function personLooksHr(person) {
+  if (!person) {
+    return false;
+  }
+  const board = String(person.board || "").trim().toLowerCase();
+  if (board === "hrtech") {
+    return ![person.department, person.center, person.role].some(textLooksTech);
+  }
+  return [person.department, person.center, person.role, person.board].some(textLooksHr);
+}
+
+function underHrOrg(me, people) {
+  if (!me) {
+    return false;
+  }
+  if (personLooksHr(me)) {
+    return true;
+  }
+  const byId = new Map((Array.isArray(people) ? people : []).map((person) => [Number(person.id), person]));
+  const seen = new Set([Number(me.id)]);
+  let cur = me;
+  for (let i = 0; i < 16; i += 1) {
+    const mid = Number(cur.managerId);
+    if (!Number.isFinite(mid) || seen.has(mid)) {
+      break;
+    }
+    seen.add(mid);
+    const boss = byId.get(mid);
+    if (!boss) {
+      break;
+    }
+    if (isStaffBrain(boss)) {
+      break;
+    }
+    if (personLooksHr(boss)) {
+      return true;
+    }
+    cur = boss;
+  }
+  return false;
 }
 
 function isStaffBrain(user) {
@@ -259,33 +344,47 @@ function isStaffBrain(user) {
   });
 }
 
+function matchOrgPerson(user, people) {
+  const aliases = namesOf(user);
+  return (
+    (Array.isArray(people) ? people : []).find(
+      (person) => aliases.includes(String(person.username || "")) || aliases.includes(String(person.name || ""))
+    ) || null
+  );
+}
+
+export function hrDeskFromOrg(user, people, memberMap) {
+  if (!user || isStaffBrain(user)) {
+    return "";
+  }
+  const list = Array.isArray(people) ? people : [];
+  const me = matchOrgPerson(user, list);
+  const codes = memberMap instanceof Map ? memberMap : new Map();
+  if (me && (codes.get(Number(me.id)) || "") === "hr") {
+    return "hr";
+  }
+  if (underHrOrg(me, list)) {
+    return "hr";
+  }
+  if (
+    personLooksHr({
+      board: user.board,
+      department: user.department,
+      center: user.center,
+      role: user.role
+    })
+  ) {
+    return "hr";
+  }
+  return "";
+}
+
 export async function deskOf(user) {
   if (!user || isStaffBrain(user)) {
     return "";
   }
   await readyStore();
-  const me = await matchPerson(user);
-  const code = me ? members.get(Number(me.id)) || "" : "";
-  if (code === "hr") {
-    return "hr";
-  }
-  const bag = [
-    user.department,
-    user.center,
-    user.role,
-    user.username,
-    user.displayName,
-    user.name,
-    me && me.department,
-    me && me.center,
-    me && me.role,
-    me && me.name,
-    me && me.username
-  ];
-  if (bag.some(textLooksHr)) {
-    return "hr";
-  }
-  return "";
+  return hrDeskFromOrg(user, await orgPeople(), members);
 }
 
 function parseDate(raw) {
