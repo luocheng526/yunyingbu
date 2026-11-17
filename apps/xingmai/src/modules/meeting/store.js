@@ -3,12 +3,13 @@ import { dbMode, query } from "../profile/auth.js";
 const MONTH_RE = /^\d{4}-\d{2}$/;
 const KPI_KEYS = ["hours", "rank", "profit", "new", "star"];
 const KPI_META = {
-  hours: { label: "奋斗时长", hint: "本月合计", unit: "h", placeholder: "小时" },
-  rank: { label: "奋斗排名", hint: "第一名", unit: "", placeholder: "姓名" },
-  profit: { label: "BI利润", hint: "本月", unit: "", placeholder: "金额" },
+  hours: { label: "奋斗时长", hint: "本月合计", unit: "小时", placeholder: "小时" },
+  rank: { label: "奋斗排名", hint: "本月冠军", unit: "", placeholder: "第 1 名" },
+  profit: { label: "BI利润", hint: "本月合计", unit: "", placeholder: "金额" },
   new: { label: "新人介绍", hint: "本月入职", unit: "人", placeholder: "人数" },
   star: { label: "优秀员工", hint: "本月表彰", unit: "人", placeholder: "人数" }
 };
+const SECTIONS = ["ranks", "intros", "levels", "goals", "stars"];
 
 let ready = false;
 const boards = new Map();
@@ -53,11 +54,44 @@ function cloneKpis(list) {
         hint: KPI_META[key].hint,
         unit: KPI_META[key].unit,
         placeholder: KPI_META[key].placeholder,
-        value: text(item.value)
+        value: text(item.value),
+        delta: text(item.delta)
       });
     }
   });
-  return KPI_KEYS.map((key) => byKey.get(key) || { key, value: "", ...KPI_META[key] });
+  return KPI_KEYS.map((key) => byKey.get(key) || { key, value: "", delta: "", ...KPI_META[key] });
+}
+
+function sectionCount(board) {
+  return SECTIONS.filter((key) => board[key].length).length;
+}
+
+function monthEnd(month) {
+  const [year, monthNum] = month.split("-").map(Number);
+  const last = new Date(Date.UTC(year, monthNum, 0)).getUTCDate();
+  return `${month}-${String(last).padStart(2, "0")}`;
+}
+
+export function listMonths() {
+  const keys = new Set(boards.keys());
+  keys.add(currentMonth());
+  return [...keys]
+    .filter((month) => MONTH_RE.test(month))
+    .sort()
+    .reverse()
+    .map((month) => {
+      const board = boards.get(month) || blankBoard(month);
+      const sections = sectionCount(board);
+      const any = sections > 0 || board.kpis.some((item) => item.value);
+      const current = month === currentMonth();
+      return {
+        month,
+        current,
+        end: monthEnd(month),
+        state: !any ? "未填写" : current ? "已录入" : "已完成",
+        note: sections === SECTIONS.length ? "记录完整" : any ? "待补充" : "未填写"
+      };
+    });
 }
 
 function cloneRows(list, fields) {
@@ -149,7 +183,7 @@ export async function getBoard(user, month) {
   await readyStore();
   const key = MONTH_RE.test(String(month || "")) ? String(month) : currentMonth();
   const board = boards.get(key) || blankBoard(key);
-  return { ok: true, admin: isMeetingAdmin(user), board };
+  return { ok: true, admin: isMeetingAdmin(user), board, months: listMonths() };
 }
 
 export async function saveBoard(user, body) {
@@ -173,5 +207,5 @@ export async function saveBoard(user, body) {
       [month, JSON.stringify(board), nowStamp()]
     );
   }
-  return { ok: true, admin: true, board };
+  return { ok: true, admin: true, board, months: listMonths() };
 }
