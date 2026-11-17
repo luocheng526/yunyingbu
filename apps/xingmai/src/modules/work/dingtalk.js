@@ -781,20 +781,51 @@ export async function sendTaskNotice(userid, title, markdown, url, button = "去
   }
 }
 
+function maskId(value) {
+  const text = String(value || "");
+  if (text.length < 10) {
+    return text ? "已配置" : "";
+  }
+  return `${text.slice(0, 6)}…${text.slice(-4)}`;
+}
+
+async function innerAppBrief() {
+  try {
+    const token = await accessToken();
+    const res = await transport("https://api.dingtalk.com/v1.0/microApp/allInnerApps", {
+      headers: { "x-acs-dingtalk-access-token": token },
+      signal: AbortSignal.timeout(8000)
+    });
+    const data = await res.json();
+    return appRows(data.result || data).map((app) => ({
+      name: String(app.name || app.appName || ""),
+      agentId: String(app.agentId || app.agentid || ""),
+      status: app.appStatus ?? ""
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function popupTo(userid) {
   if (!userid) {
     return { ok: false, statusCode: 400, error: "当前账号还没有钉钉" };
   }
+  const meta = { appKey: maskId(dingConfig().clientId), agentId: currentAgentId() };
   try {
-    const channel = await sendTaskNotice(
-      userid,
-      "工作汇报",
-      "右下角弹窗测试。请看电脑右下角，点「去处理」打开工作汇报。",
-      workLink("todo")
-    );
-    return { ok: true, channel, error: channel === "work" ? lastPopup.error : "" };
+    await sendRobotCard(userid, "工作汇报", "右下角弹窗测试。请看电脑右下角，点「去处理」打开工作汇报。", workLink("todo"), "去处理");
+    lastPopup = { channel: "robot", error: "" };
+    return { ok: true, channel: "robot", error: "", ...meta };
   } catch (error) {
-    return { ok: false, statusCode: 502, error: lastPopup.error || error.publicMessage || "没有发出", channel: "work" };
+    const apps = await innerAppBrief();
+    const names = apps.map((app) => `${app.name || "未命名"}#${app.agentId || "?"}`).join("，");
+    return {
+      ok: false,
+      statusCode: 502,
+      channel: "",
+      error: `${error.publicMessage || "机器人消息没有发出"} 当前 Client ID ${meta.appKey}，AgentId ${meta.agentId}。企业内部应用：${names || "没有读到"}`,
+      ...meta
+    };
   }
 }
 
