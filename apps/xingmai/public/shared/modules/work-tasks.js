@@ -11,6 +11,24 @@
       .replace(/"/g, "&quot;");
   }
 
+  function xm() {
+    return window.XmUI;
+  }
+
+  function uiButton(label, attrs, options) {
+    var item = { label: label, size: "small", type: "button" };
+    if (options) Object.keys(options).forEach(function (key) { item[key] = options[key]; });
+    var html = xm().button(item);
+    return attrs ? html.replace("<button ", "<button " + attrs + " ") : html;
+  }
+
+  function statusTone(status) {
+    if (status === "已完成") return "success";
+    if (status === "已退回") return "danger";
+    if (status === "待检查" || status === "进行中") return "warning";
+    return "blue";
+  }
+
   function ensureStyle() {
     if (document.getElementById("work-task-style")) return;
     var style = document.createElement("style");
@@ -53,7 +71,7 @@
     var items = [];
     var ctx = { me: "", people: [], today: "" };
     var formKey = "";
-    host.innerHTML = '<div class="work-empty">正在读取任务…</div>';
+    host.innerHTML = xm().EmptyState({ title: "正在读取任务" });
 
     function name(id) {
       var hit = ctx.people.find(function (person) { return person.id === id; });
@@ -81,20 +99,26 @@
       if (!host.isConnected) return;
       var now = Date.now();
       var nav = queue === "publish" ? ["发布任务", "已发布任务"] : queue === "review" ? ["待检查", "已处理"] : ["全部任务", "已逾期", "待执行", "进行中", "待检查", "已退回", "已完成"];
-      var chips = nav.map(function (item) {
-        var count = items.filter(function (task) { return matches(task, item, now); }).length;
-        var showCount = queue === "mine" && item !== "全部任务" && item !== "已完成" || (queue === "review" && item === "待检查");
-        return '<button type="button" class="work-chip' + (item === mode ? " is-on" : "") + '" data-task-tab="' + esc(item) + '">' + esc(item) + (showCount ? " " + count : "") + "</button>";
-      }).join("");
+      var chips = xm().FilterToolbar({
+        tabs: nav.map(function (item) {
+          var count = items.filter(function (task) { return matches(task, item, now); }).length;
+          var showCount = queue === "mine" && item !== "全部任务" && item !== "已完成" || (queue === "review" && item === "待检查");
+          return { label: item + (showCount ? " " + count : ""), value: item, active: item === mode };
+        }),
+        search: false
+      }).replace(/data-xm-ui-tab="([^"]*)"/g, 'data-xm-ui-tab="$1" data-task-tab="$1"');
       var body = mode === "发布任务" ? compose() : list(now);
       var priority = "";
       if (queue === "mine") {
         var urgent = items.filter(function (task) { return task.status === "已退回" || task.status === "待检查"; });
-        priority = '<aside class="work-card"><h2>优先跟进</h2>' + (urgent.length ? urgent.map(function (task) {
-          return '<button type="button" class="work-link" data-task-open="' + esc(task.id) + '">' + esc(task.status) + " " + esc(task.title) + "</button>";
-        }).join("") : '<p class="work-lead">暂无已退回或待检查的任务</p>') + "</aside>";
+        priority = xm().ContentCard({
+          title: "优先跟进",
+          content: urgent.length ? urgent.map(function (task) {
+            return uiButton(task.status + " " + task.title, 'data-task-open="' + esc(task.id) + '"', { variant: "secondary" });
+          }).join(" ") : xm().EmptyState({ title: "暂无已退回或待检查的任务" })
+        });
       }
-      host.innerHTML = '<div class="wt-nav">' + chips + '</div><p class="work-msg" data-task-msg></p>' + (priority ? '<div class="wt-layout">' + body + priority + "</div>" : body);
+      host.innerHTML = chips + '<p class="work-msg" data-task-msg></p>' + (priority ? '<div class="wt-layout">' + body + priority + "</div>" : body);
     }
 
     function compose() {
@@ -102,7 +126,10 @@
       var nowDate = new Date();
       var pad = function (n) { return String(n).padStart(2, "0"); };
       var start = nowDate.getFullYear() + "-" + pad(nowDate.getMonth() + 1) + "-" + pad(nowDate.getDate()) + "T" + pad(nowDate.getHours()) + ":" + pad(nowDate.getMinutes());
-      return '<form data-task-form="publish" class="work-card"><h2>发布任务</h2><div class="wt-grid"><label class="work-field">任务标题<input name="title" required maxlength="200" placeholder="请输入任务标题"></label><label class="work-field">执行人<select name="assignee">' + options("") + '</select></label><label class="work-field">检查人<select name="reviewer">' + options("") + '</select></label><label class="work-field">计划开始<input name="start_at" type="datetime-local" required value="' + esc(start) + '"></label><label class="work-field">截止时间<input name="due_at" type="datetime-local" required value="' + esc(ctx.today) + 'T23:59"></label></div><label class="work-field">任务说明<textarea name="description" maxlength="4000"></textarea></label><label class="work-field">完成要求<textarea name="criteria" maxlength="2000"></textarea></label><label class="work-field">任务附件<input name="files" type="file" multiple><span>最多 3 个文件，合计 3 MB</span></label><button type="submit" class="work-primary">发布任务</button></form>';
+      return '<form data-task-form="publish">' + xm().ContentCard({
+        title: "发布任务",
+        content: '<div class="wt-grid"><label class="work-field">任务标题<input name="title" required maxlength="200" placeholder="请输入任务标题"></label><label class="work-field">执行人<select name="assignee">' + options("") + '</select></label><label class="work-field">检查人<select name="reviewer">' + options("") + '</select></label><label class="work-field">计划开始<input name="start_at" type="datetime-local" required value="' + esc(start) + '"></label><label class="work-field">截止时间<input name="due_at" type="datetime-local" required value="' + esc(ctx.today) + 'T23:59"></label></div><label class="work-field">任务说明<textarea name="description" maxlength="4000"></textarea></label><label class="work-field">完成要求<textarea name="criteria" maxlength="2000"></textarea></label><label class="work-field">任务附件<input name="files" type="file" multiple><span>最多 3 个文件，合计 3 MB</span></label>' + uiButton("发布任务", "", { type: "submit" })
+      }) + "</form>";
     }
 
     function list(now) {
@@ -111,11 +138,31 @@
         var blob = [task.title, name(task.assignee), name(task.reviewer)].join(" ");
         return !filter || blob.indexOf(filter) >= 0;
       });
-      var rows = shown.map(function (task) {
-        var late = overdue(task, now) ? ' <span class="wt-overdue">已逾期</span>' : "";
-        return "<tr><td>" + esc(task.title) + "</td><td>" + esc(name(task.assignee)) + "</td><td>" + esc(name(task.reviewer)) + "</td><td>" + stamp(task.due_at) + late + '</td><td><span class="wt-badge" data-status="' + esc(task.status) + '">' + esc(task.status) + '</span></td><td><button type="button" class="work-mini" data-task-open="' + esc(task.id) + '">查看任务</button></td></tr>';
-      }).join("");
-      return '<section class="work-card"><div class="work-cardhead"><h2>' + (queue === "review" ? "检查清单" : "任务清单") + '</h2><label class="work-search">找任务<input data-task-q value="' + esc(filter) + '" placeholder="搜索任务标题或人员"></label></div><div class="work-table-wrap"><table class="work-table"><thead><tr><th>任务标题</th><th>执行人</th><th>检查人</th><th>截止时间</th><th>状态</th><th>操作</th></tr></thead><tbody>' + (rows || '<tr><td colspan="6" class="work-empty">暂无记录</td></tr>') + "</tbody></table></div></section>";
+      var table = shown.length ? xm().DataTable({
+        columns: [
+          { key: "title", label: "任务标题" },
+          { key: "assigneeName", label: "执行人" },
+          { key: "reviewerName", label: "检查人" },
+          { key: "due", label: "截止时间", render: function (value, row) { return value + (row.late ? ' <span class="wt-overdue">已逾期</span>' : ""); } },
+          { key: "status", label: "状态", render: function (value) { return xm().StatusBadge({ label: value, tone: statusTone(value) }); } },
+          { key: "id", label: "操作", render: function (value) { return uiButton("查看任务", 'data-task-open="' + esc(value) + '"', { variant: "secondary" }); } }
+        ],
+        rows: shown.map(function (task) {
+          return {
+            id: task.id,
+            title: task.title,
+            assigneeName: name(task.assignee),
+            reviewerName: name(task.reviewer),
+            due: stamp(task.due_at),
+            late: overdue(task, now),
+            status: task.status
+          };
+        })
+      }) : xm().EmptyState({ title: "暂无记录" });
+      return xm().ContentCard({
+        title: queue === "review" ? "检查清单" : "任务清单",
+        content: '<label class="work-field">找任务<input data-task-q value="' + esc(filter) + '" placeholder="搜索任务标题或人员"></label>' + table
+      });
     }
 
     function say(text, error) {
@@ -155,11 +202,11 @@
       if (task.assignee === ctx.me && ["待执行", "进行中", "已退回"].indexOf(task.status) >= 0) actions.push("submit");
       if (task.reviewer === ctx.me && task.status === "待检查") actions.push("approve", "return");
       var files = (task.files || []).map(function (file) {
-        return '<button type="button" class="work-mini" data-task-file="' + esc(file.id) + '">' + esc(file.name) + "</button>";
+        return uiButton(file.name || "附件", 'data-task-file="' + esc(file.id) + '"', { variant: "secondary" });
       }).join(" ");
       var log = (task.events || []).map(function (event) {
         var eventFiles = (event.files || []).map(function (file) {
-          return '<button type="button" class="work-mini" data-task-file="' + esc(file.id) + '">' + esc(file.name) + "</button>";
+          return uiButton(file.name || "附件", 'data-task-file="' + esc(file.id) + '"', { variant: "secondary" });
         }).join(" ");
         return "<li><strong>" + esc(event.action) + "</strong> · " + esc(name(event.actor)) + " <small>" + stamp(event.at) + "</small>" + (event.note ? "<p>" + esc(event.note) + "</p>" : "") + eventFiles + "</li>";
       }).join("");
@@ -167,12 +214,15 @@
         ? '<label class="work-field">' + (actions.indexOf("submit") >= 0 ? "执行结果" : "检查意见") + '<textarea name="note" maxlength="2000"></textarea></label>' +
           (actions.indexOf("submit") >= 0 ? '<label class="work-field">执行结果附件<input name="files" type="file" multiple></label>' : "") +
           '<div class="wt-actions">' + actions.map(function (action) {
-            return '<button type="button" class="' + (action === "return" ? "work-mini" : "work-primary") + '" data-task-do="' + action + '">' + labels[action] + "</button>";
+            return uiButton(labels[action], 'data-task-do="' + action + '"', action === "return" ? { variant: "secondary" } : {});
           }).join("") + "</div>"
         : "";
       var old = host.querySelector(".work-modal");
       if (old) old.remove();
-      host.insertAdjacentHTML("beforeend", '<div class="work-modal"><div class="work-dialog"><div class="work-dialog-head"><h2>' + esc(task.title) + '</h2><button type="button" class="work-mini" data-task-close>关闭</button></div><span class="wt-badge" data-status="' + esc(task.status) + '">' + esc(task.status) + "</span><p>执行人 " + esc(name(task.assignee)) + "　检查人 " + esc(name(task.reviewer)) + "</p><p>计划 " + stamp(task.start_at) + " 至 " + stamp(task.due_at) + "</p><h3>任务说明</h3><p>" + esc(task.description || "—") + "</p><h3>完成要求</h3><p>" + esc(task.criteria || "—") + "</p>" + files + '<ol class="wt-log">' + log + "</ol>" + tools + "</div></div>");
+      host.insertAdjacentHTML("beforeend", '<div class="work-modal"><div class="work-dialog">' + xm().ContentCard({
+        title: task.title,
+        content: xm().StatusBadge({ label: task.status, tone: statusTone(task.status) }) + "<p>执行人 " + esc(name(task.assignee)) + "　检查人 " + esc(name(task.reviewer)) + "</p><p>计划 " + stamp(task.start_at) + " 至 " + stamp(task.due_at) + "</p><h3>任务说明</h3><p>" + esc(task.description || "—") + "</p><h3>完成要求</h3><p>" + esc(task.criteria || "—") + "</p>" + files + '<ol class="wt-log">' + log + "</ol>" + tools + uiButton("关闭", "data-task-close", { variant: "secondary" })
+      }) + "</div></div>");
       var box = host.querySelector(".work-modal");
       box.addEventListener("click", function (event) {
         if (event.target === box || event.target.closest("[data-task-close]")) box.remove();
@@ -284,14 +334,14 @@
     api("tasks/context").then(function (data) {
       ctx = data;
       if (!ctx.me) {
-        host.innerHTML = '<div class="work-card"><div class="work-empty">对不上组织中心的人，还不能收发任务。</div></div>';
+        host.innerHTML = xm().ContentCard({ title: "任务", content: xm().EmptyState({ title: "对不上组织中心的人，还不能收发任务。" }) });
         return;
       }
       return reload().then(function () {
         if (openId) openTask(openId);
       });
     }).catch(function (err) {
-      host.innerHTML = '<div class="work-card"><div class="work-empty">' + esc(err.message) + "</div></div>";
+      host.innerHTML = xm().ContentCard({ title: "任务", content: xm().EmptyState({ title: err.message || "读取失败" }) });
     });
   }
 

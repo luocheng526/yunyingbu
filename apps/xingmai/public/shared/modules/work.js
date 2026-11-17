@@ -46,9 +46,58 @@
    .replace(/"/g, "&quot;");
  }
 
+ function xm() {
+  return window.XmUI;
+ }
+
+ function uiButton(label, attrs, options) {
+  var item = { label: label, size: "small", type: "button" };
+  if (options) {
+   Object.keys(options).forEach(function (key) {
+    item[key] = options[key];
+   });
+  }
+  var html = xm().button(item);
+  return attrs ? html.replace("<button ", "<button " + attrs + " ") : html;
+ }
+
+ function uiCard(title, content, description) {
+  return xm().ContentCard({ title: title || "", description: description || "", content: content || "" });
+ }
+
+ function uiEmpty(title, description) {
+  return xm().EmptyState({ title: title || "暂无数据", description: description || "" });
+ }
+
+ function uiBadge(label, tone) {
+  return xm().StatusBadge({ label: label, tone: tone || "neutral" });
+ }
+
+ function statusTone(status) {
+  if (status === "已报" || status === "已完成" || status === "已提交" || status === "已交") return "success";
+  if (status === "未报" || status === "已退回") return "danger";
+  if (status === "待检查" || status === "待核对" || status === "进行中") return "warning";
+  if (status === "免报" || status === "自愿" || status === "自愿填报") return "purple";
+  return "blue";
+ }
+
+ function uiTab(id, label, active, extra) {
+  var token = id === "" || id == null ? "all" : String(id);
+  var bar = xm().FilterToolbar({
+   tabs: [{ label: label, value: token, active: Boolean(active) }],
+   search: false
+  });
+  var button = (bar.match(/<button class="xm-ui-tab[\s\S]*?<\/button>/) || [""])[0];
+  return button.replace('data-xm-ui-tab="' + token + '"', 'data-xm-ui-tab="' + esc(token) + '" ' + (extra || ""));
+ }
+
+ function uiTabs(buttons) {
+  return '<div class="xm-ui-filter-toolbar"><div class="xm-ui-tabs" role="tablist">' + buttons + "</div></div>";
+ }
+
  function ensureStyle() {
   var style = document.getElementById("work-page-style");
-  if (style && style.getAttribute("data-rev") === "skin2") {
+  if (style && style.getAttribute("data-rev") === "xmui1") {
    return;
   }
   if (!style) {
@@ -56,14 +105,9 @@
    style.id = "work-page-style";
    document.head.appendChild(style);
   }
-  style.setAttribute("data-rev", "skin2");
+  style.setAttribute("data-rev", "xmui1");
   style.textContent =
-   ".work-page{--m:var(--xm-muted);--i:var(--xm-ink);--c:var(--xm-card);--p:var(--xm-primary);--l:var(--xm-line);color:var(--i);font-size:13px;}.work-page h1{margin:0;font-size:18px;font-weight:650;}.work-lead{margin:4px 0 0;color:var(--m);font-size:12px;}.work-page h2{margin:0 0 6px;padding:0;font-size:13px;font-weight:650;}.work-page h3{margin:0 0 6px;font-size:13px;font-weight:650;}.work-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;}.work-tab{position:relative;appearance:none;border:0;border-radius:10px;background:transparent;color:#5c6b82;font:inherit;font-size:13px;padding:8px 14px;cursor:pointer;white-space:nowrap;}.work-dot{position:absolute;top:-7px;right:-8px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#e23b3b;color:#fff;font-size:11px;line-height:16px;font-weight:700;font-style:normal;text-align:center;}.work-tab[aria-selected='true']{color:#fff;font-weight:650;background:#2f6bff;}.work-panel{display:flex;flex-direction:column;gap:8px;}.work-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;}.work-kpi{border:0;border-radius:12px;min-height:92px;padding:14px 14px 12px;color:#fff;display:flex;flex-direction:column;justify-content:flex-end;}button.work-kpi{appearance:none;width:100%;cursor:pointer;font:inherit;text-align:left;}.work-kpi b,.work-kpi strong{display:block;font-size:28px;line-height:1;font-weight:700;color:#fff;}.work-kpi span{display:block;margin-top:8px;color:rgba(255,255,255,.92);font-size:13px;font-weight:600;}.work-c0{background:linear-gradient(135deg,#2f6fe4,#5b94f5);}.work-c1{background:linear-gradient(135deg,#1faa5a,#3dce78);}.work-c2{background:linear-gradient(135deg,#f08a1e,#ffb04a);}.work-c4{background:linear-gradient(135deg,#1fb8c9,#2fd3c0);}.work-c5{background:linear-gradient(135deg,#e23b3b,#ff6b6b);}.work-quiet{background:var(--c);color:var(--i);border:1px solid var(--l);}.work-quiet b" +
-   "{color:var(--p);}.work-quiet span{color:var(--m);}.work-card{background:var(--c);border:1px solid var(--l);border-radius:16px;padding:10px 12px;}.work-cardhead{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 4px;}.work-lane .work-field{margin-top:8px;max-width:720px;}.work-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;}.work-form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;}.work-field{display:flex;flex-direction:column;gap:4px;min-width:140px;color:var(--m);font-size:12px;}.work-field input,.work-field select,.work-tools select{height:28px;border:1px solid var(--l);border-radius:6px;background:var(--c);color:var(--i);padding:0 8px;font:inherit;font-size:12px;}.work-field textarea,.work-table textarea{min-height:56px;width:100%;border:1px solid var(--l);border-radius:6px;background:var(--c);color:var(--i);padding:6px 8px;font:inherit;font-size:13px;resize:vertical;box-sizing:border-box;}.work-primary{height:28px;border:0;border-radius:6px;background:var(--p);color:#fff;padding:0 12px;font:inherit;font-size:12px;cursor:pointer;}.work-primary:disabled{opacity:.6;cursor:default;}.work-mini{height:26px;border:1px solid var(--l);border-radius:6px;background:var(--c);color:var(--i);padding:0 8px;font:inherit;font-size:12px;cursor:pointer;}.work-mini.is-on{border:0;color:#fff;background:linear-gradient(90deg,#245bdb,#4b7cff);}.work-table-wrap{overflow:auto;}.work-roster-scroll{max-height:360px;overflow:auto;}.work-table{width:100%;border-collapse:collapse;font-size:12px;}.work-table th{text-align:left;color:var(--m);font-weight:600;padding:4px 6px;border-bottom:1px solid var(--l);white-space:nowrap;}.work-table td{padding:4px 6px;border-bottom:1px solid var(--l);vertical-align:middle;}td.work-check{width:48px;text-align:center;}td.work-check input{width:16px;height:16px;margin:0;accent-color:var(--p);cursor:pointer;}.work-empty{padding:18px 12px;text-align:center;color:var(--m);}.work-empty b{display:block;margin-bottom:6px;font-size:15px;color:var(--i);}.work-msg{min-height:16px;margin:0 0 6px;color:var(--m);font-size:12px;}.work-msg.is-error{color:#cf1322;}.work-ok{color:#12b36a;font-weight:650;white-space:nowrap;}.wor" +
-   "k-miss{color:#cf1322;font-weight:650;white-space:nowrap;}.work-depts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}.work-dept{min-height:88px;text-align:left;border:0;border-radius:12px;padding:14px;cursor:pointer;color:#fff;font:inherit;}.work-dept b{display:block;font-size:16px;font-weight:700;}.work-dept span{display:block;margin-top:6px;color:rgba(255,255,255,.9);font-size:12px;}.work-muted{color:var(--m);font-size:12px;}.work-filters{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;align-items:center;}.work-filters .work-mini{flex:none;width:auto;}.work-chiprow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}.work-sub{display:block;margin-top:2px;font-size:12px;line-height:1.45;opacity:.92;}.work-duty{min-width:140px;max-width:280px;white-space:normal;line-height:1.45;}.work-count{margin-left:auto;color:var(--m);font-size:12px;}.work-field.is-grow{flex:1;min-width:200px;}.work-checks{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;}.work-checks label{display:inline-flex;align-items:center;gap:5px;background:var(--c);border:1px solid var(--l);border-radius:5px;padding:4px 7px;font-size:13px;cursor:pointer;}.work-context{display:flex;align-items:center;flex-wrap:wrap;gap:10px 22px;font-size:13px;color:var(--m);}.work-context .work-field{flex-direction:row;align-items:center;gap:8px;min-width:0;}.work-context .work-field input{height:34px;}.work-filler strong{margin-left:4px;color:var(--i);font-weight:650;}.work-sheet{background:var(--c);border:1px solid var(--l);border-radius:12px;min-width:0;}.work-storebar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:18px 22px;border-bottom:1px solid var(--l);}.work-storetitle,.work-storeactions{display:flex;align-items:center;gap:10px;min-width:0;}.work-storetitle{flex-wrap:wrap;}.work-storeicon{display:grid;place-items:center;width:38px;height:38px;color:var(--p);flex:none;}.work-storetitle small{display:block;font-siz" +
-   "e:12px;color:var(--m);}.work-storetitle h3{margin:0;font-size:18px;font-weight:670;}.work-storetitle select{border:0;background:transparent;color:var(--i);font:inherit;font-size:16px;font-weight:650;max-width:320px;}.work-badge{border-radius:6px;background:rgba(20,40,80,.06);color:var(--m);padding:2px 8px;font-size:12px;}.work-storeactions{margin-left:auto;}.work-storeactions select{height:32px;border:1px solid var(--p);border-radius:6px;background:var(--c);color:var(--p);padding:0 10px;font:inherit;font-size:13px;font-weight:650;}.work-link{border:0;background:transparent;color:var(--m);font:inherit;font-size:12px;cursor:pointer;padding:6px 4px;}.work-groups{display:flex;gap:22px;padding:0 22px;border-bottom:1px solid var(--l);flex-wrap:wrap;}.work-groups button{display:inline-flex;gap:7px;align-items:center;min-height:48px;padding:0 3px;cursor:pointer;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--m);font:inherit;font-size:14px;font-weight:650;}.work-groups button.is-on{color:var(--p);border-bottom-color:var(--p);}.work-section{padding:18px 22px 8px;}.work-lanes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;align-items:start;}.work-lanes.is-single{grid-template-columns:minmax(0,1fr);}.work-lane{min-width:0;}.work-lane-title{margin:0 0 5px;padding:7px 10px;border-radius:5px;background:rgba(20,40,80,.05);font-size:13px;color:var(--m);font-weight:650;}.work-diary-item{padding:0 4px;border-bottom:1px solid var(--l);}.work-item-line{min-height:55px;display:grid;align-items:center;column-gap:8px;grid-template-columns:minmax(0,1fr) minmax(62px,92px) 69px;font-size:14px;}.work-item-line>span{font-weight:550;overflow-wrap:anywhere;}.work-metric-num{display:flex;align-items:center;gap:5px;}.work-metric-num input{width:72px;height:33px;border:1px solid var(--l);border-radius:6px;background:var(--c);color:var(--i);padding:0 8px;font:inherit;font-size:15px;font-weight:650;box-sizing:border-box;}.work-metric-num small{color:var(--m);font-size:12px;}.work-more{display:inline-flex;align-items:center;justify-self:end;gap:5px;padding:6px 2px;font:inherit;font-size:12px;background:transparent;color:var(--m);border:0;cursor:pointer;}.work-more.is-open,.work-more:hov" +
-   "er{color:var(--p);}.work-more i{width:6px;height:6px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:translateY(-2px) rotate(45deg);}.work-more.is-open i{transform:translateY(2px) rotate(225deg);}.work-diary-more{display:grid;gap:10px;margin:0 0 12px;padding:12px;background:rgba(20,40,80,.04);border-radius:7px;}.work-diary-more[hidden]{display:none;}.work-orders{display:grid;grid-template-columns:minmax(200px,.8fr) minmax(0,1.2fr);gap:28px;align-items:start;}.work-order{min-width:0;}.work-order header{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;border-bottom:1px solid var(--l);padding-bottom:9px;margin-bottom:12px;}.work-order h4{margin:0;font-size:15px;}.work-order textarea,.work-diary-more textarea{min-height:70px;width:100%;box-sizing:border-box;}.work-shot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}.work-shot img{max-width:148px;max-height:72px;object-fit:cover;border:0;border-radius:8px;}.work-submitbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:2px 2px 0;}.work-submitbar strong{color:var(--m);font-size:12px;font-weight:650;}.work-submitbar .work-primary,.work-submitbar .work-mini{min-height:38px;padding:7px 16px;font-weight:650;}.work-sum-table th,.work-sum-table td{white-space:nowrap;}.work-modal{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;background:rgba(15,23,42,.45);}.work-dialog{width:min(920px,100%);background:var(--c);color:var(--i);border-radius:12px;padding:16px 18px;}.work-dialog-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 12px;}.work-sum-split{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(280px,1.6fr);gap:14px;align-items:start;}.work-fold{margin:0 0 8px;}.work-fold summary{cursor:pointer;font-weight:650;}.work-total{margin:0 0 8px;font-size:22px;font-weight:700;}.work-people{display:flex;flex-direction:column;gap:8px;}.work-person{color:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 8px 18px rgba(20,40,80,.12);display:flex;align-items:center;gap:16px;}.work-person.tone-ok{background:linear-gradient(90deg,#1faa5a,#3dce78);}.work-person.tone-miss{background:linear-gradient(90deg,#e23" +
-   "b3b,#ff6b6b);}.work-person.tone-rest{background:linear-gradient(90deg,#f08a1e,#ffb04a);}.work-person.tone-free{background:linear-gradient(90deg,#2f6fe4,#5b94f5);}.work-who{flex:0 0 140px;min-width:0;}.work-who b{display:block;font-size:16px;}.work-who span,.work-main{font-size:12px;color:rgba(255,255,255,.92);line-height:1.45;}.work-main{flex:1;min-width:0;}.work-person .work-mini{background:#fff;color:#245bdb;border:0;font-weight:650;}@media (max-width:980px){.work-stats,.work-depts,.work-lanes,.work-orders,.work-sum-split{grid-template-columns:1fr}.work-person{flex-wrap:wrap}}.work-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 12px}.work-brand{display:flex;gap:10px;align-items:center}.work-logo{width:40px;height:40px;border-radius:12px;background:#e8f1ff;position:relative;flex:none}.work-logo:before{content:'';position:absolute;left:12px;top:10px;width:14px;height:16px;border:2px solid #2f6bff;border-radius:2px}.work-brand h1{font-size:20px}.work-brand p{margin:2px 0 0;font-size:12px}.work-actions{display:flex;gap:8px}.work-ghost{height:36px;border:1px solid var(--l);border-radius:10px;background:var(--c);color:var(--p);padding:0 14px;font:inherit;cursor:pointer}.work-actions .work-primary,.work-blank .work-primary{height:36px;border-radius:10px;padding:0 16px}.work-stats .work-kpi{position:relative;background:#fff;color:var(--i);border:1px solid #e8eef8;padding-right:52px;justify-content:flex-start}.work-stats .work-kpi b{color:var(--i);font-size:26px}.work-stats .work-kpi span{margin-top:0;color:var(--m);font-weight:500}.work-stats .work-kpi:before{content:'';position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:50%;background:#e8f0ff}.work-stats .work-kpi:nth-child(2):before{background:#e8f8ee}.work-stats .work-kpi:nth-child(3):before{background:#fff3e6}.work-stats .work-kpi:nth-child(4):before{background:#f3eaff}.work-blank{min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}.work-blank:before{content:'';width:72px;height:84px;border-radius:10px;background-color:#e7f0ff;background-image:linear-gradient(#9db7e8,#9db7e8),linear-gradient(#9db7e8,#9db7e8),linear-gradient(#9db7e8,#9db7e8);background-size:28px 3px,28px 3px,16px 3px;background-position:16px 22px,16px 34px,16px 46px;background-repeat:no-repeat}.work-wait{color:#f08a1e;font-weight:650}.work-blank p{margin:0;color:var(--m)}.work-guide{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.work-guide h2{grid-column:1/-1;margin:0}.work-guide b{display:block;color:var(--i)}.work-guide small{display:block;color:var(--m);font-size:12px}.work-guide i{display:inline-grid;place-items:center;width:22px;height:22px;margin:0 8px 0 0;border-radius:50%;background:#e8f0ff;color:#2f6bff;font:700 12px/22px inherit}.work-chip{height:32px;border:0;border-radius:8px;background:#f2f5fa;color:#3d4b63;padding:0 14px;font:inherit;cursor:pointer}.work-chip.is-on{background:#2f6bff;color:#fff}.work-search{margin-left:auto;color:var(--m);font-size:12px}.work-search input{height:34px;width:220px;border:1px solid #e3eaf5;border-radius:8px;padding:0 10px;font:inherit;background:#fff;color:var(--i)}@media(max-width:980px){.work-guide,.work-stats{grid-template-columns:1fr}}.xm-work-badge{position:absolute;top:2px;right:8px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#e23b3b;color:#fff;font:700 11px/16px inherit;text-align:center}";
+   ".work-page.xm-ui-scope{padding:24px 28px 32px;min-height:100%}.work-page .xm-ui-filter-toolbar,.work-page .xm-ui-stat-grid{margin-bottom:16px}.work-page .work-stack{display:grid;gap:16px}.work-page .work-form,.work-page .work-tools,.work-page .work-filters,.work-page .work-checks{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}.work-page .work-field{display:flex;flex-direction:column;gap:4px;min-width:140px;color:var(--xm-ui-text-secondary);font-size:12px}.work-page .work-field input,.work-page .work-field select,.work-page .work-field textarea{border:1px solid var(--xm-ui-border-strong);border-radius:8px;background:var(--xm-ui-surface);color:var(--xm-ui-text);font:inherit}.work-page .work-field input,.work-page .work-field select{height:34px;padding:0 10px}.work-page .work-field textarea,.work-page .xm-ui-table textarea{min-height:72px;width:100%;padding:8px 10px;box-sizing:border-box}.work-page .work-field.is-grow{flex:1;min-width:200px}.work-page .work-msg{min-height:18px;margin:0 0 12px;color:var(--xm-ui-text-secondary);font-size:13px}.work-page .work-msg.is-error{color:var(--xm-ui-red)}.work-page .work-lead,.work-page .work-muted,.work-page .work-sub{color:var(--xm-ui-text-muted);font-size:12px}.work-page .work-filler strong{margin-left:4px;color:var(--xm-ui-text)}.work-page .work-context{display:flex;align-items:center;flex-wrap:wrap;gap:10px 22px}.work-page .work-context .work-field{flex-direction:row;align-items:center}.work-page .xm-ui-tab{position:relative}.work-page .xm-ui-tab [data-work-count]{margin-left:6px}.work-page .work-sheet{min-width:0}.work-page .work-storebar,.work-page .work-storetitle,.work-page .work-storeactions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.work-page .work-storebar{justify-content:space-between;margin-bottom:12px}.work-page .work-groups{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}.work-page .work-lanes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.work-page .work-lanes.is-single{grid-template-columns:minmax(0,1fr)}.work-page .work-item-line{min-height:52px;display:grid;align-items:center;column-gap:8px;grid-template-columns:minmax(0,1fr) minmax(62px,92px) auto}.work-page .work-metric-num{display:flex;align-items:center;gap:6px}.work-page .work-metric-num input{width:72px;height:34px;border:1px solid var(--xm-ui-border-strong);border-radius:8px;padding:0 8px;font:inherit}.work-page .work-diary-more{display:grid;gap:10px;margin:0 0 12px}.work-page .work-diary-more[hidden]{display:none}.work-page .work-orders{display:grid;grid-template-columns:minmax(200px,.8fr) minmax(0,1.2fr);gap:16px}.work-page .work-shot{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.work-page .work-shot img{max-width:148px;max-height:72px;object-fit:cover;border-radius:8px}.work-page .work-submitbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px}.work-page .work-guide{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.work-page .work-guide b,.work-page .work-guide small{display:block}.work-page .work-guide small{color:var(--xm-ui-text-muted)}.work-page .work-modal{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;background:rgba(16,24,40,.36)}.work-page .work-dialog{width:min(920px,100%)}.work-page .work-sum-split{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(280px,1.6fr);gap:16px}.work-page .work-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.work-page .work-row .work-main{flex:1;min-width:180px;color:var(--xm-ui-text-secondary)}@media(max-width:980px){.work-page .work-lanes,.work-page .work-orders,.work-page .work-sum-split,.work-page .work-guide{grid-template-columns:1fr}}.xm-work-badge{position:absolute;top:2px;right:8px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#e23b3b;color:#fff;font:700 11px/16px inherit;text-align:center}";
  }
 
  function oops(root) {
@@ -157,17 +201,7 @@
  }
 
  function chip(attr, value, label, current) {
-  return (
-   '<button type="button" class="work-mini' +
-   (current === value ? " is-on" : "") +
-   '" ' +
-   attr +
-   '="' +
-   esc(value) +
-   '">' +
-   esc(label) +
-   "</button>"
-  );
+  return uiTab(String(value), label, current === value, attr + '="' + esc(value) + '"');
  }
 
  function personShops(person) {
@@ -380,132 +414,91 @@
 
  function renderTodos() {
   if (!state.todoOpen) {
-   return '<div class="work-card"><div class="work-empty"><b>没有待办</b>今天的日报已经提交，或今天不用交。</div></div>';
+   return uiCard("", uiEmpty("没有待办", "今天的日报已经提交，或今天不用交。"));
   }
-  return (
-   '<div class="work-people"><article class="work-person tone-miss"><div class="work-who"><b>日报</b><span>今天</span></div><div class="work-main">今天的日报还没提交</div><button type="button" class="work-mini" data-todo-go>去填写</button></article></div>'
+  return uiCard(
+   "待办事项",
+   '<div class="work-row"><strong>日报</strong>' + uiBadge("今天", "danger") + '<span class="work-main">今天的日报还没提交</span>' + uiButton("去填写", "data-todo-go") + "</div>"
   );
  }
 
  function kpi(index, value, label) {
-  return (
-   '<article class="work-kpi work-c' +
-   index +
-   '"><b>' +
-   esc(value) +
-   "</b><span>" +
-   esc(label) +
-   "</span></article>"
-  );
+  var tones = ["blue", "green", "orange", "purple", "blue", "orange"];
+  var icons = ["users", "check", "file", "award", "chart", "file"];
+  return xm().StatCard({
+   label: label,
+   value: String(value),
+   icon: icons[index] || "chart",
+   tone: tones[index] || "blue"
+  });
  }
 
  function renderFillTable(row, editable) {
-  if (!row) {
-   return '<div class="work-empty">今天没有需要填的事项。</div>';
+  if (!row || !(row.items || []).length) {
+   return uiEmpty("今天没有需要填的事项。", "还没有事项，请罗成在部门设置里配模板。");
   }
-  var body = (row.items || [])
-   .map(function (item) {
-    var cell = editable
-     ? '<textarea data-item-key="' +
-      esc(item.key) +
-      '" placeholder="写今天这项做了什么">' +
-      esc(item.content) +
-      "</textarea>"
-     : esc(item.content || "—");
-    return (
-     "<tr><td>" +
-     esc(item.label) +
-     "</td><td>" +
-     cell +
-     "</td></tr>"
-    );
-   })
-   .join("");
-  return (
-   '<div class="work-table-wrap"><table class="work-table"><thead><tr><th>工作事项</th><th>今日工作</th></tr></thead><tbody>' +
-   (body || '<tr><td colspan="2" class="work-empty">还没有事项，请罗成在部门设置里配模板。</td></tr>') +
-   "</tbody></table></div>"
-  );
+  return xm().DataTable({
+   columns: [
+    { key: "label", label: "工作事项" },
+    {
+     key: "content",
+     label: "今日工作",
+     render: function (value, item) {
+      if (!editable) return esc(value || "—");
+      return '<textarea data-item-key="' + esc(item.key) + '" placeholder="写今天这项做了什么">' + esc(value) + "</textarea>";
+     }
+    }
+   ],
+   rows: row.items
+  });
  }
 
  function renderAdminTable(date) {
   var rows = (state.report && state.report.rows) || [];
   if (!rows.length) {
-   return '<div class="work-card"><div class="work-empty">这一天还没有人需要汇报。</div></div>';
+   return uiCard("", uiEmpty("这一天还没有人需要汇报。"));
   }
-  var q = String(state.boardQuery || "").trim().toLowerCase();
-  var visiblePeople = 0;
-  var body = rows
-   .map(function (row) {
-    var items = row.items || [];
-    var blob = reportBlob(row);
-    var hide = q && blob.indexOf(q) < 0;
-    if (!hide) {
-     visiblePeople += 1;
-    }
-    return items
-     .map(function (item, index) {
-      return (
-       "<tr" +
-       (hide ? " hidden" : "") +
-       ' data-report-row="' +
-       esc(row.person.id) +
-       '" data-blob="' +
-       esc(blob) +
-       '">' +
-       (index === 0
-        ? '<td rowspan="' +
-         items.length +
-         '">' +
-         esc(row.person.name) +
-         "</td><td rowspan=\"" +
-         items.length +
-         '">' +
-         esc(row.deptName) +
-         "</td><td rowspan=\"" +
-         items.length +
-         '">' +
-         esc(row.person.role) +
-         "</td><td rowspan=\"" +
-         items.length +
-         '">' +
-         esc(row.person.center) +
-         '</td><td class="work-duty" rowspan="' +
-         items.length +
-         '">' +
-         esc(boardDuty(row.person)) +
-         "</td>"
-        : "") +
-       "<td>" +
-       esc(item.label) +
-       "</td><td>" +
-       esc(item.content || "—") +
-       "</td>" +
-       (index === 0
-        ? '<td rowspan="' +
-         items.length +
-         '" class="' +
-         (row.submitted ? "work-ok" : "work-miss") +
-         '">' +
-         esc(row.status) +
-         (row.statusNote ? '<span class="work-sub">' + esc(row.statusNote) + "</span>" : "") +
-         "</td>"
-        : "") +
-       "</tr>"
-      );
-     })
-     .join("");
+  var visible = reportRows();
+  if (!visible.length) {
+   return uiCard("", uiEmpty("没有符合筛选的人。"));
+  }
+  var flat = [];
+  visible.forEach(function (row) {
+   (row.items || [{ label: "—", content: "" }]).forEach(function (item) {
+    flat.push({
+     name: row.person.name,
+     dept: row.deptName,
+     role: row.person.role,
+     center: row.person.center,
+     duty: boardDuty(row.person),
+     item: item.label,
+     content: item.content || "—",
+     status: row.status,
+     note: row.statusNote || ""
+    });
+   });
+  });
+  return uiCard(
+   "当天汇报",
+   xm().DataTable({
+    columns: [
+     { key: "name", label: "姓名" },
+     { key: "dept", label: "部门" },
+     { key: "role", label: "岗位" },
+     { key: "center", label: "所属中心" },
+     { key: "duty", label: "责权" },
+     { key: "item", label: "工作事项" },
+     { key: "content", label: dateLabel(date) },
+     {
+      key: "status",
+      label: "状态",
+      render: function (value, row) {
+       return uiBadge(value, statusTone(value)) + (row.note ? '<span class="work-sub">' + esc(row.note) + "</span>" : "");
+      }
+     }
+    ],
+    rows: flat
    })
-   .join("");
-  return (
-   '<div class="work-card work-table-wrap"><table class="work-table"><thead><tr><th>姓名</th><th>部门</th><th>岗位</th><th>所属中心</th><th>责权</th><th>工作事项</th><th>' +
-   esc(dateLabel(date)) +
-   '</th><th>状态</th></tr></thead><tbody>' +
-   body +
-   '<tr data-board-empty' +
-   (visiblePeople ? " hidden" : "") +
-   '><td colspan="8" class="work-empty">没有符合筛选的人。</td></tr>' +
-   "</tbody></table></div>"
   );
  }
 
@@ -579,17 +572,12 @@
    (images || [])
     .map(function (image) {
      return (
-      '<button type="button" class="work-mini" data-preview-image="' +
-      esc(image.id) +
-      '">查看截图 · ' +
-      esc(image.name) +
-      '</button><button type="button" class="work-mini" data-remove-image="' +
-      esc(image.id) +
-      '">移除</button>'
+      uiButton("查看截图 · " + (image.name || ""), 'data-preview-image="' + esc(image.id) + '"', { variant: "secondary" }) +
+      uiButton("移除", 'data-remove-image="' + esc(image.id) + '"', { variant: "secondary" })
      );
     })
     .join("") +
-   '<label class="work-mini">添加截图<input data-diary-file type="file" accept="image/png,image/jpeg,image/webp" hidden></label></div>'
+   '<label class="xm-ui-button xm-ui-button--secondary xm-ui-button--small">添加截图<input data-diary-file type="file" accept="image/png,image/jpeg,image/webp" hidden></label></div>'
   );
  }
 
@@ -793,13 +781,12 @@
      .join("") +
     "</select>"
    : "<h3>" + esc(currentShop ? currentShop.name : "选择填写店铺") + "</h3>";
-  return (
-   '<section class="work-sheet"><div class="work-storebar"><div class="work-storetitle"><i class="work-storeicon">' +
-   diaryIcon("store") +
-   "</i><div><small>填写店铺</small>" +
+  return uiCard(
+   "店铺日报",
+   '<div class="work-sheet"><div class="work-storebar"><div class="work-storetitle"><div><small>填写店铺</small>' +
    shopTitle +
    "</div>" +
-   (draft ? '<span class="work-badge">' + esc(draft.status || "未填报") + "</span>" : "") +
+   (draft ? uiBadge(draft.status || "未填报", statusTone(draft.status || "未填报")) : "") +
    '</div><div class="work-storeactions">' +
    (remaining.length
     ? '<select data-add-shop><option value="">＋ 添加店铺</option>' +
@@ -811,35 +798,24 @@
      "</select>"
     : "") +
    (state.diaryShop
-    ? '<button type="button" class="work-link" data-remove-shop="' + esc(state.diaryShop) + '">移出</button>'
+    ? uiButton("移出", 'data-remove-shop="' + esc(state.diaryShop) + '"', { variant: "secondary" })
     : "") +
    "</div></div>" +
-   '<nav class="work-groups" aria-label="工作分类">' +
-   sections
-    .map(function (section) {
-     return (
-      '<button type="button"' +
-      (section.id === state.diaryGroup ? ' class="is-on"' : "") +
-      ' data-diary-group="' +
-      esc(section.id) +
-      '" aria-pressed="' +
-      (section.id === state.diaryGroup) +
-      '">' +
-      diaryIcon(section.id) +
-      "<span>" +
-      esc(section.name) +
-      "</span></button>"
-     );
-    })
-    .join("") +
-   '</nav><div class="work-section"><div class="work-lanes' +
+   uiTabs(
+    sections
+     .map(function (section) {
+      return uiTab(section.id, section.name, section.id === state.diaryGroup, 'data-diary-group="' + esc(section.id) + '" aria-pressed="' + (section.id === state.diaryGroup) + '"');
+     })
+     .join("")
+   ) +
+   '<div class="work-section"><div class="work-lanes' +
    (lanes.length === 1 ? " is-single" : "") +
    '">' +
    fields +
-   "</div></div></section>" +
+   "</div></div>" +
    '<footer class="work-submitbar"><strong>本次填报：' +
    state.diaryOpen.length +
-   ' 家店</strong><div class="work-filters"><button type="button" class="work-mini" data-diary-save="草稿">保存草稿</button><button type="button" class="work-primary" data-diary-save="已提交">提交日报</button></div></footer>'
+   ' 家店</strong><div class="work-filters">' + uiButton("保存草稿", 'data-diary-save="草稿"', { variant: "secondary" }) + uiButton("提交日报", 'data-diary-save="已提交"') + "</div></footer></div>"
   );
  }
 
@@ -930,11 +906,7 @@
   return (images || [])
    .map(function (image) {
     return (
-     '<button type="button" class="work-mini" data-preview-image="' +
-     esc(image.id) +
-     '">查看截图 · ' +
-     esc(image.name) +
-     "</button>"
+     uiButton("查看截图 · " + (image.name || ""), 'data-preview-image="' + esc(image.id) + '"', { variant: "secondary" })
     );
    })
    .join("");
@@ -942,10 +914,10 @@
 
  function summaryTable(headers, rows) {
   return (
-   '<div class="work-table-wrap"><table class="work-table work-sum-table"><thead><tr>' +
+   '<div class="xm-ui-table-wrap"><table class="xm-ui-table"><thead><tr>' +
    headers.map(function (header) { return "<th>" + esc(header) + "</th>"; }).join("") +
    "</tr></thead><tbody>" +
-   (rows || '<tr><td colspan="' + headers.length + '" class="work-empty">暂无明细</td></tr>') +
+   (rows || '<tr><td colspan="' + headers.length + '">暂无明细</td></tr>') +
    "</tbody></table></div>"
   );
  }
@@ -1036,7 +1008,7 @@
         );
        })
        .join("")
-     : '<p class="work-empty">暂无明细</p>') +
+     : "<p>暂无明细</p>") +
     "</section></div>";
   } else {
    var report = rows[dialog.index];
@@ -1080,10 +1052,8 @@
     imageButtons((report.proofs && report.proofs["备注"]) || []);
   }
   return (
-   '<div class="work-modal"><div class="work-dialog" role="dialog"><div class="work-dialog-head"><h2>' +
-   esc(title) +
-   '</h2><button type="button" class="work-mini" data-summary-close>关闭</button></div>' +
-   body +
+   '<div class="work-modal"><div class="work-dialog" role="dialog">' +
+   uiCard(title, body + uiButton("关闭", "data-summary-close", { variant: "secondary" })) +
    "</div></div>"
   );
  }
@@ -1091,7 +1061,7 @@
  function renderSummary() {
   var data = state.summary;
   if (!data) {
-   return '<div class="work-card"><div class="work-empty">正在读取工作汇总…</div></div>';
+   return uiCard("", uiEmpty("正在读取工作汇总"));
   }
   var rows = summaryRows();
   var metrics = data.metrics || [];
@@ -1138,87 +1108,68 @@
     .join(" · ");
    return text || "暂无数量";
   }
-  function bars(groups, tone) {
+  function bars(groups) {
    if (!groups.length) {
-    return '<div class="work-card"><div class="work-empty">暂无明细</div></div>';
+    return uiEmpty("暂无明细");
    }
-   return (
-    '<div class="work-people">' +
-    groups
-     .map(function (group) {
-      return (
-       '<article class="work-person ' + tone + '"><div class="work-who"><b>' +
-       esc(group.name) +
-       "</b><span>日报 " +
-       group.rows.length +
-       '</span></div><div class="work-main">' +
-       esc(bits(group)) +
-       "</div></article>"
-      );
-     })
-     .join("") +
-    "</div>"
-   );
+   return groups
+    .map(function (group) {
+     return uiCard(group.name, '<div class="work-row">' + uiBadge("日报 " + group.rows.length, "blue") + '<span class="work-main">' + esc(bits(group)) + "</span></div>");
+    })
+    .join("");
   }
   var cards = metrics
    .map(function (metric) {
     var total = rows.length ? metricTotal(rows, metric.id) : "—";
-    return (
-     '<button type="button" class="work-kpi work-quiet" data-summary-metric="' +
-     esc(metric.id) +
-     '"><b>' +
-     total +
-     "</b><span>" +
-     esc(metric.name) +
-     "</span></button>"
+    return xm().StatCard({ label: metric.name, value: String(total), icon: "chart", tone: "blue" }).replace(
+     "</article>",
+     uiButton("查看", 'data-summary-metric="' + esc(metric.id) + '"', { variant: "secondary" }) + "</article>"
     );
    })
    .join("");
   var diaries = rows
    .map(function (row, index) {
-    return (
-     '<article class="work-person tone-ok"><div class="work-who"><b>' +
-     esc(row.day) +
-     "</b><span>" +
-     esc(row.personName) +
-     '</span></div><div class="work-main">' +
-     esc(row.shopName) +
-     '</div><button type="button" class="work-mini" data-summary-report="' +
-     index +
-     '">查看详情</button></article>'
+    return uiCard(
+     row.day,
+     '<div class="work-row"><span class="work-main">' + esc(row.personName) + " · " + esc(row.shopName) + "</span>" + uiButton("查看详情", 'data-summary-report="' + index + '"', { variant: "secondary" }) + "</div>"
     );
    })
    .join("");
   return (
-   '<div class="work-panel"><section class="work-card"><h2>汇总筛选</h2><div class="work-filters">' +
-   '<button type="button" class="work-mini" data-summary-period="今天">今天</button>' +
-   '<button type="button" class="work-mini" data-summary-period="昨天">昨天</button>' +
-   '<button type="button" class="work-mini" data-summary-period="近7天">近7天</button>' +
-   '<button type="button" class="work-mini" data-summary-period="本月">本月</button></div>' +
-   '<div class="work-form"><label class="work-field">开始日期<input type="date" data-summary-from value="' +
-   esc(state.summaryFrom) +
-   '"></label><label class="work-field">结束日期<input type="date" data-summary-to value="' +
-   esc(state.summaryTo) +
-   '"></label><label class="work-field">人员<select data-summary-person><option value="">全部人员</option>' +
-   peopleOptions +
-   '</select></label><label class="work-field">店铺<select data-summary-shop><option value="">全部店铺</option>' +
-   shopOptions +
-   '</select></label><label class="work-field">SPU<input data-summary-spu value="' +
-   esc(state.summarySpu) +
-   '"></label><button type="button" class="work-primary" data-summary-query>查询</button></div></section>' +
-   '<div class="work-stats">' +
+   '<div class="work-stack">' +
+   uiCard(
+    "汇总筛选",
+    uiTabs(
+     uiTab("今天", "今天", false, 'data-summary-period="今天"') +
+      uiTab("昨天", "昨天", false, 'data-summary-period="昨天"') +
+      uiTab("近7天", "近7天", false, 'data-summary-period="近7天"') +
+      uiTab("本月", "本月", false, 'data-summary-period="本月"')
+    ) +
+     '<div class="work-form"><label class="work-field">开始日期<input type="date" data-summary-from value="' +
+     esc(state.summaryFrom) +
+     '"></label><label class="work-field">结束日期<input type="date" data-summary-to value="' +
+     esc(state.summaryTo) +
+     '"></label><label class="work-field">人员<select data-summary-person><option value="">全部人员</option>' +
+     peopleOptions +
+     '</select></label><label class="work-field">店铺<select data-summary-shop><option value="">全部店铺</option>' +
+     shopOptions +
+     '</select></label><label class="work-field">SPU<input data-summary-spu value="' +
+     esc(state.summarySpu) +
+     '"></label>' +
+     uiButton("查询", "data-summary-query") +
+     "</div>"
+   ) +
+   '<div class="xm-ui-stat-grid">' +
    kpi(0, rows.length, "已交日报") +
    kpi(1, Object.keys(peopleCount).length, "已报人数") +
    kpi(4, Object.keys(shopCount).length, "店铺数") +
    "</div>" +
-   '<div class="work-stats">' +
+   '<div class="xm-ui-stat-grid">' +
    cards +
-   "</div><h2>按人员汇总</h2>" +
-   bars(groupSummary(rows, "personId"), "tone-ok") +
-   "<h2>按店铺汇总</h2>" +
-   bars(groupSummary(rows, "shopId"), "tone-free") +
-   "<h2>已提交日报</h2>" +
-   (diaries ? '<div class="work-people">' + diaries + "</div>" : '<div class="work-card"><div class="work-empty">这段时间还没有已提交的店铺日报。</div></div>') +
+   "</div>" +
+   uiCard("按人员汇总", bars(groupSummary(rows, "personId"))) +
+   uiCard("按店铺汇总", bars(groupSummary(rows, "shopId"))) +
+   uiCard("已提交日报", diaries || uiEmpty("这段时间还没有已提交的店铺日报。")) +
    renderSummaryDialog(rows, metrics) +
    "</div>"
   );
@@ -1227,7 +1178,7 @@
  function renderDuty() {
   var data = state.duty;
   if (!data) {
-   return '<div class="work-card"><div class="work-empty">正在读取提交情况…</div></div>';
+   return uiCard("", uiEmpty("正在读取提交情况"));
   }
   var sum = data.summary || {};
   function tone(status) {
@@ -1251,40 +1202,31 @@
     var restOn = row.manualRest ? "0" : "1";
     var showRest = row.manualRest || row.status === "未报" || row.status === "待核对" || row.status === "已报";
     var rest = showRest
-      ? '<button type="button" class="work-mini" data-rest="' +
-       esc(row.personId) +
-       '" data-rest-on="' +
-       restOn +
-       '">' +
-       restLabel +
-       "</button>"
+      ? uiButton(restLabel, 'data-rest="' + esc(row.personId) + '" data-rest-on="' + restOn + '"', { variant: "secondary" })
       : "";
-    return (
-     '<article class="work-person ' +
-     tone(row.status) +
-     '"><div class="work-who"><b>' +
-     esc(row.name) +
-     "</b><span>" +
-     esc(row.role || "—") +
-     " · " +
-     esc(row.deptName || "—") +
-     '</span></div><div class="work-main">部门事项 ' +
-     esc(row.template) +
-     " · 店铺日报 " +
-     esc(row.diary) +
-     " · 已交店 " +
-     esc(row.shops) +
-     "<br>" +
-     esc(row.status) +
-     (row.note ? '<span class="work-sub">' + esc(row.note) + "</span>" : "") +
-     "</div>" +
-     rest +
-     "</article>"
+    return uiCard(
+     row.name,
+     '<div class="work-row">' +
+      uiBadge(row.status, statusTone(row.status)) +
+      '<span class="work-main">' +
+      esc(row.role || "—") +
+      " · " +
+      esc(row.deptName || "—") +
+      " · 部门事项 " +
+      esc(row.template) +
+      " · 店铺日报 " +
+      esc(row.diary) +
+      " · 已交店 " +
+      esc(row.shops) +
+      (row.note ? '<span class="work-sub">' + esc(row.note) + "</span>" : "") +
+      "</span>" +
+      rest +
+      "</div>"
     );
    })
    .join("");
   return (
-   '<div class="work-panel"><div class="work-stats">' +
+   '<div class="work-stack"><div class="xm-ui-stat-grid">' +
    kpi(0, sum.should || 0, "应报人数") +
    kpi(1, sum.done || 0, "已报人数") +
    kpi(5, sum.miss || 0, "未报人数") +
@@ -1292,16 +1234,15 @@
    kpi(4, sum.shops || 0, "已交店铺数") +
    "</div>" +
    (sum.pending ? '<p class="work-lead">考勤待核对 ' + esc(sum.pending) + " 人，未计入未报。</p>" : "") +
-   '<div class="work-people">' +
-   (rows || '<div class="work-card"><div class="work-empty"><b>这一天没有需要汇报的人</b></div></div>') +
-   "</div></div>"
+   (rows || uiEmpty("这一天没有需要汇报的人")) +
+   "</div>"
   );
  }
 
  function renderDiarySettings() {
   var data = state.diarySettings;
   if (!data) {
-   return '<div class="work-card"><div class="work-empty">正在读取日报设置…</div></div>';
+   return uiCard("", uiEmpty("正在读取日报设置"));
   }
   var policy = data.policy || {};
   var positions = (policy.options || [])
@@ -1365,10 +1306,9 @@
    })
    .join("");
   return (
-   '<div class="work-panel"><div class="work-card"><h2>必须提交店铺日报的岗位</h2><p class="work-lead">勾选岗位，并且已排进运营部、人事部或技术部、名下有店的人，当天要交店铺日报。登记休息后免报。</p><div class="work-checks">' +
-   positions +
-   '</div><button type="button" class="work-primary" data-save-positions>保存岗位设置</button></div>' +
-   '<div class="work-card"><h2>考勤与提醒</h2><p class="work-lead">' +
+   '<div class="work-stack">' +
+   uiCard("必须提交店铺日报的岗位", '<div class="work-checks">' + positions + "</div>" + uiButton("保存岗位设置", "data-save-positions"), "勾选岗位，并且已排进运营部、人事部或技术部、名下有店的人，当天要交店铺日报。登记休息后免报。") +
+   uiCard("考勤与提醒", '<p class="work-lead">' +
    dingLead +
    (link.app && !link.agent ? " 待配置工作通知 AgentId。" : "") +
    '</p><div class="work-checks"><label><input type="checkbox" data-delivery="useSchedule"' +
@@ -1381,16 +1321,15 @@
    esc(delivery.remindAt || "18:00") +
    '"></label><label class="work-field">排班查询人<select data-ding-operator><option value="">请选择</option>' +
    operatorOptions +
-   '</select></label><button type="button" class="work-primary" data-save-delivery>保存考勤与提醒</button>' +
+   '</select></label>' + uiButton("保存考勤与提醒", "data-save-delivery") +
    (link.app
-    ? '<div class="work-table-wrap"><table class="work-table"><thead><tr><th>姓名</th><th>工号</th><th>钉钉 userId</th><th>核对</th></tr></thead><tbody>' +
-     (bindRows || '<tr><td colspan="4" class="work-empty">没有在职人员</td></tr>') +
-     '</tbody></table></div><button type="button" class="work-mini" data-ding-sync>从钉钉核对员工</button><button type="button" class="work-primary" data-ding-save>保存员工绑定</button>'
-    : "") +
-   "</div>" +
-   '<div class="work-card"><h2>填报项目</h2><p class="work-lead">停用后，已经提交的记录仍可在工作汇总里看。</p><div class="work-table-wrap"><table class="work-table"><thead><tr><th>栏目</th><th>名称</th><th>单位</th><th>启用</th></tr></thead><tbody>' +
-   nodes +
-   '</tbody></table></div><button type="button" class="work-primary" data-save-catalog>保存填报内容</button></div></div>'
+    ? '<div class="xm-ui-table-wrap"><table class="xm-ui-table"><thead><tr><th>姓名</th><th>工号</th><th>钉钉 userId</th><th>核对</th></tr></thead><tbody>' +
+     (bindRows || '<tr><td colspan="4">没有在职人员</td></tr>') +
+     "</tbody></table></div>" + uiButton("从钉钉核对员工", "data-ding-sync", { variant: "secondary" }) + uiButton("保存员工绑定", "data-ding-save")
+    : "")
+   ) +
+   uiCard("填报项目", '<div class="xm-ui-table-wrap"><table class="xm-ui-table"><thead><tr><th>栏目</th><th>名称</th><th>单位</th><th>启用</th></tr></thead><tbody>' + nodes + "</tbody></table></div>" + uiButton("保存填报内容", "data-save-catalog"), "停用后，已经提交的记录仍可在工作汇总里看。") +
+   "</div>"
   );
  }
 
@@ -1431,16 +1370,13 @@
   var miss = sum.miss || 0;
   var mine = myRow();
   var mineText = !mine ? "不用交" : mine.status === "已报" ? "已提交" : mine.status === "未报" ? "待提交" : mine.status === "免报" ? "免报" : mine.status === "待核对" ? "待核对" : "自愿填报";
-  function card(label, value, note, tone) {
-   return '<article class="work-kpi"><span>' + label + "</span><b>" + esc(value) + "</b>" + (note ? '<small class="' + tone + '">' + esc(note) + "</small>" : "") + "</article>";
-  }
   return (
-   '<section class="work-stats">' +
-   card("今日应提交", should + " 人") +
-   card("已提交", done + " 人", "提交率 " + rateText(done, should), "work-ok") +
-   card("待提交", miss + " 人", rateText(miss, should), "work-wait") +
-   card("我的汇报", mineText, mine ? dutyBadge() : "", "work-sub") +
-   card("今日提交率", rateText(done, should), "按今日应交", "work-sub") +
+   '<section class="xm-ui-stat-grid">' +
+   xm().StatCard({ label: "今日应提交", value: String(should), unit: "人", icon: "users", tone: "blue" }) +
+   xm().StatCard({ label: "已提交", value: String(done), unit: "人", note: "提交率 " + rateText(done, should), trend: "up", icon: "check", tone: "green" }) +
+   xm().StatCard({ label: "待提交", value: String(miss), unit: "人", note: rateText(miss, should), icon: "file", tone: "orange" }) +
+   xm().StatCard({ label: "我的汇报", value: mineText, note: mine ? dutyBadge() : "", icon: "award", tone: "purple" }) +
+   xm().StatCard({ label: "今日提交率", value: rateText(done, should), note: "按今日应交", icon: "chart", tone: "blue" }) +
    "</section>"
   );
  }
@@ -1452,30 +1388,32 @@
   if (isAdmin()) {
    var depts = ((state.meta && state.meta.depts) || [])
     .map(function (item) {
-     return '<button type="button" class="work-chip' + (state.dept === item.code ? " is-on" : "") + '" data-dept-filter="' + esc(item.code) + '">' + esc(item.name) + "</button>";
+     return uiTab(item.code, item.name, state.dept === item.code, 'data-dept-filter="' + esc(item.code) + '"');
     })
     .join("");
    chips =
-    '<div class="work-card work-filters"><span>部门</span><button type="button" class="work-chip' +
-    (state.dept ? "" : " is-on") +
-    '" data-dept-filter="">全部</button>' +
-    depts +
-    '<label class="work-search">找人<input data-board-q data-keep-focus="board" value="' +
-    esc(state.boardQuery) +
-    '" placeholder="姓名、工号、事项关键词"></label><span class="work-count" data-board-count' +
-    (state.boardQuery ? "" : " hidden") +
-    ">显示 " +
-    reportRows().length +
-    " / " +
-    ((state.report && state.report.rows) || []).length +
-    "</span></div>";
+    uiCard(
+     "部门",
+     uiTabs(uiTab("", "全部", !state.dept, 'data-dept-filter=""') + depts) +
+      '<div class="work-form"><label class="work-field is-grow">找人<input data-board-q data-keep-focus="board" value="' +
+      esc(state.boardQuery) +
+      '" placeholder="姓名、工号、事项关键词"></label><span class="work-muted" data-board-count' +
+      (state.boardQuery ? "" : " hidden") +
+      ">显示 " +
+      reportRows().length +
+      " / " +
+      ((state.report && state.report.rows) || []).length +
+      "</span></div>"
+    );
   }
   return (
-   '<div class="work-card work-context"><label class="work-field">工作日期<input type="date" data-work-date min="2020-01-01" max="' +
+   '<div class="work-context"><label class="work-field">工作日期<input type="date" data-work-date min="2020-01-01" max="' +
    esc(max) +
    '" value="' +
    esc(date) +
-   '"></label><button type="button" class="work-chip" data-today>今天</button><span class="work-filler">填报人 <strong>' +
+   '"></label>' +
+   uiButton("今天", "data-today", { variant: "secondary" }) +
+   '<span class="work-filler">填报人 <strong>' +
    esc(fillerName()) +
    "</strong></span></div>" +
    chips
@@ -1483,17 +1421,14 @@
  }
 
  function renderBlank(text, offer) {
-  return (
-   '<section class="work-card work-blank"><p>' +
-   esc(text) +
-   "</p>" +
-   (offer ? '<button type="button" class="work-primary" data-write>＋ 立即填写日报</button>' : "") +
-   "</section>"
-  );
+  return uiCard("", uiEmpty(text) + (offer ? uiButton("立即填写日报", "data-write") : ""));
  }
 
  function renderGuide() {
-  return '<section class="work-card work-guide"><h2>日报填写说明</h2><div><i>1</i><b>填写内容</b><small>总结当日工作、完成情况、问题与计划</small></div><div><i>2</i><b>提交当天</b><small>部门事项和店铺日报交上后记入汇总</small></div><div><i>3</i><b>汇总查看</b><small>在工作汇总中查看团队日报与统计</small></div></section>';
+  return uiCard(
+   "日报填写说明",
+   '<div class="work-guide"><div><b>填写内容</b><small>总结当日工作、完成情况、问题与计划</small></div><div><b>提交当天</b><small>部门事项和店铺日报交上后记入汇总</small></div><div><b>汇总查看</b><small>在工作汇总中查看团队日报与统计</small></div></div>'
+  );
  }
 
  function renderToday() {
@@ -1510,137 +1445,135 @@
    fillBlock = renderBlank(skip ? "你所在部门不需要工作汇报。" : "这一天还没有人需要汇报。", !skip);
   } else {
    if (canFill) {
-    fillBlock =
-     '<section class="work-card"><div class="work-cardhead"><div><h2>' +
-     esc(dateLabel(date)) +
-     (mine.deptName ? " · " + esc(mine.deptName) : "") +
-     '</h2><p class="work-lead">按罗成配好的模板填，一天一张表。</p></div>' +
-     '<button type="button" class="work-primary" data-save-mine>保存这一天</button></div>' +
-     renderFillTable(mine, true) +
-     "</section>";
+    fillBlock = uiCard(
+     dateLabel(date) + (mine.deptName ? " · " + mine.deptName : ""),
+     renderFillTable(mine, true) + uiButton("保存这一天", "data-save-mine"),
+     "按罗成配好的模板填，一天一张表。"
+    );
    } else if (!hasShops && !rows) {
-    fillBlock = '<div class="work-card"><div class="work-empty">今天没有需要填的事项。</div></div>';
+    fillBlock = uiCard("", uiEmpty("今天没有需要填的事项。"));
    }
    if (isAdmin() && rows) {
     fillBlock += renderAdminTable(date);
    }
    diary = renderDiaryFill();
   }
-  return '<div class="work-panel">' + renderPulse() + renderFilterBar() + fillBlock + diary + renderGuide() + "</div>";
+  return '<div class="work-stack">' + renderPulse() + renderFilterBar() + fillBlock + diary + renderGuide() + "</div>";
  }
 
  function renderTemplateEditor(items, personMode) {
-  var rows = (items || [])
-   .map(function (item, index) {
-    return (
-     "<tr><td>" +
-     (index + 1) +
-     '</td><td><input data-tpl-key="' +
-     esc(item.key || "") +
-     '" data-tpl-label="' +
-     index +
-     '" value="' +
-     esc(item.label) +
-     '"></td><td><button type="button" class="work-mini" data-tpl-del="' +
-     index +
-     '">删除</button></td></tr>'
-    );
-   })
-   .join("");
-  return (
-   '<div class="work-card"><h2>' +
-   (personMode ? "个人工作事项" : "部门默认事项") +
-   "</h2>" +
-   '<p class="work-lead">' +
-   (personMode && !personTemplate(state.personId).length
+  var rows = (items || []).map(function (item, index) {
+   return { index: index, key: item.key || "", label: item.label };
+  });
+  var table = rows.length
+   ? xm().DataTable({
+      columns: [
+       { key: "index", label: "#", render: function (value) { return String(value + 1); } },
+       {
+        key: "label",
+        label: "事项名称",
+        render: function (value, item) {
+         return '<input data-tpl-key="' + esc(item.key) + '" data-tpl-label="' + item.index + '" value="' + esc(value) + '">';
+        }
+       },
+       {
+        key: "index",
+        label: "操作",
+        render: function (value) {
+         return uiButton("删除", 'data-tpl-del="' + value + '"', { variant: "secondary" });
+        }
+       }
+      ],
+      rows: rows
+     })
+   : uiEmpty("还没有事项");
+  return uiCard(
+   personMode ? "个人工作事项" : "部门默认事项",
+   table +
+    '<div class="work-form"><label class="work-field">新增事项<input data-tpl-new placeholder="例如：店铺运营"></label>' +
+    uiButton("添加", "data-tpl-add", { variant: "secondary" }) +
+    uiButton("保存模板", "data-tpl-save") +
+    (personMode ? uiButton("改回部门模板", "data-tpl-reset", { variant: "secondary" }) : "") +
+    "</div>",
+   personMode && !personTemplate(state.personId).length
     ? "这个人还没有个人模板，下面是部门事项。保存后只给这个人用。"
-    : "他们打开工作汇报时，按这个表格填每天事项。") +
-   "</p>" +
-   '<div class="work-table-wrap"><table class="work-table"><thead><tr><th>#</th><th>事项名称</th><th></th></tr></thead><tbody>' +
-   (rows || '<tr><td colspan="3" class="work-empty">还没有事项</td></tr>') +
-   "</tbody></table></div>" +
-   '<div class="work-form"><label class="work-field">新增事项<input data-tpl-new placeholder="例如：店铺运营"></label>' +
-   '<button type="button" class="work-mini" data-tpl-add>添加</button>' +
-   '<button type="button" class="work-primary" data-tpl-save>保存模板</button>' +
-   (personMode ? '<button type="button" class="work-mini" data-tpl-reset>改回部门模板</button>' : "") +
-   "</div></div>"
+    : "他们打开工作汇报时，按这个表格填每天事项。"
   );
  }
 
  function renderPeopleTable() {
   var all = (state.settings && state.settings.people) || [];
   var people = rosterPeople();
-  var body = people
-   .map(function (person) {
-    var on = person.deptCode === state.settingsDept;
-    var orgName = person.orgBoardName || (person.orgBoard ? person.orgBoard : "未分部门");
-    return (
-     "<tr" +
-     (personVisible(person) ? "" : " hidden") +
-     ' data-person-row="' +
-     esc(person.id) +
-     '" data-org-board="' +
-     esc(person.orgBoard || "") +
-     '" data-dept="' +
-     esc(person.deptCode || "") +
-     '" data-blob="' +
-     esc(rosterBlob(person)) +
-     '"><td class="work-check"><input type="checkbox" data-assign="' +
-     esc(person.id) +
-     '"' +
-     (on ? " checked" : "") +
-     "></td><td>" +
-     esc(person.name) +
-     "</td><td>" +
-     esc(person.role) +
-     "</td><td>" +
-     esc(person.center) +
-     "</td><td>" +
-     esc(orgName) +
-     "</td><td>" +
-     esc(person.seat || "—") +
-     '</td><td class="work-duty">' +
-     rosterDuty(person) +
-     "</td><td>" +
-     esc(person.deptName || "不汇报") +
-     "</td></tr>"
-    );
-   })
-   .join("");
-  var boards = [{ code: "", name: "全部组织部门" }]
-   .concat(orgBoards())
-   .concat([{ code: "none", name: "未分部门" }]);
-  return (
-   '<div class="work-card"><h2>按责权加人</h2>' +
-   '<p class="work-lead">名单来自组织中心在职人员。勾上的人按当前部门模板填报。</p>' +
+  var boards = [{ code: "", name: "全部组织部门" }].concat(orgBoards()).concat([{ code: "none", name: "未分部门" }]);
+  var table = people.length
+   ? xm().DataTable({
+      columns: [
+       {
+        key: "id",
+        label: "汇报",
+        render: function (_value, person) {
+         return '<input type="checkbox" data-assign="' + esc(person.id) + '"' + (person.deptCode === state.settingsDept ? " checked" : "") + ">";
+        }
+       },
+       { key: "name", label: "姓名" },
+       { key: "role", label: "岗位" },
+       { key: "center", label: "所属中心" },
+       {
+        key: "org",
+        label: "组织部门",
+        render: function (_value, person) {
+         return esc(person.orgBoardName || person.orgBoard || "未分部门");
+        }
+       },
+       {
+        key: "seat",
+        label: "席位",
+        render: function (value) {
+         return esc(value || "—");
+        }
+       },
+       {
+        key: "duty",
+        label: "责权",
+        render: function (_value, person) {
+         return rosterDuty(person);
+        }
+       },
+       {
+        key: "deptName",
+        label: "当前汇报",
+        render: function (value) {
+         return esc(value || "不汇报");
+        }
+       }
+      ],
+      rows: people
+     })
+   : uiEmpty(all.length ? "没有符合筛选的人" : "组织中心还没有人");
+  return uiCard(
+   "按责权加人",
    '<div class="work-form"><label class="work-field is-grow">搜索<input data-roster-q data-keep-focus="roster" value="' +
-   esc(state.rosterQuery) +
-   '" placeholder="姓名、中心、店铺、主管"></label><span class="work-count" data-roster-count>显示 ' +
-   people.length +
-   " / " +
-   all.length +
-   "</span></div>" +
-   '<div class="work-chiprow">' +
-   chip("data-roster-scope", "all", "全部", state.rosterScope) +
-   chip("data-roster-scope", "open", "未排", state.rosterScope) +
-   chip("data-roster-scope", "here", "本部门", state.rosterScope) +
-   chip("data-roster-scope", "other", "其他汇报部门", state.rosterScope) +
-   "</div>" +
-   '<div class="work-chiprow">' +
-   boards
-    .map(function (item) {
-     return chip("data-org-board", item.code, item.name, state.orgBoard);
-    })
-    .join("") +
-   "</div>" +
-   '<div class="work-table-wrap work-roster-scroll"><table class="work-table"><thead><tr><th>汇报</th><th>姓名</th><th>岗位</th><th>所属中心</th><th>组织部门</th><th>席位</th><th>责权</th><th>当前汇报</th></tr></thead><tbody>' +
-   body +
-   '<tr data-roster-empty' +
-   (people.length ? " hidden" : "") +
-   '><td colspan="8" class="work-empty">' +
-   (all.length ? "没有符合筛选的人" : "组织中心还没有人") +
-   "</td></tr>" +
-   "</tbody></table></div></div>"
+    esc(state.rosterQuery) +
+    '" placeholder="姓名、中心、店铺、主管"></label><span class="work-muted" data-roster-count>显示 ' +
+    people.length +
+    " / " +
+    all.length +
+    "</span></div>" +
+    uiTabs(
+     chip("data-roster-scope", "all", "全部", state.rosterScope) +
+      chip("data-roster-scope", "open", "未排", state.rosterScope) +
+      chip("data-roster-scope", "here", "本部门", state.rosterScope) +
+      chip("data-roster-scope", "other", "其他汇报部门", state.rosterScope)
+    ) +
+    uiTabs(
+     boards
+      .map(function (item) {
+       return chip("data-org-board", item.code, item.name, state.orgBoard);
+      })
+      .join("")
+    ) +
+    table,
+   "名单来自组织中心在职人员。勾上的人按当前部门模板填报。"
   );
  }
 
@@ -1663,28 +1596,13 @@
     })
    )
    .join("");
-  return (
-   '<div class="work-card work-form"><label class="work-field">给谁配事项<select data-person-tpl>' +
-   options +
-   "</select></label></div>"
-  );
+  return uiCard("", '<div class="work-form"><label class="work-field">给谁配事项<select data-person-tpl>' + options + "</select></label></div>");
  }
 
  function renderSettings() {
   var depts = ((state.meta && state.meta.depts) || [])
-   .map(function (item, index) {
-    return (
-     '<button type="button" class="work-dept work-c' +
-     (index % 3) +
-     (state.settingsDept === item.code ? " is-on" : "") +
-     '" data-settings-dept="' +
-     esc(item.code) +
-     '"><b>' +
-     esc(item.name) +
-     "</b><span>" +
-     countDept(item.code) +
-     " 人需汇报</span></button>"
-    );
+   .map(function (item) {
+    return uiTab(item.code, item.name + " · " + countDept(item.code) + " 人", state.settingsDept === item.code, 'data-settings-dept="' + esc(item.code) + '"');
    })
    .join("");
   var items = Number(state.personId)
@@ -1693,9 +1611,8 @@
     : deptTemplate(state.settingsDept)
    : deptTemplate(state.settingsDept);
   return (
-   '<div class="work-panel"><div class="work-depts">' +
-   depts +
-   "</div>" +
+   '<div class="work-stack">' +
+   uiTabs(depts) +
    renderPeopleTable() +
    renderPersonPicker() +
    renderTemplateEditor(items, Boolean(Number(state.personId))) +
@@ -1714,23 +1631,23 @@
   var admin = isAdmin();
   var leader = Boolean(state.diary && state.diary.leader);
   function tabBtn(id, label, count) {
-   return '<button type="button" class="work-tab" data-tab="' + id + '" aria-selected="' + (state.tab === id) + '">' + label + dot(count) + "</button>";
+   var button = uiTab(id, label, state.tab === id, 'data-tab="' + id + '" aria-selected="' + (state.tab === id) + '"');
+   var n = Number(count) || 0;
+   if (n > 0) {
+    button = button.replace("</button>", '<span data-work-count>' + uiBadge(String(n > 99 ? 99 : n), "danger") + "</span></button>");
+   }
+   return button;
   }
-  var tabs =
-   '<div class="work-tabs" role="tablist">' +
+  var tabs = uiTabs(
    tabBtn("today", "填写日报") +
-   tabBtn("summary", "工作汇总") +
-   (leader ? tabBtn("duty", "提交情况") : "") +
-   (admin ? tabBtn("settings", "部门设置") + tabBtn("diarySettings", "日报设置") : "") +
-   '<button type="button" class="work-tab" data-tab="todo" aria-selected="' +
-   (state.tab === "todo") +
-   '">待办事项' +
-   dot(state.badges.todo) +
-   "</button>" +
-   tabBtn("taskPublish", "发布任务") +
-   tabBtn("taskMine", "我的任务", state.badges.mine) +
-   tabBtn("taskReview", "待检查任务", state.badges.review) +
-   "</div>";
+    tabBtn("summary", "工作汇总") +
+    (leader ? tabBtn("duty", "提交情况") : "") +
+    (admin ? tabBtn("settings", "部门设置") + tabBtn("diarySettings", "日报设置") : "") +
+    tabBtn("todo", "待办事项", state.badges.todo) +
+    tabBtn("taskPublish", "发布任务") +
+    tabBtn("taskMine", "我的任务", state.badges.mine) +
+    tabBtn("taskReview", "待检查任务", state.badges.review)
+  );
   var taskTab = state.tab === "taskPublish" || state.tab === "taskMine" || state.tab === "taskReview";
   var body =
    taskTab
@@ -1755,10 +1672,20 @@
    state.tab === "duty"
     ? '<div class="work-tools"><label class="work-field">日期<input type="date" data-work-date min="2020-01-01" max="2099-12-31" value="' +
      esc(date) +
-     '"></label><button type="button" class="work-mini" data-today>今天</button><span class="work-lead">人数按人计，店铺按店计。</span></div>'
+     '"></label>' +
+     uiButton("今天", "data-today", { variant: "secondary" }) +
+     '<span class="work-lead">人数按人计，店铺按店计。</span></div>'
     : "";
+  var header = xm().PageContentHeader({
+   title: "工作汇报",
+   description: "员工日常工作汇报、任务进展与成果沉淀"
+  }).replace(
+   "</header>",
+   '<div class="xm-ui-page-actions">' + uiButton("汇报统计", 'data-tab="summary"', { variant: "secondary" }) + uiButton("写日报", 'data-write="today"') + "</div></header>"
+  );
   root.innerHTML =
-   '<main class="page work-page"><header class="work-head"><div class="work-brand"><i class="work-logo" aria-hidden="true"></i><div><h1>工作汇报</h1><p>员工日常工作汇报、任务进展与成果沉淀</p></div></div><div class="work-actions"><button type="button" class="work-ghost" data-tab="summary">汇报统计</button><button type="button" class="work-primary" data-write="today">＋ 写日报</button></div></header>' +
+   '<main class="xm-ui-scope work-page">' +
+   header +
    tabs +
    '<p class="work-msg' +
    (state.error ? " is-error" : "") +
@@ -1804,7 +1731,7 @@
   script.setAttribute("data-work-tasks", "");
   script.onload = run;
   script.onerror = function () {
-   if (host.isConnected) host.innerHTML = '<div class="work-card"><div class="work-empty">任务页面没有载入</div></div>';
+   if (host.isConnected) host.innerHTML = uiCard("", uiEmpty("任务页面没有载入"));
   };
   document.head.appendChild(script);
  }
@@ -2438,13 +2365,17 @@
    var roster = event.target.closest("[data-roster-q]");
    if (roster) {
     state.rosterQuery = roster.value || "";
-    applyRosterFilter(root);
+    state.keepFocus = "roster";
+    state.keepCaret = roster.selectionStart;
+    paint(root);
     return;
    }
    var boardQuery = event.target.closest("[data-board-q]");
    if (boardQuery) {
     state.boardQuery = boardQuery.value || "";
-    applyBoardFilter(root);
+    state.keepFocus = "board";
+    state.keepCaret = boardQuery.selectionStart;
+    paint(root);
    }
   });
  }
@@ -2473,19 +2404,19 @@
    state.todoOpen = state.badges.todo > 0;
    var map = { todo: state.badges.todo, taskMine: state.badges.mine, taskReview: state.badges.review };
    Object.keys(map).forEach(function (id) {
-    var btn = root.querySelector('.work-tab[data-tab="' + id + '"]');
+    var btn = root.querySelector('.xm-ui-tab[data-tab="' + id + '"]');
     if (!btn) return;
-    var mark = btn.querySelector(".work-dot");
+    var mark = btn.querySelector("[data-work-count]");
     if (!map[id]) {
      if (mark) mark.remove();
      return;
     }
     if (!mark) {
-     mark = document.createElement("i");
-     mark.className = "work-dot";
+     mark = document.createElement("span");
+     mark.setAttribute("data-work-count", "");
      btn.appendChild(mark);
     }
-    mark.textContent = String(map[id] > 99 ? 99 : map[id]);
+    mark.innerHTML = uiBadge(String(map[id] > 99 ? 99 : map[id]), "danger");
    });
    paintNavBadge();
   }).catch(function () {});
@@ -2509,7 +2440,7 @@
    state.keepFocus = "";
    state.msg = "";
    state.error = false;
-   root.innerHTML = '<main class="page work-page"><p class="work-empty">正在打开工作汇报…</p></main>';
+   root.innerHTML = '<main class="xm-ui-scope work-page">' + (window.XmUI ? window.XmUI.EmptyState({ title: "正在打开工作汇报" }) : "") + "</main>";
    if (!root.dataset.workBound) {
     root.dataset.workBound = "1";
     bind(root);
