@@ -534,7 +534,11 @@ export async function discoverAgent() {
       signal: AbortSignal.timeout(8000)
     });
     const data = await res.json();
-    const rows = appRows(data).filter((app) => app && (app.agentId || app.agentid));
+    if (data.code || data.errcode) {
+      await rememberAgent("");
+      return { ok: false, names: [], error: String(data.message || data.errmsg || "还读不到工作通知 AgentId").slice(0, 80) };
+    }
+    const rows = appRows(data.result || data).filter((app) => app && (app.agentId || app.agentid));
     names = rows.map((app) => String(app.name || app.appName || "未命名"));
     const enabled = rows.filter((app) => app.appStatus === undefined || Number(app.appStatus) === 1);
     const pool = enabled.length ? enabled : rows;
