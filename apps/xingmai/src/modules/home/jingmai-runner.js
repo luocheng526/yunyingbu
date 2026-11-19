@@ -669,6 +669,14 @@ async function startQueued(shop, epoch) {
       message: loginCursor.message
     });
   }
+  if (opened && opened.humanBusy) {
+    return publicState({
+      status: "screen",
+      store: shop.store,
+      step: "京麦登录页",
+      message: "登录窗口正开着"
+    });
+  }
   if (deps.desk && deps.desk.close) {
     await deps.desk.close();
   }
@@ -1057,17 +1065,36 @@ export async function reloginState(store) {
     const cookies = state.cookies || [];
     const cached = orgCache.get(name);
     const kept = await rememberLogin(name, cookies, { store: name, shopId: (cached && cached.shopId) || "" });
-    await deps.desk.close();
     if (kept === "kept") {
       return publicState({ status: "login", store: name, message: "这次登录到的不是这家店，原来的会话还在" });
     }
     if (kept !== "saved") {
-      return publicState({ status: "screen", store: name, message: "登录没有通过，请再试一次" });
+      const inside = /shop\.jd\.com/i.test(String(state.href || ""));
+      return publicState({
+        status: "screen",
+        store: name,
+        message: inside ? "已经进到商家后台，请看画面确认是不是这家店" : "登录没有通过，请再试一次"
+      });
+    }
+    if (deps.desk && deps.desk.close) {
+      await deps.desk.close();
     }
     return advanceAfterSuccess(name);
   }
   if (state.status === "missing") {
     return publicState({ status: "missing", store: name, message: state.message || "请重新打开登录" });
+  }
+  if (state.status === "opening" && loginCursor.phase === "screen") {
+    const kept = /点登录|账号和密码|正在登录/.test(String(loginCursor.message || ""))
+      ? loginCursor.message
+      : "正在登录，请看下面的画面";
+    loginCursor.message = kept;
+    return publicState({
+      status: "screen",
+      store: name,
+      step: "京麦登录页",
+      message: kept
+    });
   }
   if (state.status === "opening" || loginCursor.phase === "opening") {
     return publicState({
@@ -1105,7 +1132,7 @@ export async function reloginInput(body) {
   }
   const started = Date.now();
   let state = await reloginState(name);
-  while (state.status === "screen" && Date.now() - started < 8000) {
+  while (state.status === "screen" && Date.now() - started < 1200) {
     await new Promise(function (resolve) {
       setTimeout(resolve, 400);
     });
@@ -1165,6 +1192,9 @@ async function silentOne(shop) {
   });
   shop.login = "";
   shop.password = "";
+  if (opened && opened.humanBusy) {
+    return { store: shop.store, status: "busy" };
+  }
   if (opened.status === "ok") {
     await deps.desk.close();
     const kept = await rememberLogin(shop.store, opened.cookies || [], { shopId: shop.shopId || "", store: shop.store });

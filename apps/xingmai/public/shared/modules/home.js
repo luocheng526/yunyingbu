@@ -5468,6 +5468,12 @@
         if (next.status === "verify" || next.status === "login" || next.status === "missing" || !next.status) {
           next.status = "screen";
         }
+        if ((next.status === "opening" || /启动浏览器/.test(String(next.message || ""))) && prev.open && root.querySelector("#xm-hm-desk-shot")) {
+          if (/启动浏览器/.test(String(next.message || "")) && prev.message && !/启动浏览器/.test(prev.message)) {
+            next.message = prev.message;
+          }
+          next.status = "screen";
+        }
         var keepShot = prev.open && root.querySelector("#xm-hm-desk-shot");
         state.desk = next;
         if (keepShot && next.status === "screen") {
@@ -5502,6 +5508,9 @@
             next.preview = false;
             next.store = next.store || keptStore;
             if (!next.message) {
+              next.message = keptMessage;
+            }
+            if (/启动浏览器/.test(String(next.message || "")) && keptMessage && !/启动浏览器/.test(keptMessage)) {
               next.message = keptMessage;
             }
             next.status = "screen";

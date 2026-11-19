@@ -235,6 +235,24 @@ test("clicking the captcha confirm button aims at the button", () => {
   assert.equal(aim.y, 216);
 });
 
+test("a click on 立即登录 aims at that button and ignores 无法登录", () => {
+  const help = node("BUTTON", { text: "无法登录", rect: box(40, 160, 70, 20) });
+  const button = node("BUTTON", { text: "立即登录", rect: box(40, 200, 220, 40) });
+  const doc = node("DIV", { kids: [help, button], rect: box(0, 0, 400, 320) });
+  doc.elementFromPoint = function (x, y) {
+    const hit = button.rect;
+    if (x >= hit.left && x <= hit.left + hit.width && y >= hit.top && y <= hit.top + hit.height) {
+      return button;
+    }
+    return help;
+  };
+  const aim = loginPageAction(doc, { x: 150, y: 220 });
+  assert.equal(aim.text, "立即登录");
+  assert.equal(aim.kind, "button");
+  const missed = loginPageAction(doc, { x: 50, y: 170 });
+  assert.equal(missed.text, "无法登录");
+});
+
 test("a click just outside the confirm button still aims at it", () => {
   const button = node("BUTTON", { text: "确定", rect: box(100, 200, 80, 32) });
   const doc = node("DIV", { kids: [button], rect: box(0, 0, 400, 300) });
@@ -503,6 +521,46 @@ test("opening a shop reports the browser step before the login page is ready", a
     assert.equal(screen.store, "飒望生活日用旗舰店");
     assert.equal(screen.step, "京麦登录页");
     assert.match(screen.message, /服务器画面/);
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
+test("a login picture stays up when a later poll only says the browser is starting", async () => {
+  await resetJingmaiStore();
+  let mode = "verify";
+  setJingmaiDeps(deskDeps({
+    loadOrg: async () => [
+      { store: "RASW家居旗舰店", enabled: true, login: "shop", password: "secret", shopId: "1" }
+    ],
+    desk: {
+      open: async function () {
+        return { status: "verify", message: "账号和密码已经填好，请在画面里点登录" };
+      },
+      close: async function () {
+        throw new Error("the open login window must stay");
+      },
+      poll: async function () {
+        if (mode === "verify") {
+          return { status: "verify", message: "账号和密码已经填好，请在画面里点登录" };
+        }
+        return { status: "opening", message: "正在启动浏览器 1/1" };
+      }
+    }
+  }));
+  try {
+    await beginRelogin("RASW家居旗舰店", "cookie", { manual: true });
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 40);
+    });
+    const screen = await reloginState("RASW家居旗舰店");
+    assert.equal(screen.status, "screen");
+    assert.match(screen.message, /点登录/);
+    mode = "opening";
+    const again = await reloginState("RASW家居旗舰店");
+    assert.equal(again.status, "screen");
+    assert.match(again.message, /点登录/);
+    assert.equal(/启动浏览器/.test(again.message), false);
   } finally {
     resetJingmaiDeps();
   }

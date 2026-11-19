@@ -1539,6 +1539,9 @@ function stopBooting() {
   if (!chrome || chrome.exitCode != null) {
     return;
   }
+  if (current && current.chrome === chrome) {
+    return;
+  }
   try {
     chrome.kill("SIGKILL");
   } catch {
@@ -1787,12 +1790,19 @@ function browserLaunchError(error) {
 
 let lastLaunchNote = "";
 
+function rememberLaunch(text) {
+  if (current && current.human) {
+    return;
+  }
+  lastLaunchNote = text;
+}
+
 async function launchChrome(signal, options) {
   if (signal && signal.aborted) {
     throw browserAbortError();
   }
   const opts = options || {};
-  lastLaunchNote = "正在找服务器上的 Chrome";
+  rememberLaunch("正在找服务器上的 Chrome");
   stopBooting();
   const bins = [];
   browserLaunchOrder([
@@ -1809,10 +1819,10 @@ async function launchChrome(signal, options) {
     }
   });
   if (!bins.length) {
-    lastLaunchNote = "服务器上没有可用的 Chrome";
-    throw browserLaunchError(new Error(lastLaunchNote));
+    rememberLaunch("服务器上没有可用的 Chrome");
+    throw browserLaunchError(new Error("服务器上没有可用的 Chrome"));
   }
-  lastLaunchNote = "正在启动 " + bins[0];
+  rememberLaunch("正在启动 " + bins[0]);
   let lastError = null;
   for (let i = 0; i < bins.length; i += 1) {
     if (signal && signal.aborted) {
@@ -1844,14 +1854,14 @@ async function launchChrome(signal, options) {
       if (signal && signal.aborted) {
         throw browserAbortError();
       }
-      lastLaunchNote = "正在启动浏览器 " + (i + 1) + "/" + bins.length;
+      rememberLaunch("正在启动浏览器 " + (i + 1) + "/" + bins.length);
       try {
         return await startChromeProcess(chromePath, signal, 8000, flagSets[f], opts);
       } catch (error) {
         lastError = error;
         const message = String((error && error.message) || "");
         if (message && message !== "aborted") {
-          lastLaunchNote = message;
+          rememberLaunch(message);
         }
         stopBooting();
         if (!freedProfile && !opts.ephemeral && profileBusy(message)) {
@@ -2296,6 +2306,9 @@ async function acquireDesk(store, ticket, signal, shopId, manual) {
   if (signal && signal.aborted) {
     return null;
   }
+  if (manual !== true && current && current.human && deskUsable(current)) {
+    return null;
+  }
   const identity = profileIdentity({ store: store, shopId: shopId });
   if (identity.shopId && identity.store) {
     rememberProfileBinding(identity);
@@ -2338,6 +2351,7 @@ async function acquireDesk(store, ticket, signal, shopId, manual) {
   }
   desk.store = store;
   desk.shopId = shopId || "";
+  desk.human = manual === true;
   current = desk;
   loginVisible = true;
   lastLaunchNote = "浏览器已打开，正在接登录页";
@@ -2351,6 +2365,13 @@ async function acquireDesk(store, ticket, signal, shopId, manual) {
 
 export async function closeDesk() {
   openTicket += 1;
+  if (!deskUsable(current) && current && current.chrome && current.chrome.exitCode == null) {
+    try {
+      await reconnectDesk(current);
+    } catch {
+      /* the picture is already gone */
+    }
+  }
   if (!deskUsable(current)) {
     stopCurrent();
     return;
@@ -2500,6 +2521,9 @@ async function finishOpen(desk, loginName, password, ticket, manual) {
 }
 
 export async function openDesk({ store, loginName, password, reveal, onStep, signal, shopId, manual } = {}) {
+  if (manual !== true && current && current.human && deskUsable(current)) {
+    return { status: "busy", humanBusy: true, message: "登录窗口正开着" };
+  }
   const ticket = ++openTicket;
   const step = function (message) {
     if (message && typeof onStep === "function") {
@@ -2603,7 +2627,7 @@ export async function pollDesk(store) {
     const cookies = await readCookies(current.ws);
     const href = await evaluate(current.ws, "location.href");
     if (sessionReady(href, cookies)) {
-      return { status: "ok", cookies: cookies };
+      return { status: "ok", cookies: cookies, href: String(href || "") };
     }
     loginVisible = true;
   } catch {
@@ -2627,6 +2651,9 @@ function holdShots(ms) {
 
 export async function shotDesk(store) {
   if (!current || current.store !== store) {
+    if (shotCache.ready && shotCache.store === store && shotCache.image && Date.now() - shotCache.at < 15000) {
+      return shotCache.image;
+    }
     return null;
   }
   if (!deskUsable(current)) {
@@ -2730,11 +2757,34 @@ export function loginPageAction(doc, action) {
     };
   }
   function pointOf(node, fallbackX, fallbackY, kind) {
+    const text = textOf(node);
     if (!node || !node.getBoundingClientRect) {
-      return { kind: kind || "point", x: Math.round(fallbackX), y: Math.round(fallbackY) };
+      return { kind: kind || "point", x: Math.round(fallbackX), y: Math.round(fallbackY), text: text };
     }
     const box = topBox(node);
-    return { kind: kind || "button", x: Math.round(box.cx), y: Math.round(box.cy) };
+    return { kind: kind || "button", x: Math.round(box.cx), y: Math.round(box.cy), text: text };
+  }
+  function loginButton(root, x, y) {
+    let best = null;
+    let bestDist = 16;
+    docsOf(root).forEach(function (item) {
+      const nodes = item.querySelectorAll ? item.querySelectorAll("button, [role=button], input[type=submit]") : [];
+      for (let i = 0; i < nodes.length; i += 1) {
+        const text = textOf(nodes[i]);
+        if (!visible(nodes[i]) || (text !== "登录" && text !== "立即登录")) {
+          continue;
+        }
+        const box = topBox(nodes[i]);
+        const dx = Math.max(box.left - x, 0, x - (box.left + box.width));
+        const dy = Math.max(box.top - y, 0, y - (box.top + box.height));
+        const dist = Math.hypot(dx, dy);
+        if (dist <= bestDist) {
+          best = nodes[i];
+          bestDist = dist;
+        }
+      }
+    });
+    return best;
   }
   function elementAt(root, x, y) {
     let current = root;
@@ -2952,9 +3002,12 @@ export function loginPageAction(doc, action) {
   }
   const rawX = Number(action && action.x) || 0;
   const rawY = Number(action && action.y) || 0;
-  const hit = clickable(elementAt(doc, rawX, rawY)) || nearConfirm(doc, rawX, rawY);
+  const rawHit = clickable(elementAt(doc, rawX, rawY));
+  const rawText = textOf(rawHit);
+  const loginHit = rawText === "登录" || rawText === "立即登录" ? rawHit : loginButton(doc, rawX, rawY);
+  const hit = loginHit || rawHit || nearConfirm(doc, rawX, rawY);
   if (!hit) {
-    return { kind: "point", x: Math.round(rawX), y: Math.round(rawY) };
+    return { kind: "point", x: Math.round(rawX), y: Math.round(rawY), text: "" };
   }
   return pointOf(hit, rawX, rawY, "button");
 }
@@ -3017,6 +3070,24 @@ export async function clickDesk(store, x, y, image) {
     }
   } catch {
     aim = { kind: "point", x: point.x, y: point.y };
+  }
+  if (aim.text === "立即登录" || aim.text === "登录") {
+    try {
+      const pressed = await evaluate(current.ws, `(() => {
+        const button = [...document.querySelectorAll("button, [role=button], input[type=submit]")].find((node) => {
+          const text = String(node.innerText || node.value || "").replace(/\\s+/g, "");
+          return text === "立即登录" || text === "登录";
+        });
+        if (!button || !button.click) return false;
+        button.click();
+        return true;
+      })()`);
+      if (pressed) {
+        return;
+      }
+    } catch {
+      /* fall through to the coordinate click */
+    }
   }
   await mouseClick(current.ws, aim.x, aim.y);
 }

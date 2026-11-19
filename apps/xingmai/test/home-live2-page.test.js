@@ -19,6 +19,7 @@ test("实时（新版） sits after 近七天业绩汇总 and stays independent 
   assert.match(homeJs, /xm-hm-login-link is-wait[\s\S]{0,180}待接入<\/button>/);
   assert.match(homeJs, /manual: state\.view === "live2"/);
   assert.match(homeJs, /账号和密码已经填好，请在画面里点登录/);
+  assert.match(homeJs, /启动浏览器\/\.test\(String\(next\.message \|\| ""\)\) && keptMessage/);
   const panel = homeJs.slice(homeJs.indexOf("function live2PanelHtml"), homeJs.indexOf("function paint"));
   assert.match(panel, /liveDeskHtml\(state\)/);
 });
