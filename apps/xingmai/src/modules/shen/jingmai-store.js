@@ -6,7 +6,6 @@
 import {
   COLLECTOR_OWNER_HOME,
   COLLECTOR_OWNER_SHEN,
-  COLLECTOR_LEASE_SEC,
   assertCollectorWrite,
   claimCollectorOwner,
   collectorLeaseExpired,
@@ -27,7 +26,6 @@ import {
 export {
   COLLECTOR_OWNER_HOME,
   COLLECTOR_OWNER_SHEN,
-  COLLECTOR_LEASE_SEC,
   assertCollectorWrite,
   claimCollectorOwner,
   collectorLeaseExpired,

@@ -471,4 +471,7 @@ export function homeRouter() {
   return router;
 }
 
-startJingmaiCollector();
+// Gate smoke imports set MENKAI_SMOKE_LIVE and must not start the real collector.
+if (!process.env.MENGKAI_SMOKE_LIVE) {
+  startJingmaiCollector();
+}
