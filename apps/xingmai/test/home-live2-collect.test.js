@@ -298,6 +298,51 @@ test("成交金额先入库，广告超过截止时间后仍保留这笔成交�
   releaseAds();
 });
 
+test("a shop that times out keeps today's saved server reading instead of a blank row", async () => {
+  let done;
+  const gate = new Promise(function (resolve) {
+    done = resolve;
+  });
+  const collector = createLive2Collector({
+    storePath: "",
+    shopBudgetMs: 40,
+    loadOrg: async function () {
+      return [{ store: "DIKTT生活电器旗舰店", enabled: true, login: "a", password: "b", shopId: "1" }];
+    },
+    listSessions: async function () {
+      return [{ store: "DIKTT生活电器旗舰店", cookies: [{ name: "thor", value: "1" }] }];
+    },
+    listSamples: async function () {
+      return [{
+        store: "DIKTT生活电器旗舰店",
+        capturedAt: "2026-11-19 17:22:59",
+        dealAmount: 5958.55,
+        paidAmount: null,
+        ok: true
+      }];
+    },
+    now: function () {
+      return "2026/11/19 20:42:16";
+    },
+    track: function (task) {
+      task.then(done, done);
+    },
+    client: {
+      fetchHome: function () {
+        return new Promise(function () {});
+      }
+    }
+  });
+  await collector.start("");
+  await gate;
+  const view = await collector.board("");
+  const row = view.records[0];
+  assert.equal(row.liveAmount, 5958.55);
+  assert.equal(row.capturedAt, "2026/11/19 17:22:59");
+  assert.equal(row.pendingUpdate, true);
+  assert.equal(row.pendingCollect, false);
+});
+
 test("a new process reads the last published round in one board", async () => {
   const file = path.join(os.tmpdir(), "xingmai-live2-round-" + Date.now() + ".json");
   let done;
