@@ -543,6 +543,48 @@ test("刚生成的二维码遇到接口抖动也不换", async () => {
   assert.equal(status.qrToken, "keep1");
 });
 
+test("先返回的登录结果不会被后到的未扫码盖掉", async () => {
+  resetBoundStore();
+  let releaseFirst;
+  const gate = new Promise((resolve) => {
+    releaseFirst = resolve;
+  });
+  let checks = 0;
+  setBoundFetch(async (url) => {
+    const href = String(url);
+    const json = (body) => ({
+      headers: {
+        get() { return "application/json"; },
+        getSetCookie() { return []; }
+      },
+      json: async () => body,
+      arrayBuffer: async () => new ArrayBuffer(0)
+    });
+    if (href.includes("/auth/qrcode")) {
+      return json({ code: 0, data: { url: "https://biprodapi.ecbis.cn/prod/auth/showQr?scene=race", scene: "race" } });
+    }
+    if (href.includes("/auth/checkQrcode")) {
+      checks += 1;
+      if (checks === 1) {
+        await gate;
+        return json({ code: 1000102, content: "等待" });
+      }
+      return json({ code: 0, data: { nickName: "罗成" } });
+    }
+    return json({ code: 0, data: {} });
+  });
+  await startLink("WECHAT");
+  const first = pollLink();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const second = pollLink();
+  releaseFirst();
+  const done = await Promise.all([first, second]);
+  assert.equal(done[1].phase, "collecting");
+  assert.match(done[1].message, /已登录/);
+  const status = await linkStatus();
+  assert.equal(status.phase, "collecting");
+});
+
 test("旧页面脚本取图时，提示强制刷新，新脚本不再提示", async () => {
   resetBoundStore();
   setBoundFetch(async (url) => {
