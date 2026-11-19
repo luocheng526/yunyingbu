@@ -24,6 +24,7 @@ export function ensureCollectLoop() {
   if (timer || process.env.BOUND_COLLECT_LOOP === "0") {
     return;
   }
+  // 最近缺的日期优先，每次连续 3 条。旧的失败重试排在后面。
   timer = setInterval(() => {
     tick().catch(() => {});
   }, 1000);
