@@ -585,6 +585,169 @@ test("先返回的登录结果不会被后到的未扫码盖掉", async () => {
   assert.equal(status.phase, "collecting");
 });
 
+test("扫码接口通过但资料接口未登录时，不显示已登录", async () => {
+  setBoundFetch(async (url) => {
+    const href = String(url);
+    const json = (body) => ({
+      headers: {
+        get() { return "application/json"; },
+        getSetCookie() { return ["SESSION=super-secret-cookie"]; }
+      },
+      json: async () => body,
+      arrayBuffer: async () => new ArrayBuffer(0)
+    });
+    if (href.includes("/auth/qrcode")) {
+      return json({ code: 0, data: { url: "https://biprodapi.ecbis.cn/prod/auth/showQr?scene=half", scene: "half" } });
+    }
+    if (href.includes("/auth/checkQrcode")) {
+      return json({ code: 0, data: { nickName: "罗成", token: "secret-token" } });
+    }
+    if (href.includes("/auth/info")) {
+      return json({ code: -1, content: "用户未登录或登录状态已过期" });
+    }
+    return json({ code: 0, data: {} });
+  });
+  await startLink("WECHAT");
+  const status = await pollLink();
+  assert.notEqual(status.phase, "collecting");
+  assert.doesNotMatch(status.message, /已登录/);
+  assert.match(status.message, /请点下面的微信/);
+  assert.match(status.message, /token/);
+  assert.match(status.message, /SESSION/);
+  assert.doesNotMatch(status.message, /secret-token/);
+  assert.doesNotMatch(status.message, /super-secret-cookie/);
+  assert.equal(status.qrToken, "");
+});
+
+test("登录跳转里的凭证会带到资料接口", async () => {
+  let infoCookie = "";
+  setBoundFetch(async (url, options = {}) => {
+    const href = String(url);
+    const cookie = (options.headers && options.headers.Cookie) || "";
+    const json = (body, extra = {}) => ({
+      status: extra.status || 200,
+      headers: {
+        get(name) {
+          const key = String(name).toLowerCase();
+          if (key === "content-type") {
+            return "application/json";
+          }
+          if (key === "location") {
+            return extra.location || null;
+          }
+          return null;
+        },
+        getSetCookie() {
+          return extra.cookies || [];
+        }
+      },
+      json: async () => body,
+      arrayBuffer: async () => new ArrayBuffer(0)
+    });
+    if (href.includes("/auth/qrcode")) {
+      return json({ code: 0, data: { url: "https://biprodapi.ecbis.cn/prod/auth/showQr?scene=hop", scene: "hop" } });
+    }
+    if (href.includes("/auth/checkQrcode") && !href.includes("ok=1")) {
+      return json({ code: 0, data: {} }, {
+        status: 302,
+        location: "https://biprodapi.ecbis.cn/prod/auth/checkQrcode?ok=1",
+        cookies: ["SESSION=from-redirect"]
+      });
+    }
+    if (href.includes("ok=1")) {
+      return json({ code: 0, data: { nickName: "罗成" } });
+    }
+    if (href.includes("/auth/info")) {
+      infoCookie = cookie;
+      return json({ code: 0, data: { userInfo: { nickName: "罗成" } } });
+    }
+    return json({ code: 0, data: {} });
+  });
+  await startLink("WECHAT");
+  const status = await pollLink();
+  assert.equal(status.phase, "collecting");
+  assert.match(status.message, /已登录/);
+  assert.match(infoCookie, /SESSION=from-redirect/);
+});
+
+function loggedSession() {
+  const masters = {};
+  ["profile", "perms", "projects", "shops", "teams", "members", "goods"].forEach((id) => {
+    masters[id] = { status: "done", page: 1, attempts: 0 };
+  });
+  return masters;
+}
+
+test("采集中单个报表说未登录，资料接口仍通则继续", async () => {
+  await writeState("masters", loggedSession());
+  await writeState("session", {
+    phase: "collecting",
+    deviceId: "hold",
+    cookies: { JSESSIONID: "hold" },
+    scene: "old-scene",
+    qrUrl: "https://biprodapi.ecbis.cn/prod/auth/showQr?scene=old-scene",
+    userName: "罗成",
+    message: "已登录。从 2026-09-01 按北京时间补采，页面查询不会再打旧站。"
+  });
+  setBoundFetch(async (url) => {
+    const href = String(url);
+    const json = (body) => ({
+      headers: {
+        get() { return "application/json"; },
+        getSetCookie() { return []; }
+      },
+      json: async () => body,
+      arrayBuffer: async () => new ArrayBuffer(0)
+    });
+    if (href.includes("/auth/info")) {
+      return json({ code: 0, data: { userInfo: { nickName: "罗成" } } });
+    }
+    return json({ code: -1, content: "用户未登录或登录状态已过期" });
+  });
+  const status = await tick();
+  assert.equal(status.phase, "collecting");
+  const saved = await readState("session");
+  assert.equal(saved.phase, "collecting");
+  assert.doesNotMatch(saved.message || "", /未扫码/);
+});
+
+test("资料接口也未登录才停，旧码不再显示成未扫码", async () => {
+  await writeState("masters", loggedSession());
+  await writeState("session", {
+    phase: "collecting",
+    deviceId: "hold",
+    cookies: { JSESSIONID: "hold" },
+    scene: "old-scene",
+    qrUrl: "https://biprodapi.ecbis.cn/prod/auth/showQr?scene=old-scene",
+    userName: "罗成",
+    message: "已登录。从 2026-09-01 按北京时间补采，页面查询不会再打旧站。"
+  });
+  setBoundFetch(async (url) => {
+    const href = String(url);
+    const json = (body) => ({
+      headers: {
+        get() { return "application/json"; },
+        getSetCookie() { return []; }
+      },
+      json: async () => body,
+      arrayBuffer: async () => new ArrayBuffer(0)
+    });
+    if (href.includes("/auth/checkQrcode")) {
+      return json({ code: 1000102, content: "未扫码" });
+    }
+    return json({ code: -1, content: "用户未登录或登录状态已过期" });
+  });
+  const status = await tick();
+  assert.equal(status.phase, "needs_scan");
+  const saved = await readState("session");
+  assert.equal(saved.scene || "", "");
+  const again = await pollLink();
+  assert.equal(again.phase, "needs_scan");
+  assert.match(again.message, /请点下面的微信/);
+  assert.doesNotMatch(again.message, /未扫码/);
+  assert.equal(again.qrReady, false);
+});
+
 test("旧页面脚本取图时，提示强制刷新，新脚本不再提示", async () => {
   resetBoundStore();
   setBoundFetch(async (url) => {

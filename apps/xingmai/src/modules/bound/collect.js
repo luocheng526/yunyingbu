@@ -105,7 +105,25 @@ async function callUpstream(current, spec) {
     headers["Content-Type"] = "application/json;charset=UTF-8";
     body = JSON.stringify(spec.body || {});
   }
-  const response = await fetchImpl(url, { method: spec.method === "get" ? "GET" : "POST", headers, body });
+  const method = spec.method === "get" ? "GET" : "POST";
+  let response = await fetchImpl(url, { method, headers, body, redirect: "manual" });
+  for (let hop = 0; hop < 5; hop += 1) {
+    const status = Number(response && response.status);
+    if (!(status >= 300 && status < 400)) {
+      break;
+    }
+    absorbCookies(current, response);
+    const location = response.headers && response.headers.get("location");
+    if (!location) {
+      break;
+    }
+    const nextUrl = new URL(location, url);
+    const nextCookie = Object.entries(current.cookies || {}).map(([key, value]) => `${key}=${value}`).join("; ");
+    if (nextCookie) {
+      headers.Cookie = nextCookie;
+    }
+    response = await fetchImpl(nextUrl, { method: "GET", headers, redirect: "manual" });
+  }
   absorbCookies(current, response);
   const type = response.headers.get("content-type") || "";
   if (!type.includes("json")) {
@@ -284,9 +302,47 @@ export async function qrBytes() {
   return { kind: "image", type, buffer };
 }
 
+function cookieNames(current) {
+  return Object.keys(current.cookies || {}).join("、") || "无";
+}
+
+function fieldNames(data) {
+  if (!data || typeof data !== "object") {
+    return "无";
+  }
+  return Object.keys(data).slice(0, 12).join("、") || "无";
+}
+
 async function finishLogin(current, data) {
-  current.userName = String((data && (data.nickName || data.userName || data.name)) || current.userName || "");
+  let info = null;
+  try {
+    info = await callUpstream(current, { method: "get", path: "/auth/info" });
+  } catch (error) {
+    info = null;
+  }
+  if (!info || info.code !== 0) {
+    const detail = String((info && (info.content || info.message)) || "没有返回").slice(0, 40);
+    current.phase = "needs_scan";
+    current.scene = "";
+    current.qrUrl = "";
+    current.loginTicket = "";
+    current.accounts = [];
+    current.message = `手机上已经确认，但旧站资料接口仍说未登录（${detail}）。返回字段：${fieldNames(data)}。凭证：${cookieNames(current)}。请点下面的微信，扫新的一张。`;
+    await saveSession(current);
+    return;
+  }
+  const infoData = info.data || {};
+  const user = infoData.userInfo || infoData;
+  current.userName = String(
+    (user && (user.nickName || user.userName || user.name))
+    || (data && (data.nickName || data.userName || data.name))
+    || current.userName
+    || ""
+  );
   current.phase = "collecting";
+  current.scene = "";
+  current.qrUrl = "";
+  current.loginTicket = "";
   current.message = "已登录。从 2026-09-01 按北京时间补采，页面查询不会再打旧站。";
   current.accounts = [];
   await saveSession(current);
@@ -299,9 +355,27 @@ function issuedAge(current) {
   return Number.isFinite(issued) ? Date.now() - issued : 0;
 }
 
+async function sessionAlive(current) {
+  try {
+    const info = await callUpstream(current, { method: "get", path: "/auth/info" });
+    return Boolean(info && info.code === 0);
+  } catch (error) {
+    return true;
+  }
+}
+
+async function dropLogin(current) {
+  current.phase = "needs_scan";
+  current.scene = "";
+  current.qrUrl = "";
+  current.loginTicket = "";
+  current.message = "旧站登录已过期。已保留补采进度。请点下面的微信，扫新的一张。";
+  await saveSession(current);
+}
+
 async function saveUnlessLoggedIn(current) {
   const latest = await session();
-  if (latest.phase === "collecting" || latest.phase === "choose_account") {
+  if (latest.phase === "collecting" || latest.phase === "logged_in" || latest.phase === "choose_account") {
     return linkStatus();
   }
   if (latest.scene && current.scene && latest.scene !== current.scene) {
@@ -352,12 +426,20 @@ async function pollLinkOnce() {
   }
   const shaky = code === -1 || code === -7 || /未登录|登录状态已过期|请重新登录/.test(content);
   if (code === 1000102) {
+    const latest = await session();
+    if (latest.phase === "collecting" || latest.phase === "logged_in" || latest.phase === "choose_account") {
+      return linkStatus();
+    }
     current.phase = "waiting_scan";
     current.message = "未扫码。请用微信扫这一张，扫完后在手机上点确认登录。扫旧站网页上的码不会登录这里。";
   } else if (code === 1000104 || code === 1000105 || code === 1000106) {
     current.phase = "waiting_scan";
     current.message = content || "已经扫到了。请在手机上点确认登录。";
   } else if (code === 1000103 || (shaky && issuedAge(current) >= QR_HOLD_MS)) {
+    const latest = await session();
+    if (latest.phase === "collecting" || latest.phase === "logged_in" || latest.phase === "choose_account") {
+      return linkStatus();
+    }
     current.scene = "";
     current.qrUrl = "";
     current.message = "刚才那张二维码已经失效，正在换一张。";
@@ -702,10 +784,8 @@ async function runMaster(current, unit) {
     await rememberMaster(master.id, { status: unit.attempts + 1 >= 3 ? "failed" : "retry", page: unit.page, attempts: unit.attempts + 1, error: String(error.message || error).slice(0, 300) });
     return;
   }
-  if (authExpired(payload)) {
-    current.phase = "needs_scan";
-    current.message = "旧站登录已过期。已保留补采进度，扫码后从中断处继续。";
-    await saveSession(current);
+  if (authExpired(payload) && !(await sessionAlive(current))) {
+    await dropLogin(current);
     return;
   }
   if (!payload || payload.code !== 0) {
@@ -761,10 +841,8 @@ async function runReport(current, unit) {
     });
     return;
   }
-  if (authExpired(payload)) {
-    current.phase = "needs_scan";
-    current.message = "旧站登录已过期。已保留补采进度，扫码后从中断处继续。";
-    await saveSession(current);
+  if (authExpired(payload) && !(await sessionAlive(current))) {
+    await dropLogin(current);
     return;
   }
   if (denied(payload)) {
