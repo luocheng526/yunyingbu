@@ -10,6 +10,7 @@ import { beijingParts, displayStamp } from "./jingmai.js";
 import { blankLive2Record, live2RecordFromMetrics } from "./live2.js";
 
 const CONCURRENCY = 2;
+export const LIVE2_RUNTIME_MARK = "0.1.1277-live2-login";
 
 function stampNow() {
   return displayStamp(beijingParts().stamp);
@@ -76,7 +77,14 @@ export function createLive2Collector(deps = {}) {
       }
       return publicRecord(Object.assign({}, saved, { team: shop.team || saved.team, manager: shop.manager || saved.manager }));
     });
-    return { ok: true, source: "live2", running: running, updatedAt: updatedAt, records: records };
+    return {
+      ok: true,
+      source: "live2",
+      runtimeMark: LIVE2_RUNTIME_MARK,
+      running: running,
+      updatedAt: updatedAt,
+      records: records
+    };
   }
 
   async function board(cookie) {
