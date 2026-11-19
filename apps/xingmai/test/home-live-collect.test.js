@@ -1,19 +1,43 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectAuthDecision, sampleFields, buildLiveView, beijingParts, withDeadline, shouldCollectShop, runTick } from "../src/modules/home/jingmai.js";
-import { fetchHome, parseSetCookieLine, absorbCookies } from "../src/modules/home/jingmai-client.js";
-import { cookieParams, normalizeCookie, safeProfileKey } from "../src/modules/home/jingmai-desk.js";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
+  beijingParts,
+  buildLiveView,
+  collectAuthDecision,
+  collectPinRecords,
+  filterPinsBelongingToShop,
+  runTick,
+  sampleFields,
+  shouldCollectShop,
+  withDeadline
+} from "../src/modules/home/jingmai.js";
+import {
+  absorbCookies,
+  cookieHeader,
+  cookieMatchesUrl,
+  fetchHome,
+  parseSetCookieLine
+} from "../src/modules/home/jingmai-client.js";
+import {
+  cookieParams,
+  isForbiddenLegacyProfileKey,
+  normalizeCookie,
+  profileIdentity,
+  rememberProfileBinding,
+  safeProfileKey
+} from "../src/modules/home/jingmai-desk.js";
+import {
+  classifySessionRecovery,
+  listCollectTargets,
+  listSessions,
   markAuth,
   resetJingmaiStore,
-  saveSession,
-  listSessions,
-  listCollectTargets,
-  classifySessionRecovery
+  saveSession
 } from "../src/modules/home/jingmai-store.js";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 
 test("paid-only failures do not expire the whole shop login", () => {
   const paid = collectAuthDecision({ code: "paid", message: "京准通没有可用账号 -100 登录失败，请刷新页面重新登录" });
@@ -311,11 +335,74 @@ test("cookieParams keeps real domain/path/expiry and only defaults legacy name/v
   assert.equal(legacy.domain, ".jd.com");
   assert.equal(legacy.path, "/");
   assert.equal(normalizeCookie({ name: "x", value: "1", domain: ".jzt.jd.com" }).domain, ".jzt.jd.com");
-  assert.equal(safeProfileKey("DIKTT潮流护理旗舰店"), "DIKTT");
-  assert.equal(safeProfileKey("12345"), "12345");
 });
 
-test("Set-Cookie absorb keeps domain/path attributes for migration", () => {
+test("safeProfileKey no longer collapses RASW* / 飒望* shops into RASW or anon", () => {
+  const a = profileIdentity({ store: "RASW家居旗舰店" });
+  const b = profileIdentity({ store: "RASW健康电器旗舰店" });
+  const c = profileIdentity({ store: "飒望日用旗舰店" });
+  const d = profileIdentity({ store: "飒望生活日用旗舰店" });
+  assert.notEqual(a.key, b.key);
+  assert.notEqual(c.key, d.key);
+  assert.match(a.key, /^n_[a-f0-9]{40}$/);
+  assert.match(c.key, /^n_[a-f0-9]{40}$/);
+  assert.notEqual(a.key, "RASW");
+  assert.notEqual(a.key, "anon");
+  assert.notEqual(c.key, "anon");
+  assert.equal(isForbiddenLegacyProfileKey("anon"), true);
+  assert.equal(isForbiddenLegacyProfileKey("RASW"), true);
+  assert.equal(isForbiddenLegacyProfileKey(a.key), false);
+  // Same shopId → same p_ key regardless of store label.
+  const idA = profileIdentity({ store: "RASW家居旗舰店", shopId: "10001" });
+  const idB = profileIdentity({ store: "别名", shopId: "10001" });
+  assert.equal(idA.key, idB.key);
+  assert.match(idA.key, /^p_[a-f0-9]{40}$/);
+  assert.notEqual(idA.key, a.key);
+  // Binding maps provisional name key → immutable shopId key.
+  const root = mkdtempSync(tmpdir() + "/jm-bind-");
+  try {
+    mkdirSync(join(root, a.key), { recursive: true });
+    writeFileSync(join(root, a.key, "marker"), "keep");
+    const bound = rememberProfileBinding(
+      { store: "RASW家居旗舰店", shopId: "10001", tenant: "xingmai" },
+      root
+    );
+    assert.equal(bound.from, a.key);
+    assert.equal(bound.to, idA.key);
+    const map = JSON.parse(readFileSync(join(root, ".profile-bindings.json"), "utf8"));
+    assert.equal(map[a.key].to, idA.key);
+    assert.equal(map[a.key].shopId, "10001");
+    assert.ok(existsSync(join(root, idA.key, "marker")) || existsSync(join(root, a.key, "marker")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  assert.equal(safeProfileKey({ store: "DIKTT潮流护理旗舰店" }), profileIdentity({ store: "DIKTT潮流护理旗舰店" }).key);
+  assert.notEqual(safeProfileKey({ store: "DIKTT潮流护理旗舰店" }), "DIKTT");
+});
+
+test("cookieHeader matches domain/path/secure/expiry per target URL", () => {
+  const jar = [
+    { name: "thor", value: "all", domain: ".jd.com", path: "/", secure: true, expires: 1900000000 },
+    { name: "shop_only", value: "1", domain: ".shop.jd.com", path: "/jdm", secure: true, expires: 1900000000 },
+    { name: "http_only_path", value: "2", domain: "passport.jd.com", path: "/login", secure: false, expires: 1900000000 },
+    { name: "expired", value: "x", domain: ".jd.com", path: "/", secure: true, expires: 1 }
+  ];
+  assert.equal(cookieMatchesUrl(jar[1], "https://shop.jd.com/jdm/home"), true);
+  assert.equal(cookieMatchesUrl(jar[1], "https://shop.jd.com/other"), false);
+  assert.equal(cookieMatchesUrl(jar[0], "http://jd.com/"), false);
+  assert.equal(cookieMatchesUrl(jar[3], "https://sz.jd.com/"), false);
+  const forShop = cookieHeader(jar, "https://shop.jd.com/jdm/home");
+  assert.match(forShop, /thor=all/);
+  assert.match(forShop, /shop_only=1/);
+  assert.doesNotMatch(forShop, /http_only_path/);
+  assert.doesNotMatch(forShop, /expired=/);
+  const forPassport = cookieHeader(jar, "https://passport.jd.com/login/index");
+  assert.match(forPassport, /thor=all/);
+  assert.match(forPassport, /http_only_path=2/);
+  assert.doesNotMatch(forPassport, /shop_only/);
+});
+
+test("Set-Cookie absorb keeps domain/path and applies delete/expiry", () => {
   const parsed = parseSetCookieLine("thor=keep; Domain=.jd.com; Path=/; Secure; HttpOnly; SameSite=None");
   assert.equal(parsed.name, "thor");
   assert.equal(parsed.domain, ".jd.com");
@@ -335,6 +422,100 @@ test("Set-Cookie absorb keeps domain/path attributes for migration", () => {
   );
   assert.equal(jar[0].domain, ".passport.jd.com");
   assert.ok(jar[0].expires > Math.floor(Date.now() / 1000));
+  absorbCookies(
+    {
+      headers: {
+        getSetCookie: function () {
+          return [
+            "pt_key=; Domain=.passport.jd.com; Path=/; Max-Age=0",
+            "thor=gone; Domain=.jd.com; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+          ];
+        }
+      }
+    },
+    jar
+  );
+  jar.push({ name: "thor", value: "alive", domain: ".jd.com", path: "/" });
+  absorbCookies(
+    {
+      headers: {
+        getSetCookie: function () {
+          return ["thor=; Domain=.jd.com; Path=/; Max-Age=0"];
+        }
+      }
+    },
+    jar
+  );
+  assert.equal(jar.find(function (item) { return item.name === "pt_key"; }), undefined);
+  assert.equal(jar.find(function (item) { return item.name === "thor"; }), undefined);
+});
+
+test("JZT pin ownership filters by shop metadata, not Jingmai identity alone", () => {
+  const records = collectPinRecords({
+    own: [
+      { userId: 11, shopId: "10001", shopName: "RASW家居旗舰店" },
+      { userId: 22, shopId: "10002", shopName: "RASW健康电器旗舰店" },
+      { pinId: 33, shopName: "无关店" }
+    ]
+  });
+  assert.equal(records.length, 3);
+  const mine = filterPinsBelongingToShop(records, { shopId: "10001", store: "RASW家居旗舰店" });
+  assert.equal(mine.length, 1);
+  assert.equal(mine[0].pinId, 11);
+  const none = filterPinsBelongingToShop(records, { shopId: "99999", store: "不存在的店" });
+  assert.equal(none.length, 0);
+});
+
+test("fetchHome keeps finished deal when ads hang until abort", async () => {
+  const controller = new AbortController();
+  let dealDone = false;
+  const fetchImpl = async (url, init) => {
+    const href = String(url);
+    if (href.includes("jzt") || href.includes("pinlist") || href.includes("overview") || href.includes("custom-report")) {
+      return await new Promise(function (resolve, reject) {
+        const timer = setTimeout(function () {
+          resolve(new Response(JSON.stringify({ code: 1, data: {} }), { status: 200 }));
+        }, 5000);
+        if (init && init.signal) {
+          init.signal.addEventListener(
+            "abort",
+            function () {
+              clearTimeout(timer);
+              reject(Object.assign(new Error("aborted"), { name: "AbortError", code: "timeout" }));
+            },
+            { once: true }
+          );
+        }
+      });
+    }
+    // Force deal path onto readCard: shop/sz APIs return empty so the card reader wins.
+    if (href.includes("sff.jd.com") || href.includes("realtimeSummary") || href.includes("getSummary")) {
+      return new Response(JSON.stringify({ code: 200, content: {} }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+    return new Response("{}", { status: 200 });
+  };
+  const pending = fetchHome(
+    [{ name: "thor", value: "ok", domain: ".jd.com", path: "/" }],
+    fetchImpl,
+    async function () {
+      dealDone = true;
+      return { dealAmount: 66, orderCount: 3, customerCount: 2 };
+    },
+    controller.signal,
+    { store: "测店", shopId: "1" }
+  );
+  await new Promise(function (resolve) {
+    setTimeout(resolve, 80);
+  });
+  assert.equal(dealDone, true);
+  controller.abort();
+  const metrics = await pending;
+  assert.equal(metrics.dealAmount, 66);
+  assert.equal(metrics.orderCount, 3);
+  assert.match(String(metrics.paidNote || ""), /超时|京准通/);
 });
 
 test("login_expired shops with cookies are still collected; manual pause is not", () => {
@@ -383,6 +564,21 @@ test("markAuth login_expired keeps the cookie jar for recheck migration", async 
   assert.equal(hit.authState, "login_expired");
   assert.equal(hit.cookies.length, 1);
   assert.equal(hit.cookies[0].value, "keep-me");
+});
+
+test("readHomeDealNow aborts by killing its own CDP/browser, not only racing the outer promise", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const source = readFileSync(join(here, "../src/modules/home/jingmai-desk.js"), "utf8");
+  const start = source.indexOf("async function readHomeDealNow");
+  const end = source.indexOf("export function readHomeDeal", start + 1);
+  assert.ok(start > 0 && end > start);
+  const chunk = source.slice(start, end);
+  assert.match(chunk, /const killOwn = function/);
+  assert.match(chunk, /signal\.addEventListener\("abort", onAbort/);
+  assert.match(chunk, /discard\(owned\)/);
+  assert.match(chunk, /\} finally \{/);
+  assert.match(chunk, /killOwn\(\);/);
+  assert.match(chunk, /signal\.removeEventListener\("abort", onAbort\)/);
 });
 
 test("runTick rechecks login_expired shops that still have cookies", async () => {

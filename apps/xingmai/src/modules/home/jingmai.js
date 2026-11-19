@@ -275,8 +275,8 @@ function readUpdatedAt(item) {
   return "";
 }
 
-export function collectPinIds() {
-  const ids = [];
+export function collectPinRecords() {
+  const rows = [];
   const seen = new Set();
   function add(list) {
     (Array.isArray(list) ? list : []).forEach(function (item) {
@@ -294,7 +294,12 @@ export function collectPinIds() {
         return;
       }
       seen.add(key);
-      ids.push(typeof raw === "number" ? raw : /^\d+$/.test(key) ? Number(key) : key);
+      rows.push({
+        pinId: typeof raw === "number" ? raw : /^\d+$/.test(key) ? Number(key) : key,
+        shopId: String(item.shopId || item.venderId || item.belongBizId || item.providerCode || item.siteId || "").trim(),
+        shopName: String(item.shopName || item.venderName || item.belongName || item.pinName || item.name || "").trim(),
+        raw: item
+      });
     });
   }
   function take(node, depth) {
@@ -325,7 +330,47 @@ export function collectPinIds() {
   for (let index = 0; index < arguments.length; index += 1) {
     take(arguments[index], 0);
   }
-  return ids;
+  return rows;
+}
+
+export function collectPinIds() {
+  return collectPinRecords.apply(null, arguments).map(function (row) {
+    return row.pinId;
+  });
+}
+
+/** Keep only JZT pins that declare this shop — never treat Jingmai identity as ad-account proof. */
+export function filterPinsBelongingToShop(records, expected) {
+  const wantId = String((expected && expected.shopId) || "").trim();
+  const wantName = String((expected && (expected.shopName || expected.store)) || "").trim();
+  const list = Array.isArray(records) ? records : [];
+  if (!wantId && !wantName) {
+    return list.slice();
+  }
+  return list.filter(function (row) {
+    if (!row) {
+      return false;
+    }
+    if (wantId && row.shopId && String(row.shopId) === wantId) {
+      return true;
+    }
+    if (wantName && row.shopName) {
+      const name = String(row.shopName);
+      if (name === wantName || name.indexOf(wantName) >= 0 || wantName.indexOf(name) >= 0) {
+        return true;
+      }
+    }
+    const raw = row.raw || {};
+    const ids = [raw.shopId, raw.venderId, raw.belongBizId, raw.providerCode, raw.siteId]
+      .filter(Boolean)
+      .map(function (value) {
+        return String(value);
+      });
+    if (wantId && ids.indexOf(wantId) >= 0) {
+      return true;
+    }
+    return false;
+  });
 }
 
 export function paidQuery(day, pinIds) {

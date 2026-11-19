@@ -5,6 +5,8 @@ import {
   businessFieldCode,
   classifyTransportError,
   collectPinIds,
+  collectPinRecords,
+  filterPinsBelongingToShop,
   extractPaid,
   describeShopPayload,
   extractShopDeal,
@@ -26,10 +28,50 @@ const SUMMER_URL = "https://jrsecstatic.jdpay.com/jr-sec-dev-static/summer-crypt
 const LOGIN_POST = "https://passport.shop.jd.com/login/doLogin";
 const SESSION_COOKIES = new Set(["thor", "pin", "pt_key", "pt_pin", "flash", "light_key"]);
 
-export function cookieHeader(jar) {
+export function cookieMatchesUrl(cookie, urlString) {
+  if (!cookie || !cookie.name || cookie.value == null) {
+    return false;
+  }
+  let url;
+  try {
+    url = new URL(String(urlString || ""));
+  } catch {
+    return false;
+  }
+  if (cookie.expires != null && Number(cookie.expires) >= 0 && Number(cookie.expires) * 1000 <= Date.now()) {
+    return false;
+  }
+  if (cookie.secure && url.protocol !== "https:") {
+    return false;
+  }
+  const host = String(url.hostname || "").toLowerCase();
+  const domainRaw = String(cookie.domain || "").trim();
+  if (domainRaw) {
+    const domain = domainRaw.replace(/^\./, "").toLowerCase();
+    if (host !== domain && !host.endsWith("." + domain)) {
+      return false;
+    }
+  }
+  const path = String(cookie.path || "/");
+  const uPath = String(url.pathname || "/");
+  if (path !== "/") {
+    if (uPath !== path && !uPath.startsWith(path.endsWith("/") ? path : path + "/")) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function cookieHeader(jar, url) {
   return (jar || [])
     .filter(function (item) {
-      return item && item.name && item.value != null;
+      if (!item || !item.name || item.value == null || item.value === "") {
+        return false;
+      }
+      if (!url) {
+        return item.expires == null || Number(item.expires) <= 0 || Number(item.expires) * 1000 > Date.now();
+      }
+      return cookieMatchesUrl(item, url);
     })
     .map(function (item) {
       return item.name + "=" + item.value;
@@ -65,13 +107,21 @@ export function parseSetCookieLine(line) {
       next.path = val;
     } else if (key === "expires" && val) {
       const ms = Date.parse(val);
-      if (Number.isFinite(ms) && ms > 0) {
+      if (Number.isFinite(ms)) {
         next.expires = Math.floor(ms / 1000);
+        if (ms <= Date.now()) {
+          next.expired = true;
+        }
       }
-    } else if (key === "max-age" && val) {
+    } else if (key === "max-age" && val !== "") {
       const seconds = Number(val);
-      if (Number.isFinite(seconds) && seconds > 0) {
-        next.expires = Math.floor(Date.now() / 1000) + Math.floor(seconds);
+      if (Number.isFinite(seconds)) {
+        if (seconds <= 0) {
+          next.expires = 0;
+          next.expired = true;
+        } else {
+          next.expires = Math.floor(Date.now() / 1000) + Math.floor(seconds);
+        }
       }
     } else if (key === "secure") {
       next.secure = true;
@@ -103,6 +153,16 @@ export function absorbCookies(response, jar) {
       }
       return true;
     });
+    const expired =
+      next.expired === true ||
+      next.value === "" ||
+      (next.expires != null && Number(next.expires) >= 0 && Number(next.expires) * 1000 <= Date.now());
+    if (expired) {
+      if (found >= 0) {
+        jar.splice(found, 1);
+      }
+      return;
+    }
     if (found >= 0) {
       jar[found] = Object.assign({}, jar[found], next);
     } else {
@@ -152,7 +212,7 @@ async function request(fetchImpl, jar, url, options) {
       headers: Object.assign(
         {
           "user-agent": UA,
-          cookie: cookieHeader(jar)
+          cookie: cookieHeader(jar, url)
         },
         options.headers || {}
       )
@@ -838,25 +898,6 @@ async function fetchPaid(jar, fetchImpl, signal, expected) {
   if (signal && signal.aborted) {
     throw jingmaiError("timeout", "采集超时");
   }
-  const wantId = String((expected && expected.shopId) || "").trim();
-  if (wantId) {
-    try {
-      const identity = await fetchAccountIdentity(jar, fetchImpl, signal);
-      const gotId = String((identity && identity.shopId) || "").trim();
-      if (gotId && gotId !== wantId) {
-        throw jingmaiError("paid", "京准通店铺身份与京麦不一致");
-      }
-    } catch (error) {
-      const classified = classifyTransportError(error);
-      if (classified.code === "paid" || classified.code === "timeout") {
-        throw classified;
-      }
-      if (classified.code === "login") {
-        throw jingmaiError("paid", "京准通账号未授权或需要重新开通");
-      }
-      /* identity flaky: continue to pinlist; failures stay on paid channel */
-    }
-  }
   let user = null;
   try {
     user = await getJson(
@@ -892,11 +933,24 @@ async function fetchPaid(jar, fetchImpl, signal, expected) {
   }
   const userData = user && Number(user.code) === 1 ? user.data : null;
   const authData = auth && Number(auth.code) === 1 ? auth.data : null;
-  const pinIds = collectPinIds(userData, authData);
-  if (!pinIds.length) {
+  const records = collectPinRecords(userData, authData);
+  if (!records.length) {
     const payload = user && user.code != null ? user : auth;
     throw jingmaiError("paid", paidAccountError(payload));
   }
+  // Ownership must come from JZT pin metadata belonging to this shop — not Jingmai DSM identity.
+  const wantId = String((expected && expected.shopId) || "").trim();
+  const wantName = String((expected && (expected.shopName || expected.store)) || "").trim();
+  let matched = records;
+  if (wantId || wantName) {
+    matched = filterPinsBelongingToShop(records, expected);
+    if (!matched.length) {
+      throw jingmaiError("paid", "京准通广告账号不属于本店");
+    }
+  }
+  const pinIds = matched.map(function (row) {
+    return row.pinId;
+  });
   const day = beijingParts().day;
   const overview = await postJson(
     fetchImpl,
@@ -914,6 +968,12 @@ async function fetchPaid(jar, fetchImpl, signal, expected) {
     throw jingmaiError("paid", "京准通没有返回付费数据");
   }
   return paid;
+}
+
+function hasDealFields(metrics) {
+  return ["dealAmount", "orderCount", "customerCount", "yesterdayAmount"].some(function (key) {
+    return metrics && metrics[key] != null;
+  });
 }
 
 function hasCollected(metrics) {
@@ -969,9 +1029,6 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
     }
   );
   const [dealResult, paidResult] = await Promise.all([dealTask, paidTask]);
-  if (signal && signal.aborted) {
-    throw jingmaiError("timeout", "采集超时");
-  }
   const deal = dealResult.deal;
   const dealError = dealResult.dealError;
   const paid = paidResult.paid;
@@ -996,6 +1053,16 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
   }
   if (paidError && paid == null) {
     metrics.paidNote = String(paidError.message || "京准通暂时读不到数据").slice(0, 160);
+  }
+  // Keep a finished Jingmai deal even if ads timed out / outer signal aborted.
+  if (hasDealFields(metrics)) {
+    if ((signal && signal.aborted) || (paidError && (paidError.code === "timeout" || paidError.name === "AbortError"))) {
+      metrics.paidNote = "广告采集超时";
+    }
+    return metrics;
+  }
+  if (signal && signal.aborted) {
+    throw jingmaiError("timeout", "采集超时");
   }
   // Old-site rule: ads failure must not wipe a successful Jingmai deal snapshot.
   if (hasCollected(metrics)) {

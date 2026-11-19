@@ -1,4 +1,5 @@
 import { beijingParts, buildLiveView, previousDay } from "./jingmai.js";
+import { isForbiddenLegacyProfileKey, profileIdentity } from "./jingmai-desk.js";
 
 async function getPool() {
   try {
@@ -300,8 +301,8 @@ export async function listCollectTargets() {
 
 /**
  * Split sessions after historical markAuth(login_expired) wiped jars.
- * profileKeys: optional Set of safeProfileKey() strings that still exist on disk.
- * Never promotes enabled=false (manual pause).
+ * profileKeys: optional Set of profileIdentity().key strings that still exist on disk.
+ * Never promotes enabled=false (manual pause). Never treats legacy anon/RASW dirs as recovery.
  */
 export function classifySessionRecovery(sessions, profileKeys) {
   const profiles = profileKeys instanceof Set ? profileKeys : new Set(profileKeys || []);
@@ -318,12 +319,17 @@ export function classifySessionRecovery(sessions, profileKeys) {
       return;
     }
     const hasJar = Array.isArray(session.cookies) && session.cookies.length > 0;
-    const profileKey = String(session.shopId || session.store || "")
-      .trim()
-      .replace(/[^a-zA-Z0-9._-]+/g, "_")
-      .replace(/^_+|_+$/g, "")
-      .slice(0, 96);
-    const hasProfile = Boolean(profileKey && profiles.has(profileKey));
+    // Prefer shopId digest; fall back to name digest. Never the old strip-ASCII / anon / RASW keys.
+    const stable = profileIdentity({ store: session.store, shopId: session.shopId || "" });
+    const provisional = session.shopId
+      ? profileIdentity({ store: session.store, shopId: "" })
+      : null;
+    const hasProfile =
+      (stable.key && !isForbiddenLegacyProfileKey(stable.key) && profiles.has(stable.key)) ||
+      (provisional &&
+        provisional.key &&
+        !isForbiddenLegacyProfileKey(provisional.key) &&
+        profiles.has(provisional.key));
     const expiredLike =
       session.authState === "login_expired" ||
       session.authState === "unlinked" ||

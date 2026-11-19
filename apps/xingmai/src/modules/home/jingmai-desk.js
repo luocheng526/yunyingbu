@@ -1,6 +1,6 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { connect as connectTcp, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, resolve, sep } from "node:path";
@@ -34,19 +34,149 @@ function profileRoots() {
   ].filter(Boolean);
 }
 
-export function safeProfileKey(shopKey) {
-  const raw = String(shopKey || "").trim();
-  const cleaned = raw.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 96);
-  return cleaned || "anon";
+/** Old strip-ASCII keys that collided across shops — never open these dirs. */
+const FORBIDDEN_LEGACY_PROFILE_KEYS = new Set([
+  "anon",
+  "RASW",
+  "DIKTT",
+  "ZYUO",
+  "HYEGIIR",
+  "SAWAAG",
+  "MGXEK",
+  "LUCYLEE",
+  "UUMILO",
+  "MATKAS"
+]);
+
+export function isForbiddenLegacyProfileKey(key) {
+  const name = String(key || "").trim();
+  if (!name) {
+    return true;
+  }
+  if (FORBIDDEN_LEGACY_PROFILE_KEYS.has(name)) {
+    return true;
+  }
+  // New keys are p_<hex> (platform shopId) or n_<hex> (provisional store name).
+  return !/^[pn]_[a-f0-9]{32,64}$/i.test(name);
 }
 
-export function profileDirForShop(shopKey) {
-  const key = safeProfileKey(shopKey);
+/**
+ * Tenant + immutable shop primary → collision-free profile key.
+ * Prefer shopId; without it hash the full store name (UTF-8), never strip to RASW/anon.
+ * Returns { key, ephemeral, tenant, shopId, store, boundBy }.
+ */
+export function profileIdentity(input) {
+  const opts = input && typeof input === "object" ? input : { store: input };
+  const tenant = String(opts.tenant || process.env.JINGMAI_TENANT || "xingmai").trim() || "xingmai";
+  const shopId = String(opts.shopId || "").trim();
+  const store = String(opts.store || opts.storeKey || "").trim();
+  if (!shopId && !store) {
+    return { key: "", ephemeral: true, tenant: tenant, shopId: "", store: "", boundBy: "" };
+  }
+  const boundBy = shopId ? "shopId" : "store";
+  const primary = shopId ? "id:" + shopId : "name:" + store;
+  const digest = createHash("sha256")
+    .update(tenant + "\0" + primary, "utf8")
+    .digest("hex")
+    .slice(0, 40);
+  const key = (shopId ? "p_" : "n_") + digest;
+  return { key: key, ephemeral: false, tenant: tenant, shopId: shopId, store: store, boundBy: boundBy, primary: primary };
+}
+
+/** @deprecated string form kept for callers; always hashes full identity, never "anon"/"RASW". */
+export function safeProfileKey(shopKeyOrOpts) {
+  return profileIdentity(shopKeyOrOpts).key;
+}
+
+function bindingsPath(root) {
+  return root + sep + ".profile-bindings.json";
+}
+
+function readBindings(root) {
+  try {
+    const raw = JSON.parse(readFileSync(bindingsPath(root), "utf8"));
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeBindings(root, map) {
+  writeFileSync(bindingsPath(root), JSON.stringify(map, null, 2));
+}
+
+/**
+ * When a provisional name-key later binds a platform shopId, record n_* → p_* so ops can trace,
+ * and prefer the immutable shopId directory without ever opening legacy anon/RASW dirs.
+ */
+export function rememberProfileBinding(identity, rootHint) {
+  if (!identity || !identity.shopId || !identity.store) {
+    return null;
+  }
+  const provisional = profileIdentity({ store: identity.store, tenant: identity.tenant, shopId: "" });
+  const stable = profileIdentity({ store: identity.store, tenant: identity.tenant, shopId: identity.shopId });
+  if (!provisional.key || !stable.key || provisional.key === stable.key) {
+    return { from: provisional.key, to: stable.key };
+  }
+  const roots = rootHint ? [rootHint].concat(profileRoots()) : profileRoots();
+  for (let index = 0; index < roots.length; index += 1) {
+    const root = roots[index];
+    try {
+      mkdirSync(root, { recursive: true });
+      const map = readBindings(root);
+      map[provisional.key] = {
+        to: stable.key,
+        store: identity.store,
+        shopId: identity.shopId,
+        tenant: identity.tenant,
+        boundAt: new Date().toISOString()
+      };
+      map["shopId:" + identity.shopId] = {
+        to: stable.key,
+        store: identity.store,
+        provisional: provisional.key
+      };
+      writeBindings(root, map);
+      const fromDir = root + sep + provisional.key;
+      const toDir = root + sep + stable.key;
+      if (existsSync(fromDir) && !existsSync(toDir) && !isForbiddenLegacyProfileKey(provisional.key)) {
+        try {
+          // Move provisional profile into the immutable shopId key once.
+          renameSync(fromDir, toDir);
+        } catch {
+          try {
+            symlinkSync(stable.key, fromDir + ".bound-to-" + stable.key);
+          } catch {
+            /* mapping file is enough */
+          }
+        }
+      }
+      return { from: provisional.key, to: stable.key, root: root };
+    } catch {
+      /* try next root */
+    }
+  }
+  return { from: provisional.key, to: stable.key };
+}
+
+export function profileDirForShop(shopKeyOrOpts) {
+  const identity = profileIdentity(shopKeyOrOpts);
+  if (identity.ephemeral || !identity.key || isForbiddenLegacyProfileKey(identity.key)) {
+    return mkdtempSync(tmpdir() + "/shen-jingmai-");
+  }
+  if (identity.shopId && identity.store) {
+    rememberProfileBinding(identity);
+  }
+  const key = identity.key;
   const roots = profileRoots();
   for (let index = 0; index < roots.length; index += 1) {
     const root = roots[index];
     try {
       mkdirSync(root, { recursive: true });
+      // Never select forbidden legacy collision directories (anon / RASW / …).
+      if (FORBIDDEN_LEGACY_PROFILE_KEYS.has(key) || isForbiddenLegacyProfileKey(key)) {
+        return mkdtempSync(tmpdir() + "/shen-jingmai-");
+      }
       const dir = root + sep + key;
       mkdirSync(dir, { recursive: true });
       return dir;
@@ -1655,9 +1785,13 @@ async function launchChrome(signal, options) {
 
 async function startChromeProcess(chromePath, signal, budgetMs, extraFlags, options) {
   const opts = options || {};
-  const profileKey = String(opts.profileKey || "").trim();
-  const ephemeral = opts.ephemeral === true || !profileKey;
-  const dir = ephemeral ? mkdtempSync(tmpdir() + "/shen-jingmai-") : profileDirForShop(profileKey);
+  const identity = opts.identity || profileIdentity({ store: opts.profileKey || "", shopId: opts.shopId || "" });
+  const profileKey = String(opts.profileKey || identity.key || "").trim();
+  const ephemeral =
+    opts.ephemeral === true || identity.ephemeral || !profileKey || isForbiddenLegacyProfileKey(profileKey);
+  const dir = ephemeral
+    ? mkdtempSync(tmpdir() + "/shen-jingmai-")
+    : profileDirForShop({ store: identity.store, shopId: identity.shopId, tenant: identity.tenant });
   const env = Object.assign({}, process.env);
   if (libraryPath) {
     env.LD_LIBRARY_PATH = libraryPath + (env.LD_LIBRARY_PATH ? ":" + env.LD_LIBRARY_PATH : "");
@@ -1791,8 +1925,9 @@ async function startChromeProcess(chromePath, signal, budgetMs, extraFlags, opti
       port: readyPort,
       sessionId: sessionId || "",
       password: "",
-      profileKey: ephemeral ? "" : safeProfileKey(profileKey),
-      persistProfile: !ephemeral
+      profileKey: ephemeral ? "" : profileKey,
+      persistProfile: !ephemeral,
+      identity: identity
     };
   } catch (error) {
     if (booting === chrome) {
@@ -2075,9 +2210,18 @@ async function acquireDesk(store, ticket, signal, shopId) {
   if (signal && signal.aborted) {
     return null;
   }
-  const profileKey = String(shopId || store || "").trim();
-  if (deskUsable(current) && current.profileKey && profileKey && current.profileKey === safeProfileKey(profileKey)) {
+  const identity = profileIdentity({ store: store, shopId: shopId });
+  if (identity.shopId && identity.store) {
+    rememberProfileBinding(identity);
+  }
+  const profileKey = identity.key;
+  // Never reuse a desk sitting on a forbidden legacy collision profile.
+  if (deskUsable(current) && isForbiddenLegacyProfileKey(current.profileKey)) {
+    stopCurrent();
+  }
+  if (deskUsable(current) && current.profileKey && profileKey && current.profileKey === profileKey) {
     current.store = store;
+    current.shopId = shopId || current.shopId || "";
     current.password = "";
     try {
       try {
@@ -2097,12 +2241,17 @@ async function acquireDesk(store, ticket, signal, shopId) {
   if ((ticket != null && ticket !== openTicket) || (signal && signal.aborted)) {
     return null;
   }
-  const desk = await launchChrome(signal, { profileKey: profileKey, ephemeral: !profileKey });
+  const desk = await launchChrome(signal, {
+    profileKey: profileKey,
+    ephemeral: identity.ephemeral || !profileKey,
+    identity: identity
+  });
   if ((ticket != null && ticket !== openTicket) || (signal && signal.aborted)) {
     discard(desk);
     return null;
   }
   desk.store = store;
+  desk.shopId = shopId || "";
   current = desk;
   loginVisible = true;
   lastLaunchNote = "浏览器已打开，正在接登录页";
@@ -2241,7 +2390,7 @@ export async function openDesk({ store, loginName, password, reveal, onStep, sig
     shotCache = { at: 0, store: "", image: null, ready: false };
     lastLaunchNote = "正在启动浏览器";
     step("正在启动浏览器");
-    const launching = acquireDesk(store, ticket, linked, shopId || store);
+    const launching = acquireDesk(store, ticket, linked, shopId);
     launching.catch(function () {});
     desk = await Promise.race([
       launching,
@@ -2862,9 +3011,23 @@ async function readHomeDealNow(cookies, signal, shopKey) {
   // Isolated ephemeral context per shop — never clear+switch a shared readerDesk.
   let desk = null;
   let settled = false;
+  const killOwn = function () {
+    if (desk) {
+      const owned = desk;
+      desk = null;
+      discard(owned);
+    }
+  };
+  const onAbort = function () {
+    killOwn();
+  };
+  if (signal) {
+    signal.addEventListener("abort", onAbort, { once: true });
+  }
   try {
     desk = await launchChrome(signal, { ephemeral: true, profileKey: "" });
     if (signal && signal.aborted) {
+      killOwn();
       throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
     }
     const ws = desk.ws;
@@ -2948,9 +3111,10 @@ async function readHomeDealNow(cookies, signal, shopKey) {
     throw wrapped;
   } finally {
     settled = true;
-    if (desk) {
-      discard(desk);
+    if (signal) {
+      signal.removeEventListener("abort", onAbort);
     }
+    killOwn();
   }
 }
 
