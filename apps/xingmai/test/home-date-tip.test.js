@@ -434,6 +434,7 @@ test("homepage views: bosses see all, chiefs see 主管/储备, operators do not
     chief: true,
     live: true,
     week: true,
+    live2: true,
     board: true
   });
   assert.deepEqual(fns.allowedHomeViews({ displayName: "高传颖", role: "主管" }, people, shops), {
@@ -443,6 +444,7 @@ test("homepage views: bosses see all, chiefs see 主管/储备, operators do not
     chief: true,
     live: true,
     week: true,
+    live2: true,
     board: true
   });
   assert.deepEqual(fns.allowedHomeViews({ displayName: "索一龙", role: "运营" }, people, shops), {
@@ -452,6 +454,7 @@ test("homepage views: bosses see all, chiefs see 主管/储备, operators do not
     chief: false,
     live: true,
     week: true,
+    live2: true,
     board: true
   });
   assert.deepEqual(

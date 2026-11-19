@@ -5,7 +5,8 @@
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
     { key: "live", label: "实时" },
-    { key: "week", label: "近七天业绩汇总" }
+    { key: "week", label: "近七天业绩汇总" },
+    { key: "live2", label: "实时（新版）" }
   ];
   var OVERVIEW_PANES = [
     { key: "team", label: "经理团队", tone: "teal", hint: "经营团队" },
@@ -533,9 +534,17 @@
   }
   var shopSort = { key: "", dir: "desc" };
   var shopColW = {};
+  var liveScope = "live";
+  function useLiveScope(view) {
+    liveScope = view === "live2" ? "live2" : "live";
+    return liveScope;
+  }
+  function liveColBucket() {
+    return liveScope === "live2" ? "live2" : "live";
+  }
   function colKey(table) {
     if (table && table.closest && table.closest(".xm-hm-live")) {
-      return "live";
+      return liveColBucket();
     }
     var box = table && table.closest && table.closest("[data-team]");
     return box ? box.getAttribute("data-team") || "t" : "t";
@@ -575,16 +584,17 @@
   }
   function loadLiveColW() {
     var need = liveCols().length;
-    if (shopColW.live && shopColW.live.length && shopColW.live.length !== need) {
-      delete shopColW.live;
+    var bucket = liveColBucket();
+    if (shopColW[bucket] && shopColW[bucket].length && shopColW[bucket].length !== need) {
+      delete shopColW[bucket];
     }
-    if (shopColW.live && shopColW.live.length) {
+    if (shopColW[bucket] && shopColW[bucket].length) {
       return;
     }
     try {
-      var list = JSON.parse(localStorage.getItem("xm-home-live-cols") || "[]");
+      var list = JSON.parse(localStorage.getItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-cols" : "xm-home-live-cols") || "[]");
       if (Object.prototype.toString.call(list) === "[object Array]" && list.length === need) {
-        shopColW.live = list.map(function (n) {
+        shopColW[bucket] = list.map(function (n) {
           return Math.max(48, Math.round(Number(n) || 48));
         });
       }
@@ -592,8 +602,9 @@
   }
   function saveLiveColW() {
     try {
-      if (shopColW.live && shopColW.live.length) {
-        localStorage.setItem("xm-home-live-cols", JSON.stringify(shopColW.live));
+      var bucket = liveColBucket();
+      if (shopColW[bucket] && shopColW[bucket].length) {
+        localStorage.setItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-cols" : "xm-home-live-cols", JSON.stringify(shopColW[bucket]));
       }
     } catch (_err) {}
   }
@@ -835,6 +846,7 @@
       overview: true,
       live: true,
       week: true,
+      live2: true,
       team: canSeeTeamView(user),
       chief: canSeeChiefView(user, people, shops),
       board: true
@@ -1518,7 +1530,7 @@
   function liveCardOrder() {
     var saved = [];
     try {
-      saved = JSON.parse(localStorage.getItem("xm-home-live-card-order") || "[]");
+      saved = JSON.parse(localStorage.getItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-card-order" : "xm-home-live-card-order") || "[]");
     } catch (_err) {
       saved = [];
     }
@@ -1529,7 +1541,7 @@
   }
   function saveLiveCardOrder(keys) {
     try {
-      localStorage.setItem("xm-home-live-card-order", JSON.stringify(liveCardOrderFrom(keys)));
+      localStorage.setItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-card-order" : "xm-home-live-card-order", JSON.stringify(liveCardOrderFrom(keys)));
     } catch (_err) {}
   }
   function applyLiveCardMove(fromKey, toKey) {
@@ -1552,7 +1564,7 @@
   }
   function liveRowPad() {
     try {
-      var raw = localStorage.getItem("xm-home-live-row");
+      var raw = localStorage.getItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-row" : "xm-home-live-row");
       if (raw == null || raw === "" || Number(raw) <= 4) {
         return 10;
       }
@@ -1563,7 +1575,7 @@
   }
   function saveLiveRowPad(n) {
     try {
-      localStorage.setItem("xm-home-live-row", String(liveRowPadClamp(n)));
+      localStorage.setItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-row" : "xm-home-live-row", String(liveRowPadClamp(n)));
     } catch (_err) {}
   }
   function applyLiveRowPad(root) {
@@ -1687,6 +1699,9 @@
     return { lo: lo, hi: hi };
   }
   function feeMonitorOf(row) {
+    if (row && row.pendingCollect) {
+      return { label: "—", kind: "" };
+    }
     var range = feeRangeOf(row);
     var cur = feePct(row && row.feeRate);
     if (range.lo == null && range.hi == null) {
@@ -1811,7 +1826,7 @@
   }
   function liveFilter() {
     try {
-      var raw = JSON.parse(localStorage.getItem("xm-home-live-filter") || "{}");
+      var raw = JSON.parse(localStorage.getItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-filter" : "xm-home-live-filter") || "{}");
       return {
         team: String((raw && raw.team) || "").trim(),
         shop: String((raw && raw.shop) || "").trim(),
@@ -1827,7 +1842,7 @@
   function saveLiveFilter(next) {
     try {
       localStorage.setItem(
-        "xm-home-live-filter",
+        typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-filter" : "xm-home-live-filter",
         JSON.stringify({
           team: String((next && next.team) || "").trim(),
           shop: String((next && next.shop) || "").trim(),
@@ -1929,20 +1944,29 @@
       if (pick.shop && name !== pick.shop) {
         return false;
       }
-      if (teamMap && !teamMap[normShopName(name)]) {
+      if (!(typeof liveScope !== "undefined" && liveScope === "live2") && teamMap && !teamMap[normShopName(name)]) {
         return false;
       }
       if (q && name.toLowerCase().indexOf(q) < 0) {
         return false;
       }
-      if (pick.link === "on" && liveLinkOf(row).kind !== "on") {
-        return false;
-      }
-      if (pick.link === "off" && liveLinkOf(row).kind !== "off") {
-        return false;
-      }
-      if (pick.paid === "no" ? row && row.paidIn : !(row && row.paidIn)) {
-        return false;
+      if (typeof liveScope !== "undefined" && liveScope === "live2") {
+        if (pick.team && String(row.team || "") !== pick.team) {
+          return false;
+        }
+        if (pick.link === "on" || pick.link === "off") {
+          return false;
+        }
+      } else {
+        if (pick.link === "on" && liveLinkOf(row).kind !== "on") {
+          return false;
+        }
+        if (pick.link === "off" && liveLinkOf(row).kind !== "off") {
+          return false;
+        }
+        if (pick.paid === "no" ? row && row.paidIn : !(row && row.paidIn)) {
+          return false;
+        }
       }
       return true;
     });
@@ -2031,6 +2055,52 @@
       ">" +
       (liveRefreshing ? "刷新中…" : "刷新") +
       "</button></div></div>"
+    );
+  }
+  function live2FilterHtml(allShops) {
+    var pick = liveFilter();
+    var cur = liveFilterValue(pick);
+    var teams = [];
+    var seenTeam = {};
+    (allShops || []).forEach(function (row) {
+      var name = String((row && row.team) || "").trim();
+      if (!name || seenTeam[name]) {
+        return;
+      }
+      seenTeam[name] = true;
+      teams.push(name);
+    });
+    var shops = liveFilterShopNames(allShops);
+    return (
+      '<div class="xm-hm-live-filter">' +
+      '<div class="xm-hm-live-filter-left">' +
+      '<strong class="xm-hm-live-filter-lab">店铺列表</strong>' +
+      '<span class="xm-hm-live-filter-box"><select data-live-filter="pick">' +
+      liveFilterOption("", "责权归属", !cur) +
+      (teams.length
+        ? '<optgroup label="责权团队">' +
+          teams
+            .map(function (name) {
+              return liveFilterOption("team:" + name, dutyTeamLabel(name), cur === "team:" + name);
+            })
+            .join("") +
+          "</optgroup>"
+        : "") +
+      (shops.length
+        ? '<optgroup label="店铺">' +
+          shops
+            .map(function (name) {
+              return liveFilterOption("shop:" + name, name, cur === "shop:" + name);
+            })
+            .join("") +
+          "</optgroup>"
+        : "") +
+      "</select></span></div>" +
+      '<div class="xm-hm-live-filter-right">' +
+      '<span class="xm-hm-live-at">更新时间 —</span>' +
+      '<button type="button" class="xm-hm-live-heads" data-live-heads>表头设置</button>' +
+      '<button type="button" class="xm-hm-live-refresh" data-connect-live2 title="采集功能待接入">连接京麦</button>' +
+      '<button type="button" class="xm-hm-live-refresh" data-refresh-live2>刷新</button></div></div>'
     );
   }
   function liveChipHtml(key, value, label, on) {
@@ -2297,7 +2367,7 @@
   }
   function liveHiddenHeads() {
     try {
-      var stored = localStorage.getItem("xm-home-live-head-hide");
+      var stored = localStorage.getItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-head-hide" : "xm-home-live-head-hide");
       if (stored == null) {
         return extraHeadKeys();
       }
@@ -2312,7 +2382,7 @@
   }
   function saveLiveHiddenHeads(keys) {
     try {
-      localStorage.setItem("xm-home-live-head-hide", JSON.stringify(keys || []));
+      localStorage.setItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-head-hide" : "xm-home-live-head-hide", JSON.stringify(keys || []));
     } catch (_err) {}
   }
   function liveHeadToggleList() {
@@ -2338,7 +2408,7 @@
       return col.key;
     });
     try {
-      var saved = JSON.parse(localStorage.getItem("xm-home-live-head-order") || "[]");
+      var saved = JSON.parse(localStorage.getItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-head-order" : "xm-home-live-head-order") || "[]");
       if (Object.prototype.toString.call(saved) === "[object Array]" && saved.length) {
         var next = [];
         saved.forEach(function (key) {
@@ -2363,7 +2433,7 @@
   }
   function saveLiveHeadOrder(keys) {
     try {
-      localStorage.setItem("xm-home-live-head-order", JSON.stringify(keys || liveHeadKeys()));
+      localStorage.setItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-head-order" : "xm-home-live-head-order", JSON.stringify(keys || liveHeadKeys()));
     } catch (_err) {}
   }
   function applyLiveHeadMove(fromKey, toKey) {
@@ -2469,6 +2539,9 @@
     return fiveMinuteStamp(latest);
   }
   function liveLinkOf(row) {
+    if (row && row.pendingCollect) {
+      return { label: "待接入", kind: "wait" };
+    }
     if (row && row.online === true) {
       if (row.adsFailed === true) {
         return { label: "在线·广告异常", kind: "ads" };
@@ -2543,6 +2616,9 @@
           (row && row.offlineReason ? ' title="' + escapeHtml(row.offlineReason) + '"' : "") +
           ">掉线</button></td>"
         );
+      }
+      if (link.kind === "wait") {
+        return '<td class="xm-hm-num" title="采集功能待接入">待接入</td>';
       }
       if (link.kind === "ads" || link.kind === "warn") {
         var tip = (row && (row.adsReason || row.offlineReason)) || link.label;
@@ -2641,7 +2717,8 @@
       ".xm-hm-tip{position:fixed;z-index:9;display:none;box-sizing:border-box;width:max-content;max-width:360px;padding:10px 12px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;color:var(--xm-ink);font-size:12px;line-height:1.6;white-space:pre-wrap;pointer-events:none}" +
       ".xm-hm-tip.is-on{display:block}" +
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
-      ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-overview .xm-hm-kpis-shell,.xm-hm.is-week .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges,.xm-hm.is-week .xm-hm-ranges{display:none}" +
+      ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-live2 .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-overview .xm-hm-kpis-shell,.xm-hm.is-week .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-live2 .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges,.xm-hm.is-live2 .xm-hm-ranges,.xm-hm.is-week .xm-hm-ranges{display:none}" +
+      ".xm-hm-live-refresh[data-connect-live2]{opacity:.55}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden],.xm-hm-week[hidden]{display:none}" +
       ".xm-hm-week{display:flex;flex-direction:column;gap:12px}" +
       ".xm-hm-week-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}" +
@@ -3100,6 +3177,94 @@
       "</div></div>"
     );
   }
+  /**
+   * 实时（新版）数据适配入口。本轮只读组织中心店铺名、分组、负责人。
+   * 成交额、广告花费、ROI、费比、登录状态、采集时间留空，等下一条需求再接采集。
+   * 禁止在这里请求 /api/home/local-paid、/api/home/live-login、京麦/京准通。
+   * 字段：shop, team, manager, liveAmount, paidAmount, roi, paidDeal, feeRate, capturedAt, pendingCollect
+   */
+  function adaptLive2Shops(orgRows) {
+    return (orgRows || [])
+      .filter(function (row) {
+        return row && !shopNotOperating(row) && row.kind !== "店群";
+      })
+      .map(function (row) {
+        var shop = String(row.storeName || row.shopName || row.shop || row.name || "").trim();
+        return {
+          shop: shop,
+          team: String(row.team || "").trim(),
+          manager: String(row.manager || row.owner || "").trim(),
+          liveAmount: null,
+          paidAmount: null,
+          roi: null,
+          paidDeal: null,
+          feeRate: null,
+          capturedAt: "",
+          online: false,
+          offline: false,
+          loginExpired: false,
+          paidIn: false,
+          pendingCollect: true
+        };
+      })
+      .filter(function (row) {
+        return row.shop;
+      });
+  }
+  function live2Cards() {
+    return [
+      { key: "livePay", label: "实时付费成交额", value: "—" },
+      { key: "roi", label: "付费成交ROI", value: "—" },
+      { key: "livePaid", label: "实时付费接入店铺数量", value: "—" },
+      { key: "feeHot", label: "实时付费超标店铺", value: "—" },
+      { key: "feeCold", label: "实时费比低店铺", value: "—" },
+      { key: "liveAt", label: "更新时间", value: "—" }
+    ];
+  }
+  function orderedLive2Cards() {
+    var map = {};
+    live2Cards().forEach(function (card) {
+      map[card.key] = card;
+    });
+    return liveCardOrder()
+      .map(function (key) {
+        return map[key];
+      })
+      .filter(Boolean);
+  }
+  function live2PanelHtml(state) {
+    var blank = blankLive();
+    var shops = filterLiveShops(adaptLive2Shops(state && state.dutyShops), state);
+    shops = sortLiveShops(feePickShops(shops, liveFeePick));
+    var trio = liveChartHtml(blank.hero) + liveChartHtml(blank.paid) + liveChartHtml(blank.fee);
+    liveBoardSlot = "";
+    return (
+      live2FilterHtml(adaptLive2Shops(state && state.dutyShops)) +
+      '<div class="xm-hm-live-charts">' +
+      trio +
+      '</div><div class="xm-hm-live-cards">' +
+      orderedLive2Cards()
+        .map(function (card) {
+          return liveCardHtml(card, liveFeePick);
+        })
+        .join("") +
+      "</div>" +
+      liveSearchHtml() +
+      '<div class="xm-hm-panel">' +
+      '<table class="xm-hm-table" style="min-width:' +
+      liveTableMinW() +
+      'px">' +
+      liveColgroupHtml() +
+      liveTheadHtml() +
+      "<tbody>" +
+      shops
+        .map(function (row, i) {
+          return liveShopRowHtml(row, i, "");
+        })
+        .join("") +
+      "</tbody></table></div>"
+    );
+  }
   function paint(root, state) {
     var board = root.querySelector("#xm-hm");
     var allow = allowedHomeViews(state.user, state.people, state.dutyShops);
@@ -3113,6 +3278,7 @@
     if (state.view === "overview" && state.teamPane && !canOpenOverviewPane(state.teamPane, state.user, state.people, state.dutyShops)) {
       state.teamPane = "";
     }
+    useLiveScope(state.view);
     if (!cardSetOpen) {
       viewKey = state.view === "overview" ? state.teamPane || "team" : state.view || "company";
     }
@@ -3155,7 +3321,8 @@
     board.setAttribute("data-hm-js", HOME_JS_STAMP);
     board.classList.toggle("is-overview", state.view === "overview");
     board.classList.toggle("is-board", state.view === "overview" && state.teamPane === "board");
-    board.classList.toggle("is-live", state.view === "live");
+    board.classList.toggle("is-live", state.view === "live" || state.view === "live2");
+    board.classList.toggle("is-live2", state.view === "live2");
     board.classList.toggle("is-week", state.view === "week");
     board.classList.toggle("is-team", state.view === "overview" && state.teamPane !== "board");
     board.classList.toggle("is-chief", state.view === "overview" && state.teamPane === "chief");
@@ -3177,7 +3344,7 @@
     Array.prototype.forEach.call(teamBox.querySelectorAll(".xm-hm-over-block"), function (block) {
       block.style.setProperty("--xm-hm-team-cols", String(Math.max(block.querySelectorAll(".xm-hm-team").length, 1)));
     });
-    root.querySelector("#xm-hm-live").hidden = state.view !== "live";
+    root.querySelector("#xm-hm-live").hidden = state.view !== "live" && state.view !== "live2";
     var weekBox = root.querySelector("#xm-hm-week");
     if (weekBox) {
       weekBox.hidden = state.view !== "week";
@@ -3187,27 +3354,29 @@
     }
     root.querySelector("#xm-hm-board").hidden = true;
     root.querySelector("#xm-hm-live").innerHTML =
-      liveDeskHtml(state) +
-      liveFilterHtml(allShops, state) +
-      '<div class="xm-hm-live-charts">' +
-      liveTrio +
-      '</div><div class="xm-hm-live-cards">' +
-      liveCards.map(function (card) {
-        return liveCardHtml(card, liveFeePick);
-      }).join("") +
-      "</div>" +
-      liveSearchHtml() +
-      '<div class="xm-hm-panel">' +
-      '<table class="xm-hm-table" style="min-width:' +
-      liveTableMinW() +
-      'px">' +
-      liveColgroupHtml() +
-      liveTheadHtml() +
-      "<tbody>" +
-      (liveBoardSlot = liveSlotOf(shops), shops).map(function (row, i) {
-        return liveShopRowHtml(row, i, liveBoardSlot || state.liveAt);
-      }).join("") +
-      "</tbody></table></div>";
+      state.view === "live2"
+        ? live2PanelHtml(state)
+        : liveDeskHtml(state) +
+          liveFilterHtml(allShops, state) +
+          '<div class="xm-hm-live-charts">' +
+          liveTrio +
+          '</div><div class="xm-hm-live-cards">' +
+          liveCards.map(function (card) {
+            return liveCardHtml(card, liveFeePick);
+          }).join("") +
+          "</div>" +
+          liveSearchHtml() +
+          '<div class="xm-hm-panel">' +
+          '<table class="xm-hm-table" style="min-width:' +
+          liveTableMinW() +
+          'px">' +
+          liveColgroupHtml() +
+          liveTheadHtml() +
+          "<tbody>" +
+          (liveBoardSlot = liveSlotOf(shops), shops).map(function (row, i) {
+            return liveShopRowHtml(row, i, liveBoardSlot || state.liveAt);
+          }).join("") +
+          "</tbody></table></div>";
     applyLiveRowPad(root);
     restoreShopColW(root);
     root.querySelector("#xm-hm-ladders").innerHTML = "";
@@ -3226,6 +3395,8 @@
       ? "人管对不上：" + gapText
       : state.view === "live"
         ? "实时按付费中心的方式，用组织中心账号在服务器登录京麦，抓京麦成交和京准通付费。点掉线的店，在页面中间弹出这一家的登录画面。连接京麦登录还没有会话的店。在线只算 15 分钟内还在采集的店。"
+        : state.view === "live2"
+          ? state.live2Hint || "实时（新版）只读组织中心的店铺、分组和负责人。成交、广告、费比、登录状态显示为待接入。连接京麦暂不可用：采集功能待接入。"
         : state.view === "week"
           ? "近七天业绩汇总：爬虫填店铺和当天数字，其余可手填；一键发送图片发到钉钉。"
           : "数字来自星脉 ERP。";
@@ -5021,7 +5192,13 @@
       var dead = false;
       var dates = rangeDates("yesterday");
       var state = {
-        view: "company",
+        view: (function () {
+          try {
+            return sessionStorage.getItem("xm-home-view") === "live2" ? "live2" : "company";
+          } catch (_err) {
+            return "company";
+          }
+        })(),
         teamPane: "",
         range: "yesterday",
         mode: "shop",
@@ -5035,6 +5212,7 @@
         chiefs: blankRoleTeams("主管"),
         people: [],
         dutyShops: [],
+        live2Hint: "",
         dutyKeys: null,
         dutyReady: false,
         ownCards: blankCompanyCards(),
@@ -5491,6 +5669,30 @@
           }
         });
       }
+      function rememberHomeView(view) {
+        try {
+          if (view === "live2") {
+            sessionStorage.setItem("xm-home-view", "live2");
+          } else {
+            sessionStorage.removeItem("xm-home-view");
+          }
+        } catch (_err) {}
+      }
+      function refreshLive2() {
+        useLiveScope("live2");
+        state.live2Hint = "";
+        paint(root, state);
+        return api("/api/people/org/stores?live2=1&_=" + Date.now()).then(function (org) {
+          if (dead || !org) {
+            return;
+          }
+          state.dutyShops = dutyShopsFrom(org, { shops: [] });
+          state.orgIdle = orgIdleNames(org);
+          if (state.view === "live2") {
+            paint(root, state);
+          }
+        });
+      }
       function pullLive(blankFirst) {
         if (blankFirst) {
           clearLiveShown(state);
@@ -5568,6 +5770,7 @@
         });
       }
       function onClick(event) {
+        useLiveScope(state.view);
         var help = event.target.closest && event.target.closest(".xm-hm-help");
         if (help) {
           return;
@@ -5657,6 +5860,7 @@
             liveFeePick = "";
           }
           state.view = nextView;
+          rememberHomeView(nextView);
           if (nextView === "overview") {
             state.teamPane = "";
           }
@@ -5669,6 +5873,9 @@
           paint(root, state);
           if (state.view === "live" || state.view === "company") {
             pullLive(true);
+          }
+          if (state.view === "live2") {
+            refreshLive2();
           }
           if (state.view === "week") {
             pullWeek();
@@ -5816,11 +6023,33 @@
           refreshTeams();
           return;
         }
+        if (event.target.closest("[data-refresh-live2]")) {
+          refreshLive2();
+          return;
+        }
+        if (event.target.closest("[data-connect-live2]")) {
+          state.live2Hint = "采集功能待接入";
+          paint(root, state);
+          return;
+        }
+        if (state.view === "live2" && event.target.closest("[data-live-login]")) {
+          state.live2Hint = "采集功能待接入";
+          paint(root, state);
+          return;
+        }
         if (event.target.closest("[data-refresh-live]")) {
+          if (state.view === "live2") {
+            return;
+          }
           refreshLive();
           return;
         }
         if (event.target.closest("[data-connect-jingmai]")) {
+          if (state.view === "live2") {
+            state.live2Hint = "采集功能待接入";
+            paint(root, state);
+            return;
+          }
           openConnectJingmai();
           return;
         }
@@ -6202,6 +6431,7 @@
             : el.closest(".xm-hm-card");
       }
       function onSortDown(event) {
+        useLiveScope(state.view);
         if (event.button && event.button !== 0) {
           return;
         }
@@ -6355,7 +6585,7 @@
       }
       function onSortUp(event) {
         if (colDrag) {
-          if (colKey(colDrag.table) === "live") {
+          if (colKey(colDrag.table) === "live" || colKey(colDrag.table) === "live2") {
             saveLiveColW();
           }
           colDrag = null;
@@ -6401,6 +6631,7 @@
         event.stopPropagation();
       }
       function onLiveSearchInput(event) {
+        useLiveScope(state.view);
         if (event.target.getAttribute("data-live-filter") !== "q") {
           return;
         }
@@ -6410,6 +6641,7 @@
         paint(root, state);
       }
       function onChange(event) {
+        useLiveScope(state.view);
         if (event.target.getAttribute("data-live-head-all") != null) {
           saveLiveHiddenHeads(
             event.target.checked
@@ -6518,7 +6750,11 @@
       document.addEventListener("selectstart", onSortSelectStart);
       document.addEventListener("dragstart", onSortSelectStart);
       pullBoard();
-      pullLive();
+      if (state.view === "live2") {
+        refreshLive2();
+      } else {
+        pullLive();
+      }
       poll = window.setInterval(function () {
         if (state.view === "live" || state.view === "company") {
           pullLive();
