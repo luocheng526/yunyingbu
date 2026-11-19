@@ -1,22 +1,6 @@
-import { spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
 import { Router } from "express";
-
-// 试载子进程如果被连接拖住，就用允许的那条重启命令把新文件拉起来。正常访问不会走到这里。
-if (process.env.MENGKAI_SMOKE_LIVE && String(process.env.MENGKAI_SMOKE_FILES || "").includes("profile/auth.js")) {
-  setTimeout(() => {
-    try {
-      const child = spawn("/usr/bin/sudo", ["-n", "/usr/bin/systemctl", "restart", "mengkai.service"], {
-        detached: true,
-        stdio: "ignore"
-      });
-      child.unref();
-    } catch {
-      // 试载本身还要继续。
-    }
-  }, 2000).unref();
-}
 
 let mysqlLib = null;
 
@@ -658,7 +642,24 @@ async function persistAvatarRow(username, row) {
   );
 }
 
+async function clearAvatar(username) {
+  avatars.delete(username);
+  if (dbMode() !== "mysql") {
+    return { ok: true, avatarUrl: "" };
+  }
+  try {
+    await ensureAvatarTable();
+    await query("DELETE FROM xm_me_avatars WHERE username = ?", [username]);
+  } catch (err) {
+    console.error("avatar clear failed", err);
+  }
+  return { ok: true, avatarUrl: "" };
+}
+
 async function saveAvatar(username, image) {
+  if (!String(image || "").trim()) {
+    return clearAvatar(username);
+  }
   const parsed = parseAvatarDataUrl(image);
   if (!parsed.ok) return parsed;
   const row = { mime: parsed.mime, body: parsed.body, updatedAt: Date.now() };
