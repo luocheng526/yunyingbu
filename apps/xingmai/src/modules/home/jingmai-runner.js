@@ -13,12 +13,14 @@ import {
   claimCollectorOwner,
   COLLECTOR_OWNER_HOME,
   collectStatusSummary,
+  isAdsOnlyAuthMessage,
   listCollectTargets,
   listSessions,
   markAuth,
   readJingmaiLive,
   saveSample,
   saveSession,
+  sessionVersionOf,
   setRoster,
   updateSessionCookies
 } from "./jingmai-store.js";
@@ -41,9 +43,40 @@ const orgCache = new Map();
 const orgMeta = new Map();
 /** store → 5-minute collect bucket id (old-site dedupe). */
 const collectBuckets = new Map();
+/** store → { until, failures, kind } limited retry / recover backoff. */
+const failBackoff = new Map();
 let refreshing = false;
 let recovering = false;
 let deskLock = Promise.resolve();
+
+const BACKOFF_MS = {
+  login: [15 * 60 * 1000, 30 * 60 * 1000, 60 * 60 * 1000],
+  ads: [10 * 60 * 1000, 20 * 60 * 1000, 40 * 60 * 1000],
+  timeout: [5 * 60 * 1000, 10 * 60 * 1000, 20 * 60 * 1000],
+  recover: [20 * 60 * 1000, 40 * 60 * 1000, 90 * 60 * 1000]
+};
+
+function backoffHold(store) {
+  const row = failBackoff.get(String(store || "").trim());
+  return row && Number(row.until) > Date.now() ? row : null;
+}
+
+function noteFailBackoff(store, kind) {
+  const name = String(store || "").trim();
+  if (!name) {
+    return;
+  }
+  const key = BACKOFF_MS[kind] ? kind : "timeout";
+  const prev = failBackoff.get(name) || { failures: 0, kind: key };
+  const failures = Math.min(20, Number(prev.failures || 0) + 1);
+  const ladder = BACKOFF_MS[key] || BACKOFF_MS.timeout;
+  const delay = ladder[Math.min(failures - 1, ladder.length - 1)];
+  failBackoff.set(name, { until: Date.now() + delay, failures: failures, kind: key });
+}
+
+function clearFailBackoff(store) {
+  failBackoff.delete(String(store || "").trim());
+}
 
 const defaultDeps = {
   loadOrg: loadOrgShops,
@@ -154,6 +187,7 @@ export function resetJingmaiDeps() {
   orgCache.clear();
   orgMeta.clear();
   collectBuckets.clear();
+  failBackoff.clear();
   refreshing = false;
   recovering = false;
   deskLock = Promise.resolve();
@@ -191,12 +225,16 @@ function sessionNeedsLogin(session) {
   if (!session || session.enabled === false) {
     return false;
   }
-  if (session.authState === "login_expired" || !session.cookies || !session.cookies.length) {
+  const message = String(session.authMessage || "");
+  // Ads/JZT gaps (including legacy "登录已失效；京准通-100" composites) are NOT Jingmai logout.
+  if (isAdsOnlyAuthMessage(message)) {
+    return false;
+  }
+  if (!session.cookies || !session.cookies.length) {
     return true;
   }
-  const message = String(session.authMessage || "");
-  if (/京准通/.test(message) && !/登录已失效，请重新登录/.test(message)) {
-    return false;
+  if (session.authState === "login_expired") {
+    return true;
   }
   if (session.authState === "offline" && /采集超时|采集已停止/.test(message)) {
     return false;
@@ -287,9 +325,44 @@ async function passwordRelogin(shop) {
   if (inflight.has(shop.store)) {
     return false;
   }
+  // Callers that own the desk (beginRelogin) already set loginCursor; do not treat that as a block.
+  // Auto recover passes sessionVersion + pre-checks humanProtectsShop / loginInProgress before call.
+  const expectVersion = shop.sessionVersion || "";
+  const abandonIfHuman =
+    shop.respectHuman === true
+      ? function () {
+          return humanProtectsShop(shop.store);
+        }
+      : function () {
+          return false;
+        };
   inflight.add(shop.store);
   try {
+    if (abandonIfHuman()) {
+      return false;
+    }
+    if (expectVersion) {
+      const sessions = await listSessions();
+      const current = sessions.find(function (item) {
+        return item.store === shop.store;
+      });
+      if (sessionVersionOf(current) !== expectVersion) {
+        return false;
+      }
+    }
     const cookies = await deps.client.login(shop.login, shop.password);
+    if (abandonIfHuman()) {
+      return false;
+    }
+    if (expectVersion) {
+      const sessions = await listSessions();
+      const current = sessions.find(function (item) {
+        return item.store === shop.store;
+      });
+      if (sessionVersionOf(current) !== expectVersion) {
+        return false;
+      }
+    }
     const kept = await rememberLogin(shop.store, cookies, { shopId: shop.shopId || "", store: shop.store });
     return kept === "saved" || kept === "kept";
   } finally {
@@ -829,7 +902,14 @@ export async function recoverDroppedShops(cookie) {
     const dropped = new Set(
       ((live && live.shops) || [])
         .filter(function (row) {
-          return row && (row.offline === true || row.loginExpired === true);
+          // Ads-only / timeout offline must not enter password recover.
+          if (!row) {
+            return false;
+          }
+          if (row.loginExpired === true && !isAdsOnlyAuthMessage(row.offlineReason || row.adsReason || "")) {
+            return true;
+          }
+          return false;
         })
         .map(function (row) {
           return row.shop;
@@ -840,12 +920,18 @@ export async function recoverDroppedShops(cookie) {
       if (!shop || shop.enabled === false || !shop.login || !shop.password || inflight.has(shop.store)) {
         return;
       }
-      // Home recovers every org shop (including 沈子晗 team). Manual pause stays skipped above.
+      if (humanProtectsShop(shop.store)) {
+        return;
+      }
+      if (backoffHold(shop.store)) {
+        return;
+      }
       const session = byName.get(shop.store);
-      const needs =
-        dropped.has(shop.store) ||
-        sessionNeedsLogin(session || { enabled: true, cookies: [], authState: "" }) ||
-        (sessionStillValid(session) && session && session.authState === "offline");
+      if (session && isAdsOnlyAuthMessage(session.authMessage)) {
+        return;
+      }
+      // Only true Jingmai login gaps — not ads/timeout offline.
+      const needs = dropped.has(shop.store) || sessionNeedsLogin(session || { enabled: true, cookies: [], authState: "" });
       if (!needs) {
         return;
       }
@@ -853,18 +939,36 @@ export async function recoverDroppedShops(cookie) {
         store: shop.store,
         login: shop.login,
         password: shop.password,
-        shopId: shop.shopId || ""
+        shopId: shop.shopId || "",
+        sessionVersion: sessionVersionOf(session)
       });
       shop.login = "";
       shop.password = "";
     });
     const results = [];
-    for (let i = 0; i < targets.length; i += 1) {
+    // Cap auto-recover per tick so abnormal shops cannot monopolize the desk.
+    const maxRecover = 3;
+    for (let i = 0; i < targets.length && results.length < maxRecover; i += 1) {
       const shop = targets[i];
+      if (humanProtectsShop(shop.store) || inflight.has(shop.store)) {
+        continue;
+      }
+      const claimed = await claimCollectorOwner(shop.store, COLLECTOR_OWNER_HOME);
+      if (!claimed || !claimed.ok) {
+        results.push({ store: shop.store, status: "busy", reason: claimed && claimed.reason });
+        continue;
+      }
       try {
-        const ok = await passwordRelogin(shop);
-        results.push({ store: shop.store, status: ok ? "ok" : "login" });
+        const ok = await passwordRelogin(Object.assign({}, shop, { respectHuman: true }));
+        if (ok) {
+          clearFailBackoff(shop.store);
+          results.push({ store: shop.store, status: "ok" });
+        } else {
+          noteFailBackoff(shop.store, "recover");
+          results.push({ store: shop.store, status: "login" });
+        }
       } catch {
+        noteFailBackoff(shop.store, "recover");
         results.push({ store: shop.store, status: "login" });
       }
       shop.password = "";
@@ -875,6 +979,7 @@ export async function recoverDroppedShops(cookie) {
         return item.status === "ok";
       }).length,
       total: targets.length,
+      attempted: results.length,
       results: results
     };
   } finally {
@@ -1138,6 +1243,9 @@ export async function jingmaiTick() {
     collectConcurrency: 3,
     collectBudgetMs: 85000,
     collectBuckets: collectBuckets,
+    backoffHold: backoffHold,
+    noteFailBackoff: noteFailBackoff,
+    clearFailBackoff: clearFailBackoff,
     humanProtectsShop: humanProtectsShop,
     // Sole writer: home collector (shared tables). Shen/Han UI may still read the same store.
     listTargets: listHomeCollectTargets,

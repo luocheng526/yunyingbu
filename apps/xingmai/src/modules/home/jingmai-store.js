@@ -22,7 +22,7 @@ export const COLLECTOR_OWNER_SHEN = "shen";
 /** Lease window so a crashed home worker does not block Shen forever. */
 export const COLLECTOR_LEASE_SEC = 15 * 60;
 /** Loaded-process marker for release acceptance (status JSON). */
-export const HOME_COLLECTOR_RUNTIME_MARK = "0.1.1261-home-atomic-mutex";
+export const HOME_COLLECTOR_RUNTIME_MARK = "0.1.1262-home-live-fix";
 /** Human login/roster saves (may run while paused). Collect must not use this. */
 export const WRITE_PURPOSE_HUMAN = "human";
 /** Background collect writebacks (sample/auth/jar). */

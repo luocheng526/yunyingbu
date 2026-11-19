@@ -2470,10 +2470,19 @@
   }
   function liveLinkOf(row) {
     if (row && row.online === true) {
+      if (row.adsFailed === true) {
+        return { label: "在线·广告异常", kind: "ads" };
+      }
       return { label: "在线", kind: "on" };
     }
-    if (row && (row.loginExpired === true || row.offline === true)) {
+    if (row && row.loginExpired === true) {
       return { label: "掉线", kind: "off" };
+    }
+    if (row && row.adsFailed === true) {
+      return { label: "广告异常", kind: "ads" };
+    }
+    if (row && row.offline === true) {
+      return { label: "采集异常", kind: "warn" };
     }
     return { label: "", kind: "" };
   }
@@ -2533,6 +2542,16 @@
           '"' +
           (row && row.offlineReason ? ' title="' + escapeHtml(row.offlineReason) + '"' : "") +
           ">掉线</button></td>"
+        );
+      }
+      if (link.kind === "ads" || link.kind === "warn") {
+        var tip = (row && (row.adsReason || row.offlineReason)) || link.label;
+        return (
+          '<td class="xm-hm-num is-fee-warm" title="' +
+          escapeHtml(tip) +
+          '">' +
+          escapeHtml(link.label) +
+          "</td>"
         );
       }
       if (!link.label) {
@@ -4502,6 +4521,8 @@
       online: row && row.online === true,
       offline: row && row.offline === true,
       offlineReason: row && row.offlineReason ? String(row.offlineReason) : "",
+      adsFailed: row && row.adsFailed === true,
+      adsReason: row && row.adsReason ? String(row.adsReason) : "",
       loginExpired: row && row.loginExpired === true,
       capturedAt: row && (row.capturedAt || row.ingestedAt),
       feeLo: row && (row.feeLo != null ? row.feeLo : row.feeMin),

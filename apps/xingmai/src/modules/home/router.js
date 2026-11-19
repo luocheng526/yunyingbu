@@ -158,10 +158,19 @@ const KEPT_LIVE_LINK =
   "  }\n" +
   "  function liveLinkOf(row) {\n" +
   "    if (row && row.online === true) {\n" +
+  "      if (row.adsFailed === true) {\n" +
+  "        return { label: \"在线·广告异常\", kind: \"ads\" };\n" +
+  "      }\n" +
   "      return { label: \"在线\", kind: \"on\" };\n" +
   "    }\n" +
-  "    if (row && (row.loginExpired === true || row.offline === true)) {\n" +
+  "    if (row && row.loginExpired === true) {\n" +
   "      return { label: \"掉线\", kind: \"off\" };\n" +
+  "    }\n" +
+  "    if (row && row.adsFailed === true) {\n" +
+  "      return { label: \"广告异常\", kind: \"ads\" };\n" +
+  "    }\n" +
+  "    if (row && row.offline === true) {\n" +
+  "      return { label: \"采集异常\", kind: \"warn\" };\n" +
   "    }\n" +
   "    return { label: \"\", kind: \"\" };\n" +
   "  }";
@@ -172,6 +181,8 @@ const KEPT_ONLINE_COPY =
   "      online: row && row.online === true,\n" +
   "      offline: row && row.offline === true,\n" +
   "      offlineReason: row && row.offlineReason ? String(row.offlineReason) : \"\",\n" +
+  "      adsFailed: row && row.adsFailed === true,\n" +
+  "      adsReason: row && row.adsReason ? String(row.adsReason) : \"\",\n" +
   "      loginExpired: row && row.loginExpired === true,\n" +
   "      capturedAt: row && (row.capturedAt || row.ingestedAt),";
 const OLD_LIVE_AT =

@@ -475,9 +475,11 @@ test("live shop 状态 stays online when the saved login is still valid", () => 
   assert.equal(fns.liveLinkOf({ capturedAt: almost }).label, "");
   assert.equal(fns.liveLinkOf({ capturedAt: stale }).label, "");
   assert.equal(fns.liveLinkOf({ capturedAt: stale, online: true }).label, "在线");
-  assert.equal(fns.liveLinkOf({ capturedAt: fresh, offline: true }).label, "掉线");
+  assert.equal(fns.liveLinkOf({ capturedAt: fresh, offline: true }).label, "采集异常");
   assert.equal(fns.liveLinkOf({ capturedAt: fresh, loginExpired: true }).label, "掉线");
   assert.equal(fns.liveLinkOf({ loginExpired: true, online: true }).label, "在线");
+  assert.equal(fns.liveLinkOf({ online: true, adsFailed: true }).label, "在线·广告异常");
+  assert.equal(fns.liveLinkOf({ adsFailed: true }).label, "广告异常");
   assert.match(fns.fmtShopAt("2026-11-13T09:43:03+08:00"), /^2026\/11\/13 09:43:03$/);
   assert.match(fns.fmtShopAt("2026/11/13 09:43:03"), /^2026\/11\/13 09:43:03$/);
   assert.doesNotMatch(homeJs, /label: "是否回传成功"/);

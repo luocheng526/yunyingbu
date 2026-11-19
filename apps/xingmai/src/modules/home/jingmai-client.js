@@ -1217,7 +1217,9 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
   if (hasCollected(metrics)) {
     return metrics;
   }
-  if (dealError && dealError.code === "login" && (!paid || paidError)) {
+  // Never join Jingmai-login and JZT/ads failures into one message — that made Han shops
+  // look "login expired" and triggered endless password recover while ads was the only gap.
+  if (dealError && dealError.code === "login") {
     throw jingmaiError("login", "登录已失效，请重新登录");
   }
   if (paidError && !dealError) {
@@ -1226,14 +1228,13 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
   if (dealError && dealError.code === "timeout") {
     throw jingmaiError("timeout", dealError.message || "采集超时");
   }
-  const parts = [];
   if (dealError && dealError.message) {
-    parts.push(String(dealError.message));
+    throw jingmaiError(dealError.code || "network", String(dealError.message).slice(0, 180));
   }
   if (paidError && paidError.message) {
-    parts.push(String(paidError.message));
+    throw jingmaiError("paid", String(paidError.message).slice(0, 180));
   }
-  throw jingmaiError("network", parts.join("；").slice(0, 180) || "京麦没有返回数据");
+  throw jingmaiError("network", "京麦没有返回数据");
 }
 
 export const jingmaiClient = {

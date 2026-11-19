@@ -121,10 +121,12 @@ test("stale shops keep the last capture time while offline", () => {
       }
     ]
   });
-  assert.equal(view.shops[0].offline, true);
+  // Ads/JZT failure keeps Jingmai session; surface adsFailed, not whole-shop 掉线.
+  assert.equal(view.shops[0].offline, false);
   assert.equal(view.shops[0].loginExpired, false);
+  assert.equal(view.shops[0].adsFailed, true);
+  assert.match(view.shops[0].adsReason, /京准通/);
   assert.equal(view.shops[0].capturedAt, "2026/11/19 08:25:45");
-  assert.match(view.shops[0].offlineReason, /京准通/);
 });
 
 test("fetchHome keeps deal data when Jingzhuntong pinlist returns -100", async () => {
@@ -693,7 +695,7 @@ test("collectStatusSummary exposes loaded-process runtimeMark", async () => {
   const summary = await collectStatusSummary();
   assert.equal(summary.ok, true);
   assert.equal(summary.runtimeMark, HOME_COLLECTOR_RUNTIME_MARK);
-  assert.match(String(summary.runtimeMark), /home-atomic-mutex|home-load-mutex|mutex/);
+  assert.match(String(summary.runtimeMark), /home-atomic-mutex|home-load-mutex|home-live-fix|mutex/);
 });
 
 test("cookieParams keeps real domain/path/expiry and only defaults legacy name/value jars", () => {
