@@ -10,6 +10,7 @@ import { linkStatus, noteQrClient, pollLink, resetBoundStore, setBoundClock, set
 import { readState, writeSheet, writeState } from "../src/modules/bound/persist.js";
 import { publicCatalog, reports } from "../src/modules/bound/catalog.js";
 import { reportBody } from "../src/modules/bound/collect.js";
+import { rewriteBoundModuleUrl } from "../src/modules/bound/client-url.js";
 
 process.env.BOUND_COLLECT_LOOP = "0";
 
@@ -565,11 +566,31 @@ test("旧页面脚本取图时，提示强制刷新，新脚本不再提示", as
   await startLink("WECHAT");
   noteQrClient({ ts: String(Date.now()) });
   const oldClient = await linkStatus();
-  assert.match(oldClient.message, /Ctrl\+Shift\+R/);
+  assert.match(oldClient.message, /刷新按钮/);
   noteQrClient({ v: "stay" });
   const current = await linkStatus();
-  assert.doesNotMatch(current.message, /Ctrl\+Shift\+R/);
+  assert.doesNotMatch(current.message, /刷新按钮/);
   assert.equal(current.qrToken, "stay");
+});
+
+test("扫码页脚本不走会被缓存 24 小时的地址", async () => {
+  const html =
+    '<link rel="preload" href="/shared/modules/bound.js?v=0.1.787-acadleaf" as="script" />' +
+    '<script src="/shared/modules/bound.js?v=0.1.787-acadleaf" defer></script>';
+  const out = rewriteBoundModuleUrl(html);
+  assert.equal(out.includes("/shared/modules/bound.js"), false);
+  assert.match(out, /\/api\/bound\/client\.js\?v=qr-still-3/);
+  const { base, close } = await listen(appFor({ username: "罗成", displayName: "罗成" }));
+  try {
+    const res = await fetch(`${base}/api/bound/client.js`);
+    const text = await res.text();
+    assert.equal(res.status, 200);
+    assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
+    assert.match(text, /data-qr/);
+    assert.doesNotMatch(text, /link\/qr\?ts=/);
+  } finally {
+    await close();
+  }
 });
 
 test("页面只请求边界接口，并画出四个模块", async () => {

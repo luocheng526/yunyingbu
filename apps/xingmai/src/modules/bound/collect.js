@@ -206,7 +206,7 @@ export async function linkStatus() {
     provider: current.provider,
     deviceId: current.deviceId,
     message: qrClient === "old"
-      ? "二维码还在闪，是因为浏览器锁着旧页面。请按 Ctrl+Shift+R 强制刷新一次（Mac 用 Command+Shift+R）。刷新后请用微信扫这一张，它会停住。"
+      ? "二维码还在闪。请点浏览器左上角的刷新按钮，重新打开这一页。刷新后请用微信扫这一张，它会停住。"
       : current.message,
     qrToken: current.scene || "",
     userName: current.userName,

@@ -1,3 +1,5 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Router } from "express";
 import { isHrDesk } from "../home/nav-items.js";
 import {
@@ -18,6 +20,11 @@ import {
   startLink,
   tick
 } from "./store.js";
+
+const boundJsPath = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../public/shared/modules/bound.js"
+);
 
 export const boundRouter = Router();
 
@@ -59,6 +66,12 @@ boundRouter.use((req, res, next) => {
     ensureCollectLoop();
     next();
   }
+});
+
+boundRouter.get("/client.js", (_req, res) => {
+  res.setHeader("Cache-Control", "private, no-store");
+  res.type("application/javascript");
+  res.sendFile(boundJsPath);
 });
 
 boundRouter.get("/", (req, res) => {

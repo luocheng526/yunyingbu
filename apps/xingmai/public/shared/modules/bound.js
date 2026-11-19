@@ -1235,18 +1235,7 @@
   }
 
   function render(root) {
-    var prev = root.querySelector && root.querySelector("img.bd-qr");
-    var held = prev && prev.parentNode ? prev.parentNode.removeChild(prev) : null;
     root.innerHTML = '<div class="bd-app xm-ui-scope" data-bound-erp="false"><nav class="bd-side" aria-label="边界数据中心">' + renderNav() + '</nav>' + renderMain() + "</div>";
-    var slot = held && root.querySelector ? root.querySelector("img.bd-qr") : null;
-    if (!held || !slot || !slot.parentNode) {
-      return;
-    }
-    if (held.getAttribute("data-qr") !== slot.getAttribute("data-qr")) {
-      held.setAttribute("data-qr", slot.getAttribute("data-qr") || "");
-      held.src = slot.src || slot.getAttribute("src") || held.src;
-    }
-    slot.parentNode.replaceChild(held, slot);
   }
 
   function paint(root) {
@@ -1313,9 +1302,13 @@
     var token = link.qrToken || "current";
     var showQr = link.qrReady && (link.phase === "waiting_scan" || link.phase === "needs_scan" || link.phase === "choose_account");
     var img = root.querySelector("img.bd-qr");
-    if (!showQr || !img || img.getAttribute("data-qr") !== token) {
+    if (!showQr || !img) {
       paint(root);
       return;
+    }
+    if (img.getAttribute("data-qr") !== token) {
+      img.setAttribute("data-qr", token);
+      img.src = "/api/bound/link/qr?v=" + encodeURIComponent(token);
     }
     var msg = root.querySelector("[data-bd='link-msg']");
     if (msg) {
