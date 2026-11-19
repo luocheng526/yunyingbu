@@ -515,29 +515,16 @@ export function sameShop(expected, actual) {
  * Mismatch must not land samples or refresh cookies for the wrong shop.
  */
 export function matchCollectIdentity(expected, actual) {
-  const wantId = String((expected && expected.shopId) || "").trim();
   const gotId = String((actual && actual.shopId) || "").trim();
-  const wantName = String((expected && (expected.store || expected.shopName)) || "").replace(/\s+/g, "");
   const gotName = String((actual && actual.shopName) || "").replace(/\s+/g, "");
-  if (wantId) {
-    if (!gotId) {
-      return { ok: false, reason: "identity_missing" };
-    }
-    if (wantId !== gotId) {
-      return { ok: false, reason: "identity_mismatch" };
-    }
+  if (!gotId && !gotName) {
+    return { ok: false, reason: "identity_missing" };
+  }
+  // Jingmai's account API returns the merchant id (belongBizId), not the org shop id.
+  if (sameShop(expected, actual)) {
     return { ok: true };
   }
-  if (wantName) {
-    if (!gotName) {
-      return { ok: false, reason: "identity_missing" };
-    }
-    if (wantName !== gotName) {
-      return { ok: false, reason: "identity_mismatch" };
-    }
-    return { ok: true };
-  }
-  return { ok: false, reason: "identity_missing" };
+  return { ok: false, reason: "identity_mismatch" };
 }
 
 export function sessionStillValid(session) {
@@ -1362,7 +1349,10 @@ async function verifyCollectIdentity(deps, shop, jar, signal) {
     // Timeout / network / empty identity: never release without proof.
     return { ok: false, reason: "identity_missing", identity: null };
   }
-  const match = matchCollectIdentity({ store: shop.store, shopId: shop.shopId || "" }, identity);
+  const match = matchCollectIdentity(
+    { store: shop.store, shopId: shop.shopId || "", merchantId: shop.merchantId || "" },
+    identity
+  );
   if (!match.ok) {
     return { ok: false, reason: match.reason, identity: identity };
   }
@@ -1378,6 +1368,7 @@ async function refreshCookiesSafe(deps, shop, jar, identity, sessionVersion) {
       writer: "home",
       sessionVersion: sessionVersion,
       expectedShopId: shop.shopId || "",
+      merchantId: shop.merchantId || "",
       identity: identity
     });
   } catch {
@@ -1387,7 +1378,7 @@ async function refreshCookiesSafe(deps, shop, jar, identity, sessionVersion) {
 
 async function collectOne(shop, deps) {
   const now = deps.now();
-  const expected = { store: shop.store, shopId: shop.shopId || "" };
+  const expected = { store: shop.store, shopId: shop.shopId || "", merchantId: shop.merchantId || "" };
   const sessionVersion =
     shop.sessionGen != null && shop.sessionGen !== ""
       ? "g:" + String(Number(shop.sessionGen) || 0)

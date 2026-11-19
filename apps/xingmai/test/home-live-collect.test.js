@@ -1386,6 +1386,14 @@ test("matchCollectIdentity requires shopId match; recheck mismatch keeps old sam
   assert.equal(matchCollectIdentity({ shopId: "right-id", store: "RASW家居旗舰店" }, { shopId: "wrong-id", shopName: "RASW" }).ok, false);
   assert.equal(matchCollectIdentity({ shopId: "right-id", store: "A" }, { shopId: "right-id", shopName: "A" }).ok, true);
   assert.equal(matchCollectIdentity({ shopId: "right-id", store: "A" }, { shopId: "", shopName: "" }).ok, false);
+  assert.equal(matchCollectIdentity(
+    { shopId: "16091982", merchantId: "17640114", store: "DIKTT家居旗舰店" },
+    { shopId: "17640114", shopName: "" }
+  ).ok, true);
+  assert.equal(matchCollectIdentity(
+    { shopId: "16091982", merchantId: "17640114", store: "DIKTT家居旗舰店" },
+    { shopId: "999", shopName: "另一家店" }
+  ).ok, false);
   const samples = [];
   const auths = [];
   await runTick({

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { browserReady, browserStartFailure, ensureChrome, jingmaiDesk, launchNote, LOGIN_SCREEN_MESSAGE, PAGE_WAIT_MESSAGE } from "./jingmai-desk.js";
 import { jingmaiClient } from "./jingmai-client.js";
 import {
@@ -145,7 +146,7 @@ export async function listHomeCollectTargets() {
     const result = await claimCollectorOwner(session.store, COLLECTOR_OWNER_HOME);
     if (result && result.ok) {
       session.collectorOwner = COLLECTOR_OWNER_HOME;
-      claimed.push(session);
+      claimed.push(withMerchant(session));
     }
   }
   return claimed;
@@ -193,6 +194,51 @@ export function resetJingmaiDeps() {
   recovering = false;
   deskLock = Promise.resolve();
   loginEpoch = 0;
+}
+
+let orgIdentityMap = null;
+
+function orgIdentityFor(store) {
+  const name = String(store || "").trim();
+  if (!name) {
+    return null;
+  }
+  if (!orgIdentityMap) {
+    orgIdentityMap = new Map();
+    try {
+      const file = new URL("../people/data/org-stores.json", import.meta.url);
+      const data = JSON.parse(readFileSync(file, "utf8"));
+      const rows = Array.isArray(data) ? data : data.stores || [];
+      rows.forEach(function (row) {
+        const storeName = String((row && (row.storeName || row.store)) || "").trim();
+        if (!storeName) {
+          return;
+        }
+        orgIdentityMap.set(storeName, {
+          shopId: String((row && (row.shopId || row.storeId)) || "").trim(),
+          merchantId: String((row && row.merchantId) || "").trim()
+        });
+      });
+    } catch {
+      orgIdentityMap = new Map();
+    }
+  }
+  return orgIdentityMap.get(name) || null;
+}
+
+function withMerchant(shop) {
+  if (!shop || !shop.store) {
+    return shop;
+  }
+  const cached = orgCache.get(shop.store);
+  const filed = orgIdentityFor(shop.store);
+  if (!shop.shopId) {
+    shop.shopId = String((cached && cached.shopId) || (filed && filed.shopId) || "");
+  }
+  if (!shop.merchantId) {
+    shop.merchantId = String((cached && cached.merchantId) || (filed && filed.merchantId) || "");
+  }
+  return shop;
 }
 
 function rememberOrg(shops) {
@@ -295,7 +341,7 @@ async function cookiesAlive(cookies, expected) {
         return deps.client.fetchAccountIdentity(cookies, undefined, signal);
       }, 12000);
       const match = matchCollectIdentity(
-        { store: want.store || "", shopId: want.shopId || "" },
+        { store: want.store || "", shopId: want.shopId || "", merchantId: want.merchantId || "" },
         identity || { shopId: "", shopName: "" }
       );
       if (!match.ok) {
@@ -322,6 +368,7 @@ async function cookiesAlive(cookies, expected) {
 }
 
 async function passwordRelogin(shop) {
+  shop = withMerchant(shop);
   if (!shop || !shop.store || !shop.login || !shop.password || !deps.client || !deps.client.login) {
     return false;
   }
@@ -366,7 +413,11 @@ async function passwordRelogin(shop) {
         return false;
       }
     }
-    const kept = await rememberLogin(shop.store, cookies, { shopId: shop.shopId || "", store: shop.store });
+    const kept = await rememberLogin(shop.store, cookies, {
+      shopId: shop.shopId || "",
+      merchantId: shop.merchantId || "",
+      store: shop.store
+    });
     return kept === "saved" || kept === "kept";
   } finally {
     inflight.delete(shop.store);
@@ -383,6 +434,7 @@ function cachedOrgShop(name) {
     login: hit.login,
     password: hit.password,
     shopId: hit.shopId || "",
+    merchantId: hit.merchantId || "",
     enabled: hit.enabled !== false
   };
 }
@@ -401,7 +453,7 @@ async function connectOne(shop) {
   inflight.add(shop.store);
   try {
     const cookies = await deps.client.login(shop.login, shop.password);
-    const expected = { store: shop.store, shopId: shop.shopId || "" };
+    const expected = { store: shop.store, shopId: shop.shopId || "", merchantId: shop.merchantId || "" };
     let identity = { shopId: "", shopName: "" };
     if (deps.client.fetchAccountIdentity) {
       identity = (await deps.client.fetchAccountIdentity(cookies)) || identity;
@@ -422,7 +474,7 @@ async function connectOne(shop) {
       authState: "ok",
       authMessage: "",
       enabled: true,
-      shopId: String(identity.shopId || shop.shopId || "").trim()
+      shopId: String(shop.shopId || identity.shopId || "").trim()
     });
     const now = beijingParts();
     await saveSample(
@@ -535,6 +587,7 @@ async function rememberLogin(store, cookies, expected) {
       const metrics = await deps.client.fetchHome(cookies, undefined, {
         store: store,
         shopId: shopId,
+        merchantId: String((wanted && wanted.merchantId) || ""),
         shopName: store
       });
       const now = beijingParts();
@@ -681,7 +734,11 @@ async function startQueued(shop, epoch) {
   }
   if (opened.status === "ok") {
     await deps.desk.close();
-    const kept = await rememberLogin(shop.store, opened.cookies || [], { shopId: shop.shopId || "", store: shop.store });
+    const kept = await rememberLogin(shop.store, opened.cookies || [], {
+      shopId: shop.shopId || "",
+      merchantId: shop.merchantId || "",
+      store: shop.store
+    });
     if (kept === "kept") {
       return publicState({ status: "done", store: shop.store, message: "这次登录到的不是这家店，原来的会话还在" });
     }
@@ -751,7 +808,14 @@ async function queueShops(shops, epoch) {
     return currentLoginState();
   }
   const copies = (shops || []).map(function (shop) {
-    const copy = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "", manual: shop.manual === true };
+    const copy = {
+      store: shop.store,
+      login: shop.login,
+      password: shop.password,
+      shopId: shop.shopId || "",
+      merchantId: shop.merchantId || "",
+      manual: shop.manual === true
+    };
     shop.login = "";
     shop.password = "";
     return copy;
@@ -830,10 +894,11 @@ export async function beginRelogin(store, cookie, options) {
       return item.store === name;
     });
     if (sessionStillValid(existing)) {
-      const alive = await cookiesAlive(existing.cookies || [], {
+      const alive = await cookiesAlive(existing.cookies || [], withMerchant({
         store: name,
-        shopId: (existing && existing.shopId) || (shop && shop.shopId) || ""
-      });
+        shopId: (existing && existing.shopId) || (shop && shop.shopId) || "",
+        merchantId: shop && shop.merchantId
+      }));
       if (epoch !== loginEpoch) {
         return currentLoginState(name);
       }
@@ -851,7 +916,8 @@ export async function beginRelogin(store, cookie, options) {
         store: shop.store,
         login: shop.login,
         password: shop.password,
-        shopId: shop.shopId || ""
+        shopId: shop.shopId || "",
+        merchantId: shop.merchantId || ""
       });
       if (epoch !== loginEpoch) {
         return currentLoginState(name);
@@ -870,7 +936,14 @@ export async function beginRelogin(store, cookie, options) {
   if (epoch !== loginEpoch) {
     return currentLoginState(name);
   }
-  const queued = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "", manual: manual };
+  const queued = {
+    store: shop.store,
+    login: shop.login,
+    password: shop.password,
+    shopId: shop.shopId || "",
+    merchantId: shop.merchantId || "",
+    manual: manual
+  };
   shop.login = "";
   shop.password = "";
   const job = queueShops([queued], epoch);
@@ -1213,7 +1286,7 @@ export async function finishRelogin(store, authCode) {
       password: password,
       authCode: authCode || ""
     });
-    const kept = await rememberLogin(name, jar, { store: name, shopId: pending.shopId || "" });
+    const kept = await rememberLogin(name, jar, withMerchant({ store: name, shopId: pending.shopId || "", merchantId: pending.merchantId || "" }));
     if (kept !== "saved") {
       return { ok: true, store: name, status: "login", message: kept === "kept" ? "这次登录到的不是这家店，原来的会话还在" : "登录没有通过，请再试一次" };
     }
@@ -1238,7 +1311,11 @@ async function silentOne(shop) {
   }
   if (opened.status === "ok") {
     await deps.desk.close();
-    const kept = await rememberLogin(shop.store, opened.cookies || [], { shopId: shop.shopId || "", store: shop.store });
+    const kept = await rememberLogin(shop.store, opened.cookies || [], withMerchant({
+      shopId: shop.shopId || "",
+      merchantId: shop.merchantId || "",
+      store: shop.store
+    }));
     return { store: shop.store, status: kept === "saved" || kept === "kept" ? "ok" : "login" };
   }
   if (deps.desk && deps.desk.close) {
@@ -1260,7 +1337,14 @@ async function runSilent(shops) {
   });
   const results = [];
   for (const shop of targets) {
-    const copy = { store: shop.store, enabled: shop.enabled, login: shop.login, password: shop.password };
+    const copy = withMerchant({
+      store: shop.store,
+      enabled: shop.enabled,
+      login: shop.login,
+      password: shop.password,
+      shopId: shop.shopId || "",
+      merchantId: shop.merchantId || ""
+    });
     results.push(await withDesk(function () {
       return silentOne(copy);
     }));
@@ -1337,11 +1421,10 @@ export async function jingmaiTick() {
     updateSessionCookies: updateSessionCookies,
     reloadShop: async function (store) {
       const rows = await listSessions();
-      return (
-        rows.find(function (row) {
-          return row.store === store;
-        }) || null
-      );
+      const row = rows.find(function (item) {
+        return item.store === store;
+      });
+      return row ? withMerchant(row) : null;
     },
     recheckJingmai: async function (shop, signal) {
       if (!shop || !shop.cookies || !shop.cookies.length || !deps.client) {
@@ -1352,8 +1435,9 @@ export async function jingmaiTick() {
           return false;
         }
         const identity = await deps.client.fetchAccountIdentity(shop.cookies, undefined, signal);
+        const known = withMerchant(shop);
         const match = matchCollectIdentity(
-          { store: shop.store, shopId: shop.shopId || "" },
+          { store: known.store, shopId: known.shopId || "", merchantId: known.merchantId || "" },
           identity || { shopId: "", shopName: "" }
         );
         // Historical cross-shop profiles must match shopId; mismatch keeps old data.
