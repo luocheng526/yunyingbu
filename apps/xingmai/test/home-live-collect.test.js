@@ -58,6 +58,22 @@ test("paid-only failures do not expire the whole shop login", () => {
   assert.notEqual(paid.authState, "login_expired");
 });
 
+test("parseHomeCard follows old-site parse_home: needs 经营数据; dashes keep last sample", async () => {
+  const { parseHomeCard, collectBucketId } = await import("../src/modules/home/jingmai.js");
+  assert.equal(parseHomeCard("只有成交金额\n100"), null);
+  assert.equal(
+    parseHomeCard("经营数据\n成交金额\n—\n成交单量\n1\n成交客户数\n1"),
+    null
+  );
+  const ok = parseHomeCard("经营数据\n成交金额\n¥1,234.5\n成交单量\n2\n成交客户数\n3");
+  assert.equal(ok.dealAmount, 1234.5);
+  assert.equal(ok.orderCount, 2);
+  assert.equal(ok.customerCount, 3);
+  assert.equal(collectBucketId(0), 0);
+  assert.equal(collectBucketId(5 * 60 * 1000 - 1), 0);
+  assert.equal(collectBucketId(5 * 60 * 1000), 1);
+});
+
 test("timeout keeps the session and only marks collection offline", () => {
   const row = collectAuthDecision({ code: "timeout", message: "采集超时" });
   assert.equal(row.authState, "offline");

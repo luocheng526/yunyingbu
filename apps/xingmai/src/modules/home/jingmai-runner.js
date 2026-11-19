@@ -36,6 +36,8 @@ let openingMark = 0;
 const orgCache = new Map();
 /** store → { store, team, manager, enabled } for ownership (no secrets). */
 const orgMeta = new Map();
+/** store → 5-minute collect bucket id (old-site dedupe). */
+const collectBuckets = new Map();
 let refreshing = false;
 let recovering = false;
 let deskLock = Promise.resolve();
@@ -134,6 +136,7 @@ export function resetJingmaiDeps() {
   });
   orgCache.clear();
   orgMeta.clear();
+  collectBuckets.clear();
   refreshing = false;
   recovering = false;
   deskLock = Promise.resolve();
@@ -1085,11 +1088,32 @@ export async function refreshJingmai(cookie) {
 
 const tickLock = { busy: false };
 
+/** Old-site: human login window — background must not navigate that shop for 120s. */
+export function humanProtectsShop(store) {
+  const name = String(store || "").trim();
+  if (!name) {
+    return false;
+  }
+  if (loginInProgress(name)) {
+    return true;
+  }
+  if (loginCursor.store === name && loginCursor.startedAt) {
+    const age = Date.now() - Number(loginCursor.startedAt || 0);
+    if (age >= 0 && age < 120000) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export async function jingmaiTick() {
   await runTick({
     inflight: inflight,
     tickLock: tickLock,
     collectConcurrency: 3,
+    collectBudgetMs: 85000,
+    collectBuckets: collectBuckets,
+    humanProtectsShop: humanProtectsShop,
     // Sole writer: home collector (shared tables). Shen/Han UI may still read the same store.
     listTargets: listHomeCollectTargets,
     fetchHome: function (cookies, signal, expected) {

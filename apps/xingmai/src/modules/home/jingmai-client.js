@@ -831,7 +831,7 @@ async function fetchSzDeal(jar, fetchImpl, signal) {
   return parseRealtime(response.status, await response.text(), response.headers.get("location"));
 }
 
-async function fetchDeal(jar, fetchImpl, readCard, signal, shopKey) {
+async function fetchDeal(jar, fetchImpl, readCard, signal, shopKeyOrExpected) {
   let shopError = null;
   try {
     return await enqueueDeal(function (gateSignal) {
@@ -854,7 +854,7 @@ async function fetchDeal(jar, fetchImpl, readCard, signal, shopKey) {
   const reader = readCard || (fetchImpl === fetch ? readHomeDeal : null);
   if (reader && jar && jar.length) {
     try {
-      const card = await reader(jar, signal, shopKey || "");
+      const card = await reader(jar, signal, shopKeyOrExpected || "");
       if (card && (card.dealAmount != null || card.orderCount != null || card.customerCount != null)) {
         return card;
       }
@@ -1054,8 +1054,8 @@ export async function fetchAccountIdentity(jar, fetchImpl = fetch, signal) {
 
 function paidBudgetMs() {
   const value = Number(process.env.SHEN_PAID_BUDGET_MS);
-  // Ads must finish (or self-timeout) before the outer collect round (default 120s).
-  return Number.isFinite(value) && value > 0 ? value : 90000;
+  // Old-site collect_ads independent 40s budget (zhenxuan2 jingmai_ad_report.py).
+  return Number.isFinite(value) && value > 0 ? value : 40000;
 }
 
 function linkAbort(outer, local) {
@@ -1128,47 +1128,17 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
   }
   const shopKey = String((expected && (expected.shopId || expected.store)) || "").trim();
   const onDeal = expected && typeof expected.onDeal === "function" ? expected.onDeal : null;
+  // Pass full expected so DOM reader can use persistent profile + shop-base-name checks.
+  const dealHint = expected && typeof expected === "object" ? expected : shopKey;
 
-  const dealTask = fetchDeal(jar, fetchImpl, readCard, signal, shopKey).then(
-    function (value) {
-      return { deal: value, dealError: null };
-    },
-    function (error) {
-      return { deal: null, dealError: classifyTransportError(error) };
-    }
-  );
-
-  // Independent ads deadline earlier than the outer collect round, so a finished deal can
-  // return from fetchHome before withDeadline(outer) settles/rejects and drops the value.
-  const paidLocal = typeof AbortController === "function" ? new AbortController() : null;
-  const paidSignal = paidLocal ? linkAbort(signal, paidLocal.signal) : signal;
-  const paidTask = withDeadline(
-    function (inner) {
-      return fetchPaid(jar, fetchImpl, inner || paidSignal, expected);
-    },
-    paidBudgetMs(),
-    "广告采集超时",
-    paidSignal
-  ).then(
-    function (value) {
-      return { paid: value, paidError: null };
-    },
-    function (error) {
-      const classified = classifyTransportError(error);
-      if (classified.code === "timeout" || (error && error.name === "AbortError")) {
-        return { paid: null, paidError: jingmaiError("timeout", "广告采集超时") };
-      }
-      if (classified.code === "login") {
-        return { paid: null, paidError: jingmaiError("paid", "京准通账号未授权或需要重新开通") };
-      }
-      if (classified.code !== "paid") {
-        return { paid: null, paidError: jingmaiError("paid", classified.message || "京准通暂时读不到数据") };
-      }
-      return { paid: null, paidError: classified };
-    }
-  );
-
-  const dealResult = await dealTask;
+  // Old-site order: parse_home / store deal first, then collect_ads (never wipe deal on ad fail).
+  let dealResult;
+  try {
+    const value = await fetchDeal(jar, fetchImpl, readCard, signal, dealHint);
+    dealResult = { deal: value, dealError: null };
+  } catch (error) {
+    dealResult = { deal: null, dealError: classifyTransportError(error) };
+  }
   if (dealResult.deal && hasDealFields(dealResult.deal) && onDeal) {
     try {
       await onDeal(dealResult.deal);
@@ -1177,7 +1147,32 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
     }
   }
 
-  const paidResult = await paidTask;
+  const paidLocal = typeof AbortController === "function" ? new AbortController() : null;
+  const paidSignal = paidLocal ? linkAbort(signal, paidLocal.signal) : signal;
+  let paidResult;
+  try {
+    const value = await withDeadline(
+      function (inner) {
+        return fetchPaid(jar, fetchImpl, inner || paidSignal, expected);
+      },
+      paidBudgetMs(),
+      "广告采集超时",
+      paidSignal
+    );
+    paidResult = { paid: value, paidError: null };
+  } catch (error) {
+    const classified = classifyTransportError(error);
+    if (classified.code === "timeout" || (error && error.name === "AbortError")) {
+      paidResult = { paid: null, paidError: jingmaiError("timeout", "广告采集超时") };
+    } else if (classified.code === "login") {
+      // JZT auth gap is paid-channel only — never flip whole-shop Jingmai login_expired here.
+      paidResult = { paid: null, paidError: jingmaiError("paid", "京准通账号未授权或需要重新开通") };
+    } else if (classified.code !== "paid") {
+      paidResult = { paid: null, paidError: jingmaiError("paid", classified.message || "京准通暂时读不到数据") };
+    } else {
+      paidResult = { paid: null, paidError: classified };
+    }
+  }
   const deal = dealResult.deal;
   const dealError = dealResult.dealError;
   const paid = paidResult.paid;
