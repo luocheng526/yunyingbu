@@ -183,6 +183,9 @@ test("login 罗成 sets cookie; GET /api/auth/me 200; wrong password 401", async
     assert.match(moduleJs.text, /\/api\/profile\/notices/);
     assert.match(moduleJs.text, /异地登录/);
     assert.match(moduleJs.text, /多客户端登录/);
+    assert.match(moduleJs.text, /openBasicOnEnterMe/);
+    assert.match(moduleJs.text, /showTab\("basic"\)/);
+    assert.match(moduleJs.text, /xm-me-route/);
   });
 });
 

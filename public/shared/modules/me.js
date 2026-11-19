@@ -1145,8 +1145,68 @@
         window.location.replace(window.location.pathname + "?_xm=" + Date.now() + (window.location.hash || ""));
       });
 
+      function currentPath() {
+        return String(window.location.pathname || "/").replace(/\/+$/, "") || "/";
+      }
+
+      function openBasicOnEnterMe() {
+        if (dead || currentPath() !== "/me") {
+          return;
+        }
+        showTab("basic");
+      }
+
+      if (!window.__xmMeHistWrap) {
+        window.__xmMeHistWrap = true;
+        ["pushState", "replaceState"].forEach(function (key) {
+          const orig = history[key];
+          history[key] = function () {
+            const ret = orig.apply(this, arguments);
+            window.dispatchEvent(new Event("xm-me-route"));
+            return ret;
+          };
+        });
+      }
+
+      let lastPath = currentPath();
+
+      function onMeRoute() {
+        if (dead) {
+          return;
+        }
+        const now = currentPath();
+        if (now === "/me" && lastPath !== "/me") {
+          openBasicOnEnterMe();
+        }
+        lastPath = now;
+      }
+
+      function onMeNavClick(event) {
+        const link = event.target.closest("a[href]");
+        if (!link || dead) {
+          return;
+        }
+        let next = "";
+        try {
+          next = new URL(link.getAttribute("href") || "", window.location.href).pathname;
+        } catch (_e) {
+          return;
+        }
+        if ((next.replace(/\/+$/, "") || "/") === "/me") {
+          setTimeout(openBasicOnEnterMe, 0);
+        }
+      }
+
+      showTab("basic");
+      window.addEventListener("popstate", onMeRoute);
+      window.addEventListener("xm-me-route", onMeRoute);
+      document.addEventListener("click", onMeNavClick, true);
+
       return function unmount() {
         dead = true;
+        window.removeEventListener("popstate", onMeRoute);
+        window.removeEventListener("xm-me-route", onMeRoute);
+        document.removeEventListener("click", onMeNavClick, true);
         const css = document.getElementById("xm-me-page-css");
         if (css) {
           css.remove();
