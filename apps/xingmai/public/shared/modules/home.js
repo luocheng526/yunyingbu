@@ -5,7 +5,8 @@
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
     { key: "live", label: "实时" },
-    { key: "week", label: "近七天业绩汇总" }
+    { key: "week", label: "近七天业绩汇总" },
+    { key: "live2", label: "实时（新版）" }
   ];
   var OVERVIEW_PANES = [
     { key: "team", label: "经理团队", tone: "teal", hint: "经营团队" },
@@ -290,6 +291,7 @@
   var headSetOpen = false;
   var teamsRefreshing = false;
   var liveRefreshing = false;
+  var live2Poll = 0;
   var deskTimer = 0;
   function viewStore(kind) {
     return viewKey === "team" || viewKey === "chief"
@@ -533,9 +535,17 @@
   }
   var shopSort = { key: "", dir: "desc" };
   var shopColW = {};
+  var liveScope = "live";
+  function useLiveScope(view) {
+    liveScope = view === "live2" ? "live2" : "live";
+    return liveScope;
+  }
+  function liveColBucket() {
+    return liveScope === "live2" ? "live2" : "live";
+  }
   function colKey(table) {
     if (table && table.closest && table.closest(".xm-hm-live")) {
-      return "live";
+      return liveColBucket();
     }
     var box = table && table.closest && table.closest("[data-team]");
     return box ? box.getAttribute("data-team") || "t" : "t";
@@ -575,16 +585,17 @@
   }
   function loadLiveColW() {
     var need = liveCols().length;
-    if (shopColW.live && shopColW.live.length && shopColW.live.length !== need) {
-      delete shopColW.live;
+    var bucket = liveColBucket();
+    if (shopColW[bucket] && shopColW[bucket].length && shopColW[bucket].length !== need) {
+      delete shopColW[bucket];
     }
-    if (shopColW.live && shopColW.live.length) {
+    if (shopColW[bucket] && shopColW[bucket].length) {
       return;
     }
     try {
-      var list = JSON.parse(localStorage.getItem("xm-home-live-cols") || "[]");
+      var list = JSON.parse(localStorage.getItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-cols" : "xm-home-live-cols") || "[]");
       if (Object.prototype.toString.call(list) === "[object Array]" && list.length === need) {
-        shopColW.live = list.map(function (n) {
+        shopColW[bucket] = list.map(function (n) {
           return Math.max(48, Math.round(Number(n) || 48));
         });
       }
@@ -592,8 +603,9 @@
   }
   function saveLiveColW() {
     try {
-      if (shopColW.live && shopColW.live.length) {
-        localStorage.setItem("xm-home-live-cols", JSON.stringify(shopColW.live));
+      var bucket = liveColBucket();
+      if (shopColW[bucket] && shopColW[bucket].length) {
+        localStorage.setItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-cols" : "xm-home-live-cols", JSON.stringify(shopColW[bucket]));
       }
     } catch (_err) {}
   }
@@ -835,6 +847,7 @@
       overview: true,
       live: true,
       week: true,
+      live2: true,
       team: canSeeTeamView(user),
       chief: canSeeChiefView(user, people, shops),
       board: true
@@ -1518,7 +1531,7 @@
   function liveCardOrder() {
     var saved = [];
     try {
-      saved = JSON.parse(localStorage.getItem("xm-home-live-card-order") || "[]");
+      saved = JSON.parse(localStorage.getItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-card-order" : "xm-home-live-card-order") || "[]");
     } catch (_err) {
       saved = [];
     }
@@ -1529,7 +1542,7 @@
   }
   function saveLiveCardOrder(keys) {
     try {
-      localStorage.setItem("xm-home-live-card-order", JSON.stringify(liveCardOrderFrom(keys)));
+      localStorage.setItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-card-order" : "xm-home-live-card-order", JSON.stringify(liveCardOrderFrom(keys)));
     } catch (_err) {}
   }
   function applyLiveCardMove(fromKey, toKey) {
@@ -1552,7 +1565,7 @@
   }
   function liveRowPad() {
     try {
-      var raw = localStorage.getItem("xm-home-live-row");
+      var raw = localStorage.getItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-row" : "xm-home-live-row");
       if (raw == null || raw === "" || Number(raw) <= 4) {
         return 10;
       }
@@ -1563,7 +1576,7 @@
   }
   function saveLiveRowPad(n) {
     try {
-      localStorage.setItem("xm-home-live-row", String(liveRowPadClamp(n)));
+      localStorage.setItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-row" : "xm-home-live-row", String(liveRowPadClamp(n)));
     } catch (_err) {}
   }
   function applyLiveRowPad(root) {
@@ -1687,6 +1700,9 @@
     return { lo: lo, hi: hi };
   }
   function feeMonitorOf(row) {
+    if (row && row.pendingCollect) {
+      return { label: "—", kind: "" };
+    }
     var range = feeRangeOf(row);
     var cur = feePct(row && row.feeRate);
     if (range.lo == null && range.hi == null) {
@@ -1811,7 +1827,7 @@
   }
   function liveFilter() {
     try {
-      var raw = JSON.parse(localStorage.getItem("xm-home-live-filter") || "{}");
+      var raw = JSON.parse(localStorage.getItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-filter" : "xm-home-live-filter") || "{}");
       return {
         team: String((raw && raw.team) || "").trim(),
         shop: String((raw && raw.shop) || "").trim(),
@@ -1827,7 +1843,7 @@
   function saveLiveFilter(next) {
     try {
       localStorage.setItem(
-        "xm-home-live-filter",
+        typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-filter" : "xm-home-live-filter",
         JSON.stringify({
           team: String((next && next.team) || "").trim(),
           shop: String((next && next.shop) || "").trim(),
@@ -1929,20 +1945,36 @@
       if (pick.shop && name !== pick.shop) {
         return false;
       }
-      if (teamMap && !teamMap[normShopName(name)]) {
+      if (!(typeof liveScope !== "undefined" && liveScope === "live2") && teamMap && !teamMap[normShopName(name)]) {
         return false;
       }
       if (q && name.toLowerCase().indexOf(q) < 0) {
         return false;
       }
-      if (pick.link === "on" && liveLinkOf(row).kind !== "on") {
-        return false;
-      }
-      if (pick.link === "off" && liveLinkOf(row).kind !== "off") {
-        return false;
-      }
-      if (pick.paid === "no" ? row && row.paidIn : !(row && row.paidIn)) {
-        return false;
+      if (typeof liveScope !== "undefined" && liveScope === "live2") {
+        if (pick.team && String(row.team || "") !== pick.team) {
+          return false;
+        }
+        var liveKind = liveLinkOf(row).kind;
+        if (pick.link === "on" && liveKind !== "on" && !(liveKind === "ads" && row.online === true)) {
+          return false;
+        }
+        if (pick.link === "off" && liveKind !== "off") {
+          return false;
+        }
+        if (pick.paid === "no" && !(row && row.pendingCollect)) {
+          return false;
+        }
+      } else {
+        if (pick.link === "on" && liveLinkOf(row).kind !== "on") {
+          return false;
+        }
+        if (pick.link === "off" && liveLinkOf(row).kind !== "off") {
+          return false;
+        }
+        if (pick.paid === "no" ? row && row.paidIn : !(row && row.paidIn)) {
+          return false;
+        }
       }
       return true;
     });
@@ -2031,6 +2063,52 @@
       ">" +
       (liveRefreshing ? "刷新中…" : "刷新") +
       "</button></div></div>"
+    );
+  }
+  function live2FilterHtml(allShops, updatedAt) {
+    var pick = liveFilter();
+    var cur = liveFilterValue(pick);
+    var teams = [];
+    var seenTeam = {};
+    (allShops || []).forEach(function (row) {
+      var name = String((row && row.team) || "").trim();
+      if (!name || seenTeam[name]) {
+        return;
+      }
+      seenTeam[name] = true;
+      teams.push(name);
+    });
+    var shops = liveFilterShopNames(allShops);
+    return (
+      '<div class="xm-hm-live-filter">' +
+      '<div class="xm-hm-live-filter-left">' +
+      '<strong class="xm-hm-live-filter-lab">店铺列表</strong>' +
+      '<span class="xm-hm-live-filter-box"><select data-live-filter="pick">' +
+      liveFilterOption("", "责权归属", !cur) +
+      (teams.length
+        ? '<optgroup label="责权团队">' +
+          teams
+            .map(function (name) {
+              return liveFilterOption("team:" + name, dutyTeamLabel(name), cur === "team:" + name);
+            })
+            .join("") +
+          "</optgroup>"
+        : "") +
+      (shops.length
+        ? '<optgroup label="店铺">' +
+          shops
+            .map(function (name) {
+              return liveFilterOption("shop:" + name, name, cur === "shop:" + name);
+            })
+            .join("") +
+          "</optgroup>"
+        : "") +
+      "</select></span></div>" +
+      '<div class="xm-hm-live-filter-right">' +
+      '<span class="xm-hm-live-at">更新时间 ' + escapeHtml(updatedAt || "—") + "</span>" +
+      '<button type="button" class="xm-hm-live-heads" data-live-heads>表头设置</button>' +
+      '<button type="button" class="xm-hm-live-refresh" data-connect-live2 title="用组织中心账号登录京麦和京准通">连接京麦</button>' +
+      '<button type="button" class="xm-hm-live-refresh" data-refresh-live2>刷新</button></div></div>'
     );
   }
   function liveChipHtml(key, value, label, on) {
@@ -2297,7 +2375,7 @@
   }
   function liveHiddenHeads() {
     try {
-      var stored = localStorage.getItem("xm-home-live-head-hide");
+      var stored = localStorage.getItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-head-hide" : "xm-home-live-head-hide");
       if (stored == null) {
         return extraHeadKeys();
       }
@@ -2312,7 +2390,7 @@
   }
   function saveLiveHiddenHeads(keys) {
     try {
-      localStorage.setItem("xm-home-live-head-hide", JSON.stringify(keys || []));
+      localStorage.setItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-head-hide" : "xm-home-live-head-hide", JSON.stringify(keys || []));
     } catch (_err) {}
   }
   function liveHeadToggleList() {
@@ -2338,7 +2416,7 @@
       return col.key;
     });
     try {
-      var saved = JSON.parse(localStorage.getItem("xm-home-live-head-order") || "[]");
+      var saved = JSON.parse(localStorage.getItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-head-order" : "xm-home-live-head-order") || "[]");
       if (Object.prototype.toString.call(saved) === "[object Array]" && saved.length) {
         var next = [];
         saved.forEach(function (key) {
@@ -2363,7 +2441,7 @@
   }
   function saveLiveHeadOrder(keys) {
     try {
-      localStorage.setItem("xm-home-live-head-order", JSON.stringify(keys || liveHeadKeys()));
+      localStorage.setItem(typeof liveScope !== "undefined" && liveScope === "live2" ? "xm-home-live2-head-order" : "xm-home-live-head-order", JSON.stringify(keys || liveHeadKeys()));
     } catch (_err) {}
   }
   function applyLiveHeadMove(fromKey, toKey) {
@@ -2469,6 +2547,9 @@
     return fiveMinuteStamp(latest);
   }
   function liveLinkOf(row) {
+    if (row && row.pendingCollect) {
+      return { label: "待接入", kind: "wait" };
+    }
     if (row && row.online === true) {
       if (row.adsFailed === true) {
         return { label: "在线·广告异常", kind: "ads" };
@@ -2530,6 +2611,9 @@
       return '<td class="xm-hm-num">' + escapeHtml(feeGoalCellHtml(row)) + "</td>";
     }
     if (key === "liveAt") {
+      if (typeof liveScope !== "undefined" && liveScope === "live2") {
+        return '<td class="xm-hm-num">' + escapeHtml(row && row.capturedAt ? row.capturedAt : "—") + "</td>";
+      }
       var ownAt = row && (row.capturedAt || row.ingestedAt || row.liveAt);
       return '<td class="xm-hm-num">' + escapeHtml(ownAt && liveBoardSlot ? liveBoardSlot : "—") + "</td>";
     }
@@ -2543,6 +2627,16 @@
           (row && row.offlineReason ? ' title="' + escapeHtml(row.offlineReason) + '"' : "") +
           ">掉线</button></td>"
         );
+      }
+      if (link.kind === "wait") {
+        if (typeof liveScope !== "undefined" && liveScope === "live2") {
+          return (
+            '<td class="xm-hm-num"><button type="button" class="xm-hm-login-link is-wait" data-live-login="' +
+            escapeHtml(shop) +
+            '" title="打开京麦登录页，账号和密码会填好，登录由你来点">待接入</button></td>'
+          );
+        }
+        return '<td class="xm-hm-num" title="采集功能待接入">待接入</td>';
       }
       if (link.kind === "ads" || link.kind === "warn") {
         var tip = (row && (row.adsReason || row.offlineReason)) || link.label;
@@ -2641,7 +2735,8 @@
       ".xm-hm-tip{position:fixed;z-index:9;display:none;box-sizing:border-box;width:max-content;max-width:360px;padding:10px 12px;background:var(--xm-card);border:1px solid var(--xm-line);border-radius:8px;color:var(--xm-ink);font-size:12px;line-height:1.6;white-space:pre-wrap;pointer-events:none}" +
       ".xm-hm-tip.is-on{display:block}" +
       ".xm-hm-body{position:relative;display:flex;flex-direction:column;gap:12px;overflow:visible}" +
-      ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-overview .xm-hm-kpis-shell,.xm-hm.is-week .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges,.xm-hm.is-week .xm-hm-ranges{display:none}" +
+      ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-live2 .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-overview .xm-hm-kpis-shell,.xm-hm.is-week .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-live2 .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges,.xm-hm.is-live2 .xm-hm-ranges,.xm-hm.is-week .xm-hm-ranges{display:none}" +
+      ".xm-hm-live-refresh[data-connect-live2]{opacity:.55}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden],.xm-hm-week[hidden]{display:none}" +
       ".xm-hm-week{display:flex;flex-direction:column;gap:12px}" +
       ".xm-hm-week-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}" +
@@ -2878,6 +2973,7 @@
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-login-link{border:0;background:transparent;padding:0;color:#e23b3b;font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}" +
+      ".xm-hm-login-link.is-wait{color:#2f6fed}" +
       ".xm-hm-desk-mask{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(15,23,42,.45)}" +
       ".xm-hm-desk{position:relative;width:min(780px,100%);max-height:calc(100vh - 48px);overflow:auto;margin:0;padding:16px 16px 14px;border:0;border-radius:12px;background:#fff;box-shadow:0 18px 50px rgba(0,0,0,.22)}" +
       ".xm-hm-desk h3{margin:0 28px 8px 0;font-size:16px}" +
@@ -3100,6 +3196,269 @@
       "</div></div>"
     );
   }
+  /**
+   * 实时（新版）展示适配。组织中心给出店铺、分组、负责人。
+   * 采集结果由 /api/home/live2 填入：成交金额、花费、投产比、总订单金额。
+   * 费比 = 花费 / 成交金额。没有读到的格子保持空，不写成 0 或在线。
+   * 字段：shop, team, manager, liveAmount, paidAmount, roi, paidDeal, feeRate, capturedAt, pendingCollect
+   */
+  function adaptLive2Shops(orgRows) {
+    return (orgRows || [])
+      .filter(function (row) {
+        return row && !shopNotOperating(row) && row.kind !== "店群";
+      })
+      .map(function (row) {
+        var shop = String(row.storeName || row.shopName || row.shop || row.name || "").trim();
+        return {
+          shop: shop,
+          team: String(row.team || "").trim(),
+          manager: String(row.manager || row.owner || "").trim(),
+          liveAmount: null,
+          paidAmount: null,
+          roi: null,
+          paidDeal: null,
+          feeRate: null,
+          capturedAt: "",
+          online: false,
+          offline: false,
+          loginExpired: false,
+          paidIn: false,
+          pendingCollect: true
+        };
+      })
+      .filter(function (row) {
+        return row.shop;
+      });
+  }
+  function applyLive2Pack(rows, pack) {
+    var byName = {};
+    ((pack && pack.records) || []).forEach(function (row) {
+      var name = String((row && (row.shop || row.store)) || "").trim();
+      if (name) {
+        byName[name] = row;
+      }
+    });
+    return (rows || []).map(function (row) {
+      var hit = byName[row.shop];
+      if (!hit || hit.pendingCollect) {
+        return row;
+      }
+      var fee = hit.feeRate == null ? null : fmtRate(hit.feeRate);
+      return {
+        shop: row.shop,
+        team: row.team || hit.team || "",
+        manager: row.manager || hit.manager || "",
+        liveAmount: hit.liveAmount == null ? null : fmtMoney(hit.liveAmount),
+        paidAmount: hit.paidAmount == null ? null : fmtMoney(hit.paidAmount),
+        roi: hit.roi == null ? null : asNum(hit.roi).toFixed(2),
+        paidDeal: hit.paidDeal == null ? null : fmtMoney(hit.paidDeal),
+        feeRate: fee,
+        capturedAt: hit.capturedAt || "",
+        online: hit.online === true,
+        offline: hit.offline === true,
+        loginExpired: hit.loginExpired === true,
+        adsFailed: hit.adsFailed === true,
+        adsReason: hit.adsReason || "",
+        offlineReason: hit.offlineReason || "",
+        paidIn: true,
+        pendingCollect: false
+      };
+    });
+  }
+  function live2Cards(shops, pack) {
+    var paidDeal = 0;
+    var spend = 0;
+    var hasPay = false;
+    var hasSpend = false;
+    var shopsIn = 0;
+    var hot = 0;
+    var cold = 0;
+    ((pack && pack.records) || []).forEach(function (row) {
+      if (!row || row.pendingCollect) {
+        return;
+      }
+      if (row.paidDeal != null) {
+        paidDeal += Number(row.paidDeal);
+        hasPay = true;
+      }
+      if (row.paidAmount != null) {
+        spend += Number(row.paidAmount);
+        hasSpend = true;
+      }
+      if (row.liveAmount != null || row.paidAmount != null) {
+        shopsIn += 1;
+      }
+    });
+    (shops || []).forEach(function (row) {
+      if (!row || row.pendingCollect) {
+        return;
+      }
+      var mon = feeMonitorOf(row);
+      if (mon.kind === "hot") {
+        hot += 1;
+      }
+      if (mon.kind === "cold") {
+        cold += 1;
+      }
+    });
+    var any = hasPay || hasSpend || shopsIn;
+    var at = (pack && pack.updatedAt) || "";
+    return [
+      { key: "livePay", label: "实时付费成交额", value: hasPay ? fmtMoney(paidDeal) : "—" },
+      { key: "roi", label: "付费成交ROI", value: hasPay && hasSpend && spend ? fmtRoi(paidDeal, spend) : "—" },
+      { key: "livePaid", label: "实时付费接入店铺数量", value: any ? fmtInt(shopsIn) : "—" },
+      { key: "feeHot", label: "实时付费超标店铺", value: any ? String(hot) : "—" },
+      { key: "feeCold", label: "实时费比低店铺", value: any ? String(cold) : "—" },
+      { key: "liveAt", label: "更新时间", value: at || "—" }
+    ];
+  }
+  function orderedLive2Cards() {
+    var map = {};
+    live2Cards(null, null).forEach(function (card) {
+      map[card.key] = card;
+    });
+    return liveCardOrder()
+      .map(function (key) {
+        return map[key];
+      })
+      .filter(Boolean);
+  }
+  var LIVE2_DAY_KEY = "xm-home-live2-yday";
+  function live2Sums(records) {
+    var deal = 0;
+    var spend = 0;
+    var hasDeal = false;
+    var hasSpend = false;
+    (records || []).forEach(function (row) {
+      if (!row || row.pendingCollect) {
+        return;
+      }
+      if (row.liveAmount != null && row.liveAmount !== "") {
+        deal += Number(row.liveAmount) || 0;
+        hasDeal = true;
+      }
+      if (row.paidAmount != null && row.paidAmount !== "") {
+        spend += Number(row.paidAmount) || 0;
+        hasSpend = true;
+      }
+    });
+    return {
+      deal: hasDeal ? deal : null,
+      spend: hasSpend ? spend : null,
+      fee: hasDeal && hasSpend && deal ? spend / deal : null
+    };
+  }
+  function levelDeltas(list, slots) {
+    var src = padHours(list, 24);
+    var last = 0;
+    var out = [];
+    var i;
+    var end = slots == null ? shanghaiHour() : slots - 1;
+    for (i = 0; i <= end && i < 24; i += 1) {
+      var n = asNum(src[i]);
+      var level = n ? n : last;
+      out.push(level - last);
+      last = level;
+    }
+    return out;
+  }
+  function levelDay(list) {
+    var src = padHours(list, 24);
+    var last = 0;
+    var out = [];
+    var i;
+    for (i = 0; i < 24; i += 1) {
+      var n = asNum(src[i]);
+      if (n) {
+        last = n;
+      }
+      out.push(last);
+    }
+    return out;
+  }
+  function stampAtHour(list) {
+    var src = padHours(list, 24);
+    var i;
+    var h = shanghaiHour();
+    for (i = Math.min(h, src.length - 1); i >= 0; i -= 1) {
+      var n = asNum(src[i]);
+      if (n) {
+        return n;
+      }
+    }
+    return null;
+  }
+  function live2Charts(records) {
+    var blank = blankLive();
+    var sums = live2Sums(records);
+    if (sums.deal == null && sums.spend == null) {
+      return { hero: blank.hero, paid: blank.paid, fee: blank.fee };
+    }
+    var kept = keepLiveDay(
+      { jingmai: sums.deal, spend: sums.spend, fee: sums.fee },
+      LIVE2_DAY_KEY
+    );
+    var today = kept.todayStamps || emptyLiveDayNums();
+    var yest = kept.yestStamps || emptyLiveDayNums();
+    var yestDeal = stampAtHour(yest.jingmaiAt);
+    var yestSpend = stampAtHour(yest.spendAt);
+    var yestFee = stampAtHour(yest.feeAt);
+    var hero = spendChartOf(sums.deal, yestDeal, {
+      todaySpend: levelDeltas(today.jingmaiAt),
+      yesterdaySpend: yestDeal != null ? levelDeltas(yest.jingmaiAt, 24) : []
+    });
+    hero.key = "jingmai";
+    hero.label = "实时总成交金额";
+    var paid = spendChartOf(sums.spend, yestSpend, {
+      todaySpend: levelDeltas(today.spendAt),
+      yesterdaySpend: yestSpend != null ? levelDeltas(yest.spendAt, 24) : []
+    });
+    var fee = feeChartOf(sums.fee, yestFee, {
+      todayFee: levelDay(today.feeAt).slice(0, shanghaiHour() + 1),
+      yesterdayFee: yestFee != null ? levelDay(yest.feeAt) : []
+    });
+    return { hero: hero, paid: paid, fee: fee };
+  }
+  function live2PanelHtml(state) {
+    var roster = adaptLive2Shops(state && state.dutyShops);
+    var shops = filterLiveShops(applyLive2Pack(roster, state && state.live2Pack), state);
+    shops = sortLiveShops(feePickShops(shops, liveFeePick));
+    var charts = live2Charts((state && state.live2Pack && state.live2Pack.records) || []);
+    var trio = liveChartHtml(charts.hero) + liveChartHtml(charts.paid) + liveChartHtml(charts.fee);
+    var cards = live2Cards(shops, state && state.live2Pack);
+    var cardMap = {};
+    cards.forEach(function (card) {
+      cardMap[card.key] = card;
+    });
+    liveBoardSlot = "";
+    return (
+      liveDeskHtml(state) +
+      live2FilterHtml(roster, state && state.live2Pack && state.live2Pack.updatedAt) +
+      '<div class="xm-hm-live-charts">' +
+      trio +
+      '</div><div class="xm-hm-live-cards">' +
+      orderedLive2Cards()
+        .map(function (card) {
+          return liveCardHtml(cardMap[card.key] || card, liveFeePick);
+        })
+        .join("") +
+      "</div>" +
+      liveSearchHtml() +
+      '<div class="xm-hm-panel">' +
+      '<table class="xm-hm-table" style="min-width:' +
+      liveTableMinW() +
+      'px">' +
+      liveColgroupHtml() +
+      liveTheadHtml() +
+      "<tbody>" +
+      shops
+        .map(function (row, i) {
+          return liveShopRowHtml(row, i, "");
+        })
+        .join("") +
+      "</tbody></table></div>"
+    );
+  }
   function paint(root, state) {
     var board = root.querySelector("#xm-hm");
     var allow = allowedHomeViews(state.user, state.people, state.dutyShops);
@@ -3113,6 +3472,7 @@
     if (state.view === "overview" && state.teamPane && !canOpenOverviewPane(state.teamPane, state.user, state.people, state.dutyShops)) {
       state.teamPane = "";
     }
+    useLiveScope(state.view);
     if (!cardSetOpen) {
       viewKey = state.view === "overview" ? state.teamPane || "team" : state.view || "company";
     }
@@ -3155,7 +3515,8 @@
     board.setAttribute("data-hm-js", HOME_JS_STAMP);
     board.classList.toggle("is-overview", state.view === "overview");
     board.classList.toggle("is-board", state.view === "overview" && state.teamPane === "board");
-    board.classList.toggle("is-live", state.view === "live");
+    board.classList.toggle("is-live", state.view === "live" || state.view === "live2");
+    board.classList.toggle("is-live2", state.view === "live2");
     board.classList.toggle("is-week", state.view === "week");
     board.classList.toggle("is-team", state.view === "overview" && state.teamPane !== "board");
     board.classList.toggle("is-chief", state.view === "overview" && state.teamPane === "chief");
@@ -3177,7 +3538,7 @@
     Array.prototype.forEach.call(teamBox.querySelectorAll(".xm-hm-over-block"), function (block) {
       block.style.setProperty("--xm-hm-team-cols", String(Math.max(block.querySelectorAll(".xm-hm-team").length, 1)));
     });
-    root.querySelector("#xm-hm-live").hidden = state.view !== "live";
+    root.querySelector("#xm-hm-live").hidden = state.view !== "live" && state.view !== "live2";
     var weekBox = root.querySelector("#xm-hm-week");
     if (weekBox) {
       weekBox.hidden = state.view !== "week";
@@ -3187,27 +3548,29 @@
     }
     root.querySelector("#xm-hm-board").hidden = true;
     root.querySelector("#xm-hm-live").innerHTML =
-      liveDeskHtml(state) +
-      liveFilterHtml(allShops, state) +
-      '<div class="xm-hm-live-charts">' +
-      liveTrio +
-      '</div><div class="xm-hm-live-cards">' +
-      liveCards.map(function (card) {
-        return liveCardHtml(card, liveFeePick);
-      }).join("") +
-      "</div>" +
-      liveSearchHtml() +
-      '<div class="xm-hm-panel">' +
-      '<table class="xm-hm-table" style="min-width:' +
-      liveTableMinW() +
-      'px">' +
-      liveColgroupHtml() +
-      liveTheadHtml() +
-      "<tbody>" +
-      (liveBoardSlot = liveSlotOf(shops), shops).map(function (row, i) {
-        return liveShopRowHtml(row, i, liveBoardSlot || state.liveAt);
-      }).join("") +
-      "</tbody></table></div>";
+      state.view === "live2"
+        ? live2PanelHtml(state)
+        : liveDeskHtml(state) +
+          liveFilterHtml(allShops, state) +
+          '<div class="xm-hm-live-charts">' +
+          liveTrio +
+          '</div><div class="xm-hm-live-cards">' +
+          liveCards.map(function (card) {
+            return liveCardHtml(card, liveFeePick);
+          }).join("") +
+          "</div>" +
+          liveSearchHtml() +
+          '<div class="xm-hm-panel">' +
+          '<table class="xm-hm-table" style="min-width:' +
+          liveTableMinW() +
+          'px">' +
+          liveColgroupHtml() +
+          liveTheadHtml() +
+          "<tbody>" +
+          (liveBoardSlot = liveSlotOf(shops), shops).map(function (row, i) {
+            return liveShopRowHtml(row, i, liveBoardSlot || state.liveAt);
+          }).join("") +
+          "</tbody></table></div>";
     applyLiveRowPad(root);
     restoreShopColW(root);
     root.querySelector("#xm-hm-ladders").innerHTML = "";
@@ -3226,6 +3589,8 @@
       ? "人管对不上：" + gapText
       : state.view === "live"
         ? "实时按付费中心的方式，用组织中心账号在服务器登录京麦，抓京麦成交和京准通付费。点掉线的店，在页面中间弹出这一家的登录画面。连接京麦登录还没有会话的店。在线只算 15 分钟内还在采集的店。"
+        : state.view === "live2"
+          ? state.live2Hint || "实时（新版）用组织中心账号在服务器登录。实时成交金额取京麦经营数据的成交金额；实时付费金额、实时付费ROI、实时付费成交额取京准通当天的花费、投产比、总订单金额。实时费比 =（实时付费金额 / 实时成交金额）× 100%。还没有读到的格子显示—或待接入。"
         : state.view === "week"
           ? "近七天业绩汇总：爬虫填店铺和当天数字，其余可手填；一键发送图片发到钉钉。"
           : "数字来自星脉 ERP。";
@@ -4038,13 +4403,13 @@
   function liveDayYmd() {
     return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   }
-  function readLiveDay() {
+  function readLiveDay(key) {
     var blank = { ymd: liveDayYmd(), today: emptyLiveDayNums(), yest: emptyLiveDayNums() };
     try {
       if (typeof localStorage === "undefined") {
         return blank;
       }
-      var raw = JSON.parse(localStorage.getItem(LIVE_DAY_KEY) || "null");
+      var raw = JSON.parse(localStorage.getItem(key || LIVE_DAY_KEY) || "null");
       if (!raw || typeof raw !== "object") {
         return blank;
       }
@@ -4055,12 +4420,12 @@
       return blank;
     }
   }
-  function writeLiveDay(store) {
+  function writeLiveDay(store, key) {
     try {
       if (typeof localStorage === "undefined") {
         return;
       }
-      localStorage.setItem(LIVE_DAY_KEY, JSON.stringify(store));
+      localStorage.setItem(key || LIVE_DAY_KEY, JSON.stringify(store));
     } catch (err) {}
   }
   function rollLiveDay(store) {
@@ -4118,9 +4483,9 @@
     }
     return fallback == null ? null : asNum(fallback);
   }
-  function keepLiveDay(input) {
+  function keepLiveDay(input, key) {
     input = input || {};
-    var store = rollLiveDay(readLiveDay());
+    var store = rollLiveDay(readLiveDay(key));
     if (input.jingmai != null) {
       store.today.jingmai = input.jingmai;
       store.today.jingmaiAt = stampAt(store.today.jingmaiAt, input.jingmai);
@@ -4142,7 +4507,7 @@
     if (input.yestFee != null) {
       store.yest.fee = input.yestFee;
     }
-    writeLiveDay(store);
+    writeLiveDay(store, key);
     var hourly = input.hourly || {};
     var yestJingmai = hourCum(hourly.yesterdayPay, null);
     if (yestJingmai == null) {
@@ -4164,6 +4529,7 @@
       yestSpend: yestSpend,
       yestFee: yestFee,
       hourly: hourly,
+      todayStamps: store.today,
       yestStamps: store.yest
     };
   }
@@ -5021,7 +5387,13 @@
       var dead = false;
       var dates = rangeDates("yesterday");
       var state = {
-        view: "company",
+        view: (function () {
+          try {
+            return sessionStorage.getItem("xm-home-view") === "live2" ? "live2" : "company";
+          } catch (_err) {
+            return "company";
+          }
+        })(),
         teamPane: "",
         range: "yesterday",
         mode: "shop",
@@ -5035,6 +5407,8 @@
         chiefs: blankRoleTeams("主管"),
         people: [],
         dutyShops: [],
+        live2Hint: "",
+        live2Pack: null,
         dutyKeys: null,
         dutyReady: false,
         ownCards: blankCompanyCards(),
@@ -5163,6 +5537,13 @@
           pollDesk();
         }
       }
+      function finishDeskLogin(storeName) {
+        if (state.view === "live2") {
+          refreshLive2(storeName || "");
+          return;
+        }
+        pullLive();
+      }
       function applyDesk(st) {
         var prev = state.desk || {};
         var next = st || {};
@@ -5173,7 +5554,7 @@
           if (!dead) {
             paint(root, state);
           }
-          pullLive();
+          finishDeskLogin(next.store || prev.store || "");
           return;
         }
         next.open = true;
@@ -5182,6 +5563,12 @@
           next.message = prev.message;
         }
         if (next.status === "verify" || next.status === "login" || next.status === "missing" || !next.status) {
+          next.status = "screen";
+        }
+        if ((next.status === "opening" || /启动浏览器/.test(String(next.message || ""))) && prev.open && root.querySelector("#xm-hm-desk-shot")) {
+          if (/启动浏览器/.test(String(next.message || "")) && prev.message && !/启动浏览器/.test(prev.message)) {
+            next.message = prev.message;
+          }
           next.status = "screen";
         }
         var keepShot = prev.open && root.querySelector("#xm-hm-desk-shot");
@@ -5211,13 +5598,16 @@
               deskTimer = 0;
               state.desk = null;
               paint(root, state);
-              pullLive();
+              finishDeskLogin(next.store || keptStore || "");
               return;
             }
             next.open = true;
             next.preview = false;
             next.store = next.store || keptStore;
             if (!next.message) {
+              next.message = keptMessage;
+            }
+            if (/启动浏览器/.test(String(next.message || "")) && keptMessage && !/启动浏览器/.test(keptMessage)) {
               next.message = keptMessage;
             }
             next.status = "screen";
@@ -5251,8 +5641,11 @@
               return;
             }
             var note = state.desk.message || "";
-            if (!note || note.indexOf("启动") >= 0 || note.indexOf("登录页已打开") >= 0) {
-              note = "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。";
+            var keepNote = note.indexOf("点登录") >= 0 || note.indexOf("账号和密码") >= 0;
+            if (!keepNote && (!note || note.indexOf("启动") >= 0 || note.indexOf("登录页已打开") >= 0)) {
+              note = state.view === "live2"
+                ? "账号和密码已经填好，请在画面里点登录"
+                : "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。";
             }
             showDesk({
               open: true,
@@ -5349,7 +5742,14 @@
         var seq = ++deskSeq;
         window.clearInterval(deskTimer);
         deskTimer = 0;
-        state.desk = { open: true, status: "opening", store: name, preview: true, step: "启动浏览器", message: "正在启动浏览器" };
+        state.desk = {
+          open: true,
+          status: "opening",
+          store: name,
+          preview: true,
+          step: "打开京麦登录页",
+          message: state.view === "live2" ? "正在打开京麦登录页，账号和密码会自动填上" : "正在启动浏览器"
+        };
         if (!dead) {
           paint(root, state);
         }
@@ -5382,7 +5782,7 @@
               window.clearInterval(wait);
               state.desk = null;
               paint(root, state);
-              pullLive();
+              finishDeskLogin(name);
               return;
             }
             if (row.message && state.desk.status === "opening") {
@@ -5404,7 +5804,7 @@
           }
           failDesk(seq, name, state.desk.step || "打开京麦登录页", "登录页还没有出来，可以重试本店");
         }, 90000);
-        api("/api/home/live-login/one", { store: name }).then(function (st) {
+        api("/api/home/live-login/one", { store: name, manual: state.view === "live2" }).then(function (st) {
           if (dead || seq !== deskSeq) {
             return;
           }
@@ -5417,7 +5817,7 @@
             window.clearTimeout(timed);
             state.desk = null;
             paint(root, state);
-            pullLive();
+            finishDeskLogin(name);
             return;
           }
           if (st.status === "failed" || st.status === "missing") {
@@ -5488,6 +5888,75 @@
           liveRefreshing = false;
           if (!dead) {
             paint(root, state);
+          }
+        });
+      }
+      function rememberHomeView(view) {
+        try {
+          if (view === "live2") {
+            sessionStorage.setItem("xm-home-view", "live2");
+          } else {
+            sessionStorage.removeItem("xm-home-view");
+          }
+        } catch (_err) {}
+      }
+      function paintLive2(pack) {
+        if (pack) {
+          state.live2Pack = pack;
+        }
+        if (state.view === "live2") {
+          paint(root, state);
+        }
+      }
+      function pollLive2() {
+        window.clearTimeout(live2Poll);
+        live2Poll = window.setTimeout(function () {
+          if (dead || state.view !== "live2") {
+            return;
+          }
+          api("/api/home/live2?_=" + Date.now()).then(function (pack) {
+            if (dead || state.view !== "live2" || !pack) {
+              return;
+            }
+            state.live2Hint = pack.running ? "正在用组织中心账号登录并读取成交金额、花费、投产比和总订单金额。" : "";
+            paintLive2(pack);
+            if (pack.running) {
+              pollLive2();
+            }
+          });
+        }, 4000);
+      }
+      function refreshLive2(storeName) {
+        useLiveScope("live2");
+        state.live2Hint = storeName
+          ? storeName + " 登录成功，正在读取成交金额和花费。"
+          : "正在用组织中心账号登录并读取成交金额、花费、投产比和总订单金额。";
+        paint(root, state);
+        var body = storeName ? { store: storeName } : {};
+        return api("/api/people/org/stores?live2=1&_=" + Date.now()).then(function (org) {
+          if (dead) {
+            return null;
+          }
+          if (org) {
+            state.dutyShops = dutyShopsFrom(org, { shops: [] });
+            state.orgIdle = orgIdleNames(org);
+          }
+          return api("/api/home/live2", body);
+        }).then(function (pack) {
+          if (dead || state.view !== "live2") {
+            return;
+          }
+          if (!pack) {
+            state.live2Hint = "采集接口还没有返回数据。成交、花费、投产比和总订单金额仍显示为—。";
+            paint(root, state);
+            return;
+          }
+          state.live2Hint = pack.running
+            ? (storeName ? storeName + " 登录成功，正在读取成交金额和花费。" : "正在用组织中心账号登录并读取成交金额、花费、投产比和总订单金额。")
+            : "";
+          paintLive2(pack);
+          if (pack.running) {
+            pollLive2();
           }
         });
       }
@@ -5568,6 +6037,7 @@
         });
       }
       function onClick(event) {
+        useLiveScope(state.view);
         var help = event.target.closest && event.target.closest(".xm-hm-help");
         if (help) {
           return;
@@ -5657,6 +6127,7 @@
             liveFeePick = "";
           }
           state.view = nextView;
+          rememberHomeView(nextView);
           if (nextView === "overview") {
             state.teamPane = "";
           }
@@ -5669,6 +6140,9 @@
           paint(root, state);
           if (state.view === "live" || state.view === "company") {
             pullLive(true);
+          }
+          if (state.view === "live2") {
+            refreshLive2();
           }
           if (state.view === "week") {
             pullWeek();
@@ -5816,11 +6290,26 @@
           refreshTeams();
           return;
         }
+        if (event.target.closest("[data-refresh-live2]")) {
+          refreshLive2();
+          return;
+        }
+        if (event.target.closest("[data-connect-live2]")) {
+          refreshLive2();
+          return;
+        }
         if (event.target.closest("[data-refresh-live]")) {
+          if (state.view === "live2") {
+            return;
+          }
           refreshLive();
           return;
         }
         if (event.target.closest("[data-connect-jingmai]")) {
+          if (state.view === "live2") {
+            refreshLive2();
+            return;
+          }
           openConnectJingmai();
           return;
         }
@@ -6202,6 +6691,7 @@
             : el.closest(".xm-hm-card");
       }
       function onSortDown(event) {
+        useLiveScope(state.view);
         if (event.button && event.button !== 0) {
           return;
         }
@@ -6355,7 +6845,7 @@
       }
       function onSortUp(event) {
         if (colDrag) {
-          if (colKey(colDrag.table) === "live") {
+          if (colKey(colDrag.table) === "live" || colKey(colDrag.table) === "live2") {
             saveLiveColW();
           }
           colDrag = null;
@@ -6401,6 +6891,7 @@
         event.stopPropagation();
       }
       function onLiveSearchInput(event) {
+        useLiveScope(state.view);
         if (event.target.getAttribute("data-live-filter") !== "q") {
           return;
         }
@@ -6410,6 +6901,7 @@
         paint(root, state);
       }
       function onChange(event) {
+        useLiveScope(state.view);
         if (event.target.getAttribute("data-live-head-all") != null) {
           saveLiveHiddenHeads(
             event.target.checked
@@ -6518,7 +7010,11 @@
       document.addEventListener("selectstart", onSortSelectStart);
       document.addEventListener("dragstart", onSortSelectStart);
       pullBoard();
-      pullLive();
+      if (state.view === "live2") {
+        refreshLive2();
+      } else {
+        pullLive();
+      }
       poll = window.setInterval(function () {
         if (state.view === "live" || state.view === "company") {
           pullLive();

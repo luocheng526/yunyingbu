@@ -6,7 +6,7 @@ import {
   classifyTransportError,
   collectPinIds,
   collectPinRecords,
-  filterPinsBelongingToShop,
+  pinsForLoggedInShop,
   extractPaid,
   describeShopPayload,
   extractShopDeal,
@@ -16,7 +16,7 @@ import {
   beijingParts,
   withDeadline
 } from "./jingmai.js";
-import { readHomeDeal } from "./jingmai-desk.js";
+import { readHomeDeal, readJztOverview } from "./jingmai-desk.js";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
@@ -1000,6 +1000,9 @@ async function fetchPaid(jar, fetchImpl, signal, expected) {
   const records = collectPinRecords(userData, authData);
   if (!records.length) {
     const payload = user && user.code != null ? user : auth;
+    if (fetchImpl === fetch && payload && Number(payload.code) !== 1) {
+      return readJztOverview(jar, signal, expected);
+    }
     throw jingmaiError("paid", paidAccountError(payload));
   }
   // Ownership must come from JZT pin metadata belonging to this shop — not Jingmai DSM identity.
@@ -1007,9 +1010,9 @@ async function fetchPaid(jar, fetchImpl, signal, expected) {
   const wantName = String((expected && (expected.shopName || expected.store)) || "").trim();
   let matched = records;
   if (wantId || wantName) {
-    matched = filterPinsBelongingToShop(records, expected);
+    matched = pinsForLoggedInShop(records, expected);
     if (!matched.length) {
-      // No evidence → do not mix other ad accounts; keep deal path via paid-channel note.
+      // Real shop ids on the pins belong to a different shop. Do not mix them in.
       throw jingmaiError("paid", "待核验：无本店广告账号证据");
     }
   }

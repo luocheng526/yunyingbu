@@ -570,7 +570,10 @@ export async function updateSessionCookies(store, cookies, options) {
       return { updated: false, reason: "shop_changed" };
     }
     if (opts.identity) {
-      const match = matchCollectIdentity({ store: store, shopId: rowShopId || expectedShopId }, opts.identity);
+      const match = matchCollectIdentity(
+        { store: store, shopId: rowShopId || expectedShopId, merchantId: String(opts.merchantId || "") },
+        opts.identity
+      );
       if (!match.ok) {
         return { updated: false, reason: match.reason };
       }
@@ -590,7 +593,10 @@ export async function updateSessionCookies(store, cookies, options) {
     return { updated: false, reason: "shop_changed" };
   }
   if (opts.identity) {
-    const match = matchCollectIdentity({ store: store, shopId: rowShopId || expectedShopId }, opts.identity);
+    const match = matchCollectIdentity(
+      { store: store, shopId: rowShopId || expectedShopId, merchantId: String(opts.merchantId || "") },
+      opts.identity
+    );
     if (!match.ok) {
       return { updated: false, reason: match.reason };
     }

@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { accountIdentity, bindDecision, buildLiveView, collectAuthDecision } from "../src/modules/home/jingmai.js";
+import { accountIdentity, bindDecision, buildLiveView, collectAuthDecision, sameShop } from "../src/modules/home/jingmai.js";
 import { beginRelogin, beginReloginAll, recoverDroppedShops, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/home/jingmai-runner.js";
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { browserCandidates, browserLaunchOrder, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginTipBlocked, loginScreenState, readDebugTargets, realBrowserBinary, resolveBrowserBinary, sessionReady, unpackDebBuffer, waitForDebugPort } from "../src/modules/home/jingmai-desk.js";
+import { assertPageShopIdentity, browserCandidates, browserFailure, browserLaunchOrder, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginTipBlocked, loginScreenState, readDebugTargets, realBrowserBinary, resolveBrowserBinary, sessionReady, unpackDebBuffer, waitForDebugPort } from "../src/modules/home/jingmai-desk.js";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import zlib from "node:zlib";
@@ -235,6 +235,24 @@ test("clicking the captcha confirm button aims at the button", () => {
   assert.equal(aim.y, 216);
 });
 
+test("a click on 立即登录 aims at that button and ignores 无法登录", () => {
+  const help = node("BUTTON", { text: "无法登录", rect: box(40, 160, 70, 20) });
+  const button = node("BUTTON", { text: "立即登录", rect: box(40, 200, 220, 40) });
+  const doc = node("DIV", { kids: [help, button], rect: box(0, 0, 400, 320) });
+  doc.elementFromPoint = function (x, y) {
+    const hit = button.rect;
+    if (x >= hit.left && x <= hit.left + hit.width && y >= hit.top && y <= hit.top + hit.height) {
+      return button;
+    }
+    return help;
+  };
+  const aim = loginPageAction(doc, { x: 150, y: 220 });
+  assert.equal(aim.text, "立即登录");
+  assert.equal(aim.kind, "button");
+  const missed = loginPageAction(doc, { x: 50, y: 170 });
+  assert.equal(missed.text, "无法登录");
+});
+
 test("a click just outside the confirm button still aims at it", () => {
   const button = node("BUTTON", { text: "确定", rect: box(100, 200, 80, 32) });
   const doc = node("DIV", { kids: [button], rect: box(0, 0, 400, 300) });
@@ -290,6 +308,63 @@ test("typing the code aims at the confirm button and fills the field", () => {
   assert.equal(aim.kind, "button");
   assert.equal(aim.x, 140);
   assert.equal(aim.y, 236);
+});
+
+test("a homepage whose vender id is the merchant id still belongs to this shop", () => {
+  assert.doesNotThrow(() => assertPageShopIdentity(
+    { store: "RASW家居旗舰店", shopId: "16065563", merchantId: "17568184" },
+    "RASW家居旗舰店POP",
+    { venderId: "17568184" }
+  ));
+  assert.throws(() => assertPageShopIdentity(
+    { store: "RASW家居旗舰店", shopId: "16065563", merchantId: "17568184" },
+    "另一家旗舰店",
+    { venderId: "999" }
+  ), /店铺不一致/);
+});
+
+test("the same shop name matches even when Jingmai returns the merchant id", () => {
+  assert.equal(sameShop(
+    { store: "RASW家居旗舰店", shopId: "16065563", merchantId: "17568184" },
+    { shopId: "17568184", shopName: "RASW家居旗舰店" }
+  ), true);
+  assert.equal(sameShop(
+    { store: "RASW家居旗舰店", shopId: "16065563" },
+    { shopId: "999", shopName: "另一家旗舰店" }
+  ), false);
+});
+
+test("a page showing this shop is saved even when the account api rejects the old session", async () => {
+  await resetJingmaiStore();
+  await saveSession("RASW家居旗舰店", {
+    cookies: [{ name: "thor", value: "old" }],
+    authState: "ok",
+    shopId: "16065563"
+  });
+  setJingmaiDeps(deskDeps({
+    desk: {
+      poll: async () => ({ status: "ok", cookies: [{ name: "thor", value: "fresh" }], pageMatch: true }),
+      close: async () => {}
+    },
+    client: {
+      fetchAccountIdentity: async () => {
+        const error = new Error("登录已失效，请重新登录");
+        error.code = "login";
+        throw error;
+      },
+      fetchHome: async () => ({ dealAmount: 3009, paidAmount: 1841.39 })
+    }
+  }));
+  try {
+    const state = await reloginState("RASW家居旗舰店");
+    assert.equal(state.status, "ok");
+    assert.match(state.message, /登录成功/);
+    const row = (await listSessions()).find((item) => item.store === "RASW家居旗舰店");
+    assert.equal(row.cookies[0].value, "fresh");
+    assert.equal(row.authState, "ok");
+  } finally {
+    resetJingmaiDeps();
+  }
 });
 
 test("a login is bound only when the platform shop id matches", () => {
@@ -508,6 +583,46 @@ test("opening a shop reports the browser step before the login page is ready", a
   }
 });
 
+test("a login picture stays up when a later poll only says the browser is starting", async () => {
+  await resetJingmaiStore();
+  let mode = "verify";
+  setJingmaiDeps(deskDeps({
+    loadOrg: async () => [
+      { store: "RASW家居旗舰店", enabled: true, login: "shop", password: "secret", shopId: "1" }
+    ],
+    desk: {
+      open: async function () {
+        return { status: "verify", message: "账号和密码已经填好，请在画面里点登录" };
+      },
+      close: async function () {
+        throw new Error("the open login window must stay");
+      },
+      poll: async function () {
+        if (mode === "verify") {
+          return { status: "verify", message: "账号和密码已经填好，请在画面里点登录" };
+        }
+        return { status: "opening", message: "正在启动浏览器 1/1" };
+      }
+    }
+  }));
+  try {
+    await beginRelogin("RASW家居旗舰店", "cookie", { manual: true });
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 40);
+    });
+    const screen = await reloginState("RASW家居旗舰店");
+    assert.equal(screen.status, "screen");
+    assert.match(screen.message, /点登录/);
+    mode = "opening";
+    const again = await reloginState("RASW家居旗舰店");
+    assert.equal(again.status, "screen");
+    assert.match(again.message, /点登录/);
+    assert.equal(/启动浏览器/.test(again.message), false);
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
 test("the homepage tries the host browser first and can fall back to the shell", () => {
   const shell = "/tmp/shen-chrome/chrome-headless-shell-linux64/chrome-headless-shell";
   assert.deepEqual(browserCandidates("/usr/bin/google-chrome", shell), ["/usr/bin/google-chrome", shell]);
@@ -677,6 +792,13 @@ test("a login form captcha is submitted with the 登录 button", () => {
   assert.equal(aim.x, 170);
   assert.equal(aim.y, 188);
   assert.equal(loginPageAction(doc, { submit: true }).kind, "button");
+  const filled = loginPageAction(doc, { fill: { loginName: "shop-user", password: "shop-secret" } });
+  assert.equal(filled.kind, "filled");
+  assert.equal(filled.account, true);
+  assert.equal(filled.password, true);
+  assert.equal(account.value, "shop-user");
+  assert.equal(password.value, "shop-secret");
+  assert.equal(button.value, "");
 });
 
 test("the login page is shown once it is on screen, and typing waits until the form stays up", () => {
@@ -868,6 +990,12 @@ test("the login connects as soon as the debug port answers", async () => {
       server.close(resolve);
     });
   }
+});
+
+test("a locked shop profile is reported as a busy login window", () => {
+  const text = browserFailure("Opening multiple instances would start multiple browser processes rather than opening a new window in the existing process. Aborting now to avoid profile corruption.");
+  assert.equal(text, "这家店的登录窗口被占用，正在重新打开");
+  assert.equal(text.includes("multiple instances"), false);
 });
 
 test("a shell wrapper is not used as the login browser", () => {

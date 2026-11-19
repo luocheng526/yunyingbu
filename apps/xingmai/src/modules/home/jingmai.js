@@ -329,7 +329,7 @@ export function collectPinRecords() {
       seen.add(key);
       rows.push({
         pinId: typeof raw === "number" ? raw : /^\d+$/.test(key) ? Number(key) : key,
-        shopId: String(item.shopId || item.venderId || item.belongBizId || item.providerCode || item.siteId || "").trim(),
+        shopId: String(item.shopId || item.venderId || item.belongBizId || item.providerCode || "").trim(),
         shopName: String(item.shopName || item.venderName || item.belongName || item.pinName || item.name || "").trim(),
         raw: item
       });
@@ -372,20 +372,82 @@ export function collectPinIds() {
   });
 }
 
+function shopIdText(value) {
+  const text = String(value == null ? "" : value).trim();
+  // JZT puts siteId "0" on every pin. That is the request header, not a shop.
+  if (!text || text === "0") {
+    return "";
+  }
+  return text;
+}
+
 function pinShopIds(row) {
   const ids = new Set();
   if (!row || typeof row !== "object") {
     return ids;
   }
   const raw = row.raw && typeof row.raw === "object" ? row.raw : {};
-  [row.shopId, raw.shopId, raw.venderId, raw.belongBizId, raw.providerCode, raw.siteId]
-    .filter(function (value) {
-      return value != null && String(value).trim() !== "";
-    })
+  [row.shopId, raw.shopId, raw.venderId, raw.belongBizId, raw.providerCode]
+    .map(shopIdText)
+    .filter(Boolean)
     .forEach(function (value) {
-      ids.add(String(value).trim());
+      ids.add(value);
     });
   return ids;
+}
+
+function pinLabel(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  return String((row && row.shopName) || raw.userDisplayName || "").trim();
+}
+
+function labelStartsWith(label, token) {
+  if (!label || !token) {
+    return false;
+  }
+  if (/^[A-Za-z0-9]/.test(token)) {
+    return label.toUpperCase().startsWith(token.toUpperCase());
+  }
+  return label.startsWith(token);
+}
+
+function pinsOfThisLogin(list, expected) {
+  const usable = list.filter(function (row) {
+    return row && row.pinId != null && row.pinId !== "";
+  });
+  if (!usable.length) {
+    return [];
+  }
+  const name = String((expected && (expected.shopName || expected.store)) || "").trim();
+  const tokens = [];
+  const latin = name.match(/^[A-Za-z0-9]{3,}/);
+  if (latin) {
+    tokens.push(latin[0]);
+  }
+  const stripped = name.replace(/(旗舰店|专营店|官方旗舰店|官方店|企官店)$/u, "");
+  for (let len = stripped.length; len >= 2; len -= 1) {
+    const token = stripped.slice(0, len);
+    if (/^[A-Za-z0-9]+$/.test(token) && token.length < 3) {
+      continue;
+    }
+    if (tokens.indexOf(token) < 0) {
+      tokens.push(token);
+    }
+  }
+  let best = null;
+  tokens.forEach(function (token) {
+    const matched = usable.filter(function (row) {
+      return labelStartsWith(pinLabel(row), token);
+    });
+    // A one-off nickname that happens to contain the shop name must not drop the rest.
+    if (matched.length * 2 < usable.length) {
+      return;
+    }
+    if (!best || token.length > best.token.length) {
+      best = { token: token, matched: matched };
+    }
+  });
+  return best ? best.matched : usable;
 }
 
 /**
@@ -396,9 +458,10 @@ function pinShopIds(row) {
  */
 export function filterPinsBelongingToShop(records, expected) {
   const wantId = String((expected && expected.shopId) || "").trim();
+  const merchantId = String((expected && expected.merchantId) || "").trim();
   const wantName = String((expected && (expected.shopName || expected.store)) || "").trim();
   const list = Array.isArray(records) ? records : [];
-  if (!wantId && !wantName) {
+  if (!wantId && !merchantId && !wantName) {
     return list.slice();
   }
   return list.filter(function (row) {
@@ -406,10 +469,10 @@ export function filterPinsBelongingToShop(records, expected) {
       return false;
     }
     const ids = pinShopIds(row);
-    if (wantId) {
+    if (wantId || merchantId) {
       if (ids.size > 0) {
         // ID conflict (e.g. wrong-id vs right-id) must exclude — never soften with name.
-        return ids.has(wantId);
+        return ids.has(wantId) || (merchantId && ids.has(merchantId));
       }
       // No reliable id on the pin: exact full shop name only, no substring/brand match.
       const name = String(row.shopName || "").trim();
@@ -418,6 +481,26 @@ export function filterPinsBelongingToShop(records, expected) {
     const name = String(row.shopName || "").trim();
     return Boolean(wantName && name && name === wantName);
   });
+}
+
+/**
+ * Pins from the shop's own Jingmai login.
+ * A real shop id still has to match. siteId 0 and operator nicknames are this login's accounts.
+ * When most names carry this shop's brand, the other brand on an agency login is left out.
+ */
+export function pinsForLoggedInShop(records, expected) {
+  const list = Array.isArray(records) ? records : [];
+  const identified = filterPinsBelongingToShop(list, expected);
+  if (identified.length) {
+    return identified;
+  }
+  const hasRealId = list.some(function (row) {
+    return pinShopIds(row).size > 0;
+  });
+  if (hasRealId) {
+    return [];
+  }
+  return pinsOfThisLogin(list, expected);
 }
 
 export function paidQuery(day, pinIds) {
@@ -487,14 +570,21 @@ export function accountIdentity(body) {
 
 export function sameShop(expected, actual) {
   const wantId = String((expected && expected.shopId) || "").trim();
+  const merchantId = String((expected && expected.merchantId) || "").trim();
   const gotId = String((actual && actual.shopId) || "").trim();
   const wantName = String((expected && (expected.store || expected.shopName)) || "").replace(/\s+/g, "");
   const gotName = String((actual && actual.shopName) || "").replace(/\s+/g, "");
   if (!gotId && !gotName) {
     return true;
   }
+  if (wantName && gotName && wantName === gotName) {
+    return true;
+  }
+  if (gotId && (gotId === wantId || (merchantId && gotId === merchantId))) {
+    return true;
+  }
   if (wantId && gotId) {
-    return wantId === gotId;
+    return false;
   }
   if (wantName && gotName) {
     return wantName === gotName;
@@ -507,29 +597,16 @@ export function sameShop(expected, actual) {
  * Mismatch must not land samples or refresh cookies for the wrong shop.
  */
 export function matchCollectIdentity(expected, actual) {
-  const wantId = String((expected && expected.shopId) || "").trim();
   const gotId = String((actual && actual.shopId) || "").trim();
-  const wantName = String((expected && (expected.store || expected.shopName)) || "").replace(/\s+/g, "");
   const gotName = String((actual && actual.shopName) || "").replace(/\s+/g, "");
-  if (wantId) {
-    if (!gotId) {
-      return { ok: false, reason: "identity_missing" };
-    }
-    if (wantId !== gotId) {
-      return { ok: false, reason: "identity_mismatch" };
-    }
+  if (!gotId && !gotName) {
+    return { ok: false, reason: "identity_missing" };
+  }
+  // Jingmai's account API returns the merchant id (belongBizId), not the org shop id.
+  if (sameShop(expected, actual)) {
     return { ok: true };
   }
-  if (wantName) {
-    if (!gotName) {
-      return { ok: false, reason: "identity_missing" };
-    }
-    if (wantName !== gotName) {
-      return { ok: false, reason: "identity_mismatch" };
-    }
-    return { ok: true };
-  }
-  return { ok: false, reason: "identity_missing" };
+  return { ok: false, reason: "identity_mismatch" };
 }
 
 export function sessionStillValid(session) {
@@ -1348,13 +1425,15 @@ async function verifyCollectIdentity(deps, shop, jar, signal) {
     identity = await deps.fetchAccountIdentity(jar, signal);
   } catch (error) {
     const classified = classifyTransportError(error);
-    if (classified.code === "login") {
+    if (classified.code === "login" || classified.code === "network" || classified.code === "timeout") {
       throw classified;
     }
-    // Timeout / network / empty identity: never release without proof.
     return { ok: false, reason: "identity_missing", identity: null };
   }
-  const match = matchCollectIdentity({ store: shop.store, shopId: shop.shopId || "" }, identity);
+  const match = matchCollectIdentity(
+    { store: shop.store, shopId: shop.shopId || "", merchantId: shop.merchantId || "" },
+    identity
+  );
   if (!match.ok) {
     return { ok: false, reason: match.reason, identity: identity };
   }
@@ -1370,6 +1449,7 @@ async function refreshCookiesSafe(deps, shop, jar, identity, sessionVersion) {
       writer: "home",
       sessionVersion: sessionVersion,
       expectedShopId: shop.shopId || "",
+      merchantId: shop.merchantId || "",
       identity: identity
     });
   } catch {
@@ -1379,7 +1459,7 @@ async function refreshCookiesSafe(deps, shop, jar, identity, sessionVersion) {
 
 async function collectOne(shop, deps) {
   const now = deps.now();
-  const expected = { store: shop.store, shopId: shop.shopId || "" };
+  const expected = { store: shop.store, shopId: shop.shopId || "", merchantId: shop.merchantId || "" };
   const sessionVersion =
     shop.sessionGen != null && shop.sessionGen !== ""
       ? "g:" + String(Number(shop.sessionGen) || 0)

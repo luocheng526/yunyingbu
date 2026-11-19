@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
-import { extractShopDeal, parseHomeCard, withDeadline } from "./jingmai.js";
+import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
 
 const LOGIN_URL =
   "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
@@ -1486,6 +1486,49 @@ let loginVisible = false;
 let booting = null;
 let bootAbort = null;
 
+function profileBusy(text) {
+  return /multiple instances|profile corruption|process_singleton/i.test(String(text || ""));
+}
+
+function releaseProfileDir(dir) {
+  if (!dir || dir.indexOf(sep) < 0) {
+    return;
+  }
+  const marker = "--user-data-dir=" + dir;
+  let entries = [];
+  try {
+    entries = readdirSync("/proc");
+  } catch {
+    entries = [];
+  }
+  entries.forEach(function (name) {
+    if (!/^\d+$/.test(name)) {
+      return;
+    }
+    let cmd = "";
+    try {
+      cmd = readFileSync("/proc/" + name + "/cmdline").toString().replace(/\0/g, " ");
+    } catch {
+      return;
+    }
+    if (cmd.indexOf(marker) < 0) {
+      return;
+    }
+    try {
+      process.kill(Number(name), "SIGKILL");
+    } catch {
+      /* already gone */
+    }
+  });
+  ["SingletonLock", "SingletonSocket", "SingletonCookie"].forEach(function (name) {
+    try {
+      unlinkSync(dir + sep + name);
+    } catch {
+      /* lock already gone */
+    }
+  });
+}
+
 function stopBooting() {
   if (bootAbort) {
     bootAbort.abort();
@@ -1494,6 +1537,9 @@ function stopBooting() {
   const chrome = booting;
   booting = null;
   if (!chrome || chrome.exitCode != null) {
+    return;
+  }
+  if (current && current.chrome === chrome) {
     return;
   }
   try {
@@ -1686,8 +1732,11 @@ function connectSocket(url) {
   });
 }
 
-function browserFailure(stderr) {
+export function browserFailure(stderr) {
   const text = String(stderr || "");
+  if (/multiple instances|profile corruption|process_singleton/i.test(text)) {
+    return "这家店的登录窗口被占用，正在重新打开";
+  }
   const library = text.match(/error while loading shared libraries: (\S+)/);
   if (library) {
     return "服务器浏览器缺少 " + library[1].replace(/[,:]/g, "") + "，登录开不了";
@@ -1741,12 +1790,19 @@ function browserLaunchError(error) {
 
 let lastLaunchNote = "";
 
+function rememberLaunch(text) {
+  if (current && current.human) {
+    return;
+  }
+  lastLaunchNote = text;
+}
+
 async function launchChrome(signal, options) {
   if (signal && signal.aborted) {
     throw browserAbortError();
   }
   const opts = options || {};
-  lastLaunchNote = "正在找服务器上的 Chrome";
+  rememberLaunch("正在找服务器上的 Chrome");
   stopBooting();
   const bins = [];
   browserLaunchOrder([
@@ -1763,10 +1819,10 @@ async function launchChrome(signal, options) {
     }
   });
   if (!bins.length) {
-    lastLaunchNote = "服务器上没有可用的 Chrome";
-    throw browserLaunchError(new Error(lastLaunchNote));
+    rememberLaunch("服务器上没有可用的 Chrome");
+    throw browserLaunchError(new Error("服务器上没有可用的 Chrome"));
   }
-  lastLaunchNote = "正在启动 " + bins[0];
+  rememberLaunch("正在启动 " + bins[0]);
   let lastError = null;
   for (let i = 0; i < bins.length; i += 1) {
     if (signal && signal.aborted) {
@@ -1793,20 +1849,27 @@ async function launchChrome(signal, options) {
       ["--headless=new", "--remote-allow-origins=*"],
       ["--headless", "--remote-allow-origins=*"]
     ];
+    let freedProfile = false;
     for (let f = 0; f < flagSets.length; f += 1) {
       if (signal && signal.aborted) {
         throw browserAbortError();
       }
-      lastLaunchNote = "正在启动浏览器 " + (i + 1) + "/" + bins.length;
+      rememberLaunch("正在启动浏览器 " + (i + 1) + "/" + bins.length);
       try {
         return await startChromeProcess(chromePath, signal, 8000, flagSets[f], opts);
       } catch (error) {
         lastError = error;
         const message = String((error && error.message) || "");
         if (message && message !== "aborted") {
-          lastLaunchNote = message;
+          rememberLaunch(message);
         }
         stopBooting();
+        if (!freedProfile && !opts.ephemeral && profileBusy(message)) {
+          freedProfile = true;
+          releaseProfileDir(profileDirForShop(opts.identity || { store: opts.profileKey || "", shopId: opts.shopId || "" }));
+          await sleep(300);
+          f -= 1;
+        }
         if (signal && signal.aborted) {
           throw browserAbortError();
         }
@@ -2236,11 +2299,14 @@ async function disguiseDesk(ws) {
   }
 }
 
-async function acquireDesk(store, ticket, signal, shopId) {
+async function acquireDesk(store, ticket, signal, shopId, manual) {
   if (ticket != null && ticket !== openTicket) {
     return null;
   }
   if (signal && signal.aborted) {
+    return null;
+  }
+  if (manual !== true && current && current.human && deskUsable(current)) {
     return null;
   }
   const identity = profileIdentity({ store: store, shopId: shopId });
@@ -2275,8 +2341,8 @@ async function acquireDesk(store, ticket, signal, shopId) {
     return null;
   }
   const desk = await launchChrome(signal, {
-    profileKey: profileKey,
-    ephemeral: identity.ephemeral || !profileKey,
+    profileKey: manual === true ? "" : profileKey,
+    ephemeral: manual === true || identity.ephemeral || !profileKey,
     identity: identity
   });
   if ((ticket != null && ticket !== openTicket) || (signal && signal.aborted)) {
@@ -2285,6 +2351,7 @@ async function acquireDesk(store, ticket, signal, shopId) {
   }
   desk.store = store;
   desk.shopId = shopId || "";
+  desk.human = manual === true;
   current = desk;
   loginVisible = true;
   lastLaunchNote = "浏览器已打开，正在接登录页";
@@ -2298,6 +2365,13 @@ async function acquireDesk(store, ticket, signal, shopId) {
 
 export async function closeDesk() {
   openTicket += 1;
+  if (!deskUsable(current) && current && current.chrome && current.chrome.exitCode == null) {
+    try {
+      await reconnectDesk(current);
+    } catch {
+      /* the picture is already gone */
+    }
+  }
   if (!deskUsable(current)) {
     stopCurrent();
     return;
@@ -2321,7 +2395,34 @@ async function readLoginPage(ws) {
   }
 }
 
-async function finishOpen(desk, loginName, password, ticket) {
+async function fillLoginOnDesk(ws, loginName, password) {
+  const expression = `(${loginPageAction.toString()})(document, ${JSON.stringify({ fill: { loginName: loginName, password: password } })})`;
+  const frames = await frameIds(ws);
+  let account = false;
+  let secret = false;
+  for (let i = 0; i < frames.length; i += 1) {
+    try {
+      let contextId = 0;
+      if (frames[i]) {
+        const world = await send(ws, "Page.createIsolatedWorld", { frameId: frames[i], grantUniveralAccess: true }, undefined, 2500);
+        contextId = world.executionContextId || 0;
+      }
+      const result = contextId
+        ? await send(ws, "Runtime.evaluate", { expression: expression, contextId: contextId, returnByValue: true }, undefined, 2500)
+        : await send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true }, undefined, 2500);
+      const hit = result && result.result ? result.result.value : null;
+      if (hit && hit.kind === "filled") {
+        account = account || hit.account === true;
+        secret = secret || hit.password === true;
+      }
+    } catch {
+      /* try the next frame */
+    }
+  }
+  return account && secret;
+}
+
+async function finishOpen(desk, loginName, password, ticket, manual) {
   try {
     loginVisible = true;
     lastLaunchNote = LOGIN_SCREEN_MESSAGE;
@@ -2360,14 +2461,27 @@ async function finishOpen(desk, loginName, password, ticket) {
     if (ticket !== openTicket || current !== desk) {
       return { status: "login", message: "登录已取消" };
     }
+    let filled = false;
     if (streak >= 1 && loginName && password) {
       try {
-        await fillAndSubmit(desk.ws, loginName, password);
+        if (manual) {
+          filled = await fillLoginOnDesk(desk.ws, loginName, password);
+        } else {
+          await fillAndSubmit(desk.ws, loginName, password);
+        }
       } catch {
         /* keep the picture open for manual login */
       }
     }
     password = "";
+    if (manual) {
+      lastLaunchNote = filled ? "账号和密码已经填好，请在画面里点登录" : "京麦登录页已打开，请在画面里核对账号密码后再点登录";
+      return {
+        status: "verify",
+        message: lastLaunchNote,
+        formReady: true
+      };
+    }
     for (let attempt = 0; attempt < 6; attempt += 1) {
       if (ticket !== openTicket || current !== desk) {
         return { status: "login", message: "登录已取消" };
@@ -2406,7 +2520,10 @@ async function finishOpen(desk, loginName, password, ticket) {
   }
 }
 
-export async function openDesk({ store, loginName, password, reveal, onStep, signal, shopId } = {}) {
+export async function openDesk({ store, loginName, password, reveal, onStep, signal, shopId, manual } = {}) {
+  if (manual !== true && current && current.human && deskUsable(current)) {
+    return { status: "busy", humanBusy: true, message: "登录窗口正开着" };
+  }
   const ticket = ++openTicket;
   const step = function (message) {
     if (message && typeof onStep === "function") {
@@ -2423,7 +2540,7 @@ export async function openDesk({ store, loginName, password, reveal, onStep, sig
     shotCache = { at: 0, store: "", image: null, ready: false };
     lastLaunchNote = "正在启动浏览器";
     step("正在启动浏览器");
-    const launching = acquireDesk(store, ticket, linked, shopId);
+    const launching = acquireDesk(store, ticket, linked, shopId, manual === true);
     launching.catch(function () {});
     desk = await Promise.race([
       launching,
@@ -2462,7 +2579,7 @@ export async function openDesk({ store, loginName, password, reveal, onStep, sig
     const account = loginName;
     const secret = password;
     password = "";
-    return await finishOpen(desk, account, secret, ticket);
+    return await finishOpen(desk, account, secret, ticket, manual === true);
   } catch (error) {
     if (ticket === openTicket) {
       stopCurrent();
@@ -2509,8 +2626,27 @@ export async function pollDesk(store) {
   try {
     const cookies = await readCookies(current.ws);
     const href = await evaluate(current.ws, "location.href");
+    let pageMatch = false;
+    const storeName = String(store || current.store || "").replace(/\s+/g, "");
+    if (storeName) {
+      try {
+        pageMatch = Boolean(await evaluate(current.ws, `(() => {
+          const want = ${JSON.stringify(storeName)};
+          const nodes = document.querySelectorAll("a, span, div, h1, h2, p");
+          for (let i = 0; i < nodes.length && i < 400; i += 1) {
+            const text = String(nodes[i].innerText || "").replace(/\\s+/g, "");
+            if (text !== want && text.indexOf(want) !== 0) continue;
+            const rect = nodes[i].getBoundingClientRect();
+            if (rect.width > 2 && rect.height > 2 && rect.top >= 0 && rect.top < 180) return true;
+          }
+          return false;
+        })()`));
+      } catch {
+        pageMatch = false;
+      }
+    }
     if (sessionReady(href, cookies)) {
-      return { status: "ok", cookies: cookies };
+      return { status: "ok", cookies: cookies, href: String(href || ""), pageMatch: pageMatch };
     }
     loginVisible = true;
   } catch {
@@ -2520,7 +2656,8 @@ export async function pollDesk(store) {
     }
     loginVisible = true;
   }
-  return { status: "verify", message: LOGIN_SCREEN_MESSAGE };
+  const note = /点登录|账号和密码/.test(String(lastLaunchNote || "")) ? lastLaunchNote : LOGIN_SCREEN_MESSAGE;
+  return { status: "verify", message: note };
 }
 
 let shotCache = { at: 0, store: "", image: null, ready: false };
@@ -2533,6 +2670,9 @@ function holdShots(ms) {
 
 export async function shotDesk(store) {
   if (!current || current.store !== store) {
+    if (shotCache.ready && shotCache.store === store && shotCache.image && Date.now() - shotCache.at < 15000) {
+      return shotCache.image;
+    }
     return null;
   }
   if (!deskUsable(current)) {
@@ -2636,11 +2776,34 @@ export function loginPageAction(doc, action) {
     };
   }
   function pointOf(node, fallbackX, fallbackY, kind) {
+    const text = textOf(node);
     if (!node || !node.getBoundingClientRect) {
-      return { kind: kind || "point", x: Math.round(fallbackX), y: Math.round(fallbackY) };
+      return { kind: kind || "point", x: Math.round(fallbackX), y: Math.round(fallbackY), text: text };
     }
     const box = topBox(node);
-    return { kind: kind || "button", x: Math.round(box.cx), y: Math.round(box.cy) };
+    return { kind: kind || "button", x: Math.round(box.cx), y: Math.round(box.cy), text: text };
+  }
+  function loginButton(root, x, y) {
+    let best = null;
+    let bestDist = 16;
+    docsOf(root).forEach(function (item) {
+      const nodes = item.querySelectorAll ? item.querySelectorAll("button, [role=button], input[type=submit]") : [];
+      for (let i = 0; i < nodes.length; i += 1) {
+        const text = textOf(nodes[i]);
+        if (!visible(nodes[i]) || (text !== "登录" && text !== "立即登录")) {
+          continue;
+        }
+        const box = topBox(nodes[i]);
+        const dx = Math.max(box.left - x, 0, x - (box.left + box.width));
+        const dy = Math.max(box.top - y, 0, y - (box.top + box.height));
+        const dist = Math.hypot(dx, dy);
+        if (dist <= bestDist) {
+          best = nodes[i];
+          bestDist = dist;
+        }
+      }
+    });
+    return best;
   }
   function elementAt(root, x, y) {
     let current = root;
@@ -2735,6 +2898,58 @@ export function loginPageAction(doc, action) {
     });
     return found;
   }
+  if (action && action.fill) {
+    const loginName = String(action.fill.loginName || "");
+    const secret = String(action.fill.password || "");
+    let account = null;
+    let password = null;
+    let tab = null;
+    docsOf(doc).forEach(function (item) {
+      const tabs = item.querySelectorAll ? item.querySelectorAll("a, button, [role=tab], span, div") : [];
+      for (let i = 0; i < tabs.length && !tab; i += 1) {
+        if (textOf(tabs[i]) === "密码登录" && visible(tabs[i])) {
+          tab = tabs[i];
+        }
+      }
+      const fields = item.querySelectorAll ? item.querySelectorAll("input") : [];
+      for (let i = 0; i < fields.length; i += 1) {
+        const field = fields[i];
+        if (!visible(field)) {
+          continue;
+        }
+        const hint = String(field.placeholder || "") + String(field.type || "") + String(field.name || "");
+        if (/password|密码/.test(hint) && !password) {
+          password = field;
+        } else if (/账号|登录名|用户名/.test(hint) && !/验证码/.test(hint) && !account) {
+          account = field;
+        }
+      }
+    });
+    if (tab && tab.click && !password) {
+      tab.click();
+    }
+    function write(field, value) {
+      if (!field) {
+        return false;
+      }
+      if (field.focus) {
+        field.focus();
+      }
+      const view = field.ownerDocument && field.ownerDocument.defaultView;
+      const proto = view && view.HTMLInputElement && Object.getOwnPropertyDescriptor(view.HTMLInputElement.prototype, "value");
+      if (proto && proto.set) {
+        proto.set.call(field, value);
+      } else {
+        field.value = value;
+      }
+      if (view && view.Event && field.dispatchEvent) {
+        field.dispatchEvent(new view.Event("input", { bubbles: true }));
+        field.dispatchEvent(new view.Event("change", { bubbles: true }));
+      }
+      return true;
+    }
+    return { kind: "filled", account: write(account, loginName), password: write(password, secret) };
+  }
   if (action && action.submit) {
     const button = loginSubmit(doc);
     if (!button) {
@@ -2806,9 +3021,12 @@ export function loginPageAction(doc, action) {
   }
   const rawX = Number(action && action.x) || 0;
   const rawY = Number(action && action.y) || 0;
-  const hit = clickable(elementAt(doc, rawX, rawY)) || nearConfirm(doc, rawX, rawY);
+  const rawHit = clickable(elementAt(doc, rawX, rawY));
+  const rawText = textOf(rawHit);
+  const loginHit = rawText === "登录" || rawText === "立即登录" ? rawHit : loginButton(doc, rawX, rawY);
+  const hit = loginHit || rawHit || nearConfirm(doc, rawX, rawY);
   if (!hit) {
-    return { kind: "point", x: Math.round(rawX), y: Math.round(rawY) };
+    return { kind: "point", x: Math.round(rawX), y: Math.round(rawY), text: "" };
   }
   return pointOf(hit, rawX, rawY, "button");
 }
@@ -2871,6 +3089,24 @@ export async function clickDesk(store, x, y, image) {
     }
   } catch {
     aim = { kind: "point", x: point.x, y: point.y };
+  }
+  if (aim.text === "立即登录" || aim.text === "登录") {
+    try {
+      const pressed = await evaluate(current.ws, `(() => {
+        const button = [...document.querySelectorAll("button, [role=button], input[type=submit]")].find((node) => {
+          const text = String(node.innerText || node.value || "").replace(/\\s+/g, "");
+          return text === "立即登录" || text === "登录";
+        });
+        if (!button || !button.click) return false;
+        button.click();
+        return true;
+      })()`);
+      if (pressed) {
+        return;
+      }
+    } catch {
+      /* fall through to the coordinate click */
+    }
   }
   await mouseClick(current.ws, aim.x, aim.y);
 }
@@ -3041,7 +3277,8 @@ function normalizeDealExpected(shopKeyOrExpected) {
   if (shopKeyOrExpected && typeof shopKeyOrExpected === "object") {
     return {
       store: String(shopKeyOrExpected.store || shopKeyOrExpected.shopName || "").trim(),
-      shopId: String(shopKeyOrExpected.shopId || "").trim()
+      shopId: String(shopKeyOrExpected.shopId || "").trim(),
+      merchantId: String(shopKeyOrExpected.merchantId || "").trim()
     };
   }
   const key = String(shopKeyOrExpected || "").trim();
@@ -3165,17 +3402,36 @@ async function readShopBaseName(ws) {
   }
 }
 
-function assertPageShopIdentity(expected, pageName, vane) {
+function shopTitleMatch(want, got) {
+  const left = String(want || "").replace(/\s+/g, "");
+  const right = String(got || "").replace(/\s+/g, "");
+  if (!left || !right) {
+    return false;
+  }
+  return left === right || right.startsWith(left) || left.startsWith(right);
+}
+
+export function assertPageShopIdentity(expected, pageName, vane) {
   const wantName = String((expected && expected.store) || "").trim();
   const wantId = String((expected && expected.shopId) || "").trim();
+  const merchantId = String((expected && expected.merchantId) || "").trim();
   const gotName = String(pageName || (vane && vane.shopName) || "").trim();
   const gotId = String((vane && vane.venderId) || "").trim();
-  if (wantName && gotName && wantName !== gotName) {
+  if (!gotName && !gotId) {
+    return;
+  }
+  if (shopTitleMatch(wantName, gotName)) {
+    return;
+  }
+  if (gotId && (gotId === wantId || (merchantId && gotId === merchantId))) {
+    return;
+  }
+  if (wantName && gotName) {
     const err = new Error("京麦当前店铺：" + gotName + "；网站当前店铺：" + wantName + "。店铺不一致，未保存数据");
     err.code = "identity";
     throw err;
   }
-  if (wantId && gotId && wantId !== gotId) {
+  if (wantId && gotId) {
     const err = new Error("京麦店铺ID不符，未保存数据");
     err.code = "identity";
     throw err;
@@ -3335,6 +3591,73 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
     }
     // Old-site finally: close this shop context only.
     killOwn();
+  }
+}
+
+export async function readJztOverview(cookies, signal, expected) {
+  if (signal && signal.aborted) {
+    throw Object.assign(new Error("广告采集超时"), { code: "timeout", name: "AbortError" });
+  }
+  let desk = null;
+  try {
+    desk = await launchChrome(signal, { ephemeral: true, profileKey: "" });
+    const ws = desk.ws;
+    await send(ws, "Page.enable");
+    await send(ws, "Network.enable");
+    const jar = cookieParams(cookies);
+    if (jar.length) {
+      await send(ws, "Network.setCookies", { cookies: jar });
+    }
+    await send(ws, "Page.navigate", { url: "https://jzt.jd.com/custom-report/#/overview" });
+    await waitDomContentLoaded(ws, signal, 20000);
+    await sleepSignal(1500, signal);
+    const href = await evaluate(ws, "location.href");
+    if (/passport\.|\/login/i.test(String(href || ""))) {
+      const err = new Error("京准通跨域登录未完成");
+      err.code = "paid";
+      throw err;
+    }
+    const lists = await evaluate(
+      ws,
+      `fetch("https://jzt-api.jd.com/dataCenter/index/user/pinlist?requestFrom=0",{credentials:"include",headers:{accept:"application/json, text/plain, */*",siteId:"0"}}).then(r=>r.json()).then(user=>fetch("https://jzt-api.jd.com/dataCenter/index/auth/pinlist?requestFrom=0",{credentials:"include",headers:{accept:"application/json, text/plain, */*",siteId:"0"}}).then(r=>r.json()).catch(()=>null).then(auth=>({user,auth}))).catch(e=>({error:String(e&&e.message||e)}))`,
+      15000
+    );
+    if (!lists || lists.error) {
+      const err = new Error("京准通没有可用账号");
+      err.code = "paid";
+      throw err;
+    }
+    const user = lists.user || {};
+    if (Number(user.code) !== 1) {
+      const err = new Error("京准通没有可用账号 " + String(user.code == null ? "" : user.code) + " " + String(user.msg || user.message || "").replace(/\s+/g, " ").slice(0, 36));
+      err.code = "paid";
+      throw err;
+    }
+    const records = collectPinRecords(user.code === 1 ? user.data : null, lists.auth && Number(lists.auth.code) === 1 ? lists.auth.data : null);
+    const wanted = expected || {};
+    const matched = pinsForLoggedInShop(records, wanted);
+    if (!matched.length) {
+      const err = new Error(records.length ? "待核验：无本店广告账号证据" : "京准通没有可用账号");
+      err.code = "paid";
+      throw err;
+    }
+    const query = paidQuery(beijingParts().day, matched.map(function (row) { return row.pinId; }));
+    const overview = await evaluate(
+      ws,
+      `fetch("https://jzt-api.jd.com/dataCenter/index/v2/summary/overview?requestFrom=0",{method:"POST",credentials:"include",headers:{accept:"application/json, text/plain, */*","content-type":"application/json",siteId:"0"},body:${JSON.stringify(JSON.stringify(query))}}).then(r=>r.json()).catch(e=>({error:String(e&&e.message||e)}))`,
+      15000
+    );
+    const paid = extractPaid(overview && overview.code === 1 ? overview.data : overview);
+    if (!paid) {
+      const err = new Error("京准通没有返回付费数据");
+      err.code = "paid";
+      throw err;
+    }
+    return paid;
+  } finally {
+    if (desk) {
+      discard(desk);
+    }
   }
 }
 

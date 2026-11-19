@@ -21,6 +21,7 @@ import {
   reloginState,
   startJingmaiCollector
 } from "./jingmai-runner.js";
+import { getLive2Board, startLive2Round } from "./live2-collect.js";
 import {
   buildWeekPack,
   saveWeekCells,
@@ -301,6 +302,35 @@ export function homeRouter() {
     }
   });
 
+  router.get("/live2", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      return res.json(await getLive2Board(req.headers.cookie || ""));
+    } catch (err) {
+      return res.status(Number(err.statusCode) || 502).json({
+        ok: false,
+        source: "live2",
+        records: [],
+        error: err.message || "实时（新版）还没有读到数据"
+      });
+    }
+  });
+
+  router.post("/live2", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      const store = req.body && req.body.store;
+      return res.json(await startLive2Round(req.headers.cookie || "", store));
+    } catch (err) {
+      return res.status(Number(err.statusCode) || 502).json({
+        ok: false,
+        source: "live2",
+        records: [],
+        error: err.message || "实时（新版）采集没有开始"
+      });
+    }
+  });
+
   router.get("/local-paid", async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     try {
@@ -335,7 +365,9 @@ export function homeRouter() {
 
   router.post("/live-login/one", async (req, res) => {
     try {
-      res.json(await beginRelogin(req.body && req.body.store, req.headers.cookie || ""));
+      res.json(await beginRelogin(req.body && req.body.store, req.headers.cookie || "", {
+        manual: Boolean(req.body && req.body.manual)
+      }));
     } catch (err) {
       res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
     }

@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
 import { browserReady, browserStartFailure, ensureChrome, jingmaiDesk, launchNote, LOGIN_SCREEN_MESSAGE, PAGE_WAIT_MESSAGE } from "./jingmai-desk.js";
 import { jingmaiClient } from "./jingmai-client.js";
 import {
   beijingParts,
   bindDecision,
   matchCollectIdentity,
+  sameShop,
   runTick,
   sampleFields,
   sessionStillValid,
@@ -144,7 +146,7 @@ export async function listHomeCollectTargets() {
     const result = await claimCollectorOwner(session.store, COLLECTOR_OWNER_HOME);
     if (result && result.ok) {
       session.collectorOwner = COLLECTOR_OWNER_HOME;
-      claimed.push(session);
+      claimed.push(withMerchant(session));
     }
   }
   return claimed;
@@ -194,6 +196,51 @@ export function resetJingmaiDeps() {
   loginEpoch = 0;
 }
 
+let orgIdentityMap = null;
+
+function orgIdentityFor(store) {
+  const name = String(store || "").trim();
+  if (!name) {
+    return null;
+  }
+  if (!orgIdentityMap) {
+    orgIdentityMap = new Map();
+    try {
+      const file = new URL("../people/data/org-stores.json", import.meta.url);
+      const data = JSON.parse(readFileSync(file, "utf8"));
+      const rows = Array.isArray(data) ? data : data.stores || [];
+      rows.forEach(function (row) {
+        const storeName = String((row && (row.storeName || row.store)) || "").trim();
+        if (!storeName) {
+          return;
+        }
+        orgIdentityMap.set(storeName, {
+          shopId: String((row && (row.shopId || row.storeId)) || "").trim(),
+          merchantId: String((row && row.merchantId) || "").trim()
+        });
+      });
+    } catch {
+      orgIdentityMap = new Map();
+    }
+  }
+  return orgIdentityMap.get(name) || null;
+}
+
+function withMerchant(shop) {
+  if (!shop || !shop.store) {
+    return shop;
+  }
+  const cached = orgCache.get(shop.store);
+  const filed = orgIdentityFor(shop.store);
+  if (!shop.shopId) {
+    shop.shopId = String((cached && cached.shopId) || (filed && filed.shopId) || "");
+  }
+  if (!shop.merchantId) {
+    shop.merchantId = String((cached && cached.merchantId) || (filed && filed.merchantId) || "");
+  }
+  return shop;
+}
+
 function rememberOrg(shops) {
   rememberOrgMeta(shops);
   (shops || []).forEach(function (shop) {
@@ -206,6 +253,7 @@ function rememberOrg(shops) {
       login: shop.login,
       password: shop.password,
       shopId: String(shop.shopId || ""),
+      merchantId: String(shop.merchantId || ""),
       team: String(shop.team || ""),
       manager: String(shop.manager || "")
     });
@@ -271,7 +319,8 @@ export async function loadOrgShops(cookie, fetchImpl = fetch) {
         enabled: store.statusKey === "operating" || (store.statusKey == null && store.remark === "运营中"),
         login: String(store.login || ""),
         password: String(store.password || ""),
-        shopId: String(store.shopId || store.storeId || "").trim()
+        shopId: String(store.shopId || store.storeId || "").trim(),
+        merchantId: String(store.merchantId || "").trim()
       };
     })
     .filter(function (store) {
@@ -292,7 +341,7 @@ async function cookiesAlive(cookies, expected) {
         return deps.client.fetchAccountIdentity(cookies, undefined, signal);
       }, 12000);
       const match = matchCollectIdentity(
-        { store: want.store || "", shopId: want.shopId || "" },
+        { store: want.store || "", shopId: want.shopId || "", merchantId: want.merchantId || "" },
         identity || { shopId: "", shopName: "" }
       );
       if (!match.ok) {
@@ -319,6 +368,7 @@ async function cookiesAlive(cookies, expected) {
 }
 
 async function passwordRelogin(shop) {
+  shop = withMerchant(shop);
   if (!shop || !shop.store || !shop.login || !shop.password || !deps.client || !deps.client.login) {
     return false;
   }
@@ -363,7 +413,11 @@ async function passwordRelogin(shop) {
         return false;
       }
     }
-    const kept = await rememberLogin(shop.store, cookies, { shopId: shop.shopId || "", store: shop.store });
+    const kept = await rememberLogin(shop.store, cookies, {
+      shopId: shop.shopId || "",
+      merchantId: shop.merchantId || "",
+      store: shop.store
+    });
     return kept === "saved" || kept === "kept";
   } finally {
     inflight.delete(shop.store);
@@ -380,6 +434,7 @@ function cachedOrgShop(name) {
     login: hit.login,
     password: hit.password,
     shopId: hit.shopId || "",
+    merchantId: hit.merchantId || "",
     enabled: hit.enabled !== false
   };
 }
@@ -398,7 +453,7 @@ async function connectOne(shop) {
   inflight.add(shop.store);
   try {
     const cookies = await deps.client.login(shop.login, shop.password);
-    const expected = { store: shop.store, shopId: shop.shopId || "" };
+    const expected = { store: shop.store, shopId: shop.shopId || "", merchantId: shop.merchantId || "" };
     let identity = { shopId: "", shopName: "" };
     if (deps.client.fetchAccountIdentity) {
       identity = (await deps.client.fetchAccountIdentity(cookies)) || identity;
@@ -419,7 +474,7 @@ async function connectOne(shop) {
       authState: "ok",
       authMessage: "",
       enabled: true,
-      shopId: String(identity.shopId || shop.shopId || "").trim()
+      shopId: String(shop.shopId || identity.shopId || "").trim()
     });
     const now = beijingParts();
     await saveSample(
@@ -497,12 +552,13 @@ function publicState(state) {
 
 async function rememberLogin(store, cookies, expected) {
   let identity = { shopId: "", shopName: "" };
+  const pageMatch = Boolean(expected && expected.pageMatch);
   try {
     if (deps.client.fetchAccountIdentity) {
       identity = (await deps.client.fetchAccountIdentity(cookies)) || identity;
     }
   } catch (error) {
-    if (error && error.code === "login") {
+    if (error && error.code === "login" && !pageMatch) {
       const sessions = await listSessions();
       const existing = sessions.find(function (item) {
         return item.store === store;
@@ -517,7 +573,40 @@ async function rememberLogin(store, cookies, expected) {
   const existing = sessions.find(function (item) {
     return item.store === store;
   });
-  const decision = bindDecision(Object.assign({ store: store }, expected || {}), identity, existing);
+  const wanted = Object.assign({ store: store }, expected || {});
+  if (pageMatch || sameShop(wanted, identity)) {
+    const shopId = String((wanted.shopId || identity.shopId) || "").trim();
+    await saveSession(store, {
+      cookies: cookies,
+      authState: "ok",
+      authMessage: "",
+      enabled: true,
+      shopId: shopId
+    });
+    try {
+      const metrics = await deps.client.fetchHome(cookies, undefined, {
+        store: store,
+        shopId: shopId,
+        merchantId: String((wanted && wanted.merchantId) || ""),
+        shopName: store
+      });
+      const now = beijingParts();
+      await saveSample(
+        Object.assign({ store: store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)),
+        { writer: COLLECTOR_OWNER_HOME }
+      );
+    } catch (error) {
+      if (error && error.code === "identity") {
+        await markAuth(store, "offline", String(error.message || "身份不符").slice(0, 200), {
+          writer: COLLECTOR_OWNER_HOME
+        });
+        return "failed";
+      }
+      /* 一次采集超时或没有成交，保留刚保存的登录 */
+    }
+    return "saved";
+  }
+  const decision = bindDecision(wanted, identity, existing);
   if (decision.action === "keep") {
     return "kept";
   }
@@ -604,6 +693,7 @@ async function startQueued(shop, epoch) {
       loginName: shop.login,
       password: shop.password,
       reveal: true,
+      manual: shop.manual === true,
       signal: boot ? boot.signal : undefined,
       onStep: function (message) {
         if (epoch != null && epoch !== loginEpoch) {
@@ -629,7 +719,7 @@ async function startQueued(shop, epoch) {
             status: "login",
             message: launchNote() || browserStartFailure()
           });
-        }, deps.startLimitMs || 12000);
+        }, shop.manual === true ? 30000 : (deps.startLimitMs || 12000));
       })
     ]);
   } catch {
@@ -644,7 +734,11 @@ async function startQueued(shop, epoch) {
   }
   if (opened.status === "ok") {
     await deps.desk.close();
-    const kept = await rememberLogin(shop.store, opened.cookies || [], { shopId: shop.shopId || "", store: shop.store });
+    const kept = await rememberLogin(shop.store, opened.cookies || [], {
+      shopId: shop.shopId || "",
+      merchantId: shop.merchantId || "",
+      store: shop.store
+    });
     if (kept === "kept") {
       return publicState({ status: "done", store: shop.store, message: "这次登录到的不是这家店，原来的会话还在" });
     }
@@ -655,7 +749,7 @@ async function startQueued(shop, epoch) {
     loginCursor.message = "登录没有通过，请再试一次";
       return publicState({ status: "failed", store: shop.store, step: "核对店铺身份", message: loginCursor.message });
     }
-    return publicState({ status: "ok", store: shop.store, message: shop.store + " 已在服务器登录" });
+    return publicState({ status: "ok", store: shop.store, message: shop.store + " 登录成功" });
   }
   if (opened.status === "verify") {
     loginCursor.phase = "screen";
@@ -666,6 +760,14 @@ async function startQueued(shop, epoch) {
       store: shop.store,
       step: "京麦登录页",
       message: loginCursor.message
+    });
+  }
+  if (opened && opened.humanBusy) {
+    return publicState({
+      status: "screen",
+      store: shop.store,
+      step: "京麦登录页",
+      message: "登录窗口正开着"
     });
   }
   if (deps.desk && deps.desk.close) {
@@ -681,7 +783,7 @@ async function startQueued(shop, epoch) {
 async function advanceAfterSuccess(store) {
   const next = loginQueue.shift();
   if (!next) {
-    return publicState({ status: "ok", store: store, message: store + " 已在服务器登录" });
+    return publicState({ status: "ok", store: store, message: store + " 登录成功" });
   }
   loginCursor.index += 1;
   return startQueued(next, loginEpoch);
@@ -706,7 +808,14 @@ async function queueShops(shops, epoch) {
     return currentLoginState();
   }
   const copies = (shops || []).map(function (shop) {
-    const copy = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "" };
+    const copy = {
+      store: shop.store,
+      login: shop.login,
+      password: shop.password,
+      shopId: shop.shopId || "",
+      merchantId: shop.merchantId || "",
+      manual: shop.manual === true
+    };
     shop.login = "";
     shop.password = "";
     return copy;
@@ -735,7 +844,7 @@ async function queueShops(shops, epoch) {
   return startQueued(next, epoch);
 }
 
-export async function beginRelogin(store, cookie) {
+export async function beginRelogin(store, cookie, options) {
   const name = String(store || "").trim();
   if (!name) {
     const error = new Error("请选择店铺");
@@ -745,6 +854,7 @@ export async function beginRelogin(store, cookie) {
   if (loginInProgress(name)) {
     return currentLoginState(name);
   }
+  const manual = Boolean(options && options.manual);
   const epoch = ++loginEpoch;
   loginCursor = {
     index: 1,
@@ -778,51 +888,62 @@ export async function beginRelogin(store, cookie) {
       message: !shop || shop.enabled === false ? "这家店已停用" : "组织中心还没有填写这家店的账号"
     };
   }
-  const sessions = await listSessions();
-  const existing = sessions.find(function (item) {
-    return item.store === name;
-  });
-  if (sessionStillValid(existing)) {
-    const alive = await cookiesAlive(existing.cookies || [], {
-      store: name,
-      shopId: (existing && existing.shopId) || (shop && shop.shopId) || ""
+  if (!manual) {
+    const sessions = await listSessions();
+    const existing = sessions.find(function (item) {
+      return item.store === name;
     });
-    if (epoch !== loginEpoch) {
-      return currentLoginState(name);
+    if (sessionStillValid(existing)) {
+      const alive = await cookiesAlive(existing.cookies || [], withMerchant({
+        store: name,
+        shopId: (existing && existing.shopId) || (shop && shop.shopId) || "",
+        merchantId: shop && shop.merchantId
+      }));
+      if (epoch !== loginEpoch) {
+        return currentLoginState(name);
+      }
+      if (alive) {
+        clearOpening();
+        loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
+        shop.login = "";
+        shop.password = "";
+        return { ok: true, status: "done", store: name, message: "「" + name + "」已连接" };
+      }
+      await markAuth(name, "login_expired", "登录已失效，请重新登录", { writer: COLLECTOR_OWNER_HOME });
     }
-    if (alive) {
-      clearOpening();
-      loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
-      shop.login = "";
-      shop.password = "";
-      return { ok: true, status: "done", store: name, message: "「" + name + "」已连接" };
+    try {
+      const renewed = await passwordRelogin({
+        store: shop.store,
+        login: shop.login,
+        password: shop.password,
+        shopId: shop.shopId || "",
+        merchantId: shop.merchantId || ""
+      });
+      if (epoch !== loginEpoch) {
+        return currentLoginState(name);
+      }
+      if (renewed) {
+        clearOpening();
+        loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
+        shop.login = "";
+        shop.password = "";
+        return { ok: true, status: "done", store: name, message: "「" + name + "」已重新登录" };
+      }
+    } catch {
+      /* 掉线店先走账号密码；需要验证码时再打开服务器画面 */
     }
-    await markAuth(name, "login_expired", "登录已失效，请重新登录", { writer: COLLECTOR_OWNER_HOME });
-  }
-  try {
-    const renewed = await passwordRelogin({
-      store: shop.store,
-      login: shop.login,
-      password: shop.password,
-      shopId: shop.shopId || ""
-    });
-    if (epoch !== loginEpoch) {
-      return currentLoginState(name);
-    }
-    if (renewed) {
-      clearOpening();
-      loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
-      shop.login = "";
-      shop.password = "";
-      return { ok: true, status: "done", store: name, message: "「" + name + "」已重新登录" };
-    }
-  } catch {
-    /* 掉线店先走账号密码；需要验证码时再打开服务器画面 */
   }
   if (epoch !== loginEpoch) {
     return currentLoginState(name);
   }
-  const queued = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "" };
+  const queued = {
+    store: shop.store,
+    login: shop.login,
+    password: shop.password,
+    shopId: shop.shopId || "",
+    merchantId: shop.merchantId || "",
+    manual: manual
+  };
   shop.login = "";
   shop.password = "";
   const job = queueShops([queued], epoch);
@@ -1040,7 +1161,8 @@ export async function reloginState(store) {
   if (state.status === "verify" || state.status === "screen") {
     loginCursor.phase = "screen";
     loginCursor.step = "京麦登录页";
-    loginCursor.message = state.message || LOGIN_SCREEN_MESSAGE;
+    const kept = /点登录|账号和密码/.test(String(loginCursor.message || "")) ? loginCursor.message : "";
+    loginCursor.message = kept || state.message || LOGIN_SCREEN_MESSAGE;
     return publicState({
       status: "screen",
       store: name,
@@ -1051,18 +1173,42 @@ export async function reloginState(store) {
   if (state.status === "ok") {
     const cookies = state.cookies || [];
     const cached = orgCache.get(name);
-    const kept = await rememberLogin(name, cookies, { store: name, shopId: (cached && cached.shopId) || "" });
-    await deps.desk.close();
+    const kept = await rememberLogin(name, cookies, {
+      store: name,
+      shopId: (cached && cached.shopId) || "",
+      merchantId: (cached && cached.merchantId) || "",
+      pageMatch: state.pageMatch === true
+    });
     if (kept === "kept") {
       return publicState({ status: "login", store: name, message: "这次登录到的不是这家店，原来的会话还在" });
     }
     if (kept !== "saved") {
-      return publicState({ status: "screen", store: name, message: "登录没有通过，请再试一次" });
+      const inside = /shop\.jd\.com/i.test(String(state.href || ""));
+      return publicState({
+        status: "screen",
+        store: name,
+        message: inside ? "已经进到商家后台，请看画面确认是不是这家店" : "登录没有通过，请再试一次"
+      });
+    }
+    if (deps.desk && deps.desk.close) {
+      await deps.desk.close();
     }
     return advanceAfterSuccess(name);
   }
   if (state.status === "missing") {
     return publicState({ status: "missing", store: name, message: state.message || "请重新打开登录" });
+  }
+  if (state.status === "opening" && loginCursor.phase === "screen") {
+    const kept = /点登录|账号和密码|正在登录/.test(String(loginCursor.message || ""))
+      ? loginCursor.message
+      : "正在登录，请看下面的画面";
+    loginCursor.message = kept;
+    return publicState({
+      status: "screen",
+      store: name,
+      step: "京麦登录页",
+      message: kept
+    });
   }
   if (state.status === "opening" || loginCursor.phase === "opening") {
     return publicState({
@@ -1100,7 +1246,7 @@ export async function reloginInput(body) {
   }
   const started = Date.now();
   let state = await reloginState(name);
-  while (state.status === "screen" && Date.now() - started < 8000) {
+  while (state.status === "screen" && Date.now() - started < 1200) {
     await new Promise(function (resolve) {
       setTimeout(resolve, 400);
     });
@@ -1140,7 +1286,7 @@ export async function finishRelogin(store, authCode) {
       password: password,
       authCode: authCode || ""
     });
-    const kept = await rememberLogin(name, jar, { store: name, shopId: pending.shopId || "" });
+    const kept = await rememberLogin(name, jar, withMerchant({ store: name, shopId: pending.shopId || "", merchantId: pending.merchantId || "" }));
     if (kept !== "saved") {
       return { ok: true, store: name, status: "login", message: kept === "kept" ? "这次登录到的不是这家店，原来的会话还在" : "登录没有通过，请再试一次" };
     }
@@ -1160,9 +1306,16 @@ async function silentOne(shop) {
   });
   shop.login = "";
   shop.password = "";
+  if (opened && opened.humanBusy) {
+    return { store: shop.store, status: "busy" };
+  }
   if (opened.status === "ok") {
     await deps.desk.close();
-    const kept = await rememberLogin(shop.store, opened.cookies || [], { shopId: shop.shopId || "", store: shop.store });
+    const kept = await rememberLogin(shop.store, opened.cookies || [], withMerchant({
+      shopId: shop.shopId || "",
+      merchantId: shop.merchantId || "",
+      store: shop.store
+    }));
     return { store: shop.store, status: kept === "saved" || kept === "kept" ? "ok" : "login" };
   }
   if (deps.desk && deps.desk.close) {
@@ -1184,7 +1337,14 @@ async function runSilent(shops) {
   });
   const results = [];
   for (const shop of targets) {
-    const copy = { store: shop.store, enabled: shop.enabled, login: shop.login, password: shop.password };
+    const copy = withMerchant({
+      store: shop.store,
+      enabled: shop.enabled,
+      login: shop.login,
+      password: shop.password,
+      shopId: shop.shopId || "",
+      merchantId: shop.merchantId || ""
+    });
     results.push(await withDesk(function () {
       return silentOne(copy);
     }));
@@ -1261,11 +1421,10 @@ export async function jingmaiTick() {
     updateSessionCookies: updateSessionCookies,
     reloadShop: async function (store) {
       const rows = await listSessions();
-      return (
-        rows.find(function (row) {
-          return row.store === store;
-        }) || null
-      );
+      const row = rows.find(function (item) {
+        return item.store === store;
+      });
+      return row ? withMerchant(row) : null;
     },
     recheckJingmai: async function (shop, signal) {
       if (!shop || !shop.cookies || !shop.cookies.length || !deps.client) {
@@ -1276,8 +1435,9 @@ export async function jingmaiTick() {
           return false;
         }
         const identity = await deps.client.fetchAccountIdentity(shop.cookies, undefined, signal);
+        const known = withMerchant(shop);
         const match = matchCollectIdentity(
-          { store: shop.store, shopId: shop.shopId || "" },
+          { store: known.store, shopId: known.shopId || "", merchantId: known.merchantId || "" },
           identity || { shopId: "", shopName: "" }
         );
         // Historical cross-shop profiles must match shopId; mismatch keeps old data.

@@ -243,7 +243,7 @@ test("live table can search shops, filter 掉线, and hide idle org shops", () =
   const old = new Date(Date.now() - 11 * 60 * 1000).toISOString();
   const rows = [
     { shop: "在线店", capturedAt: now, paidIn: true, online: true },
-    { shop: "掉线店", capturedAt: old, paidIn: true, offline: true },
+    { shop: "掉线店", capturedAt: old, paidIn: true, loginExpired: true },
     { shop: "闲置店", capturedAt: now, paidIn: true },
     { shop: "未接入店", capturedAt: now }
   ];
