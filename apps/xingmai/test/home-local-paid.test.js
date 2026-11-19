@@ -21,6 +21,10 @@ import { loadOrgShops, setJingmaiRequestOrigin } from "../src/modules/home/jingm
 import { beijingParts } from "../src/modules/home/jingmai.js";
 import { resetJingmaiStore, saveSample, saveSession } from "../src/modules/home/jingmai-store.js";
 
+if (process.env.SHEN_JINGMAI_MEMORY == null) {
+  process.env.SHEN_JINGMAI_MEMORY = "1";
+}
+
 const snapDir = mkdtempSync(join(tmpdir(), "home-local-paid-"));
 setLocalPaidSnapPath(join(snapDir, "days.json"));
 
