@@ -1,7 +1,24 @@
 import { browserReady, browserStartFailure, ensureChrome, jingmaiDesk, launchNote, LOGIN_SCREEN_MESSAGE, PAGE_WAIT_MESSAGE } from "./jingmai-desk.js";
 import { jingmaiClient } from "./jingmai-client.js";
-import { beijingParts, bindDecision, runTick, sampleFields, sessionStillValid, withDeadline } from "./jingmai.js";
-import { listCollectTargets, listSessions, markAuth, readJingmaiLive, saveSample, saveSession, setRoster } from "./jingmai-store.js";
+import {
+  beijingParts,
+  bindDecision,
+  matchCollectIdentity,
+  runTick,
+  sampleFields,
+  sessionStillValid,
+  withDeadline
+} from "./jingmai.js";
+import {
+  listCollectTargets,
+  listSessions,
+  markAuth,
+  readJingmaiLive,
+  saveSample,
+  saveSession,
+  setRoster,
+  updateSessionCookies
+} from "./jingmai-store.js";
 
 const INTERVAL_MS = 5 * 60 * 1000;
 let requestOrigin = "";
@@ -144,17 +161,37 @@ export async function loadOrgShops(cookie, fetchImpl = fetch) {
   return mapped;
 }
 
-async function cookiesAlive(cookies) {
-  if (!cookies || !cookies.length || !deps.client || !deps.client.fetchHome) {
+async function cookiesAlive(cookies, expected) {
+  if (!cookies || !cookies.length || !deps.client) {
     return false;
   }
+  const want = expected || {};
   try {
+    if (deps.client.fetchAccountIdentity) {
+      const identity = await withDeadline(function (signal) {
+        return deps.client.fetchAccountIdentity(cookies, undefined, signal);
+      }, 12000);
+      const match = matchCollectIdentity(
+        { store: want.store || "", shopId: want.shopId || "" },
+        identity || { shopId: "", shopName: "" }
+      );
+      if (!match.ok) {
+        return false;
+      }
+      return true;
+    }
+    if (!deps.client.fetchHome) {
+      return false;
+    }
     await withDeadline(function (signal) {
-      return deps.client.fetchHome(cookies, signal);
+      return deps.client.fetchHome(cookies, signal, {
+        store: want.store || "",
+        shopId: want.shopId || ""
+      });
     }, 12000);
     return true;
   } catch (error) {
-    if (error && error.code === "login") {
+    if (error && (error.code === "login" || error.code === "identity")) {
       return false;
     }
     return false;
@@ -206,8 +243,29 @@ async function connectOne(shop) {
   inflight.add(shop.store);
   try {
     const cookies = await deps.client.login(shop.login, shop.password);
-    const metrics = await deps.client.fetchHome(cookies);
-    await saveSession(shop.store, { cookies: cookies, authState: "ok", authMessage: "", enabled: true });
+    const expected = { store: shop.store, shopId: shop.shopId || "" };
+    let identity = { shopId: "", shopName: "" };
+    if (deps.client.fetchAccountIdentity) {
+      identity = (await deps.client.fetchAccountIdentity(cookies)) || identity;
+      const match = matchCollectIdentity(expected, identity);
+      if (!match.ok) {
+        const who = identity.shopName || identity.shopId || "另一家店";
+        return {
+          store: shop.store,
+          ok: false,
+          auth: false,
+          message: "身份不符：登录到的是「" + who + "」，不是这家店"
+        };
+      }
+    }
+    const metrics = await deps.client.fetchHome(cookies, undefined, expected);
+    await saveSession(shop.store, {
+      cookies: cookies,
+      authState: "ok",
+      authMessage: "",
+      enabled: true,
+      shopId: String(identity.shopId || shop.shopId || "").trim()
+    });
     const now = beijingParts();
     await saveSample(Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)));
     return { store: shop.store, ok: true };
@@ -220,6 +278,14 @@ async function connectOne(shop) {
         enabled: true
       });
       return { store: shop.store, ok: false, auth: true, message: "登录已失效，请重新登录" };
+    }
+    if (error && error.code === "identity") {
+      return {
+        store: shop.store,
+        ok: false,
+        auth: false,
+        message: String(error.message || "身份不符").slice(0, 120)
+      };
     }
     return { store: shop.store, ok: false, auth: false, message: "连接超时，请稍后再试" };
   } finally {
@@ -315,10 +381,17 @@ async function rememberLogin(store, cookies, expected) {
     shopId: decision.shopId
   });
   try {
-    const metrics = await deps.client.fetchHome(cookies);
+    const metrics = await deps.client.fetchHome(cookies, undefined, {
+      store: store,
+      shopId: decision.shopId || (expected && expected.shopId) || ""
+    });
     const now = beijingParts();
     await saveSample(Object.assign({ store: store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)));
-  } catch {
+  } catch (error) {
+    if (error && error.code === "identity") {
+      await markAuth(store, "offline", String(error.message || "身份不符").slice(0, 200));
+      return "failed";
+    }
     /* 一次采集超时或没有成交，保留刚保存的登录 */
   }
   return "saved";
@@ -547,7 +620,10 @@ export async function beginRelogin(store, cookie) {
     return item.store === name;
   });
   if (sessionStillValid(existing)) {
-    const alive = await cookiesAlive(existing.cookies || []);
+    const alive = await cookiesAlive(existing.cookies || [], {
+      store: name,
+      shopId: (existing && existing.shopId) || (shop && shop.shopId) || ""
+    });
     if (epoch !== loginEpoch) {
       return currentLoginState(name);
     }
@@ -942,31 +1018,47 @@ export async function refreshJingmai(cookie) {
   }
 }
 
+const tickLock = { busy: false };
+
 export async function jingmaiTick() {
   await runTick({
     inflight: inflight,
+    tickLock: tickLock,
+    collectConcurrency: 3,
     listTargets: listCollectTargets,
     fetchHome: function (cookies, signal, expected) {
       return deps.client.fetchHome(cookies, signal, expected);
     },
+    fetchAccountIdentity: async function (cookies, signal) {
+      if (!deps.client || !deps.client.fetchAccountIdentity) {
+        return { shopId: "", shopName: "" };
+      }
+      return deps.client.fetchAccountIdentity(cookies, undefined, signal);
+    },
+    updateSessionCookies: updateSessionCookies,
     recheckJingmai: async function (shop, signal) {
       if (!shop || !shop.cookies || !shop.cookies.length || !deps.client) {
         return false;
       }
       try {
-        if (deps.client.fetchAccountIdentity) {
-          const identity = await deps.client.fetchAccountIdentity(shop.cookies, undefined, signal);
-          if (identity && (identity.shopId || identity.shopName)) {
-            return true;
-          }
+        if (!deps.client.fetchAccountIdentity) {
+          return false;
         }
-        await deps.client.fetchHome(shop.cookies, signal, { store: shop.store, shopId: shop.shopId || "" });
-        return true;
+        const identity = await deps.client.fetchAccountIdentity(shop.cookies, undefined, signal);
+        const match = matchCollectIdentity(
+          { store: shop.store, shopId: shop.shopId || "" },
+          identity || { shopId: "", shopName: "" }
+        );
+        // Historical cross-shop profiles must match shopId; mismatch keeps old data.
+        return match.ok === true;
       } catch (error) {
         if (error && error.code === "login") {
           return false;
         }
-        // Network/paid/timeout during recheck: session may still be valid — allow collectOne path.
+        // Without identity proof, do not treat recheck as alive when shopId is bound.
+        if (String(shop.shopId || "").trim()) {
+          return false;
+        }
         return true;
       }
     },

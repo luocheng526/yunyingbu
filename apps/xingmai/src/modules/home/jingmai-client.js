@@ -1095,13 +1095,36 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
     signal = fetchImpl;
     fetchImpl = fetch;
     readCard = undefined;
+  } else if (
+    fetchImpl &&
+    typeof fetchImpl === "object" &&
+    !("aborted" in fetchImpl) &&
+    (fetchImpl.shopId != null || fetchImpl.store || fetchImpl.onDeal)
+  ) {
+    // fetchHome(jar, expected)
+    expected = fetchImpl;
+    fetchImpl = fetch;
+    readCard = undefined;
   } else if (readCard && typeof readCard === "object" && typeof readCard.aborted === "boolean") {
     expected = signal && typeof signal === "object" && !("aborted" in signal) ? signal : expected;
     signal = readCard;
     readCard = undefined;
+  } else if (
+    readCard &&
+    typeof readCard === "object" &&
+    typeof readCard !== "function" &&
+    !("aborted" in readCard) &&
+    (readCard.shopId != null || readCard.store || readCard.onDeal)
+  ) {
+    // fetchHome(jar, undefined, expected) — explicit undefined skips default fetchImpl.
+    expected = readCard;
+    readCard = undefined;
   } else if (signal && typeof signal === "object" && !("aborted" in signal) && (signal.shopId != null || signal.store || signal.onDeal)) {
     expected = signal;
     signal = undefined;
+  }
+  if (typeof fetchImpl !== "function") {
+    fetchImpl = fetch;
   }
   const shopKey = String((expected && (expected.shopId || expected.store)) || "").trim();
   const onDeal = expected && typeof expected.onDeal === "function" ? expected.onDeal : null;

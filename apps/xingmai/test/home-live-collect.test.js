@@ -10,6 +10,7 @@ import {
   collectAuthDecision,
   collectPinRecords,
   filterPinsBelongingToShop,
+  matchCollectIdentity,
   runTick,
   sampleFields,
   shouldCollectShop,
@@ -37,7 +38,8 @@ import {
   listSessions,
   markAuth,
   resetJingmaiStore,
-  saveSession
+  saveSession,
+  updateSessionCookies
 } from "../src/modules/home/jingmai-store.js";
 
 test("paid-only failures do not expire the whole shop login", () => {
@@ -604,6 +606,7 @@ test("runTick/withDeadline persists deal when ads hang past outer deadline; no o
   try {
     await runTick({
       inflight: new Set(),
+      tickLock: { busy: false },
       collectBudgetMs: 200,
       listTargets: async function () {
         return [
@@ -612,7 +615,8 @@ test("runTick/withDeadline persists deal when ads hang past outer deadline; no o
             enabled: true,
             authState: "ok",
             cookies: [{ name: "thor", value: "1", domain: ".jd.com", path: "/" }],
-            shopId: "1"
+            shopId: "1",
+            linkedAt: "2026-11-19 10:00:00"
           }
         ];
       },
@@ -725,6 +729,7 @@ test("runTick rechecks login_expired shops that still have cookies", async () =>
   const seen = [];
   await runTick({
     inflight: new Set(),
+    tickLock: { busy: false },
     listTargets: async function () {
       return [
         {
@@ -760,4 +765,180 @@ test("runTick rechecks login_expired shops that still have cookies", async () =>
     }
   });
   assert.deepEqual(seen, ["recheck:误标店", "fetch:误标店", "auth:误标店:ok"]);
+});
+
+test("runTick fair schedule: waiting shops do not burn deadline; failures do not block later shops", async () => {
+  const lock = { busy: false };
+  const inflight = new Set();
+  const finished = [];
+  const startedAt = {};
+  let live = 0;
+  let maxLive = 0;
+  const shops = [1, 2, 3, 4, 5].map(function (index) {
+    return {
+      store: "店" + index,
+      enabled: true,
+      authState: "ok",
+      cookies: [{ name: "thor", value: "1", domain: ".jd.com", path: "/" }],
+      shopId: String(index),
+      linkedAt: "2026-11-19 10:00:00"
+    };
+  });
+  await runTick({
+    inflight: inflight,
+    tickLock: lock,
+    collectConcurrency: 2,
+    collectBudgetMs: 200,
+    listTargets: async function () {
+      return shops;
+    },
+    fetchHome: async function (cookies, signal, expected) {
+      startedAt[expected.store] = Date.now();
+      live += 1;
+      maxLive = Math.max(maxLive, live);
+      if (expected.store === "店2") {
+        live -= 1;
+        throw Object.assign(new Error("boom"), { code: "network" });
+      }
+      await new Promise(function (resolve, reject) {
+        const timer = setTimeout(resolve, 90);
+        signal.addEventListener(
+          "abort",
+          function () {
+            clearTimeout(timer);
+            reject(Object.assign(new Error("timeout"), { code: "timeout", name: "AbortError" }));
+          },
+          { once: true }
+        );
+      });
+      live -= 1;
+      finished.push(expected.store);
+      return { dealAmount: Number(expected.shopId) };
+    },
+    saveSample: async function () {},
+    markAuth: async function () {},
+    now: function () {
+      return { day: "2026-11-19", stamp: "2026-11-19 10:00:00" };
+    }
+  });
+  assert.ok(maxLive <= 2);
+  assert.ok(finished.indexOf("店1") >= 0);
+  assert.ok(finished.indexOf("店5") >= 0);
+  assert.equal(finished.indexOf("店2"), -1);
+  // Shop 5 started only after earlier slots freed — not at t0 with a burned budget.
+  assert.ok(startedAt["店5"] - startedAt["店1"] >= 60);
+  const stacked = await runTick({
+    inflight: inflight,
+    tickLock: { busy: true },
+    listTargets: async function () {
+      return shops;
+    },
+    fetchHome: async function () {
+      return { dealAmount: 1 };
+    },
+    saveSample: async function () {},
+    markAuth: async function () {},
+    now: function () {
+      return { day: "2026-11-19", stamp: "2026-11-19 10:00:00" };
+    }
+  });
+  assert.equal(stacked.skipped, true);
+  assert.equal(stacked.reason, "previous_round_running");
+});
+
+test("updateSessionCookies writes jar for next listSessions without unpausing or clearing shopId", async () => {
+  process.env.SHEN_JINGMAI_MEMORY = "1";
+  await resetJingmaiStore();
+  await saveSession("会话店", {
+    cookies: [{ name: "thor", value: "old", domain: ".jd.com", path: "/" }],
+    authState: "ok",
+    enabled: false,
+    shopId: "100"
+  });
+  const before = (await listSessions()).find(function (row) {
+    return row.store === "会话店";
+  });
+  const beforeVersion = "g:" + String(before.sessionGen);
+  const refreshed = [
+    { name: "thor", value: "new", domain: ".jd.com", path: "/", host: "jd.com", hostOnly: false }
+  ];
+  const ok = await updateSessionCookies("会话店", refreshed, {
+    sessionVersion: beforeVersion,
+    expectedShopId: "100",
+    identity: { shopId: "100", shopName: "会话店" }
+  });
+  assert.equal(ok.updated, true);
+  const after = (await listSessions()).find(function (row) {
+    return row.store === "会话店";
+  });
+  assert.equal(after.enabled, false);
+  assert.equal(after.shopId, "100");
+  assert.equal(after.linkedAt, before.linkedAt);
+  assert.equal(after.sessionGen, before.sessionGen);
+  assert.equal(after.cookies[0].value, "new");
+  // Concurrent newer login (sessionGen bumped) must not be overwritten by stale collect.
+  await saveSession("会话店", {
+    cookies: [{ name: "thor", value: "login-fresh", domain: ".jd.com", path: "/" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "100"
+  });
+  const newer = (await listSessions()).find(function (row) {
+    return row.store === "会话店";
+  });
+  assert.ok(Number(newer.sessionGen) > Number(before.sessionGen));
+  const denied = await updateSessionCookies(
+    "会话店",
+    [{ name: "thor", value: "stale-collect", domain: ".jd.com", path: "/" }],
+    { sessionVersion: beforeVersion, expectedShopId: "100", identity: { shopId: "100", shopName: "会话店" } }
+  );
+  assert.equal(denied.updated, false);
+  assert.equal(denied.reason, "version_conflict");
+  const finalRow = (await listSessions()).find(function (row) {
+    return row.store === "会话店";
+  });
+  assert.equal(finalRow.cookies[0].value, "login-fresh");
+  assert.equal(finalRow.enabled, true);
+});
+
+test("matchCollectIdentity requires shopId match; recheck mismatch keeps old sample", async () => {
+  assert.equal(matchCollectIdentity({ shopId: "right-id", store: "RASW家居旗舰店" }, { shopId: "wrong-id", shopName: "RASW" }).ok, false);
+  assert.equal(matchCollectIdentity({ shopId: "right-id", store: "A" }, { shopId: "right-id", shopName: "A" }).ok, true);
+  assert.equal(matchCollectIdentity({ shopId: "right-id", store: "A" }, { shopId: "", shopName: "" }).ok, false);
+  const samples = [];
+  const auths = [];
+  await runTick({
+    inflight: new Set(),
+    tickLock: { busy: false },
+    listTargets: async function () {
+      return [
+        {
+          store: "串店",
+          enabled: true,
+          authState: "ok",
+          cookies: [{ name: "thor", value: "1", domain: ".jd.com", path: "/" }],
+          shopId: "right-id",
+          linkedAt: "2026-11-19 10:00:00"
+        }
+      ];
+    },
+    fetchAccountIdentity: async function () {
+      return { shopId: "wrong-id", shopName: "别的店" };
+    },
+    fetchHome: async function () {
+      return { dealAmount: 99 };
+    },
+    saveSample: async function (sample) {
+      samples.push(sample);
+    },
+    markAuth: async function (store, state, message) {
+      auths.push({ store: store, state: state, message: message });
+    },
+    now: function () {
+      return { day: "2026-11-19", stamp: "2026-11-19 10:00:00" };
+    }
+  });
+  assert.equal(samples.length, 0);
+  assert.equal(auths[0].state, "offline");
+  assert.match(String(auths[0].message), /身份不符/);
 });

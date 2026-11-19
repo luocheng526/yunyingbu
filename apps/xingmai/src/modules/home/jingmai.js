@@ -469,6 +469,36 @@ export function sameShop(expected, actual) {
   return true;
 }
 
+/**
+ * Strict identity check for collect/recheck — require real shopId match when expected.
+ * Mismatch must not land samples or refresh cookies for the wrong shop.
+ */
+export function matchCollectIdentity(expected, actual) {
+  const wantId = String((expected && expected.shopId) || "").trim();
+  const gotId = String((actual && actual.shopId) || "").trim();
+  const wantName = String((expected && (expected.store || expected.shopName)) || "").replace(/\s+/g, "");
+  const gotName = String((actual && actual.shopName) || "").replace(/\s+/g, "");
+  if (wantId) {
+    if (!gotId) {
+      return { ok: false, reason: "identity_missing" };
+    }
+    if (wantId !== gotId) {
+      return { ok: false, reason: "identity_mismatch" };
+    }
+    return { ok: true };
+  }
+  if (wantName) {
+    if (!gotName) {
+      return { ok: false, reason: "identity_missing" };
+    }
+    if (wantName !== gotName) {
+      return { ok: false, reason: "identity_mismatch" };
+    }
+    return { ok: true };
+  }
+  return { ok: false, reason: "identity_missing" };
+}
+
 export function sessionStillValid(session) {
   if (!session || session.authState === "login_expired" || session.authState === "unlinked") {
     return false;
@@ -598,7 +628,14 @@ export function parseRealtime(status, text, location) {
 }
 
 export function classifyTransportError(error) {
-  if (error && (error.code === "login" || error.code === "timeout" || error.code === "network" || error.code === "paid")) {
+  if (
+    error &&
+    (error.code === "login" ||
+      error.code === "timeout" ||
+      error.code === "network" ||
+      error.code === "paid" ||
+      error.code === "identity")
+  ) {
     return error;
   }
   if (error && (error.name === "TimeoutError" || error.name === "AbortError")) {
@@ -1129,25 +1166,57 @@ export function shouldCollectShop(shop) {
   return true;
 }
 
+const defaultTickLock = { busy: false };
+
+/**
+ * Bounded fair collect: a shop's withDeadline budget starts only after it acquires a worker slot.
+ * Waiting in queue does not burn the 120s budget. Previous unfinished round is not stacked.
+ */
 export async function runTick(deps) {
-  const inflight = deps.inflight;
-  const targets = await deps.listTargets();
-  const jobs = [];
-  for (const shop of targets) {
-    if (!shouldCollectShop(shop)) {
-      continue;
-    }
-    if (inflight.has(shop.store)) {
-      continue;
-    }
-    inflight.add(shop.store);
-    jobs.push(
-      collectOne(shop, deps).finally(function () {
-        inflight.delete(shop.store);
-      })
-    );
+  const lock = deps.tickLock || defaultTickLock;
+  if (lock.busy) {
+    return { skipped: true, reason: "previous_round_running" };
   }
-  await Promise.all(jobs);
+  lock.busy = true;
+  try {
+    const inflight = deps.inflight;
+    const concurrency = Math.max(1, Number(deps.collectConcurrency) || 3);
+    const roundSignal = deps.signal;
+    const targets = (await deps.listTargets()).filter(function (shop) {
+      return shouldCollectShop(shop) && !inflight.has(shop.store);
+    });
+    let cursor = 0;
+
+    async function worker() {
+      while (cursor < targets.length) {
+        if (roundSignal && roundSignal.aborted) {
+          return;
+        }
+        const shop = targets[cursor];
+        cursor += 1;
+        if (!shop || inflight.has(shop.store) || shop.enabled === false) {
+          continue;
+        }
+        // Slot acquired — only now start this shop's collect deadline.
+        inflight.add(shop.store);
+        try {
+          await collectOne(shop, deps);
+        } finally {
+          inflight.delete(shop.store);
+        }
+      }
+    }
+
+    const workers = [];
+    const n = Math.min(concurrency, targets.length);
+    for (let index = 0; index < n; index += 1) {
+      workers.push(worker());
+    }
+    await Promise.all(workers);
+    return { skipped: false, scheduled: targets.length, concurrency: concurrency };
+  } finally {
+    lock.busy = false;
+  }
 }
 
 function offlineMessage(error) {
@@ -1170,49 +1239,125 @@ async function persistDealSample(deps, shop, now, metrics, paidNote) {
   );
 }
 
+function identityMismatchMessage(identity) {
+  const who = (identity && (identity.shopName || identity.shopId)) || "另一家店";
+  return "身份不符：登录到的是「" + who + "」，不是这家店";
+}
+
+async function verifyCollectIdentity(deps, shop, jar, signal) {
+  if (typeof deps.fetchAccountIdentity !== "function") {
+    return { ok: true, identity: null };
+  }
+  let identity;
+  try {
+    identity = await deps.fetchAccountIdentity(jar, signal);
+  } catch (error) {
+    const classified = classifyTransportError(error);
+    if (classified.code === "login") {
+      throw classified;
+    }
+    // Flaky identity read: do not land samples without proof when shopId is known.
+    if (String(shop.shopId || "").trim()) {
+      return { ok: false, reason: "identity_missing", identity: null };
+    }
+    return { ok: true, identity: null };
+  }
+  const match = matchCollectIdentity({ store: shop.store, shopId: shop.shopId || "" }, identity);
+  if (!match.ok) {
+    return { ok: false, reason: match.reason, identity: identity };
+  }
+  return { ok: true, identity: identity };
+}
+
+async function refreshCookiesSafe(deps, shop, jar, identity, sessionVersion) {
+  if (typeof deps.updateSessionCookies !== "function") {
+    return;
+  }
+  try {
+    await deps.updateSessionCookies(shop.store, jar, {
+      sessionVersion: sessionVersion,
+      expectedShopId: shop.shopId || "",
+      identity: identity
+    });
+  } catch {
+    /* cookie refresh must not fail the collect round */
+  }
+}
+
 async function collectOne(shop, deps) {
   const now = deps.now();
   const expected = { store: shop.store, shopId: shop.shopId || "" };
+  const sessionVersion =
+    shop.sessionGen != null && Number(shop.sessionGen) > 0
+      ? "g:" + String(shop.sessionGen)
+      : shop.linkedAt || "";
+  // Work on a copy so absorbCookies mutations are explicit when written back.
+  const jar = Array.isArray(shop.cookies) ? shop.cookies.map(function (item) {
+    return item && typeof item === "object" ? Object.assign({}, item) : item;
+  }) : [];
   let earlyDeal = null;
   let earlySaved = false;
+  let verifiedIdentity = null;
+  const budget = typeof deps.collectBudgetMs === "number" ? deps.collectBudgetMs : 120000;
   try {
-    if (shop.authState === "login_expired" && typeof deps.recheckJingmai === "function") {
-      const alive = await withDeadline(function (signal) {
-        return deps.recheckJingmai(shop, signal);
-      }, 30000);
-      if (!alive) {
-        await deps.markAuth(shop.store, "login_expired", "登录已失效，请重新登录");
-        return;
-      }
-    }
-    const metrics = await withDeadline(function (signal) {
-      return deps.fetchHome(
-        shop.cookies,
-        signal,
-        Object.assign({}, expected, {
-          onDeal: async function (dealMetrics) {
-            earlyDeal = dealMetrics;
-            if (earlySaved || !metricsHaveDeal(dealMetrics)) {
-              return;
-            }
-            earlySaved = true;
-            // Persist deal as soon as it arrives — outer withDeadline may reject before fetchHome returns.
-            await persistDealSample(deps, shop, now, dealMetrics, "");
+    await withDeadline(
+      async function (signal) {
+        if (shop.authState === "login_expired" && typeof deps.recheckJingmai === "function") {
+          const alive = await deps.recheckJingmai(
+            Object.assign({}, shop, { cookies: jar }),
+            signal
+          );
+          if (!alive) {
+            throw jingmaiError("login", "登录已失效，请重新登录");
           }
-        })
-      );
-    }, typeof deps.collectBudgetMs === "number" ? deps.collectBudgetMs : 120000);
-    await persistDealSample(deps, shop, now, metrics, "");
-    await deps.markAuth(shop.store, "ok", "");
+        }
+        const verified = await verifyCollectIdentity(deps, shop, jar, signal);
+        if (!verified.ok) {
+          const err = jingmaiError(
+            "identity",
+            verified.reason === "identity_mismatch"
+              ? identityMismatchMessage(verified.identity)
+              : "无法核对店铺身份"
+          );
+          err.identity = verified.identity;
+          throw err;
+        }
+        verifiedIdentity = verified.identity;
+        const metrics = await deps.fetchHome(
+          jar,
+          signal,
+          Object.assign({}, expected, {
+            onDeal: async function (dealMetrics) {
+              earlyDeal = dealMetrics;
+              if (earlySaved || !metricsHaveDeal(dealMetrics)) {
+                return;
+              }
+              earlySaved = true;
+              await persistDealSample(deps, shop, now, dealMetrics, "");
+            }
+          })
+        );
+        await persistDealSample(deps, shop, now, metrics, "");
+        await refreshCookiesSafe(deps, shop, jar, verifiedIdentity, sessionVersion);
+        await deps.markAuth(shop.store, "ok", "");
+      },
+      budget,
+      "采集超时"
+    );
   } catch (error) {
+    if (error && error.code === "identity") {
+      // Keep prior samples/cookies; report mismatch only.
+      await deps.markAuth(shop.store, "offline", String(error.message || "身份不符").slice(0, 200));
+      return;
+    }
     if (metricsHaveDeal(earlyDeal)) {
       if (!earlySaved) {
         await persistDealSample(deps, shop, now, earlyDeal, "广告采集超时");
         earlySaved = true;
       } else if (earlyDeal && !String((earlyDeal.paidNote || "")).trim()) {
-        // Refresh note when the round timed out after an early clean save.
         await persistDealSample(deps, shop, now, earlyDeal, "广告采集超时");
       }
+      await refreshCookiesSafe(deps, shop, jar, verifiedIdentity, sessionVersion);
       const decision = collectAuthDecision(error);
       if (decision.authState === "login_expired") {
         await deps.markAuth(shop.store, "login_expired", decision.authMessage);
@@ -1236,6 +1381,9 @@ export function collectAuthDecision(error) {
   const classified = classifyTransportError(error);
   if (classified.code === "login") {
     return { authState: "login_expired", authMessage: "登录已失效，请重新登录" };
+  }
+  if (classified.code === "identity") {
+    return { authState: "offline", authMessage: String(classified.message || "身份不符").slice(0, 200) };
   }
   if (classified.code === "paid") {
     return { authState: "offline", authMessage: offlineMessage(classified) };
