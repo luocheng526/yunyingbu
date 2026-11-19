@@ -22,6 +22,7 @@ import {
   startJingmaiCollector
 } from "./jingmai-runner.js";
 import { getLive2Board, startLive2Round } from "./live2-collect.js";
+import { readFeeGoals, saveFeeGoal } from "./fee-goals.js";
 import {
   buildWeekPack,
   saveWeekCells,
@@ -328,6 +329,22 @@ export function homeRouter() {
         records: [],
         error: err.message || "实时（新版）采集没有开始"
       });
+    }
+  });
+
+  router.get("/fee-goals", (_req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({ ok: true, goals: readFeeGoals() });
+  });
+
+  router.post("/fee-goals", (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      const body = req.body || {};
+      const goals = saveFeeGoal(body.shop, body.lo, body.hi);
+      res.json({ ok: true, goals });
+    } catch (err) {
+      res.status(Number(err.statusCode) || 400).json({ ok: false, error: err.message || "费比设置没有保存" });
     }
   });
 

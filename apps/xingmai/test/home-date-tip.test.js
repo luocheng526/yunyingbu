@@ -1083,7 +1083,7 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
     pick("asNum") +
       pick("escapeHtml") +
       homeJs.slice(start, end) +
-      "return {feeMonitorOf,feeWarnLabel,feeGoalCellHtml,isHomeFormField,isFeeTyping,feeShopCounts,feePickShops};"
+      "return {feeMonitorOf,feeWarnLabel,feeGoalCellHtml,rememberFeeGoals,isHomeFormField,isFeeTyping,feeShopCounts,feePickShops};"
   )();
   const rasw = { shop: "RASW家居旗舰店", feeLo: 10, feeHi: 20 };
   assert.equal(fns.feeWarnLabel({ ...rasw, feeRate: "8%" }), "加大付费");
@@ -1130,9 +1130,17 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
   assert.equal(fns.feeWarnLabel({ shop: "只设上限", feeRate: "19%", feeHi: 20 }), "正常");
   assert.equal(fns.feeWarnLabel({ shop: "只设下限", feeRate: "9%", feeLo: 10 }), "加大付费");
   assert.equal(fns.feeWarnLabel({ shop: "只设下限", feeRate: "11%", feeLo: 10 }), "正常");
-  assert.equal(fns.feeGoalCellHtml({ feeLo: 10, feeHi: 20 }), "10%–20%");
-  assert.equal(fns.feeGoalCellHtml({}), "—");
-  assert.doesNotMatch(fns.feeGoalCellHtml({ feeLo: 10, feeHi: 20 }), /<input/);
+  function feeInputs(html) {
+    const lo = String(html).match(/data-fee-lo="[^"]*" value="([^"]*)"/);
+    const hi = String(html).match(/data-fee-hi="[^"]*" value="([^"]*)"/);
+    return { lo: lo ? lo[1] : "", hi: hi ? hi[1] : "" };
+  }
+  assert.deepEqual(feeInputs(fns.feeGoalCellHtml({ feeLo: 10, feeHi: 20 })), { lo: "10", hi: "20" });
+  assert.deepEqual(feeInputs(fns.feeGoalCellHtml({})), { lo: "", hi: "" });
+  assert.match(fns.feeGoalCellHtml({ feeLo: 10, feeHi: 20 }), /<input/);
+  assert.match(homeJs, /\/api\/home\/fee-goals/);
+  assert.match(homeJs, /key === "feeGoal"\) \{\s*return '<td class="xm-hm-num">' \+ feeGoalCellHtml\(row\) \+ "<\/td>";/);
+  assert.doesNotMatch(homeJs, /escapeHtml\(feeGoalCellHtml\(row\)\)/);
   assert.match(homeJs, /function scrapedFeeRange/);
   assert.match(homeJs, /han-fee-targets/);
   assert.match(homeJs, /shen-fee-targets/);
@@ -1158,15 +1166,25 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
     RADW潮流生活旗舰店: { lo: 35, hi: 42 },
     RASW家居旗舰店: { min: 35, max: 41 }
   });
-  assert.equal(fns.feeGoalCellHtml({ shop: "DIKTT潮流生活旗舰店" }), "30%–45%");
-  assert.equal(fns.feeGoalCellHtml({ shop: "RADW潮流生活旗舰店" }), "35%–42%");
-  assert.equal(fns.feeGoalCellHtml({ shop: "RASW家居旗舰店" }), "35%–41%");
+  assert.deepEqual(feeInputs(fns.feeGoalCellHtml({ shop: "DIKTT潮流生活旗舰店" })), { lo: "30", hi: "45" });
+  assert.deepEqual(feeInputs(fns.feeGoalCellHtml({ shop: "RADW潮流生活旗舰店" })), { lo: "35", hi: "42" });
+  assert.deepEqual(feeInputs(fns.feeGoalCellHtml({ shop: "RASW家居旗舰店" })), { lo: "35", hi: "41" });
   assert.equal(fns.feeWarnLabel({ shop: "RADW潮流生活旗舰店", feeRate: "26.55%" }), "加大付费");
   assert.equal(fns.feeWarnLabel({ shop: "RADW潮流生活旗舰店", feeRate: "36%" }), "正常");
   assert.equal(fns.feeWarnLabel({ shop: "RADW潮流生活旗舰店", feeRate: "43%" }), "费比超标");
   feeStore["shen-home-fee-targets"] = JSON.stringify({ 旧数字店: 15 });
-  assert.equal(fns.feeGoalCellHtml({ shop: "旧数字店" }), "15%–15%");
-  assert.equal(fns.feeGoalCellHtml({ shop: "没设目标的店" }), "—");
+  assert.deepEqual(feeInputs(fns.feeGoalCellHtml({ shop: "旧数字店" })), { lo: "15", hi: "15" });
+  assert.deepEqual(feeInputs(fns.feeGoalCellHtml({ shop: "没设目标的店" })), { lo: "", hi: "" });
+  fns.rememberFeeGoals({
+    RADW潮流生活旗舰店: { set: true, lo: 20, hi: 30 }
+  });
+  assert.deepEqual(feeInputs(fns.feeGoalCellHtml({ shop: "RADW潮流生活旗舰店" })), { lo: "20", hi: "30" });
+  assert.equal(fns.feeWarnLabel({ shop: "RADW潮流生活旗舰店", feeRate: "36%" }), "费比超标");
+  fns.rememberFeeGoals({
+    RADW潮流生活旗舰店: { set: true, lo: null, hi: null }
+  });
+  assert.equal(fns.feeWarnLabel({ shop: "RADW潮流生活旗舰店", feeRate: "36%" }), "未设目标");
+  fns.rememberFeeGoals({});
   delete globalThis.localStorage;
   assert.equal(fns.isHomeFormField({ closest: (sel) => (sel.indexOf("input") >= 0 ? {} : null) }), true);
   assert.equal(fns.isFeeTyping({ closest: (sel) => (sel.indexOf("input") >= 0 ? {} : null) }), true);
