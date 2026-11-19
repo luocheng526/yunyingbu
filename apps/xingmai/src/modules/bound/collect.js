@@ -24,9 +24,10 @@ export function ensureCollectLoop() {
   if (timer || process.env.BOUND_COLLECT_LOOP === "0") {
     return;
   }
+  // 最近缺的日期优先，每次连续 3 条。旧的失败重试排在后面。
   timer = setInterval(() => {
     tick().catch(() => {});
-  }, 4000);
+  }, 1000);
   if (typeof timer.unref === "function") {
     timer.unref();
   }
@@ -204,7 +205,10 @@ export async function linkStatus() {
     phase: current.phase,
     provider: current.provider,
     deviceId: current.deviceId,
-    message: current.message,
+    message: qrClient === "old"
+      ? "二维码还在闪。请点浏览器左上角的刷新按钮，重新打开这一页。刷新后请用微信扫这一张，它会停住。"
+      : current.message,
+    qrToken: current.scene || "",
     userName: current.userName,
     accounts: current.accounts || [],
     qrReady: Boolean(current.qrUrl),
@@ -232,9 +236,29 @@ export async function startLink(provider) {
   }
   current.scene = payload.data.scene || "";
   current.qrUrl = payload.data.url || "";
-  current.message = "请用微信扫这一张二维码。扫旧站网页上的码不会登录这里。";
+  current.qrIssuedAt = new Date().toISOString();
+  current.qrCheckedAt = "";
+  current.message = "请用微信扫这一张二维码。这一张会保持约一分半，扫旧站网页上的码不会登录这里。";
   await saveSession(current);
   return linkStatus();
+}
+
+let qrCache = { url: "", type: "", buffer: null };
+let qrClient = "";
+
+export function noteQrClient(query) {
+  if (query && Object.prototype.hasOwnProperty.call(query, "ts")) {
+    qrClient = "old";
+    return;
+  }
+  if (query && Object.prototype.hasOwnProperty.call(query, "v")) {
+    qrClient = "new";
+  }
+}
+
+export function resetQrClient() {
+  qrClient = "";
+  pollQueue = Promise.resolve();
 }
 
 export async function qrBytes() {
@@ -245,6 +269,9 @@ export async function qrBytes() {
   if (current.provider !== "WECHAT") {
     return { kind: "url", url: current.qrUrl };
   }
+  if (qrCache.url === current.qrUrl && qrCache.buffer) {
+    return { kind: "image", type: qrCache.type, buffer: qrCache.buffer };
+  }
   const response = await fetchImpl(current.qrUrl, {
     headers: {
       Referer: `${ORIGIN}/login`,
@@ -252,7 +279,9 @@ export async function qrBytes() {
     }
   });
   const type = response.headers.get("content-type") || "image/png";
-  return { kind: "image", type, buffer: Buffer.from(await response.arrayBuffer()) };
+  const buffer = Buffer.from(await response.arrayBuffer());
+  qrCache = { url: current.qrUrl, type, buffer };
+  return { kind: "image", type, buffer };
 }
 
 async function finishLogin(current, data) {
@@ -263,10 +292,32 @@ async function finishLogin(current, data) {
   await saveSession(current);
 }
 
-export async function pollLink() {
+const QR_HOLD_MS = 90 * 1000;
+
+function issuedAge(current) {
+  const issued = Date.parse(current.qrIssuedAt || "");
+  return Number.isFinite(issued) ? Date.now() - issued : 0;
+}
+
+async function saveUnlessLoggedIn(current) {
+  const latest = await session();
+  if (latest.phase === "collecting" || latest.phase === "choose_account") {
+    return linkStatus();
+  }
+  if (latest.scene && current.scene && latest.scene !== current.scene) {
+    return linkStatus();
+  }
+  await saveSession(current);
+  return linkStatus();
+}
+
+async function pollLinkOnce() {
   const current = await session();
   if (!current.scene || (current.phase !== "waiting_scan" && current.phase !== "needs_scan")) {
     return linkStatus();
+  }
+  if (!current.qrIssuedAt) {
+    current.qrIssuedAt = new Date().toISOString();
   }
   const payload = await callUpstream(current, {
     method: "get",
@@ -278,20 +329,9 @@ export async function pollLink() {
       ...providerQuery(current.provider)
     }
   });
-  const code = payload && payload.code;
+  const code = Number(payload && payload.code);
   const content = String((payload && payload.content) || "");
-  if (code === 1000102) {
-    current.phase = "waiting_scan";
-    current.message = "未扫码。请扫这一张二维码，扫旧站网页上的码不会登录这里。";
-  } else if (code === 1000103 || code === -1 || code === -7 || /未登录|登录状态已过期|请重新登录/.test(content)) {
-    current.scene = "";
-    current.qrUrl = "";
-    current.message = "刚才那张二维码已经失效，正在换一张。";
-    await saveSession(current);
-    return startLink(current.provider);
-  } else if (code === 1011) {
-    current.message = content || `浏览器标识未加入登录管理：${current.deviceId}`;
-  } else if (code === 0) {
+  if (code === 0) {
     const data = payload.data || {};
     if (data.needBind) {
       current.message = data.message || "这个第三方账号还没绑定，请先在旧站用账号绑定后再扫。";
@@ -308,11 +348,38 @@ export async function pollLink() {
       await finishLogin(current, data);
       return linkStatus();
     }
+    return saveUnlessLoggedIn(current);
+  }
+  const shaky = code === -1 || code === -7 || /未登录|登录状态已过期|请重新登录/.test(content);
+  if (code === 1000102) {
+    current.phase = "waiting_scan";
+    current.message = "未扫码。请用微信扫这一张，扫完后在手机上点确认登录。扫旧站网页上的码不会登录这里。";
+  } else if (code === 1000104 || code === 1000105 || code === 1000106) {
+    current.phase = "waiting_scan";
+    current.message = content || "已经扫到了。请在手机上点确认登录。";
+  } else if (code === 1000103 || (shaky && issuedAge(current) >= QR_HOLD_MS)) {
+    current.scene = "";
+    current.qrUrl = "";
+    current.message = "刚才那张二维码已经失效，正在换一张。";
+    await saveSession(current);
+    return startLink(current.provider);
+  } else if (shaky) {
+    current.phase = "waiting_scan";
+    current.message = content || "请用微信扫这一张，扫完后在手机上点确认登录。";
+  } else if (code === 1011) {
+    current.message = content || `浏览器标识未加入登录管理：${current.deviceId}`;
   } else if (content) {
     current.message = content;
   }
-  await saveSession(current);
-  return linkStatus();
+  return saveUnlessLoggedIn(current);
+}
+
+let pollQueue = Promise.resolve();
+
+export function pollLink() {
+  const run = pollQueue.then(pollLinkOnce, pollLinkOnce);
+  pollQueue = run.then(() => {}, () => {});
+  return run;
 }
 
 export async function pickAccount(companyId) {
@@ -487,8 +554,8 @@ export function reportBody(report, dim, scope, page) {
   };
 }
 
-function sheetHole(report, dim, scope, sheets) {
-  const pages = sheets.filter(
+function sheetHole(report, dim, scope, sheets, indexedPages = null) {
+  const pages = indexedPages || sheets.filter(
     (row) => row.reportId === report.id && row.dim === dim && row.startOn === scope.start && row.endOn === scope.end
   );
   const first = pages.find((row) => row.pageNo === 1);
@@ -548,6 +615,35 @@ function sheetHole(report, dim, scope, sheets) {
   return null;
 }
 
+function sheetIndex(sheets) {
+  const index = new Map();
+  sheets.forEach((row) => {
+    const key = `${row.reportId}|${row.dim}|${row.startOn}|${row.endOn}`;
+    const pages = index.get(key);
+    if (pages) {
+      pages.push(row);
+    } else {
+      index.set(key, [row]);
+    }
+  });
+  return index;
+}
+
+function freshScopes(scopes) {
+  const days = [];
+  const months = [];
+  scopes.forEach((scope) => {
+    if (scope.start === scope.end) {
+      days.push(scope);
+    } else {
+      months.push(scope);
+    }
+  });
+  days.reverse();
+  months.reverse();
+  return days.concat(months);
+}
+
 async function nextUnit(current) {
   const masters = await masterState();
   for (const master of MASTERS) {
@@ -559,16 +655,23 @@ async function nextUnit(current) {
   }
   const allowed = Array.isArray(current.allowed) ? new Set(current.allowed) : null;
   const sheets = await listSheetHeads();
+  const indexed = sheetIndex(sheets);
   const scopes = collectScopes(shanghaiToday());
-  for (const cause of ["retry", "empty", "page", "new"]) {
-    for (const report of reports()) {
-      if (allowed && report.access && !allowed.has(report.access)) {
-        continue;
-      }
-      for (const dim of report.dims || ["all"]) {
-        for (const scope of scopes) {
-          const hole = sheetHole(report, dim, scope, sheets);
-          if (hole && hole.cause === cause) {
+  const passes = [
+    { causes: new Set(["new", "page"]), list: freshScopes(scopes) },
+    { causes: new Set(["empty"]), list: freshScopes(scopes) },
+    { causes: new Set(["retry"]), list: scopes }
+  ];
+  for (const pass of passes) {
+    for (const scope of pass.list) {
+      for (const report of reports()) {
+        if (allowed && report.access && !allowed.has(report.access)) {
+          continue;
+        }
+        for (const dim of report.dims || ["all"]) {
+          const pages = indexed.get(`${report.id}|${dim}|${scope.start}|${scope.end}`) || [];
+          const hole = sheetHole(report, dim, scope, sheets, pages);
+          if (hole && pass.causes.has(hole.cause)) {
             return { type: "report", report, dim, scope, ...hole };
           }
         }
@@ -754,37 +857,68 @@ async function runReport(current, unit) {
   });
 }
 
+function cursorOf(unit) {
+  if (unit.type === "master") {
+    return { id: unit.master.id, label: unit.master.label, page: "基础资料", dim: "all", start: "2026-09-01", end: shanghaiToday(), pageNo: unit.page || 1 };
+  }
+  return {
+    id: unit.report.id,
+    label: unit.report.label,
+    page: unit.report.pageLabel || "",
+    dim: unit.dim || "all",
+    start: unit.scope.start,
+    end: unit.scope.end,
+    pageNo: unit.page || 1
+  };
+}
+
+async function runUnit(current, unit) {
+  current.phase = "collecting";
+  current.cursor = cursorOf(unit);
+  await saveSession(current);
+  if (unit.type === "master") {
+    await runMaster(current, unit);
+  } else {
+    await runReport(current, unit);
+  }
+}
+
 export async function tick() {
   if (busy) {
     return { ok: true, skipped: true };
   }
   busy = true;
   try {
-    const current = await session();
+    let current = await session();
     if (current.phase === "waiting_scan") {
       return pollLink();
     }
     if (current.phase !== "collecting" && current.phase !== "logged_in") {
       return { ok: true, idle: true, phase: current.phase };
     }
-    const unit = await nextUnit(current);
-    if (!unit) {
-      current.phase = "logged_in";
-      current.message = `已补到 ${shanghaiToday()} 之前能确定的范围。之后按天增量。`;
-      await saveSession(current);
-      return { ok: true, idle: true, phase: current.phase };
+    let last = null;
+    for (let step = 0; step < 3; step += 1) {
+      if (step > 0) {
+        current = await session();
+        if (current.phase !== "collecting" && current.phase !== "logged_in") {
+          break;
+        }
+      }
+      const unit = await nextUnit(current);
+      if (!unit) {
+        if (!last) {
+          current.phase = "logged_in";
+          current.message = `已补到 ${shanghaiToday()} 之前能确定的范围。之后按天增量。`;
+          await saveSession(current);
+          return { ok: true, idle: true, phase: current.phase };
+        }
+        break;
+      }
+      await runUnit(current, unit);
+      last = unit;
     }
-    current.phase = "collecting";
-    current.cursor = unit.type === "master"
-      ? { id: unit.master.id, label: unit.master.label, page: "基础资料", dim: "all", start: "2026-09-01", end: shanghaiToday(), pageNo: unit.page || 1 }
-      : { id: unit.report.id, label: unit.report.label, page: unit.report.pageLabel || "", dim: unit.dim || "all", start: unit.scope.start, end: unit.scope.end, pageNo: unit.page || 1 };
-    await saveSession(current);
-    if (unit.type === "master") {
-      await runMaster(current, unit);
-    } else {
-      await runReport(current, unit);
-    }
-    return { ok: true, phase: (await session()).phase, unit: unit.type === "master" ? unit.master.id : unit.report.id };
+    const phase = (await session()).phase;
+    return { ok: true, phase, unit: last.type === "master" ? last.master.id : last.report.id };
   } finally {
     busy = false;
   }

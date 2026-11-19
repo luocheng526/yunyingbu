@@ -6,10 +6,11 @@ import test from "node:test";
 import vm from "node:vm";
 import express from "express";
 import { boundRouter } from "../src/modules/bound/router.js";
-import { pollLink, resetBoundStore, setBoundClock, setBoundFetch, startLink, tick } from "../src/modules/bound/store.js";
+import { linkStatus, noteQrClient, pollLink, resetBoundStore, setBoundClock, setBoundFetch, startLink, tick } from "../src/modules/bound/store.js";
 import { readState, writeSheet, writeState } from "../src/modules/bound/persist.js";
 import { publicCatalog, reports } from "../src/modules/bound/catalog.js";
 import { reportBody } from "../src/modules/bound/collect.js";
+import { rewriteBoundModuleUrl } from "../src/modules/bound/client-url.js";
 
 process.env.BOUND_COLLECT_LOOP = "0";
 
@@ -388,10 +389,10 @@ test("扫码后按进度补采，过期保留断点", async () => {
     }
     if (href.includes("/v2/channel/channelOverViewList")) {
       reports += 1;
-      if (reports === 2) {
-        expired = true;
-        return json({ code: -1, content: "用户未登录或登录状态已过期" });
-      }
+    }
+    if (reports >= 1 && !href.includes("/auth/") && !href.includes("/v2/channel/channelOverViewList")) {
+      expired = true;
+      return json({ code: -1, content: "用户未登录或登录状态已过期" });
     }
     if (expired) {
       return json({ code: -1, content: "用户未登录或登录状态已过期" });
@@ -409,8 +410,8 @@ test("扫码后按进度补采，过期保留断点", async () => {
     }
   }
   assert.equal(status.phase, "needs_scan");
-  const september = () => calls.filter((line) => line.includes("channelOverViewList") && line.includes("2026-09-01") && line.includes("2026-09-30")).length;
-  assert.equal(september(), 1);
+  const newest = () => calls.filter((line) => line.includes("channelOverViewList") && line.includes("2026-11-16")).length;
+  assert.equal(newest(), 1);
   const before = calls.length;
   const paused = await tick();
   assert.equal(paused.phase, "needs_scan");
@@ -421,7 +422,58 @@ test("扫码后按进度补采，过期保留断点", async () => {
   await tick();
   await tick();
   await tick();
-  assert.equal(september(), 1);
+  assert.equal(newest(), 1);
+});
+
+test("失败重试让开最近还没采的日期", async () => {
+  setBoundClock(() => new Date("2026-11-19T04:00:00Z"));
+  const calls = [];
+  setBoundFetch(async (url, options = {}) => {
+    calls.push(`${options.body || ""} ${url}`);
+    return {
+      headers: {
+        get(name) {
+          return String(name).toLowerCase() === "content-type" ? "application/json" : null;
+        },
+        getSetCookie() {
+          return [];
+        }
+      },
+      json: async () => ({ code: 0, data: { list: [{ shopName: "甲店", payAmount: 1 }], total: 1 } }),
+      arrayBuffer: async () => new ArrayBuffer(0)
+    };
+  });
+  const masters = {};
+  ["profile", "perms", "projects", "shops", "teams", "members", "goods"].forEach((id) => {
+    masters[id] = { status: "done", page: 1, attempts: 0 };
+  });
+  await writeState("masters", masters);
+  await writeState("session", {
+    phase: "collecting",
+    deviceId: "pace",
+    cookies: { JSESSIONID: "pace" },
+    message: ""
+  });
+  await writeSheet({
+    reportId: "qdfx_llfx",
+    dim: "all",
+    startOn: "2026-09-01",
+    endOn: "2026-09-01",
+    pageNo: 1,
+    status: "failed",
+    kind: "list",
+    attempts: 1,
+    errorText: "q=1 daysType=1 error",
+    payload: {}
+  });
+  const status = await tick();
+  assert.equal(status.phase, "collecting");
+  assert.equal(calls.length, 3);
+  assert.equal(calls.some((line) => line.includes("flowChannelAnalyzeExpert")), false);
+  calls.forEach((line) => {
+    assert.match(line, /2026-11-19/);
+  });
+  assert.match(calls[0], /channelOverViewList/);
 });
 
 test("过期后仍核对页面上的二维码，扫完就登录", async () => {
@@ -458,6 +510,131 @@ test("过期后仍核对页面上的二维码，扫完就登录", async () => {
   assert.match(status.message, /已登录/);
 });
 
+test("刚生成的二维码遇到接口抖动也不换", async () => {
+  resetBoundStore();
+  let issued = 0;
+  setBoundFetch(async (url) => {
+    const href = String(url);
+    const json = (body) => ({
+      headers: {
+        get(name) {
+          return String(name).toLowerCase() === "content-type" ? "application/json" : null;
+        },
+        getSetCookie() {
+          return [];
+        }
+      },
+      json: async () => body,
+      arrayBuffer: async () => new ArrayBuffer(0)
+    });
+    if (href.includes("/auth/qrcode")) {
+      issued += 1;
+      return json({ code: 0, data: { url: `https://biprodapi.ecbis.cn/prod/auth/showQr?scene=keep${issued}`, scene: `keep${issued}` } });
+    }
+    if (href.includes("/auth/checkQrcode")) {
+      return json({ code: -1, content: "用户未登录或登录状态已过期" });
+    }
+    return json({ code: 0, data: {} });
+  });
+  await startLink("WECHAT");
+  const status = await pollLink();
+  assert.equal(issued, 1);
+  assert.equal(status.phase, "waiting_scan");
+  assert.equal(status.qrToken, "keep1");
+});
+
+test("先返回的登录结果不会被后到的未扫码盖掉", async () => {
+  resetBoundStore();
+  let releaseFirst;
+  const gate = new Promise((resolve) => {
+    releaseFirst = resolve;
+  });
+  let checks = 0;
+  setBoundFetch(async (url) => {
+    const href = String(url);
+    const json = (body) => ({
+      headers: {
+        get() { return "application/json"; },
+        getSetCookie() { return []; }
+      },
+      json: async () => body,
+      arrayBuffer: async () => new ArrayBuffer(0)
+    });
+    if (href.includes("/auth/qrcode")) {
+      return json({ code: 0, data: { url: "https://biprodapi.ecbis.cn/prod/auth/showQr?scene=race", scene: "race" } });
+    }
+    if (href.includes("/auth/checkQrcode")) {
+      checks += 1;
+      if (checks === 1) {
+        await gate;
+        return json({ code: 1000102, content: "等待" });
+      }
+      return json({ code: 0, data: { nickName: "罗成" } });
+    }
+    return json({ code: 0, data: {} });
+  });
+  await startLink("WECHAT");
+  const first = pollLink();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const second = pollLink();
+  releaseFirst();
+  const done = await Promise.all([first, second]);
+  assert.equal(done[1].phase, "collecting");
+  assert.match(done[1].message, /已登录/);
+  const status = await linkStatus();
+  assert.equal(status.phase, "collecting");
+});
+
+test("旧页面脚本取图时，提示强制刷新，新脚本不再提示", async () => {
+  resetBoundStore();
+  setBoundFetch(async (url) => {
+    const href = String(url);
+    const json = (body) => ({
+      headers: {
+        get() { return "application/json"; },
+        getSetCookie() { return []; }
+      },
+      json: async () => body,
+      arrayBuffer: async () => new ArrayBuffer(0)
+    });
+    if (href.includes("/auth/qrcode")) {
+      return json({ code: 0, data: { url: "https://biprodapi.ecbis.cn/prod/auth/showQr?scene=stay", scene: "stay" } });
+    }
+    if (href.includes("/auth/checkQrcode")) {
+      return json({ code: 1000102, content: "未扫码" });
+    }
+    return json({ code: 0, data: {} });
+  });
+  await startLink("WECHAT");
+  noteQrClient({ ts: String(Date.now()) });
+  const oldClient = await linkStatus();
+  assert.match(oldClient.message, /刷新按钮/);
+  noteQrClient({ v: "stay" });
+  const current = await linkStatus();
+  assert.doesNotMatch(current.message, /刷新按钮/);
+  assert.equal(current.qrToken, "stay");
+});
+
+test("扫码页脚本不走会被缓存 24 小时的地址", async () => {
+  const html =
+    '<link rel="preload" href="/shared/modules/bound.js?v=0.1.787-acadleaf" as="script" />' +
+    '<script src="/shared/modules/bound.js?v=0.1.787-acadleaf" defer></script>';
+  const out = rewriteBoundModuleUrl(html);
+  assert.equal(out.includes("/shared/modules/bound.js"), false);
+  assert.match(out, /\/api\/bound\/client\.js\?v=qr-still-3/);
+  const { base, close } = await listen(appFor({ username: "罗成", displayName: "罗成" }));
+  try {
+    const res = await fetch(`${base}/api/bound/client.js`);
+    const text = await res.text();
+    assert.equal(res.status, 200);
+    assert.match(String(res.headers.get("cache-control") || ""), /no-store/i);
+    assert.match(text, /data-qr/);
+    assert.doesNotMatch(text, /link\/qr\?ts=/);
+  } finally {
+    await close();
+  }
+});
+
 test("页面只请求边界接口，并画出四个模块", async () => {
   const js = readFileSync(clientPath, "utf8");
   const routerSrc = readFileSync(routerPath, "utf8");
@@ -467,6 +644,7 @@ test("页面只请求边界接口，并画出四个模块", async () => {
   assert.match(js, /访客相关的指标默认将单日的数据直接累加计算/);
   assert.match(js, /XmModules\["\/bound"\]/);
   assert.doesNotMatch(js, /\/api\/data|\/api\/home|jingmai|hejun\.ecbis|biprodapi/);
+  assert.doesNotMatch(js, /link\/qr\?ts=/);
   assert.doesNotMatch(routerSrc, /modules\/data|jingmai/);
   assert.doesNotMatch(storeSrc, /modules\/data|jingmai|xingmai-erp/);
   const calls = [];

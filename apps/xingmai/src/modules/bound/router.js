@@ -1,3 +1,5 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Router } from "express";
 import { isHrDesk } from "../home/nav-items.js";
 import {
@@ -8,6 +10,7 @@ import {
   exportView,
   isBoundAdmin,
   linkStatus,
+  noteQrClient,
   pickAccount,
   pollLink,
   qrBytes,
@@ -17,6 +20,11 @@ import {
   startLink,
   tick
 } from "./store.js";
+
+const boundJsPath = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../public/shared/modules/bound.js"
+);
 
 export const boundRouter = Router();
 
@@ -58,6 +66,12 @@ boundRouter.use((req, res, next) => {
     ensureCollectLoop();
     next();
   }
+});
+
+boundRouter.get("/client.js", (_req, res) => {
+  res.setHeader("Cache-Control", "private, no-store");
+  res.type("application/javascript");
+  res.sendFile(boundJsPath);
 });
 
 boundRouter.get("/", (req, res) => {
@@ -160,6 +174,7 @@ boundRouter.get("/link/qr", async (req, res) => {
   if (!requireAdmin(req, res)) {
     return;
   }
+  noteQrClient(req.query || {});
   const image = await qrBytes();
   if (!image) {
     res.status(404).json({ ok: false, error: "二维码还没生成", module: "bound", source: "crawler", erp: false });
@@ -170,7 +185,7 @@ boundRouter.get("/link/qr", async (req, res) => {
     return;
   }
   res.setHeader("Content-Type", image.type || "image/png");
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "private, max-age=120");
   res.send(image.buffer);
 });
 
