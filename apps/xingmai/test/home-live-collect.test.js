@@ -552,32 +552,48 @@ test("lease expiry recovers: shen may reclaim and write after home lease dies", 
   assert.equal(lateHome.reason, "owned_by_other");
 });
 
-test("manual pause blocks late collect writes; relogin gen bump blocks stale markAuth", async () => {
+test("manual pause blocks collect writeback but allows human relogin save", async () => {
   const {
     claimCollectorOwner,
     COLLECTOR_OWNER_HOME,
+    COLLECTOR_OWNER_SHEN,
     getSession,
     markAuth,
     saveSample,
     saveSession,
-    sessionVersionOf
+    sessionVersionOf,
+    updateSessionCookies,
+    WRITE_PURPOSE_HUMAN
   } = await import("../src/modules/home/jingmai-store.js");
   await resetJingmaiStore();
   await saveSession("暂停店", {
     cookies: [{ name: "thor", value: "old" }],
     authState: "ok",
     enabled: true,
-    shopId: "p1"
+    shopId: "p1",
+    purpose: WRITE_PURPOSE_HUMAN
   });
   assert.equal((await claimCollectorOwner("暂停店", COLLECTOR_OWNER_HOME)).ok, true);
+  // Foreign active lease must not block human pause/relogin.
+  const held = await getSession("暂停店");
+  await saveSession("暂停店", {
+    cookies: held.cookies,
+    authState: "ok",
+    enabled: true,
+    shopId: "p1",
+    collectorOwner: COLLECTOR_OWNER_SHEN,
+    collectorLeaseUntil: "2099-01-01 00:00:00",
+    purpose: WRITE_PURPOSE_HUMAN
+  });
   const before = await getSession("暂停店");
   const staleVer = sessionVersionOf(before);
+  assert.equal(before.collectorOwner, COLLECTOR_OWNER_SHEN);
   await saveSession("暂停店", {
     cookies: before.cookies,
     authState: "ok",
     enabled: false,
     shopId: "p1",
-    writer: COLLECTOR_OWNER_HOME
+    purpose: WRITE_PURPOSE_HUMAN
   });
   const lateSample = await saveSample(
     { store: "暂停店", day: "2026-11-19", capturedAt: "2026-11-19 12:20:00", dealAmount: 3, ok: true },
@@ -585,21 +601,43 @@ test("manual pause blocks late collect writes; relogin gen bump blocks stale mar
   );
   assert.equal(lateSample.saved, false);
   assert.equal(lateSample.reason, "manual_pause");
+  const lateJar = await updateSessionCookies(
+    "暂停店",
+    [{ name: "thor", value: "collect-blocked" }],
+    { writer: COLLECTOR_OWNER_HOME, sessionVersion: staleVer }
+  );
+  assert.equal(lateJar.updated, false);
+  assert.equal(lateJar.reason, "manual_pause");
   const lateAuth = await markAuth("暂停店", "login_expired", "旧任务晚返回", {
     writer: COLLECTOR_OWNER_HOME,
     sessionVersion: staleVer
   });
   assert.equal(lateAuth.updated, false);
-  // Relogin bumps gen; stale version cannot overwrite.
+  assert.equal(lateAuth.reason, "manual_pause");
+  // Human may re-login while still paused and persist a new jar/gen.
+  const humanWhilePaused = await saveSession("暂停店", {
+    cookies: [{ name: "thor", value: "human-paused" }],
+    authState: "ok",
+    enabled: false,
+    shopId: "p1",
+    human: true
+  });
+  assert.ok(humanWhilePaused);
+  assert.equal(humanWhilePaused.cookies[0].value, "human-paused");
+  assert.equal(humanWhilePaused.enabled, false);
+  assert.equal(humanWhilePaused.collectorOwner, "");
+  assert.notEqual(sessionVersionOf(humanWhilePaused), staleVer);
+  // Enable + relogin bumps gen again; stale collect gen cannot overwrite.
   await saveSession("暂停店", {
     cookies: [{ name: "thor", value: "new" }],
     authState: "ok",
     enabled: true,
     shopId: "p1",
-    writer: COLLECTOR_OWNER_HOME
+    purpose: WRITE_PURPOSE_HUMAN
   });
   const after = await getSession("暂停店");
   assert.notEqual(sessionVersionOf(after), staleVer);
+  assert.equal(after.cookies[0].value, "new");
   const staleAfterRelogin = await markAuth("暂停店", "login_expired", "更旧任务", {
     writer: COLLECTOR_OWNER_HOME,
     sessionVersion: staleVer
@@ -655,7 +693,7 @@ test("collectStatusSummary exposes loaded-process runtimeMark", async () => {
   const summary = await collectStatusSummary();
   assert.equal(summary.ok, true);
   assert.equal(summary.runtimeMark, HOME_COLLECTOR_RUNTIME_MARK);
-  assert.match(String(summary.runtimeMark), /home-load-mutex|home-lease|mutex/);
+  assert.match(String(summary.runtimeMark), /home-atomic-mutex|home-load-mutex|mutex/);
 });
 
 test("cookieParams keeps real domain/path/expiry and only defaults legacy name/value jars", () => {
@@ -1420,10 +1458,22 @@ function createJingmaiFakePool() {
       }
       return [{ affectedRows: 1 }, undefined];
     }
+    function leaseAllows(row, who, nowStamp) {
+      const owner = String(row.collector_owner || "");
+      const until = String(row.collector_lease_until || "");
+      if (!owner || owner === who || !until || until <= nowStamp) {
+        return true;
+      }
+      return false;
+    }
     if (/^UPDATE shen_jingmai_session SET cookie_jar/i.test(text)) {
-      const [jar, updatedAt, store, gen] = params;
+      // packed, stamp, store, gen, who, stamp, expectedShopId, expectedShopId
+      const [jar, updatedAt, store, gen, who, nowStamp] = params;
       const row = sessions.get(store);
-      if (!row || Number(row.session_gen) !== Number(gen)) {
+      if (!row || Number(row.enabled_flag) !== 1 || Number(row.session_gen) !== Number(gen)) {
+        return [{ affectedRows: 0 }, undefined];
+      }
+      if (!leaseAllows(row, who, nowStamp)) {
         return [{ affectedRows: 0 }, undefined];
       }
       row.cookie_jar = jar;
@@ -1432,9 +1482,12 @@ function createJingmaiFakePool() {
     }
     if (/^UPDATE shen_jingmai_session SET auth_state/i.test(text)) {
       if (/AND session_gen = \?/i.test(text)) {
-        const [authState, authMessage, updatedAt, store, gen] = params;
+        const [authState, authMessage, updatedAt, store, gen, who, nowStamp] = params;
         const row = sessions.get(store);
-        if (!row || Number(row.session_gen) !== Number(gen)) {
+        if (!row || Number(row.enabled_flag) !== 1 || Number(row.session_gen) !== Number(gen)) {
+          return [{ affectedRows: 0 }, undefined];
+        }
+        if (!leaseAllows(row, who, nowStamp)) {
           return [{ affectedRows: 0 }, undefined];
         }
         row.auth_state = authState;
@@ -1442,14 +1495,75 @@ function createJingmaiFakePool() {
         row.updated_at = updatedAt;
         return [{ affectedRows: 1 }, undefined];
       }
-      const [authState, authMessage, updatedAt, store] = params;
+      const [authState, authMessage, updatedAt, store, who, nowStamp] = params;
       const row = sessions.get(store);
-      if (!row) {
+      if (!row || Number(row.enabled_flag) !== 1) {
+        return [{ affectedRows: 0 }, undefined];
+      }
+      if (!leaseAllows(row, who, nowStamp)) {
         return [{ affectedRows: 0 }, undefined];
       }
       row.auth_state = authState;
       row.auth_message = authMessage;
       row.updated_at = updatedAt;
+      return [{ affectedRows: 1 }, undefined];
+    }
+    if (/^UPDATE shen_jingmai_session SET updated_at = \?/i.test(text) && /enabled_flag = 1/i.test(text)) {
+      // collect write permit touch
+      if (/AND session_gen = \?/i.test(text)) {
+        const [updatedAt, store, gen, who, nowStamp] = params;
+        const row = sessions.get(store);
+        if (!row || Number(row.enabled_flag) !== 1 || Number(row.session_gen) !== Number(gen)) {
+          return [{ affectedRows: 0 }, undefined];
+        }
+        if (!leaseAllows(row, who, nowStamp)) {
+          return [{ affectedRows: 0 }, undefined];
+        }
+        row.updated_at = updatedAt;
+        return [{ affectedRows: 1 }, undefined];
+      }
+      const [updatedAt, store, who, nowStamp] = params;
+      const row = sessions.get(store);
+      if (!row || Number(row.enabled_flag) !== 1) {
+        return [{ affectedRows: 0 }, undefined];
+      }
+      if (!leaseAllows(row, who, nowStamp)) {
+        return [{ affectedRows: 0 }, undefined];
+      }
+      row.updated_at = updatedAt;
+      return [{ affectedRows: 1 }, undefined];
+    }
+    if (/^INSERT INTO shen_jingmai_session/i.test(text) && /collector_owner = ''/i.test(text)) {
+      const [store, jar, authState, authMessage, enabled, shopId, linkedAt, updatedAt] = params;
+      const existing = sessions.get(store);
+      if (!existing) {
+        sessions.set(store, {
+          store: store,
+          cookie_jar: jar,
+          auth_state: authState,
+          auth_message: authMessage,
+          enabled_flag: enabled,
+          shop_id: shopId,
+          linked_at: linkedAt,
+          updated_at: updatedAt,
+          session_gen: 1,
+          collector_owner: "",
+          collector_lease_until: ""
+        });
+      } else {
+        existing.cookie_jar = jar;
+        existing.auth_state = authState;
+        existing.auth_message = authMessage;
+        existing.enabled_flag = enabled;
+        if (shopId) {
+          existing.shop_id = shopId;
+        }
+        existing.linked_at = linkedAt;
+        existing.updated_at = updatedAt;
+        existing.session_gen = (Number(existing.session_gen) || 0) + 1;
+        existing.collector_owner = "";
+        existing.collector_lease_until = "";
+      }
       return [{ affectedRows: 1 }, undefined];
     }
     if (/^SELECT .+ FROM shen_jingmai_session WHERE store = \?/i.test(text)) {
@@ -1516,19 +1630,45 @@ test("SQL pool path: atomic session_gen bump + gen0 CAS; process restart does no
     shop_id: "7",
     linked_at: "2026-11-19 10:00:00",
     updated_at: "2026-11-19 10:00:00",
-    session_gen: 0
+    session_gen: 0,
+    collector_owner: "home",
+    collector_lease_until: "2099-01-01 00:00:00"
   });
   const cas0 = await updateSessionCookies(
     "原子店",
     [{ name: "thor", value: "from-gen0", domain: ".jd.com", path: "/" }],
-    { sessionVersion: "g:0", expectedShopId: "7", identity: { shopId: "7", shopName: "原子店" } }
+    {
+      sessionVersion: "g:0",
+      expectedShopId: "7",
+      identity: { shopId: "7", shopName: "原子店" },
+      writer: "home"
+    }
   );
   assert.equal(cas0.updated, true);
   assert.ok(
     pool.sqlLog.some(function (entry) {
-      return /session_gen = \?/.test(entry.sql) && entry.params.indexOf(0) >= 0;
-    })
+      return (
+        /SET cookie_jar/.test(entry.sql) &&
+        /enabled_flag = 1/.test(entry.sql) &&
+        /collector_owner = \?/.test(entry.sql) &&
+        /session_gen = \?/.test(entry.sql) &&
+        entry.params.indexOf(0) >= 0
+      );
+    }),
+    "collect jar write must be one conditional UPDATE (pause+owner+gen), not SELECT-then-blind"
   );
+  const foreign = await updateSessionCookies(
+    "原子店",
+    [{ name: "thor", value: "stolen", domain: ".jd.com", path: "/" }],
+    {
+      sessionVersion: "g:0",
+      expectedShopId: "7",
+      identity: { shopId: "7", shopName: "原子店" },
+      writer: "shen"
+    }
+  );
+  assert.equal(foreign.updated, false);
+  assert.equal(foreign.reason, "owned_by_other");
   const first = await saveSession("原子店", {
     cookies: [{ name: "thor", value: "login-1" }],
     authState: "ok",

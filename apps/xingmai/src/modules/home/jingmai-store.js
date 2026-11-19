@@ -22,7 +22,25 @@ export const COLLECTOR_OWNER_SHEN = "shen";
 /** Lease window so a crashed home worker does not block Shen forever. */
 export const COLLECTOR_LEASE_SEC = 15 * 60;
 /** Loaded-process marker for release acceptance (status JSON). */
-export const HOME_COLLECTOR_RUNTIME_MARK = "0.1.1260-home-load-mutex";
+export const HOME_COLLECTOR_RUNTIME_MARK = "0.1.1261-home-atomic-mutex";
+/** Human login/roster saves (may run while paused). Collect must not use this. */
+export const WRITE_PURPOSE_HUMAN = "human";
+/** Background collect writebacks (sample/auth/jar). */
+export const WRITE_PURPOSE_COLLECT = "collect";
+
+export function isHumanSessionWrite(fields) {
+  if (!fields || typeof fields !== "object") {
+    return true;
+  }
+  if (fields.purpose === WRITE_PURPOSE_COLLECT || fields.collect === true) {
+    return false;
+  }
+  if (fields.purpose === WRITE_PURPOSE_HUMAN || fields.human === true) {
+    return true;
+  }
+  // Default saveSession is human/roster/login; collect uses saveSample/markAuth/updateSessionCookies.
+  return true;
+}
 
 
 const CREATE_SAMPLE = `CREATE TABLE IF NOT EXISTS shen_jingmai_sample (
@@ -227,8 +245,9 @@ export function collectorLeaseExpired(session, nowStamp) {
 }
 
 /**
- * Cross-worker write gate. Expired lease is reclaimable (failure recovery).
- * writer must match collector_owner when lease is still valid.
+ * Cross-worker write gate (advisory). Collect paths must still use atomic WHERE
+ * on the real UPDATE/INSERT — never SELECT then unconditional write.
+ * Human login may skip owner/pause; collect must not.
  */
 export async function assertCollectorWrite(store, writer, options) {
   const opts = options || {};
@@ -245,6 +264,9 @@ export async function assertCollectorWrite(store, writer, options) {
   if (opts.allowPaused !== true && session.enabled === false) {
     return { ok: false, reason: "manual_pause", owner: String(session.collectorOwner || "") };
   }
+  if (opts.skipOwner === true) {
+    return { ok: true, reason: "human_skip_owner", owner: String(session.collectorOwner || "") };
+  }
   const owner = String(session.collectorOwner || "");
   if (!owner || collectorLeaseExpired(session)) {
     return { ok: true, reason: "unclaimed_or_expired", owner: owner };
@@ -254,6 +276,44 @@ export async function assertCollectorWrite(store, writer, options) {
     return { ok: true, reason: "owner", owner: owner };
   }
   return { ok: false, reason: "owned_by_other", owner: owner };
+}
+
+/** SQL/memory predicate pieces for collect writes (pause + owner/lease + optional gen). */
+function collectWriteWhereSql(hasGen) {
+  const genClause = hasGen ? "AND session_gen = ?" : "";
+  return (
+    `WHERE store = ?
+       AND enabled_flag = 1
+       ${genClause}
+       AND (
+         collector_owner = ?
+         OR collector_owner = ''
+         OR collector_lease_until = ''
+         OR collector_lease_until <= ?
+       )`
+  );
+}
+
+function memoryCollectWriteOk(session, writer, stamp, sessionVersion) {
+  if (!session) {
+    return { ok: false, reason: "missing" };
+  }
+  if (session.enabled === false) {
+    return { ok: false, reason: "manual_pause", owner: String(session.collectorOwner || "") };
+  }
+  const owner = String(session.collectorOwner || "");
+  const who = String(writer || "").trim() || COLLECTOR_OWNER_HOME;
+  if (owner && owner !== who && !collectorLeaseExpired(session, stamp)) {
+    return { ok: false, reason: "owned_by_other", owner: owner };
+  }
+  if (
+    sessionVersion != null &&
+    String(sessionVersion) !== "" &&
+    sessionVersionOf(session) !== String(sessionVersion)
+  ) {
+    return { ok: false, reason: "version_conflict", owner: owner };
+  }
+  return { ok: true, reason: "ok", owner: owner, gen: Number(session.sessionGen) || 0 };
 }
 
 export function sessionVersionOf(row) {
@@ -355,13 +415,15 @@ export async function getSession(store) {
 
 export async function saveSession(store, fields) {
   await ensure();
+  const human = isHumanSessionWrite(fields);
   const writer = fields && fields.writer != null ? fields.writer : COLLECTOR_OWNER_HOME;
-  // Human login / roster may rewrite jars while paused; collect writes use saveSample/markAuth instead.
-  const gate = await assertCollectorWrite(store, writer, {
-    allowPaused: fields && fields.allowPaused !== false
-  });
-  if (!gate.ok) {
-    return null;
+  // Human login/roster may save while paused and ignores collect lease.
+  // Collect must not call saveSession; it uses saveSample/markAuth/updateSessionCookies.
+  if (!human) {
+    const gate = await assertCollectorWrite(store, writer, { allowPaused: false });
+    if (!gate.ok) {
+      return null;
+    }
   }
   if (memoryForced()) {
     const current = memorySession(store);
@@ -373,12 +435,17 @@ export async function saveSession(store, fields) {
       .trim()
       .slice(0, 32);
     const sessionGen = (Number(current.sessionGen) || 0) + 1;
-    const collectorOwner =
+    // Human save bumps gen and clears lease so in-flight collect tasks die.
+    let collectorOwner =
       fields.collectorOwner == null ? current.collectorOwner || "" : String(fields.collectorOwner || "");
-    const collectorLeaseUntil =
+    let collectorLeaseUntil =
       fields.collectorLeaseUntil == null
         ? current.collectorLeaseUntil || ""
         : String(fields.collectorLeaseUntil || "");
+    if (human && fields.collectorOwner == null && fields.collectorLeaseUntil == null) {
+      collectorOwner = "";
+      collectorLeaseUntil = "";
+    }
     const row = {
       store: store,
       cookies: cookies || [],
@@ -405,26 +472,47 @@ export async function saveSession(store, fields) {
     .slice(0, 32);
   const stamp = stampNow();
   const packed = JSON.stringify(cookies || []);
+  const clearLease = human && fields.collectorOwner == null && fields.collectorLeaseUntil == null;
 
   // Atomic bump: DB owns session_gen so restarts / multi-worker cannot reset or collide.
+  // Human path also clears collector lease in the same statement (task generation + invalidate).
   try {
-    await query(
-      `INSERT INTO shen_jingmai_session (store, cookie_jar, auth_state, auth_message, enabled_flag, shop_id, linked_at, updated_at, session_gen)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-       ON DUPLICATE KEY UPDATE
-         cookie_jar = VALUES(cookie_jar),
-         auth_state = VALUES(auth_state),
-         auth_message = VALUES(auth_message),
-         enabled_flag = VALUES(enabled_flag),
-         shop_id = IF(VALUES(shop_id) = '', shop_id, VALUES(shop_id)),
-         linked_at = VALUES(linked_at),
-         updated_at = VALUES(updated_at),
-         session_gen = session_gen + 1`,
-      [store, packed, authState, String(authMessage || "").slice(0, 200), enabled ? 1 : 0, shopId, stamp, stamp]
-    );
+    if (clearLease) {
+      await query(
+        `INSERT INTO shen_jingmai_session (store, cookie_jar, auth_state, auth_message, enabled_flag, shop_id, linked_at, updated_at, session_gen, collector_owner, collector_lease_until)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, '', '')
+         ON DUPLICATE KEY UPDATE
+           cookie_jar = VALUES(cookie_jar),
+           auth_state = VALUES(auth_state),
+           auth_message = VALUES(auth_message),
+           enabled_flag = VALUES(enabled_flag),
+           shop_id = IF(VALUES(shop_id) = '', shop_id, VALUES(shop_id)),
+           linked_at = VALUES(linked_at),
+           updated_at = VALUES(updated_at),
+           session_gen = session_gen + 1,
+           collector_owner = '',
+           collector_lease_until = ''`,
+        [store, packed, authState, String(authMessage || "").slice(0, 200), enabled ? 1 : 0, shopId, stamp, stamp]
+      );
+    } else {
+      await query(
+        `INSERT INTO shen_jingmai_session (store, cookie_jar, auth_state, auth_message, enabled_flag, shop_id, linked_at, updated_at, session_gen)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+         ON DUPLICATE KEY UPDATE
+           cookie_jar = VALUES(cookie_jar),
+           auth_state = VALUES(auth_state),
+           auth_message = VALUES(auth_message),
+           enabled_flag = VALUES(enabled_flag),
+           shop_id = IF(VALUES(shop_id) = '', shop_id, VALUES(shop_id)),
+           linked_at = VALUES(linked_at),
+           updated_at = VALUES(updated_at),
+           session_gen = session_gen + 1`,
+        [store, packed, authState, String(authMessage || "").slice(0, 200), enabled ? 1 : 0, shopId, stamp, stamp]
+      );
+    }
   } catch (error) {
     const message = String((error && (error.sqlMessage || error.message)) || "");
-    if (!/session_gen|Unknown column/i.test(message)) {
+    if (!/session_gen|collector_owner|collector_lease_until|Unknown column/i.test(message)) {
       throw error;
     }
     await query(
@@ -463,26 +551,41 @@ export async function updateSessionCookies(store, cookies, options) {
   if (!Array.isArray(cookies)) {
     return { updated: false, reason: "invalid_jar" };
   }
-  const gate = await assertCollectorWrite(
-    store,
-    opts.writer != null ? opts.writer : COLLECTOR_OWNER_HOME
-  );
-  if (!gate.ok) {
-    return { updated: false, reason: gate.reason, owner: gate.owner || "" };
+  const writer = opts.writer != null ? opts.writer : COLLECTOR_OWNER_HOME;
+  const expectedShopId = String(opts.expectedShopId || "").trim();
+  const nextCookies = cookies.map(function (item) {
+    return item && typeof item === "object" ? Object.assign({}, item) : item;
+  });
+  const packed = JSON.stringify(nextCookies);
+  const stamp = stampNow();
+
+  if (memoryForced()) {
+    const current = memory.sessions.has(store) ? memorySession(store) : null;
+    const permit = memoryCollectWriteOk(current, writer, stamp, opts.sessionVersion);
+    if (!permit.ok) {
+      return { updated: false, reason: permit.reason, owner: permit.owner || "" };
+    }
+    const rowShopId = String(current.shopId || "").trim();
+    if (expectedShopId && rowShopId && expectedShopId !== rowShopId) {
+      return { updated: false, reason: "shop_changed" };
+    }
+    if (opts.identity) {
+      const match = matchCollectIdentity({ store: store, shopId: rowShopId || expectedShopId }, opts.identity);
+      if (!match.ok) {
+        return { updated: false, reason: match.reason };
+      }
+    }
+    current.cookies = nextCookies;
+    memory.sessions.set(store, current);
+    return { updated: true, reason: "ok" };
   }
+
+  // Advisory identity check only; write itself is atomic on pause+owner+gen.
   const current = await getSession(store);
   if (!current) {
     return { updated: false, reason: "missing" };
   }
-  if (
-    opts.sessionVersion != null &&
-    String(opts.sessionVersion) !== "" &&
-    sessionVersionOf(current) !== String(opts.sessionVersion)
-  ) {
-    return { updated: false, reason: "version_conflict" };
-  }
   const rowShopId = String(current.shopId || "").trim();
-  const expectedShopId = String(opts.expectedShopId || "").trim();
   if (expectedShopId && rowShopId && expectedShopId !== rowShopId) {
     return { updated: false, reason: "shop_changed" };
   }
@@ -492,31 +595,42 @@ export async function updateSessionCookies(store, cookies, options) {
       return { updated: false, reason: match.reason };
     }
   }
-  const nextCookies = cookies.map(function (item) {
-    return item && typeof item === "object" ? Object.assign({}, item) : item;
-  });
-  const packed = JSON.stringify(nextCookies);
 
-  if (memoryForced()) {
-    const row = memorySession(store);
-    row.cookies = nextCookies;
-    memory.sessions.set(store, row);
-    return { updated: true, reason: "ok" };
-  }
-
-  const parsed = parseSessionVersion(opts.sessionVersion != null ? opts.sessionVersion : sessionVersionOf(current));
+  const parsed = parseSessionVersion(
+    opts.sessionVersion != null && String(opts.sessionVersion) !== ""
+      ? opts.sessionVersion
+      : sessionVersionOf(current)
+  );
   const gen = parsed.kind === "gen" ? parsed.gen : Number(current.sessionGen) || 0;
-  // Always CAS on session_gen (including 0). Do not fall back to second-precision linked_at alone.
+  const who = String(writer || "").trim() || COLLECTOR_OWNER_HOME;
+  // Single conditional UPDATE: enabled + gen CAS + owner/lease. No SELECT-then-blind-write.
   const result = await query(
     `UPDATE shen_jingmai_session
      SET cookie_jar = ?, updated_at = ?
-     WHERE store = ?
-       AND session_gen = ?
+     ${collectWriteWhereSql(true)}
        AND (? = '' OR shop_id = '' OR shop_id = ?)`,
-    [packed, stampNow(), store, gen, expectedShopId, expectedShopId]
+    [packed, stamp, store, gen, who, stamp, expectedShopId, expectedShopId]
   );
   const affected = result[0] && typeof result[0].affectedRows === "number" ? result[0].affectedRows : 0;
   if (!affected) {
+    const again = await getSession(store);
+    if (!again) {
+      return { updated: false, reason: "missing" };
+    }
+    if (again.enabled === false) {
+      return { updated: false, reason: "manual_pause", owner: String(again.collectorOwner || "") };
+    }
+    if (
+      opts.sessionVersion != null &&
+      String(opts.sessionVersion) !== "" &&
+      sessionVersionOf(again) !== String(opts.sessionVersion)
+    ) {
+      return { updated: false, reason: "version_conflict" };
+    }
+    const owner = String(again.collectorOwner || "");
+    if (owner && owner !== who && !collectorLeaseExpired(again, stamp)) {
+      return { updated: false, reason: "owned_by_other", owner: owner };
+    }
     return { updated: false, reason: "version_conflict" };
   }
   if (memory.sessions.has(store)) {
@@ -529,23 +643,16 @@ export async function updateSessionCookies(store, cookies, options) {
 export async function markAuth(store, authState, authMessage, options) {
   const opts = options || {};
   await ensure();
-  const gate = await assertCollectorWrite(
-    store,
-    opts.writer != null ? opts.writer : COLLECTOR_OWNER_HOME
-  );
-  if (!gate.ok) {
-    return { updated: false, reason: gate.reason, owner: gate.owner || "" };
-  }
+  const writer = opts.writer != null ? opts.writer : COLLECTOR_OWNER_HOME;
+  const who = String(writer || "").trim() || COLLECTOR_OWNER_HOME;
   const message = String(authMessage || "").slice(0, 200);
+  const stamp = stampNow();
   // Keep cookie jars on login_expired so a controlled Jingmai recheck can run.
   if (memoryForced()) {
-    const current = memorySession(store);
-    if (
-      opts.sessionVersion != null &&
-      String(opts.sessionVersion) !== "" &&
-      sessionVersionOf(current) !== String(opts.sessionVersion)
-    ) {
-      return { updated: false, reason: "version_conflict" };
+    const current = memory.sessions.has(store) ? memorySession(store) : null;
+    const permit = memoryCollectWriteOk(current, writer, stamp, opts.sessionVersion);
+    if (!permit.ok) {
+      return { updated: false, reason: permit.reason, owner: permit.owner || "" };
     }
     current.authState = authState;
     current.authMessage = message;
@@ -553,37 +660,41 @@ export async function markAuth(store, authState, authMessage, options) {
     return { updated: true, reason: "ok" };
   }
 
-  const current = await getSession(store);
-  if (!current) {
-    return { updated: false, reason: "missing" };
-  }
-  if (
-    opts.sessionVersion != null &&
-    String(opts.sessionVersion) !== "" &&
-    sessionVersionOf(current) !== String(opts.sessionVersion)
-  ) {
-    return { updated: false, reason: "version_conflict" };
-  }
-  const parsed = parseSessionVersion(opts.sessionVersion != null ? opts.sessionVersion : sessionVersionOf(current));
-  const gen = parsed.kind === "gen" ? parsed.gen : Number(current.sessionGen) || 0;
+  const hasGen = opts.sessionVersion != null && String(opts.sessionVersion) !== "";
+  const parsed = parseSessionVersion(hasGen ? opts.sessionVersion : "");
   let result;
-  if (opts.sessionVersion != null && String(opts.sessionVersion) !== "") {
+  if (hasGen && parsed.kind === "gen") {
     result = await query(
       `UPDATE shen_jingmai_session
        SET auth_state = ?, auth_message = ?, updated_at = ?
-       WHERE store = ? AND session_gen = ?`,
-      [authState, message, stampNow(), store, gen]
+       ${collectWriteWhereSql(true)}`,
+      [authState, message, stamp, store, parsed.gen, who, stamp]
     );
   } else {
+    // Still atomic on pause + owner/lease even when caller omitted gen.
     result = await query(
       `UPDATE shen_jingmai_session
        SET auth_state = ?, auth_message = ?, updated_at = ?
-       WHERE store = ?`,
-      [authState, message, stampNow(), store]
+       ${collectWriteWhereSql(false)}`,
+      [authState, message, stamp, store, who, stamp]
     );
   }
   const affected = result[0] && typeof result[0].affectedRows === "number" ? result[0].affectedRows : 0;
   if (!affected) {
+    const again = await getSession(store);
+    if (!again) {
+      return { updated: false, reason: "missing" };
+    }
+    if (again.enabled === false) {
+      return { updated: false, reason: "manual_pause", owner: String(again.collectorOwner || "") };
+    }
+    if (hasGen && sessionVersionOf(again) !== String(opts.sessionVersion)) {
+      return { updated: false, reason: "version_conflict" };
+    }
+    const owner = String(again.collectorOwner || "");
+    if (owner && owner !== who && !collectorLeaseExpired(again, stamp)) {
+      return { updated: false, reason: "owned_by_other", owner: owner };
+    }
     return { updated: false, reason: "version_conflict" };
   }
   if (memory.sessions.has(store)) {
@@ -923,19 +1034,9 @@ export function classifySessionRecovery(sessions, profileKeys) {
 export async function saveSample(sample, options) {
   const opts = options || {};
   await ensure();
-  const gate = await assertCollectorWrite(
-    sample && sample.store,
-    opts.writer != null ? opts.writer : COLLECTOR_OWNER_HOME
-  );
-  if (!gate.ok) {
-    return { saved: false, reason: gate.reason, owner: gate.owner || "" };
-  }
-  if (opts.sessionVersion != null && String(opts.sessionVersion) !== "") {
-    const current = await getSession(sample.store);
-    if (!current || sessionVersionOf(current) !== String(opts.sessionVersion)) {
-      return { saved: false, reason: "version_conflict" };
-    }
-  }
+  const writer = opts.writer != null ? opts.writer : COLLECTOR_OWNER_HOME;
+  const who = String(writer || "").trim() || COLLECTOR_OWNER_HOME;
+  const stamp = stampNow();
   const raw = {
     dealAmount: sample.dealAmount == null ? null : sample.dealAmount,
     orderCount: sample.orderCount == null ? null : sample.orderCount,
@@ -967,6 +1068,11 @@ export async function saveSample(sample, options) {
     raw: raw
   };
   if (memoryForced()) {
+    const current = memory.sessions.has(row.store) ? memorySession(row.store) : null;
+    const permit = memoryCollectWriteOk(current, writer, stamp, opts.sessionVersion);
+    if (!permit.ok) {
+      return { saved: false, reason: permit.reason, owner: permit.owner || "" };
+    }
     const index = memory.samples.findIndex(function (item) {
       return item.store === row.store && item.capturedAt === row.capturedAt;
     });
@@ -977,29 +1083,101 @@ export async function saveSample(sample, options) {
     }
     return { saved: true, reason: "ok" };
   }
-  await query(
-    `INSERT INTO shen_jingmai_sample (store, day, captured_at, deal_amount, order_count, customer_count, yesterday_amount, raw_json, ok_flag)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       deal_amount = VALUES(deal_amount),
-       order_count = VALUES(order_count),
-       customer_count = VALUES(customer_count),
-       yesterday_amount = VALUES(yesterday_amount),
-       raw_json = VALUES(raw_json),
-       ok_flag = VALUES(ok_flag)`,
-    [
-      row.store,
-      row.day,
-      row.capturedAt,
-      row.dealAmount,
-      row.orderCount,
-      row.customerCount,
-      row.yesterdayAmount,
-      JSON.stringify(raw),
-      row.ok ? 1 : 0
-    ]
-  );
-  return { saved: true, reason: "ok" };
+
+  const hasGen = opts.sessionVersion != null && String(opts.sessionVersion) !== "";
+  const parsed = parseSessionVersion(hasGen ? opts.sessionVersion : "");
+  const run = async function (execQuery) {
+    let permit;
+    if (hasGen && parsed.kind === "gen") {
+      permit = await execQuery(
+        `UPDATE shen_jingmai_session
+         SET updated_at = ?
+         ${collectWriteWhereSql(true)}`,
+        [stamp, row.store, parsed.gen, who, stamp]
+      );
+    } else {
+      permit = await execQuery(
+        `UPDATE shen_jingmai_session
+         SET updated_at = ?
+         ${collectWriteWhereSql(false)}`,
+        [stamp, row.store, who, stamp]
+      );
+    }
+    const affected = permit[0] && typeof permit[0].affectedRows === "number" ? permit[0].affectedRows : 0;
+    if (!affected) {
+      return { saved: false, reason: "permit_denied" };
+    }
+    await execQuery(
+      `INSERT INTO shen_jingmai_sample (store, day, captured_at, deal_amount, order_count, customer_count, yesterday_amount, raw_json, ok_flag)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         deal_amount = VALUES(deal_amount),
+         order_count = VALUES(order_count),
+         customer_count = VALUES(customer_count),
+         yesterday_amount = VALUES(yesterday_amount),
+         raw_json = VALUES(raw_json),
+         ok_flag = VALUES(ok_flag)`,
+      [
+        row.store,
+        row.day,
+        row.capturedAt,
+        row.dealAmount,
+        row.orderCount,
+        row.customerCount,
+        row.yesterdayAmount,
+        JSON.stringify(raw),
+        row.ok ? 1 : 0
+      ]
+    );
+    return { saved: true, reason: "ok" };
+  };
+
+  const pool = await resolvePool();
+  let outcome;
+  if (pool && typeof pool.getConnection === "function") {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      outcome = await run(function (sql, params) {
+        return conn.query(sql, params);
+      });
+      if (!outcome.saved) {
+        await conn.rollback();
+      } else {
+        await conn.commit();
+      }
+    } catch (error) {
+      try {
+        await conn.rollback();
+      } catch {
+        /* ignore */
+      }
+      throw error;
+    } finally {
+      conn.release();
+    }
+  } else {
+    outcome = await run(query);
+  }
+
+  if (!outcome.saved) {
+    const again = await getSession(row.store);
+    if (!again) {
+      return { saved: false, reason: "missing" };
+    }
+    if (again.enabled === false) {
+      return { saved: false, reason: "manual_pause", owner: String(again.collectorOwner || "") };
+    }
+    if (hasGen && sessionVersionOf(again) !== String(opts.sessionVersion)) {
+      return { saved: false, reason: "version_conflict" };
+    }
+    const owner = String(again.collectorOwner || "");
+    if (owner && owner !== who && !collectorLeaseExpired(again, stamp)) {
+      return { saved: false, reason: "owned_by_other", owner: owner };
+    }
+    return { saved: false, reason: hasGen ? "version_conflict" : "owned_by_other", owner: owner };
+  }
+  return outcome;
 }
 
 export async function listSamples(fromDay, toDay) {
