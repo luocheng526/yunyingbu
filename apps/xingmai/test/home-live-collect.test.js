@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectAuthDecision, sampleFields, buildLiveView, beijingParts, withDeadline } from "../src/modules/home/jingmai.js";
-import { fetchHome } from "../src/modules/home/jingmai-client.js";
+import { collectAuthDecision, sampleFields, buildLiveView, beijingParts, withDeadline, shouldCollectShop, runTick } from "../src/modules/home/jingmai.js";
+import { fetchHome, parseSetCookieLine, absorbCookies } from "../src/modules/home/jingmai-client.js";
+import { cookieParams, normalizeCookie, safeProfileKey } from "../src/modules/home/jingmai-desk.js";
+import { markAuth, resetJingmaiStore, saveSession, listSessions } from "../src/modules/home/jingmai-store.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -205,4 +207,140 @@ test("restart helper keeps the exact sudoers argv and drops --no-block/systemd-r
   assert.doesNotMatch(argv, /no-block/);
   assert.doesNotMatch(argv, /systemd/);
   assert.match(source, /detached:\s*true/);
+});
+
+test("cookieParams keeps real domain/path/expiry and only defaults legacy name/value jars", () => {
+  const full = cookieParams([
+    {
+      name: "thor",
+      value: "abc",
+      domain: ".shop.jd.com",
+      path: "/jdm",
+      expires: 1900000000,
+      secure: true,
+      httpOnly: true,
+      sameSite: "Lax"
+    }
+  ])[0];
+  assert.equal(full.domain, ".shop.jd.com");
+  assert.equal(full.path, "/jdm");
+  assert.equal(full.expires, 1900000000);
+  assert.equal(full.sameSite, "Lax");
+  const legacy = cookieParams([{ name: "thor", value: "abc" }])[0];
+  assert.equal(legacy.domain, ".jd.com");
+  assert.equal(legacy.path, "/");
+  assert.equal(normalizeCookie({ name: "x", value: "1", domain: ".jzt.jd.com" }).domain, ".jzt.jd.com");
+  assert.equal(safeProfileKey("DIKTT潮流护理旗舰店"), "DIKTT");
+  assert.equal(safeProfileKey("12345"), "12345");
+});
+
+test("Set-Cookie absorb keeps domain/path attributes for migration", () => {
+  const parsed = parseSetCookieLine("thor=keep; Domain=.jd.com; Path=/; Secure; HttpOnly; SameSite=None");
+  assert.equal(parsed.name, "thor");
+  assert.equal(parsed.domain, ".jd.com");
+  assert.equal(parsed.path, "/");
+  assert.equal(parsed.secure, true);
+  assert.equal(parsed.httpOnly, true);
+  const jar = [];
+  absorbCookies(
+    {
+      headers: {
+        getSetCookie: function () {
+          return ["pt_key=one; Domain=.passport.jd.com; Path=/; Max-Age=3600"];
+        }
+      }
+    },
+    jar
+  );
+  assert.equal(jar[0].domain, ".passport.jd.com");
+  assert.ok(jar[0].expires > Math.floor(Date.now() / 1000));
+});
+
+test("login_expired shops with cookies are still collected; manual pause is not", () => {
+  assert.equal(
+    shouldCollectShop({
+      store: "A",
+      enabled: true,
+      authState: "login_expired",
+      cookies: [{ name: "thor", value: "1" }]
+    }),
+    true
+  );
+  assert.equal(
+    shouldCollectShop({
+      store: "B",
+      enabled: false,
+      authState: "ok",
+      cookies: [{ name: "thor", value: "1" }]
+    }),
+    false
+  );
+  assert.equal(
+    shouldCollectShop({
+      store: "C",
+      enabled: true,
+      authState: "login_expired",
+      cookies: []
+    }),
+    false
+  );
+});
+
+test("markAuth login_expired keeps the cookie jar for recheck migration", async () => {
+  process.env.SHEN_JINGMAI_MEMORY = "1";
+  await resetJingmaiStore();
+  await saveSession("复核店", {
+    cookies: [{ name: "thor", value: "keep-me", domain: ".jd.com", path: "/" }],
+    authState: "ok",
+    shopId: "123"
+  });
+  await markAuth("复核店", "login_expired", "登录已失效，请重新登录");
+  const rows = await listSessions();
+  const hit = rows.find(function (row) {
+    return row.store === "复核店";
+  });
+  assert.equal(hit.authState, "login_expired");
+  assert.equal(hit.cookies.length, 1);
+  assert.equal(hit.cookies[0].value, "keep-me");
+});
+
+test("runTick rechecks login_expired shops that still have cookies", async () => {
+  const seen = [];
+  await runTick({
+    inflight: new Set(),
+    listTargets: async function () {
+      return [
+        {
+          store: "误标店",
+          enabled: true,
+          authState: "login_expired",
+          authMessage: "京准通没有可用账号 -100",
+          cookies: [{ name: "thor", value: "1" }],
+          shopId: "9"
+        },
+        {
+          store: "人工暂停",
+          enabled: false,
+          authState: "ok",
+          cookies: [{ name: "thor", value: "1" }]
+        }
+      ];
+    },
+    recheckJingmai: async function (shop) {
+      seen.push("recheck:" + shop.store);
+      return true;
+    },
+    fetchHome: async function (cookies, signal, expected) {
+      seen.push("fetch:" + expected.store);
+      return { dealAmount: 10, paidAmount: 1 };
+    },
+    saveSample: async function () {},
+    markAuth: async function (store, state) {
+      seen.push("auth:" + store + ":" + state);
+    },
+    now: function () {
+      return { day: "2026-11-19", stamp: "2026-11-19 10:00:00" };
+    }
+  });
+  assert.deepEqual(seen, ["recheck:误标店", "fetch:误标店", "auth:误标店:ok"]);
 });

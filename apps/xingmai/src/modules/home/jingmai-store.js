@@ -174,13 +174,12 @@ export async function saveSession(store, fields) {
 export async function markAuth(store, authState, authMessage) {
   await ensure();
   const message = String(authMessage || "").slice(0, 200);
+  // Keep cookie jars on login_expired so a controlled Jingmai recheck can run.
+  // Do not wipe historical sessions that were mis-labeled by ad-channel errors.
   if (memoryMode !== false) {
     const current = memorySession(store);
     current.authState = authState;
     current.authMessage = message;
-    if (authState === "login_expired") {
-      current.cookies = [];
-    }
     memory.sessions.set(store, current);
     if (memoryMode === true) {
       return;
@@ -188,17 +187,14 @@ export async function markAuth(store, authState, authMessage) {
   }
   const result = await query(
     `UPDATE shen_jingmai_session
-     SET auth_state = ?, auth_message = ?, cookie_jar = CASE WHEN ? = 'login_expired' THEN '[]' ELSE cookie_jar END, updated_at = ?
+     SET auth_state = ?, auth_message = ?, updated_at = ?
      WHERE store = ?`,
-    [authState, message, authState, stampNow(), store]
+    [authState, message, stampNow(), store]
   );
   if (result == null) {
     const current = memorySession(store);
     current.authState = authState;
     current.authMessage = message;
-    if (authState === "login_expired") {
-      current.cookies = [];
-    }
     memory.sessions.set(store, current);
   }
 }

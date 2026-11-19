@@ -37,22 +37,74 @@ export function cookieHeader(jar) {
     .join("; ");
 }
 
+export function parseSetCookieLine(line) {
+  const parts = String(line || "").split(";");
+  const pair = parts[0] || "";
+  const index = pair.indexOf("=");
+  if (index < 1) {
+    return null;
+  }
+  const next = {
+    name: pair.slice(0, index).trim(),
+    value: pair.slice(index + 1).trim()
+  };
+  if (!next.name) {
+    return null;
+  }
+  for (let i = 1; i < parts.length; i += 1) {
+    const chunk = String(parts[i] || "").trim();
+    if (!chunk) {
+      continue;
+    }
+    const eq = chunk.indexOf("=");
+    const key = (eq >= 0 ? chunk.slice(0, eq) : chunk).trim().toLowerCase();
+    const val = eq >= 0 ? chunk.slice(eq + 1).trim() : "";
+    if (key === "domain" && val) {
+      next.domain = val;
+    } else if (key === "path" && val) {
+      next.path = val;
+    } else if (key === "expires" && val) {
+      const ms = Date.parse(val);
+      if (Number.isFinite(ms) && ms > 0) {
+        next.expires = Math.floor(ms / 1000);
+      }
+    } else if (key === "max-age" && val) {
+      const seconds = Number(val);
+      if (Number.isFinite(seconds) && seconds > 0) {
+        next.expires = Math.floor(Date.now() / 1000) + Math.floor(seconds);
+      }
+    } else if (key === "secure") {
+      next.secure = true;
+    } else if (key === "httponly") {
+      next.httpOnly = true;
+    } else if (key === "samesite" && val) {
+      next.sameSite = val;
+    }
+  }
+  return next;
+}
+
 export function absorbCookies(response, jar) {
   const lines = typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [];
   lines.forEach(function (line) {
-    const pair = String(line).split(";")[0];
-    const index = pair.indexOf("=");
-    if (index < 1) {
+    const next = parseSetCookieLine(line);
+    if (!next) {
       return;
     }
-    const name = pair.slice(0, index).trim();
-    const value = pair.slice(index + 1).trim();
     const found = jar.findIndex(function (item) {
-      return item.name === name;
+      if (!item || item.name !== next.name) {
+        return false;
+      }
+      if (next.domain && item.domain && String(item.domain) !== String(next.domain)) {
+        return false;
+      }
+      if (next.path && item.path && String(item.path) !== String(next.path)) {
+        return false;
+      }
+      return true;
     });
-    const next = { name: name, value: value };
     if (found >= 0) {
-      jar[found] = next;
+      jar[found] = Object.assign({}, jar[found], next);
     } else {
       jar.push(next);
     }
@@ -655,7 +707,7 @@ async function fetchSzDeal(jar, fetchImpl, signal) {
   return parseRealtime(response.status, await response.text(), response.headers.get("location"));
 }
 
-async function fetchDeal(jar, fetchImpl, readCard, signal) {
+async function fetchDeal(jar, fetchImpl, readCard, signal, shopKey) {
   let shopError = null;
   try {
     return await enqueueDeal(function (gateSignal) {
@@ -678,7 +730,7 @@ async function fetchDeal(jar, fetchImpl, readCard, signal) {
   const reader = readCard || (fetchImpl === fetch ? readHomeDeal : null);
   if (reader && jar && jar.length) {
     try {
-      const card = await reader(jar, signal);
+      const card = await reader(jar, signal, shopKey || "");
       if (card && (card.dealAmount != null || card.orderCount != null || card.customerCount != null)) {
         return card;
       }
@@ -706,26 +758,104 @@ function paidAccountError(payload) {
   return ("京准通没有可用账号" + (code ? " " + code : "") + (message ? " " + message : "")).trim();
 }
 
-async function warmJzt(jar, fetchImpl, signal) {
-  try {
-    const response = await request(fetchImpl, jar, "https://jzt.jd.com/custom-report/", {
+async function followRedirectChain(fetchImpl, jar, startUrl, headers, signal, maxHops) {
+  let current = startUrl;
+  let lastStatus = 0;
+  for (let hop = 0; hop < (maxHops || 8); hop += 1) {
+    if (signal && signal.aborted) {
+      throw jingmaiError("timeout", "采集超时");
+    }
+    const response = await request(fetchImpl, jar, current, {
       signal: signal,
-      headers: {
+      timeoutMs: 20000,
+      headers: headers || {}
+    });
+    lastStatus = response.status;
+    const location = response.headers.get("location") || "";
+    try {
+      await response.arrayBuffer();
+    } catch {
+      /* body optional while hopping SSO */
+    }
+    if (lastStatus >= 300 && lastStatus < 400 && location) {
+      current = new URL(location, current).toString();
+      continue;
+    }
+    return { url: current, status: lastStatus };
+  }
+  return { url: current, status: lastStatus };
+}
+
+async function warmJzt(jar, fetchImpl, signal) {
+  // Real SSO chain: shop session → follow redirects into JZT (not a single manual hit).
+  try {
+    await followRedirectChain(
+      fetchImpl,
+      jar,
+      "https://shop.jd.com/jdm/home",
+      {
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         referer: "https://shop.jd.com/"
-      }
-    });
-    await response.arrayBuffer();
-  } catch {
-    /* pinlist still runs; the warm page only seeds jzt cookies */
+      },
+      signal,
+      6
+    );
+  } catch (error) {
+    if (classifyTransportError(error).code === "timeout") {
+      throw error;
+    }
+  }
+  try {
+    const landed = await followRedirectChain(
+      fetchImpl,
+      jar,
+      "https://jzt.jd.com/custom-report/",
+      {
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        referer: "https://shop.jd.com/jdm/home"
+      },
+      signal,
+      8
+    );
+    if (/passport\.|\/login/i.test(String(landed.url || ""))) {
+      throw jingmaiError("paid", "京准通跨域登录未完成");
+    }
+  } catch (error) {
+    const classified = classifyTransportError(error);
+    if (classified.code === "timeout") {
+      throw classified;
+    }
+    if (classified.code === "paid") {
+      throw classified;
+    }
+    /* pinlist still runs; warm only seeds SSO cookies */
   }
 }
 
-async function fetchPaid(jar, fetchImpl, signal) {
+async function fetchPaid(jar, fetchImpl, signal, expected) {
   const headers = jztHeaders();
   await warmJzt(jar, fetchImpl, signal);
   if (signal && signal.aborted) {
     throw jingmaiError("timeout", "采集超时");
+  }
+  const wantId = String((expected && expected.shopId) || "").trim();
+  if (wantId) {
+    try {
+      const identity = await fetchAccountIdentity(jar, fetchImpl, signal);
+      const gotId = String((identity && identity.shopId) || "").trim();
+      if (gotId && gotId !== wantId) {
+        throw jingmaiError("paid", "京准通店铺身份与京麦不一致");
+      }
+    } catch (error) {
+      const classified = classifyTransportError(error);
+      if (classified.code === "paid" || classified.code === "timeout") {
+        throw classified;
+      }
+      if (classified.code === "login") {
+        throw jingmaiError("paid", "京准通账号未授权或需要重新开通");
+      }
+      /* identity flaky: continue to pinlist; failures stay on paid channel */
+    }
   }
   let user = null;
   try {
@@ -792,23 +922,30 @@ function hasCollected(metrics) {
   });
 }
 
-export async function fetchAccountIdentity(jar, fetchImpl = fetch) {
-  const account = await postDsm(fetchImpl, jar, SHELL_APP, ACCOUNT_API, {});
+export async function fetchAccountIdentity(jar, fetchImpl = fetch, signal) {
+  const account = await postDsm(fetchImpl, jar, SHELL_APP, ACCOUNT_API, {}, signal);
   return accountIdentity(account);
 }
 
-export async function fetchHome(jar, fetchImpl = fetch, readCard, signal) {
-  // Allow fetchHome(jar, signal) and fetchHome(jar, fetchImpl, signal) call shapes
-  // used by collectOne / runner wrappers.
-  if (fetchImpl && typeof fetchImpl === "object" && typeof fetchImpl.aborted === "boolean" && !readCard) {
+export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expected) {
+  // Shapes: fetchHome(jar), fetchHome(jar, signal), fetchHome(jar, signal, expected),
+  // fetchHome(jar, fetchImpl, readCard, signal, expected).
+  if (fetchImpl && typeof fetchImpl === "object" && typeof fetchImpl.aborted === "boolean") {
+    expected = readCard && typeof readCard === "object" && !("aborted" in readCard) ? readCard : expected;
     signal = fetchImpl;
     fetchImpl = fetch;
-  } else if (readCard && typeof readCard === "object" && typeof readCard.aborted === "boolean" && !signal) {
+    readCard = undefined;
+  } else if (readCard && typeof readCard === "object" && typeof readCard.aborted === "boolean") {
+    expected = signal && typeof signal === "object" && !("aborted" in signal) ? signal : expected;
     signal = readCard;
     readCard = undefined;
+  } else if (signal && typeof signal === "object" && !("aborted" in signal) && (signal.shopId != null || signal.store)) {
+    expected = signal;
+    signal = undefined;
   }
+  const shopKey = String((expected && (expected.shopId || expected.store)) || "").trim();
 
-  const dealTask = fetchDeal(jar, fetchImpl, readCard, signal).then(
+  const dealTask = fetchDeal(jar, fetchImpl, readCard, signal, shopKey).then(
     function (value) {
       return { deal: value, dealError: null };
     },
@@ -816,7 +953,7 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal) {
       return { deal: null, dealError: classifyTransportError(error) };
     }
   );
-  const paidTask = fetchPaid(jar, fetchImpl, signal).then(
+  const paidTask = fetchPaid(jar, fetchImpl, signal, expected).then(
     function (value) {
       return { paid: value, paidError: null };
     },
