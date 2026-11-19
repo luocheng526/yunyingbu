@@ -3336,6 +3336,7 @@
     });
     liveBoardSlot = "";
     return (
+      liveDeskHtml(state) +
       live2FilterHtml(roster, state && state.live2Pack && state.live2Pack.updatedAt) +
       '<div class="xm-hm-live-charts">' +
       trio +
