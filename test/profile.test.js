@@ -69,6 +69,7 @@ test("auth.js exports dbMode() and query for academy and other stores", () => {
   assert.equal(resolveDesk({ username: "罗成" }).home, "/home");
   const authSource = fs.readFileSync(new URL("../src/modules/profile/auth.js", import.meta.url), "utf8");
   assert.doesNotMatch(authSource, /from ["']\.\/duties\.js["']/);
+  assert.doesNotMatch(authSource, /from ["']express["']/);
 });
 
 test("GET /shared assets are public and cacheable; APIs are not cached", async () => {

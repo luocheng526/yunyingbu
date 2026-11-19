@@ -1,9 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
-import { Router } from "express";
+
+// 线上试载会把静态 from 说明符拼到 live 目录，所以 Express 用 createRequire。
+const express = createRequire(import.meta.url)("express");
+const Router = express.Router;
 
 // 线上覆盖只能改已有文件。责权表内联在本文件，避免试载再 import 不存在的 ./duties.js。
 const DUTY_INITIAL = [
