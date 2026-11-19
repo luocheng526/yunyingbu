@@ -505,13 +505,7 @@
         root.querySelector("#edit-email").value = user.email || "";
         root.querySelector("#device-list").innerHTML = deviceTable(false);
         root.querySelector("#device-list-all").innerHTML = deviceTable(true);
-        let uploaded = "";
-        try {
-          uploaded = sessionStorage.getItem("xm-me-avatar-" + (user.username || "")) || "";
-        } catch (_e) {
-          uploaded = "";
-        }
-        showAvatar(uploaded, name);
+        showAvatar(user.avatarUrl || "", name);
       }
 
       function emptyDuties() {
@@ -920,6 +914,31 @@
         });
       }
 
+      function packAvatar(file, done) {
+        const reader = new FileReader();
+        reader.onload = function () {
+          const raw = String(reader.result || "");
+          const img = new Image();
+          img.onload = function () {
+            const size = 256;
+            const canvas = document.createElement("canvas");
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext("2d");
+            const min = Math.min(img.width, img.height) || size;
+            const sx = (img.width - min) / 2;
+            const sy = (img.height - min) / 2;
+            ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+            done(canvas.toDataURL("image/jpeg", 0.86));
+          };
+          img.onerror = function () {
+            done(raw);
+          };
+          img.src = raw;
+        };
+        reader.readAsDataURL(file);
+      }
+
       root.querySelector("#who-avatar-file").addEventListener("change", function (event) {
         const file = event.target.files && event.target.files[0];
         event.target.value = "";
@@ -928,25 +947,27 @@
         }
         if (file.size > 512 * 1024) {
           setStatus("头像请小于 512KB", "error");
-          showTab("security");
+          showTab("basic");
           return;
         }
-        const reader = new FileReader();
-        reader.onload = function () {
-          const src = String(reader.result || "");
+        packAvatar(file, function (src) {
           showAvatar(src, currentUser.username || "脉");
-          try {
-            sessionStorage.setItem("xm-me-avatar-" + (currentUser.username || ""), src);
-          } catch (_e) {}
-          api("/api/profile/logs", {
+          api("/api/profile/avatar", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "上传头像" })
-          }).then(function () {
+            body: JSON.stringify({ image: src })
+          }).then(function (result) {
+            if (!result.res.ok) {
+              setStatus(result.data.error || "头像保存失败", "error");
+              showTab("basic");
+              return;
+            }
+            currentUser.avatarUrl = result.data.avatarUrl || "";
+            showAvatar(currentUser.avatarUrl || src, currentUser.username || "脉");
+            setStatus("头像已保存", "ok");
             loadLogs();
           });
-        };
-        reader.readAsDataURL(file);
+        });
       });
       root.querySelector("#password-form").addEventListener("submit", onPassword);
       root.querySelector("#logout-form").addEventListener("submit", function (event) {

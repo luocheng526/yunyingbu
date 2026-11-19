@@ -9,7 +9,7 @@ const publicDir = path.join(__dirname, "../public");
 
 export function createApp() {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: "1mb" }));
   attachProfile(app);
   app.use(express.static(publicDir));
   attachHome(app);

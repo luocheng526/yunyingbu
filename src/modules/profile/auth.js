@@ -148,6 +148,12 @@ export const SCHEMA_SQL = [
     created_at BIGINT NOT NULL,
     KEY idx_xm_me_logs_user_time (username, created_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS xm_me_avatars (
+    username VARCHAR(64) NOT NULL PRIMARY KEY,
+    mime VARCHAR(64) NOT NULL,
+    body LONGBLOB NOT NULL,
+    updated_at BIGINT NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS release_tickets (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     version VARCHAR(128) NOT NULL,
@@ -598,6 +604,11 @@ export async function hydrateFromMysql() {
     } catch (err) {
       console.error("session hydrate failed", err);
     }
+    try {
+      await hydrateAvatarsFromMysql();
+    } catch (err) {
+      console.error("avatar hydrate failed", err);
+    }
     return;
   }
   for (const user of users.values()) {
@@ -607,6 +618,11 @@ export async function hydrateFromMysql() {
     await hydrateSessionsFromMysql();
   } catch (err) {
     console.error("session hydrate failed", err);
+  }
+  try {
+    await hydrateAvatarsFromMysql();
+  } catch (err) {
+    console.error("avatar hydrate failed", err);
   }
 }
 
@@ -779,6 +795,109 @@ async function listProfileLogs(viewer, filterUser) {
   return items.slice(0, 500).map(publicLog);
 }
 
+const AVATAR_TABLE_SQL = SCHEMA_SQL.find((sql) => sql.includes("xm_me_avatars"));
+const AVATAR_MAX = 512 * 1024;
+const AVATAR_TYPES = {
+  "image/jpeg": true,
+  "image/jpg": true,
+  "image/png": true,
+  "image/gif": true,
+  "image/webp": true
+};
+const avatars = new Map();
+let avatarTableReady = false;
+
+function avatarPublicUrl(username) {
+  const row = avatars.get(String(username || "").trim());
+  if (!row) {
+    return "";
+  }
+  return "/api/profile/avatar?t=" + encodeURIComponent(String(row.updatedAt));
+}
+
+async function ensureAvatarTable() {
+  if (avatarTableReady || dbMode() !== "mysql" || !AVATAR_TABLE_SQL) {
+    return;
+  }
+  await query(AVATAR_TABLE_SQL);
+  avatarTableReady = true;
+}
+
+function parseAvatarDataUrl(image) {
+  const text = String(image || "").trim();
+  const match = text.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/);
+  if (!match) {
+    return { ok: false, error: "请上传图片文件" };
+  }
+  const mime = match[1].toLowerCase() === "image/jpg" ? "image/jpeg" : match[1].toLowerCase();
+  if (!AVATAR_TYPES[mime]) {
+    return { ok: false, error: "头像仅支持 jpg、png、gif、webp" };
+  }
+  let body;
+  try {
+    body = Buffer.from(match[2].replace(/\s+/g, ""), "base64");
+  } catch {
+    return { ok: false, error: "图片无法读取" };
+  }
+  if (!body.length) {
+    return { ok: false, error: "图片无法读取" };
+  }
+  if (body.length > AVATAR_MAX) {
+    return { ok: false, error: "头像请小于 512KB" };
+  }
+  return { ok: true, mime, body };
+}
+
+async function persistAvatarRow(username, row) {
+  if (dbMode() !== "mysql") {
+    return;
+  }
+  await ensureAvatarTable();
+  await query(
+    `INSERT INTO xm_me_avatars (username, mime, body, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       mime = VALUES(mime),
+       body = VALUES(body),
+       updated_at = VALUES(updated_at)`,
+    [username, row.mime, row.body, row.updatedAt]
+  );
+}
+
+async function saveAvatar(username, image) {
+  const parsed = parseAvatarDataUrl(image);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  const row = { mime: parsed.mime, body: parsed.body, updatedAt: Date.now() };
+  avatars.set(username, row);
+  try {
+    await persistAvatarRow(username, row);
+  } catch (err) {
+    console.error("avatar persist failed", err);
+  }
+  return { ok: true, avatarUrl: avatarPublicUrl(username) };
+}
+
+async function hydrateAvatarsFromMysql() {
+  if (dbMode() !== "mysql") {
+    return;
+  }
+  await ensureAvatarTable();
+  const [rows] = await query("SELECT username, mime, body, updated_at FROM xm_me_avatars");
+  avatars.clear();
+  for (const row of rows || []) {
+    if (!row.username || !row.body) {
+      continue;
+    }
+    avatars.set(row.username, {
+      mime: row.mime || "image/jpeg",
+      body: Buffer.isBuffer(row.body) ? row.body : Buffer.from(row.body),
+      updatedAt: Number(row.updated_at) || Date.now()
+    });
+  }
+}
+
 export function resetStoreForTests() {
   setPoolForTests(null);
   setDbMode("memory");
@@ -789,6 +908,8 @@ export function resetStoreForTests() {
   peopleListLoader = null;
   profileLogs.length = 0;
   logTableReady = false;
+  avatars.clear();
+  avatarTableReady = false;
   resetDutyCatalogForTests();
   seed();
 }
@@ -811,7 +932,8 @@ export function publicProfile(user) {
     department: user.department || identityDefaults(user.username, user.displayName).department,
     createdAt: user.createdAt || identityDefaults(user.username, user.displayName).createdAt,
     grantedCount: duties.grantedCount,
-    dutyTotal: duties.total
+    dutyTotal: duties.total,
+    avatarUrl: avatarPublicUrl(user.username)
   };
 }
 
@@ -1049,4 +1171,25 @@ profileRouter.delete("/logs", (_req, res) => {
 
 profileRouter.delete("/logs/:id", (_req, res) => {
   res.status(403).json({ ok: false, error: "操作日志不可删除" });
+});
+
+profileRouter.get("/avatar", (req, res) => {
+  const row = avatars.get(req.user.username);
+  if (!row) {
+    res.status(404).json({ ok: false, error: "暂无头像" });
+    return;
+  }
+  res.setHeader("Content-Type", row.mime);
+  res.setHeader("Cache-Control", "private, max-age=60");
+  res.send(row.body);
+});
+
+profileRouter.post("/avatar", async (req, res) => {
+  const result = await saveAvatar(req.user.username, req.body?.image);
+  if (!result.ok) {
+    res.status(400).json(result);
+    return;
+  }
+  recordProfileLog(req, req.user, "上传头像", "已保存到服务器");
+  res.json({ ok: true, avatarUrl: result.avatarUrl });
 });

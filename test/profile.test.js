@@ -165,6 +165,8 @@ test("login 罗成 sets cookie; GET /api/auth/me 200; wrong password 401", async
     assert.match(moduleJs.text, /\/api\/profile\/logs/);
     assert.match(moduleJs.text, /个人不可删除/);
     assert.doesNotMatch(moduleJs.text, /操作日志即将开放/);
+    assert.match(moduleJs.text, /\/api\/profile\/avatar/);
+    assert.doesNotMatch(moduleJs.text, /sessionStorage\.setItem\("xm-me-avatar-/);
   });
 });
 
@@ -363,6 +365,51 @@ test("operation logs record account actions; staff cannot delete; 罗成 sees ev
       redirect: "follow"
     });
     assert.equal(spoof.json.items.every((item) => item.username === "沈子晗"), true);
+  });
+});
+
+test("uploaded avatar is stored on the server and survives a later profile fetch", async () => {
+  const png =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  await withServer(async (base) => {
+    const missing = await request(base, "/api/profile/avatar", { redirect: "follow" });
+    assert.equal(missing.res.status, 401);
+
+    const ok = await request(base, "/api/auth/login", {
+      method: "POST",
+      body: { username: DEMO_USERNAME, password: DEMO_INITIAL_PASSWORD },
+      redirect: "follow"
+    });
+    assert.equal(ok.res.status, 200);
+    assert.equal(ok.json.user.avatarUrl || "", "");
+
+    const empty = await request(base, "/api/profile/avatar", { cookie: ok.cookie, redirect: "follow" });
+    assert.equal(empty.res.status, 404);
+
+    const saved = await request(base, "/api/profile/avatar", {
+      method: "POST",
+      cookie: ok.cookie,
+      redirect: "follow",
+      body: { image: png }
+    });
+    assert.equal(saved.res.status, 200);
+    assert.match(saved.json.avatarUrl, /\/api\/profile\/avatar/);
+
+    const file = await request(base, saved.json.avatarUrl, { cookie: ok.cookie, redirect: "follow" });
+    assert.equal(file.res.status, 200);
+    assert.match(String(file.res.headers.get("content-type")), /image\//);
+    assert.ok(file.text.length > 0);
+
+    const later = await request(base, "/api/profile", { cookie: ok.cookie, redirect: "follow" });
+    assert.equal(later.res.status, 200);
+    assert.equal(later.json.avatarUrl, saved.json.avatarUrl);
+
+    const again = await request(base, "/api/profile/avatar", { cookie: ok.cookie, redirect: "follow" });
+    assert.equal(again.res.status, 200);
+    assert.equal(again.text, file.text);
+
+    const logs = await request(base, "/api/profile/logs", { cookie: ok.cookie, redirect: "follow" });
+    assert.ok(logs.json.items.some((item) => item.action === "上传头像"));
   });
 });
 
