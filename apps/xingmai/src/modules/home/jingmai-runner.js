@@ -149,8 +149,8 @@ async function cookiesAlive(cookies) {
     return false;
   }
   try {
-    await withDeadline(function () {
-      return deps.client.fetchHome(cookies);
+    await withDeadline(function (signal) {
+      return deps.client.fetchHome(cookies, signal);
     }, 12000);
     return true;
   } catch (error) {
@@ -940,8 +940,8 @@ export async function jingmaiTick() {
   await runTick({
     inflight: inflight,
     listTargets: listCollectTargets,
-    fetchHome: function (cookies) {
-      return deps.client.fetchHome(cookies);
+    fetchHome: function (cookies, signal) {
+      return deps.client.fetchHome(cookies, signal);
     },
     saveSample: saveSample,
     markAuth: markAuth,

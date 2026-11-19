@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectAuthDecision, sampleFields, buildLiveView, beijingParts } from "../src/modules/home/jingmai.js";
+import { collectAuthDecision, sampleFields, buildLiveView, beijingParts, withDeadline } from "../src/modules/home/jingmai.js";
 import { fetchHome } from "../src/modules/home/jingmai-client.js";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 test("paid-only failures do not expire the whole shop login", () => {
   const paid = collectAuthDecision({ code: "paid", message: "京准通没有可用账号 -100 登录失败，请刷新页面重新登录" });
@@ -102,4 +105,104 @@ test("fetchHome keeps deal data when Jingzhuntong pinlist returns -100", async (
 test("beijing clock helper stays available for collector stamps", () => {
   const parts = beijingParts(new Date("2026-11-19T01:00:00Z"));
   assert.equal(parts.day, "2026-11-19");
+});
+
+test("withDeadline aborts the in-flight work and does not leave it running", async () => {
+  let aborted = false;
+  let finishedAfterAbort = false;
+  const error = await withDeadline(
+    function (signal) {
+      return new Promise(function (resolve, reject) {
+        signal.addEventListener(
+          "abort",
+          function () {
+            aborted = true;
+            reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+          },
+          { once: true }
+        );
+        setTimeout(function () {
+          if (!signal.aborted) {
+            finishedAfterAbort = true;
+            resolve("late");
+          }
+        }, 200);
+      });
+    },
+    40,
+    "采集超时"
+  ).then(
+    function () {
+      return null;
+    },
+    function (err) {
+      return err;
+    }
+  );
+  assert.equal(error && error.code, "timeout");
+  assert.equal(aborted, true);
+  await new Promise(function (resolve) {
+    setTimeout(resolve, 250);
+  });
+  assert.equal(finishedAfterAbort, false);
+});
+
+test("fetchHome cancels hanging paid and deal requests when the collect signal aborts", async () => {
+  let dealAborted = false;
+  let paidAborted = false;
+  const controller = new AbortController();
+  const fetchImpl = async (url, init) => {
+    const href = String(url);
+    const signal = init && init.signal;
+    return await new Promise(function (resolve, reject) {
+      const timer = setTimeout(function () {
+        resolve(new Response("{}", { status: 200, headers: { "content-type": "application/json" } }));
+      }, 5000);
+      if (!signal) {
+        return;
+      }
+      signal.addEventListener(
+        "abort",
+        function () {
+          clearTimeout(timer);
+          if (href.includes("jzt") || href.includes("pinlist") || href.includes("overview")) {
+            paidAborted = true;
+          } else {
+            dealAborted = true;
+          }
+          reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+        },
+        { once: true }
+      );
+    });
+  };
+  const pending = fetchHome([{ name: "thor", value: "ok" }], fetchImpl, null, controller.signal).then(
+    function () {
+      return null;
+    },
+    function (err) {
+      return err;
+    }
+  );
+  await new Promise(function (resolve) {
+    setTimeout(resolve, 30);
+  });
+  controller.abort();
+  const error = await pending;
+  assert.equal(error && error.code, "timeout");
+  assert.equal(dealAborted || paidAborted, true);
+});
+
+test("restart helper keeps the exact sudoers argv and drops --no-block/systemd-run", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const source = readFileSync(join(here, "../src/modules/releases/restart.js"), "utf8");
+  const spawnMatch = source.match(/spawn\(\s*"\/usr\/bin\/sudo"\s*,\s*\[([\s\S]*?)\]\s*,/);
+  assert.ok(spawnMatch, "sudo spawn argv list missing");
+  const argv = spawnMatch[1];
+  assert.match(argv, /"\/usr\/bin\/systemctl"/);
+  assert.match(argv, /"restart"/);
+  assert.match(argv, /"mengkai\.service"/);
+  assert.doesNotMatch(argv, /no-block/);
+  assert.doesNotMatch(argv, /systemd/);
+  assert.match(source, /detached:\s*true/);
 });

@@ -66,13 +66,37 @@ function hasSession(jar) {
   });
 }
 
+function linkSignals(extra, budgetMs) {
+  const timeout = AbortSignal.timeout(budgetMs == null ? 20000 : budgetMs);
+  if (!extra) {
+    return timeout;
+  }
+  if (typeof AbortSignal.any === "function") {
+    return AbortSignal.any([extra, timeout]);
+  }
+  if (extra.aborted) {
+    return extra;
+  }
+  const controller = new AbortController();
+  const forward = function () {
+    try {
+      controller.abort();
+    } catch {
+      /* already aborted */
+    }
+  };
+  extra.addEventListener("abort", forward, { once: true });
+  timeout.addEventListener("abort", forward, { once: true });
+  return controller.signal;
+}
+
 async function request(fetchImpl, jar, url, options) {
   try {
     const response = await fetchImpl(url, {
       method: options.method || "GET",
       redirect: "manual",
       body: options.body,
-      signal: options.signal || AbortSignal.timeout(20000),
+      signal: linkSignals(options.signal, options.timeoutMs),
       headers: Object.assign(
         {
           "user-agent": UA,
@@ -402,10 +426,11 @@ function readJson(status, text, location) {
   return body;
 }
 
-async function postJson(fetchImpl, jar, url, body, headers) {
+async function postJson(fetchImpl, jar, url, body, headers, signal) {
   const response = await request(fetchImpl, jar.slice(), url, {
     method: "POST",
     body: JSON.stringify(body || {}),
+    signal: signal,
     headers: Object.assign(
       {
         accept: "application/json, text/plain, */*",
@@ -417,8 +442,8 @@ async function postJson(fetchImpl, jar, url, body, headers) {
   return readJson(response.status, await response.text(), response.headers.get("location"));
 }
 
-async function getJson(fetchImpl, jar, url, headers) {
-  const response = await request(fetchImpl, jar.slice(), url, { headers: headers || {} });
+async function getJson(fetchImpl, jar, url, headers, signal) {
+  const response = await request(fetchImpl, jar.slice(), url, { headers: headers || {}, signal: signal });
   return readJson(response.status, await response.text(), response.headers.get("location"));
 }
 
@@ -451,8 +476,8 @@ function dsmProblem(body) {
   return (String(body.code) + " " + message).trim();
 }
 
-async function postDsm(fetchImpl, jar, appId, api, body) {
-  const payload = await postJson(fetchImpl, jar, dsmUrl(appId, api), body, dsmHeaders());
+async function postDsm(fetchImpl, jar, appId, api, body, signal) {
+  const payload = await postJson(fetchImpl, jar, dsmUrl(appId, api), body, dsmHeaders(), signal);
   const problem = dsmProblem(payload);
   if (problem) {
     throw jingmaiError("network", "京麦首页 " + problem);
@@ -470,9 +495,24 @@ function dealGapMs() {
   return Number.isFinite(value) && value >= 0 ? Math.min(value, 800) : 800;
 }
 
-function pause(ms) {
-  return new Promise(function (resolve) {
-    setTimeout(resolve, ms);
+function pause(ms, signal) {
+  return new Promise(function (resolve, reject) {
+    if (signal && signal.aborted) {
+      reject(jingmaiError("timeout", "采集超时"));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    if (!signal) {
+      return;
+    }
+    signal.addEventListener(
+      "abort",
+      function () {
+        clearTimeout(timer);
+        reject(jingmaiError("timeout", "采集超时"));
+      },
+      { once: true }
+    );
   });
 }
 
@@ -488,13 +528,23 @@ function dealGateMs() {
   return Number.isFinite(value) && value > 0 ? value : 25000;
 }
 
-function enqueueDeal(task) {
+function enqueueDeal(task, signal) {
   return new Promise(function (resolve, reject) {
+    let queued = false;
     const run = function () {
+      queued = false;
+      if (signal && signal.aborted) {
+        reject(jingmaiError("timeout", "采集超时"));
+        const next = dealWaiters.shift();
+        if (next) {
+          setTimeout(next, dealGapMs());
+        }
+        return;
+      }
       dealActive += 1;
       Promise.resolve()
         .then(function () {
-          return withDeadline(task, dealGateMs(), "采集超时");
+          return withDeadline(task, dealGateMs(), "采集超时", signal);
         })
         .then(resolve, reject)
         .finally(function () {
@@ -505,18 +555,38 @@ function enqueueDeal(task) {
           }
         });
     };
+    const onAbort = function () {
+      if (!queued) {
+        return;
+      }
+      const index = dealWaiters.indexOf(run);
+      if (index < 0) {
+        return;
+      }
+      dealWaiters.splice(index, 1);
+      queued = false;
+      reject(jingmaiError("timeout", "采集超时"));
+    };
+    if (signal) {
+      if (signal.aborted) {
+        reject(jingmaiError("timeout", "采集超时"));
+        return;
+      }
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
     if (dealActive < 3) {
       run();
     } else {
+      queued = true;
       dealWaiters.push(run);
     }
   });
 }
 
-async function fetchShopDealOnce(jar, fetchImpl) {
+async function fetchShopDealOnce(jar, fetchImpl, signal) {
   let field = "";
   try {
-    const account = await postDsm(fetchImpl, jar, SHELL_APP, ACCOUNT_API, {});
+    const account = await postDsm(fetchImpl, jar, SHELL_APP, ACCOUNT_API, {}, signal);
     field = businessFieldCode(account);
   } catch (error) {
     if (classifyTransportError(error).code === "login") {
@@ -528,9 +598,16 @@ async function fetchShopDealOnce(jar, fetchImpl) {
   let last = "";
   for (let index = 0; index < attempts.length; index += 1) {
     try {
-      const payload = await postDsm(fetchImpl, jar, SHOP_APP, SHOP_DATA_API, {
-        request: { belongParam: belongParam, bizRequest: attempts[index] }
-      });
+      const payload = await postDsm(
+        fetchImpl,
+        jar,
+        SHOP_APP,
+        SHOP_DATA_API,
+        {
+          request: { belongParam: belongParam, bizRequest: attempts[index] }
+        },
+        signal
+      );
       const metrics = extractShopDeal(payload);
       if (metrics) {
         return metrics;
@@ -550,25 +627,26 @@ async function fetchShopDealOnce(jar, fetchImpl) {
   throw jingmaiError("network", last || "京麦首页没有成交字段");
 }
 
-async function fetchShopDeal(jar, fetchImpl) {
+async function fetchShopDeal(jar, fetchImpl, signal) {
   let last = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await fetchShopDealOnce(jar, fetchImpl);
+      return await fetchShopDealOnce(jar, fetchImpl, signal);
     } catch (error) {
       const classified = classifyTransportError(error);
       if (classified.code === "login" || attempt === 2 || !dealBusy(classified)) {
         throw classified;
       }
       last = classified;
-      await pause(dealRetryMs());
+      await pause(dealRetryMs(), signal);
     }
   }
   throw last || jingmaiError("network", "京麦首页没有成交字段");
 }
 
-async function fetchSzDeal(jar, fetchImpl) {
+async function fetchSzDeal(jar, fetchImpl, signal) {
   const response = await request(fetchImpl, jar.slice(), SUMMARY_URL, {
+    signal: signal,
     headers: {
       accept: "application/json, text/plain, */*",
       referer: "https://sz.jd.com/realtime/realtimeSummarys.html"
@@ -577,24 +655,30 @@ async function fetchSzDeal(jar, fetchImpl) {
   return parseRealtime(response.status, await response.text(), response.headers.get("location"));
 }
 
-async function fetchDeal(jar, fetchImpl, readCard) {
+async function fetchDeal(jar, fetchImpl, readCard, signal) {
   let shopError = null;
   try {
-    return await enqueueDeal(function () {
-      return fetchShopDeal(jar, fetchImpl);
-    });
+    return await enqueueDeal(function (gateSignal) {
+      return fetchShopDeal(jar, fetchImpl, gateSignal || signal);
+    }, signal);
   } catch (error) {
     shopError = classifyTransportError(error);
   }
+  if (signal && signal.aborted) {
+    throw jingmaiError("timeout", "采集超时");
+  }
   try {
-    return await fetchSzDeal(jar, fetchImpl);
+    return await fetchSzDeal(jar, fetchImpl, signal);
   } catch (error) {
     shopError = shopError || classifyTransportError(error);
+  }
+  if (signal && signal.aborted) {
+    throw jingmaiError("timeout", "采集超时");
   }
   const reader = readCard || (fetchImpl === fetch ? readHomeDeal : null);
   if (reader && jar && jar.length) {
     try {
-      const card = await reader(jar);
+      const card = await reader(jar, signal);
       if (card && (card.dealAmount != null || card.orderCount != null || card.customerCount != null)) {
         return card;
       }
@@ -622,9 +706,10 @@ function paidAccountError(payload) {
   return ("京准通没有可用账号" + (code ? " " + code : "") + (message ? " " + message : "")).trim();
 }
 
-async function warmJzt(jar, fetchImpl) {
+async function warmJzt(jar, fetchImpl, signal) {
   try {
     const response = await request(fetchImpl, jar, "https://jzt.jd.com/custom-report/", {
+      signal: signal,
       headers: {
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         referer: "https://shop.jd.com/"
@@ -636,12 +721,21 @@ async function warmJzt(jar, fetchImpl) {
   }
 }
 
-async function fetchPaid(jar, fetchImpl) {
+async function fetchPaid(jar, fetchImpl, signal) {
   const headers = jztHeaders();
-  await warmJzt(jar, fetchImpl);
+  await warmJzt(jar, fetchImpl, signal);
+  if (signal && signal.aborted) {
+    throw jingmaiError("timeout", "采集超时");
+  }
   let user = null;
   try {
-    user = await getJson(fetchImpl, jar, JZT_ORIGIN + "/dataCenter/index/user/pinlist?requestFrom=0", headers);
+    user = await getJson(
+      fetchImpl,
+      jar,
+      JZT_ORIGIN + "/dataCenter/index/user/pinlist?requestFrom=0",
+      headers,
+      signal
+    );
   } catch (error) {
     const classified = classifyTransportError(error);
     if (classified.code === "login") {
@@ -651,7 +745,13 @@ async function fetchPaid(jar, fetchImpl) {
   }
   let auth = null;
   try {
-    auth = await getJson(fetchImpl, jar, JZT_ORIGIN + "/dataCenter/index/auth/pinlist?requestFrom=0", headers);
+    auth = await getJson(
+      fetchImpl,
+      jar,
+      JZT_ORIGIN + "/dataCenter/index/auth/pinlist?requestFrom=0",
+      headers,
+      signal
+    );
   } catch (error) {
     const classified = classifyTransportError(error);
     if (classified.code !== "login" && classified.code !== "paid") {
@@ -673,7 +773,8 @@ async function fetchPaid(jar, fetchImpl) {
     jar,
     JZT_ORIGIN + "/dataCenter/index/v2/summary/overview?requestFrom=0",
     paidQuery(day, pinIds),
-    Object.assign({ "content-type": "application/json" }, headers)
+    Object.assign({ "content-type": "application/json" }, headers),
+    signal
   );
   if (overview && overview.code != null && Number(overview.code) !== 1) {
     throw jingmaiError("paid", "京准通没有返回付费数据");
@@ -696,8 +797,18 @@ export async function fetchAccountIdentity(jar, fetchImpl = fetch) {
   return accountIdentity(account);
 }
 
-export async function fetchHome(jar, fetchImpl = fetch, readCard) {
-  const dealTask = fetchDeal(jar, fetchImpl, readCard).then(
+export async function fetchHome(jar, fetchImpl = fetch, readCard, signal) {
+  // Allow fetchHome(jar, signal) and fetchHome(jar, fetchImpl, signal) call shapes
+  // used by collectOne / runner wrappers.
+  if (fetchImpl && typeof fetchImpl === "object" && typeof fetchImpl.aborted === "boolean" && !readCard) {
+    signal = fetchImpl;
+    fetchImpl = fetch;
+  } else if (readCard && typeof readCard === "object" && typeof readCard.aborted === "boolean" && !signal) {
+    signal = readCard;
+    readCard = undefined;
+  }
+
+  const dealTask = fetchDeal(jar, fetchImpl, readCard, signal).then(
     function (value) {
       return { deal: value, dealError: null };
     },
@@ -705,7 +816,7 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard) {
       return { deal: null, dealError: classifyTransportError(error) };
     }
   );
-  const paidTask = fetchPaid(jar, fetchImpl).then(
+  const paidTask = fetchPaid(jar, fetchImpl, signal).then(
     function (value) {
       return { paid: value, paidError: null };
     },
@@ -721,6 +832,9 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard) {
     }
   );
   const [dealResult, paidResult] = await Promise.all([dealTask, paidTask]);
+  if (signal && signal.aborted) {
+    throw jingmaiError("timeout", "采集超时");
+  }
   const deal = dealResult.deal;
   const dealError = dealResult.dealError;
   const paid = paidResult.paid;
@@ -746,6 +860,7 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard) {
   if (paidError && paid == null) {
     metrics.paidNote = String(paidError.message || "京准通暂时读不到数据").slice(0, 160);
   }
+  // Old-site rule: ads failure must not wipe a successful Jingmai deal snapshot.
   if (hasCollected(metrics)) {
     return metrics;
   }

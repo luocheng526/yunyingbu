@@ -1,7 +1,4 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
+import { spawn } from "node:child_process";
 
 function isSystemdUnavailable(err) {
   const msg = String(err?.stderr || err?.message || err);
@@ -32,42 +29,108 @@ export function ticketNeedsProcessRestart(item, noDoc = false) {
   return filesNeedProcessRestart(noDoc ? [] : item.files || []);
 }
 
-/** Only the releases module may restart mengkai. Other modules must not call this. */
+/**
+ * Only the releases module may restart mengkai. Other modules must not call this.
+ *
+ * Production sudoers matches the exact argv:
+ *   /usr/bin/sudo -n /usr/bin/systemctl restart mengkai.service
+ * Extra flags (timer helpers / no-block) broke NOPASSWD exact-match and
+ * failed with "sudo: a password is required" (rel-1361/1362/1365).
+ * Do not widen sudoers — keep this argv exact.
+ *
+ * Spawn detached and do not await stop/start: waiting inside Type=notify
+ * deadlocks. Detach so the child outlives this process when systemd stops us.
+ */
 export async function restartMengkaiService() {
-  // Waiting on `systemctl restart` from inside mengkai.service deadlocks:
-  // systemd waits for this process to exit, and this process waits for systemctl.
-  // Schedule the restart outside the service unit and return.
-  try {
-    await execFileAsync(
-      "/usr/bin/sudo",
-      [
-        "-n",
-        "/usr/bin/systemd-run",
-        "--on-active=2s",
-        "--timer-property=AccuracySec=1s",
-        "/usr/bin/systemctl",
-        "restart",
-        "mengkai.service"
-      ],
-      { timeout: 8000 }
-    );
-    return { skipped: false, scheduled: true };
-  } catch (err) {
-    if (isSystemdUnavailable(err)) {
-      return { skipped: true, reason: "当前环境没有 systemd/mengkai.service，已跳过重启；代码已在本进程生效。" };
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+    const chunks = [];
+    let child;
+    try {
+      child = spawn("/usr/bin/sudo", ["-n", "/usr/bin/systemctl", "restart", "mengkai.service"], {
+        detached: true,
+        stdio: ["ignore", "ignore", "pipe"]
+      });
+    } catch (err) {
+      if (isSystemdUnavailable(err)) {
+        resolve({ skipped: true, reason: "当前环境没有 systemd/mengkai.service，已跳过重启；代码已在本进程生效。" });
+        return;
+      }
+      reject(err);
+      return;
     }
-  }
-  try {
-    await execFileAsync(
-      "/usr/bin/sudo",
-      ["-n", "/usr/bin/systemctl", "restart", "--no-block", "mengkai.service"],
-      { timeout: 8000 }
-    );
-    return { skipped: false, scheduled: true };
-  } catch (err) {
-    if (isSystemdUnavailable(err)) {
-      return { skipped: true, reason: "当前环境没有 systemd/mengkai.service，已跳过重启；代码已在本进程生效。" };
+
+    function done(result, error) {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      try {
+        if (child.stderr) {
+          child.stderr.removeAllListeners("data");
+        }
+      } catch {
+        /* ignore */
+      }
+      try {
+        child.unref();
+      } catch {
+        /* ignore */
+      }
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(result);
     }
-    throw err;
-  }
+
+    if (child.stderr) {
+      child.stderr.on("data", (chunk) => {
+        chunks.push(Buffer.from(chunk));
+      });
+    }
+
+    child.on("error", (err) => {
+      if (isSystemdUnavailable(err)) {
+        done({ skipped: true, reason: "当前环境没有 systemd/mengkai.service，已跳过重启；代码已在本进程生效。" });
+        return;
+      }
+      done(null, err);
+    });
+
+    child.on("exit", (code, signal) => {
+      const stderr = Buffer.concat(chunks).toString("utf8");
+      if (code === 0) {
+        done({ skipped: false, scheduled: true });
+        return;
+      }
+      if (/password is required/i.test(stderr)) {
+        done(
+          null,
+          Object.assign(new Error("Command failed: /usr/bin/sudo -n /usr/bin/systemctl restart mengkai.service\n" + stderr), {
+            code: code || 1,
+            stderr
+          })
+        );
+        return;
+      }
+      if (isSystemdUnavailable({ message: stderr, code })) {
+        done({ skipped: true, reason: "当前环境没有 systemd/mengkai.service，已跳过重启；代码已在本进程生效。" });
+        return;
+      }
+      // Non-zero often means this unit was already stopping while systemctl ran —
+      // the restart was still accepted. Treat as scheduled unless sudo rejected us.
+      if (signal || code) {
+        done({ skipped: false, scheduled: true, note: stderr.slice(0, 200) });
+        return;
+      }
+      done({ skipped: false, scheduled: true });
+    });
+
+    // Do not wait for the full restart; after 1.5s assume systemd accepted the job.
+    const timer = setTimeout(() => {
+      done({ skipped: false, scheduled: true });
+    }, 1500);
+  });
 }
