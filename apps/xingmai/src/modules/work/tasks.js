@@ -72,8 +72,9 @@ async function defaultNotify(personId, title, text, url) {
   if (!userid) {
     return false;
   }
+  const person = (await peopleMap()).get(String(personId));
   try {
-    return await sendTaskNotice(userid, title, text, url);
+    return await sendTaskNotice(userid, title, text, url, "去处理", person ? taskPersonName(person) : "");
   } catch {
     return false;
   }

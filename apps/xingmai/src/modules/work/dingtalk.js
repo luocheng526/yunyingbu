@@ -724,12 +724,14 @@ function dingFail(message, code) {
   return error;
 }
 
-function mentionText(userid, title, markdown, url, button) {
+function mentionText(name, title, markdown, url, button) {
+  const who = String(name || "").replace(/\s+/g, "").slice(0, 20);
   const head = String(title || "工作任务").trim().slice(0, 40);
   const text = String(markdown || "").replace(/\s+/g, " ").trim().slice(0, 180);
   const link = url || WORK_URL;
   const action = button || "去处理";
-  return `工作汇报 @${userid} ${head}\n${text}\n${action}：${link}`.slice(0, 500);
+  const at = who ? `@${who} ` : "";
+  return `工作汇报 ${at}${head}\n${text}\n${action}：${link}`.slice(0, 500);
 }
 
 function validHook(raw) {
@@ -764,7 +766,7 @@ export async function saveNotifyWebhook(raw) {
   return { ok: true };
 }
 
-async function sendMention(userid, title, markdown, url, button) {
+async function sendMention(userid, title, markdown, url, button, name) {
   const hook = notifyWebhook();
   if (!hook) {
     throw dingFail("还没有可以 @ 人的通知群");
@@ -774,7 +776,7 @@ async function sendMention(userid, title, markdown, url, button) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       msgtype: "text",
-      text: { content: mentionText(userid, title, markdown, url, button) },
+      text: { content: mentionText(name, title, markdown, url, button) },
       at: { atUserIds: [String(userid)], isAtAll: false }
     }),
     signal: AbortSignal.timeout(8000)
@@ -833,12 +835,12 @@ async function sendCorpCard(userid, title, markdown, url, button) {
   });
 }
 
-export async function sendTaskNotice(userid, title, markdown, url, button = "去处理") {
+export async function sendTaskNotice(userid, title, markdown, url, button = "去处理", name = "") {
   if (!userid) {
     return false;
   }
   try {
-    await sendMention(userid, title, markdown, url, button);
+    await sendMention(userid, title, markdown, url, button, name);
     lastPopup = { channel: "at", error: "" };
     return "at";
   } catch (mentionError) {
@@ -862,13 +864,13 @@ function maskId(value) {
   return `${text.slice(0, 6)}…${text.slice(-4)}`;
 }
 
-export async function popupTo(userid) {
+export async function popupTo(userid, name = "") {
   if (!userid) {
     return { ok: false, statusCode: 400, error: "当前账号还没有钉钉" };
   }
   const meta = { appKey: maskId(dingConfig().clientId), agentId: currentAgentId() };
   try {
-    await sendMention(userid, "工作汇报", "右下角弹窗测试。请看电脑右下角，这一条会显示内容。", workLink("todo"), "去处理");
+    await sendMention(userid, "工作汇报", "右下角弹窗测试。请看电脑右下角，这一条会显示内容。", workLink("todo"), "去处理", name);
     lastPopup = { channel: "at", error: "" };
     return { ok: true, channel: "at", error: "", ...meta };
   } catch (error) {
@@ -882,12 +884,12 @@ export async function popupTo(userid) {
   }
 }
 
-export async function sendWorkNotice(userid) {
+export async function sendWorkNotice(userid, name = "") {
   if (String(userid) === "0") {
     await sendCorpCard(userid, "今天的日报还没提交", "今天的工作日报还没交，请在今天提交。", workLink("todo"), "去填日报");
     return;
   }
-  await sendTaskNotice(userid, "今天的日报还没提交", "今天的工作日报还没交，请在今天提交。", workLink("todo"), "去填日报");
+  await sendTaskNotice(userid, "今天的日报还没提交", "今天的工作日报还没交，请在今天提交。", workLink("todo"), "去填日报", name);
 }
 
 export function shanghaiNow(now = new Date()) {

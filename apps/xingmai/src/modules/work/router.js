@@ -16,7 +16,7 @@ import {
   startDiaryReminder,
   syncDingBinds
 } from "./diary.js";
-import { getReport, getSettings, isWorkAdmin, myTodoCount, saveMembers, saveReport, saveTemplate, snapshot } from "./store.js";
+import { getReport, getSettings, isWorkAdmin, myTodoCount, orgPeople, saveMembers, saveReport, saveTemplate, snapshot } from "./store.js";
 import { dingUserOf, popupTo, saveNotifyWebhook } from "./dingtalk.js";
 import { actTask, listTasks, publishTask, readTaskFile, taskContext, taskCounts } from "./tasks.js";
 
@@ -288,7 +288,8 @@ workRouter.post(
     }
     const snap = await snapshot(req.user);
     const personId = Number(req.body?.personId) || (snap.me && snap.me.id);
-    sendResult(res, await popupTo(dingUserOf(personId)), 502);
+    const person = (await orgPeople()).find((item) => Number(item.id) === personId);
+    sendResult(res, await popupTo(dingUserOf(personId), person?.name || ""), 502);
   })
 );
 

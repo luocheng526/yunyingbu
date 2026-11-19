@@ -1254,7 +1254,7 @@ export async function noteMemberAdded(personId) {
     return { sent: false };
   }
   try {
-    await sendTaskNotice(userid, "待办事项", `今天的日报还没提交。截止日期 ${date}。`, workLink("todo"));
+    await sendTaskNotice(userid, "待办事项", `今天的日报还没提交。截止日期 ${date}。`, workLink("todo"), "去处理", person.name);
     return { sent: true };
   } catch (error) {
     await releaseReminder(person.id, `${date}#new`);
@@ -1283,7 +1283,7 @@ export async function reminderTargets(date) {
     });
     const bind = confirmedBinds().find((row) => row.personId === Number(person.id));
     if (obligation.status === "未报" && bind?.userid) {
-      targets.push({ personId: Number(person.id), userid: bind.userid });
+      targets.push({ personId: Number(person.id), userid: bind.userid, name: person.name });
     }
   }
   return targets;
@@ -1307,7 +1307,7 @@ export async function runDiaryReminder(now = new Date()) {
       continue;
     }
     try {
-      await sendWorkNotice(target.userid);
+      await sendWorkNotice(target.userid, target.name);
       sent += 1;
     } catch (error) {
       await releaseReminder(target.personId, clock.date);

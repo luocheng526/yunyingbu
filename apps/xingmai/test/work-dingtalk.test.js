@@ -172,6 +172,7 @@ test("同一员工同一天的未交提醒只发一次", async () => {
   process.env.DINGTALK_CLIENT_ID = "test-client";
   process.env.DINGTALK_CLIENT_SECRET = "test-secret";
   process.env.DINGTALK_AGENT_ID = "100";
+  process.env.DINGTALK_NOTIFY_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=abcdefghij1234567890";
   const calls = [];
   setDingTransport(async (url, options) => {
     calls.push(String(options?.body || ""));
@@ -192,11 +193,14 @@ test("同一员工同一天的未交提醒只发一次", async () => {
     assert.equal(second.sent, 0);
     const notices = calls.filter((body) => body.includes("去填日报"));
     assert.equal(notices.length, 1);
+    assert.match(notices[0], /@张文静/);
+    assert.doesNotMatch(notices[0], /@u4/);
     assert.match(notices[0], /zx\.xingmaierp\.cc\/work/);
   } finally {
     delete process.env.DINGTALK_CLIENT_ID;
     delete process.env.DINGTALK_CLIENT_SECRET;
     delete process.env.DINGTALK_AGENT_ID;
+    delete process.env.DINGTALK_NOTIFY_WEBHOOK;
     setDingTransport(globalThis.fetch);
     resetDingStore();
     resetWorkStore();
@@ -262,12 +266,13 @@ test("群里 @ 对应的人成功时只发这一条，没有通知群时退回�
       assert.equal(body.msgtype, "text");
       assert.deepEqual(body.at.atUserIds, ["u4"]);
       assert.equal(body.at.isAtAll, false);
-      assert.match(body.text.content, /@u4/);
+      assert.match(body.text.content, /@张文静/);
+      assert.doesNotMatch(body.text.content, /@u4/);
       assert.match(body.text.content, /工作汇报/);
       assert.match(body.text.content, /tab=taskReview/);
       return { json: async () => ({ errcode: 0, errmsg: "ok" }) };
     });
-    const popped = await sendTaskNotice("u4", "新的工作任务", "第二条单独弹窗。", "https://zx.xingmaierp.cc/work?tab=taskReview&task=abc");
+    const popped = await sendTaskNotice("u4", "新的工作任务", "第二条单独弹窗。", "https://zx.xingmaierp.cc/work?tab=taskReview&task=abc", "去处理", "张文静");
     assert.equal(popped, "at");
     assert.equal(mentioned.length, 1);
     assert.match(mentioned[0], /^https:\/\/oapi\.dingtalk\.com\/robot\/send/);
