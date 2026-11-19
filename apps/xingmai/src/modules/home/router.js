@@ -365,7 +365,9 @@ export function homeRouter() {
 
   router.post("/live-login/one", async (req, res) => {
     try {
-      res.json(await beginRelogin(req.body && req.body.store, req.headers.cookie || ""));
+      res.json(await beginRelogin(req.body && req.body.store, req.headers.cookie || "", {
+        manual: Boolean(req.body && req.body.manual)
+      }));
     } catch (err) {
       res.status(err.statusCode || 500).json({ error: err.message || "无法登录京麦" });
     }

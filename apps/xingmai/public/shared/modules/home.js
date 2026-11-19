@@ -2629,6 +2629,13 @@
         );
       }
       if (link.kind === "wait") {
+        if (typeof liveScope !== "undefined" && liveScope === "live2") {
+          return (
+            '<td class="xm-hm-num"><button type="button" class="xm-hm-login-link is-wait" data-live-login="' +
+            escapeHtml(shop) +
+            '" title="打开京麦登录页，账号和密码会填好，登录由你来点">待接入</button></td>'
+          );
+        }
         return '<td class="xm-hm-num" title="采集功能待接入">待接入</td>';
       }
       if (link.kind === "ads" || link.kind === "warn") {
@@ -2966,6 +2973,7 @@
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-login-link{border:0;background:transparent;padding:0;color:#e23b3b;font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}" +
+      ".xm-hm-login-link.is-wait{color:#2f6fed}" +
       ".xm-hm-desk-mask{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(15,23,42,.45)}" +
       ".xm-hm-desk{position:relative;width:min(780px,100%);max-height:calc(100vh - 48px);overflow:auto;margin:0;padding:16px 16px 14px;border:0;border-radius:12px;background:#fff;box-shadow:0 18px 50px rgba(0,0,0,.22)}" +
       ".xm-hm-desk h3{margin:0 28px 8px 0;font-size:16px}" +
@@ -5431,6 +5439,13 @@
           pollDesk();
         }
       }
+      function finishDeskLogin(storeName) {
+        if (state.view === "live2") {
+          refreshLive2(storeName || "");
+          return;
+        }
+        pullLive();
+      }
       function applyDesk(st) {
         var prev = state.desk || {};
         var next = st || {};
@@ -5441,7 +5456,7 @@
           if (!dead) {
             paint(root, state);
           }
-          pullLive();
+          finishDeskLogin(next.store || prev.store || "");
           return;
         }
         next.open = true;
@@ -5479,7 +5494,7 @@
               deskTimer = 0;
               state.desk = null;
               paint(root, state);
-              pullLive();
+              finishDeskLogin(next.store || keptStore || "");
               return;
             }
             next.open = true;
@@ -5519,8 +5534,11 @@
               return;
             }
             var note = state.desk.message || "";
-            if (!note || note.indexOf("启动") >= 0 || note.indexOf("登录页已打开") >= 0) {
-              note = "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。";
+            var keepNote = note.indexOf("点登录") >= 0 || note.indexOf("账号和密码") >= 0;
+            if (!keepNote && (!note || note.indexOf("启动") >= 0 || note.indexOf("登录页已打开") >= 0)) {
+              note = state.view === "live2"
+                ? "账号和密码已经填好，请在画面里点登录"
+                : "请在下面的服务器画面里完成验证。点画面就是在服务器上操作。";
             }
             showDesk({
               open: true,
@@ -5617,7 +5635,14 @@
         var seq = ++deskSeq;
         window.clearInterval(deskTimer);
         deskTimer = 0;
-        state.desk = { open: true, status: "opening", store: name, preview: true, step: "启动浏览器", message: "正在启动浏览器" };
+        state.desk = {
+          open: true,
+          status: "opening",
+          store: name,
+          preview: true,
+          step: "打开京麦登录页",
+          message: state.view === "live2" ? "正在打开京麦登录页，账号和密码会自动填上" : "正在启动浏览器"
+        };
         if (!dead) {
           paint(root, state);
         }
@@ -5650,7 +5675,7 @@
               window.clearInterval(wait);
               state.desk = null;
               paint(root, state);
-              pullLive();
+              finishDeskLogin(name);
               return;
             }
             if (row.message && state.desk.status === "opening") {
@@ -5672,7 +5697,7 @@
           }
           failDesk(seq, name, state.desk.step || "打开京麦登录页", "登录页还没有出来，可以重试本店");
         }, 90000);
-        api("/api/home/live-login/one", { store: name }).then(function (st) {
+        api("/api/home/live-login/one", { store: name, manual: state.view === "live2" }).then(function (st) {
           if (dead || seq !== deskSeq) {
             return;
           }
@@ -5685,7 +5710,7 @@
             window.clearTimeout(timed);
             state.desk = null;
             paint(root, state);
-            pullLive();
+            finishDeskLogin(name);
             return;
           }
           if (st.status === "failed" || st.status === "missing") {
@@ -6160,11 +6185,6 @@
         }
         if (event.target.closest("[data-connect-live2]")) {
           refreshLive2();
-          return;
-        }
-        if (state.view === "live2" && event.target.closest("[data-live-login]")) {
-          var retryShop = event.target.closest("[data-live-login]").getAttribute("data-live-login") || "";
-          refreshLive2(retryShop);
           return;
         }
         if (event.target.closest("[data-refresh-live]")) {

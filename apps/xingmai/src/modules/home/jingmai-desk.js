@@ -2321,7 +2321,34 @@ async function readLoginPage(ws) {
   }
 }
 
-async function finishOpen(desk, loginName, password, ticket) {
+async function fillLoginOnDesk(ws, loginName, password) {
+  const expression = `(${loginPageAction.toString()})(document, ${JSON.stringify({ fill: { loginName: loginName, password: password } })})`;
+  const frames = await frameIds(ws);
+  let account = false;
+  let secret = false;
+  for (let i = 0; i < frames.length; i += 1) {
+    try {
+      let contextId = 0;
+      if (frames[i]) {
+        const world = await send(ws, "Page.createIsolatedWorld", { frameId: frames[i], grantUniveralAccess: true }, undefined, 2500);
+        contextId = world.executionContextId || 0;
+      }
+      const result = contextId
+        ? await send(ws, "Runtime.evaluate", { expression: expression, contextId: contextId, returnByValue: true }, undefined, 2500)
+        : await send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true }, undefined, 2500);
+      const hit = result && result.result ? result.result.value : null;
+      if (hit && hit.kind === "filled") {
+        account = account || hit.account === true;
+        secret = secret || hit.password === true;
+      }
+    } catch {
+      /* try the next frame */
+    }
+  }
+  return account && secret;
+}
+
+async function finishOpen(desk, loginName, password, ticket, manual) {
   try {
     loginVisible = true;
     lastLaunchNote = LOGIN_SCREEN_MESSAGE;
@@ -2360,14 +2387,27 @@ async function finishOpen(desk, loginName, password, ticket) {
     if (ticket !== openTicket || current !== desk) {
       return { status: "login", message: "登录已取消" };
     }
+    let filled = false;
     if (streak >= 1 && loginName && password) {
       try {
-        await fillAndSubmit(desk.ws, loginName, password);
+        if (manual) {
+          filled = await fillLoginOnDesk(desk.ws, loginName, password);
+        } else {
+          await fillAndSubmit(desk.ws, loginName, password);
+        }
       } catch {
         /* keep the picture open for manual login */
       }
     }
     password = "";
+    if (manual) {
+      lastLaunchNote = filled ? "账号和密码已经填好，请在画面里点登录" : "京麦登录页已打开，请在画面里核对账号密码后再点登录";
+      return {
+        status: "verify",
+        message: lastLaunchNote,
+        formReady: true
+      };
+    }
     for (let attempt = 0; attempt < 6; attempt += 1) {
       if (ticket !== openTicket || current !== desk) {
         return { status: "login", message: "登录已取消" };
@@ -2406,7 +2446,7 @@ async function finishOpen(desk, loginName, password, ticket) {
   }
 }
 
-export async function openDesk({ store, loginName, password, reveal, onStep, signal, shopId } = {}) {
+export async function openDesk({ store, loginName, password, reveal, onStep, signal, shopId, manual } = {}) {
   const ticket = ++openTicket;
   const step = function (message) {
     if (message && typeof onStep === "function") {
@@ -2462,7 +2502,7 @@ export async function openDesk({ store, loginName, password, reveal, onStep, sig
     const account = loginName;
     const secret = password;
     password = "";
-    return await finishOpen(desk, account, secret, ticket);
+    return await finishOpen(desk, account, secret, ticket, manual === true);
   } catch (error) {
     if (ticket === openTicket) {
       stopCurrent();
@@ -2520,7 +2560,8 @@ export async function pollDesk(store) {
     }
     loginVisible = true;
   }
-  return { status: "verify", message: LOGIN_SCREEN_MESSAGE };
+  const note = /点登录|账号和密码/.test(String(lastLaunchNote || "")) ? lastLaunchNote : LOGIN_SCREEN_MESSAGE;
+  return { status: "verify", message: note };
 }
 
 let shotCache = { at: 0, store: "", image: null, ready: false };
@@ -2734,6 +2775,58 @@ export function loginPageAction(doc, action) {
       }
     });
     return found;
+  }
+  if (action && action.fill) {
+    const loginName = String(action.fill.loginName || "");
+    const secret = String(action.fill.password || "");
+    let account = null;
+    let password = null;
+    let tab = null;
+    docsOf(doc).forEach(function (item) {
+      const tabs = item.querySelectorAll ? item.querySelectorAll("a, button, [role=tab], span, div") : [];
+      for (let i = 0; i < tabs.length && !tab; i += 1) {
+        if (textOf(tabs[i]) === "密码登录" && visible(tabs[i])) {
+          tab = tabs[i];
+        }
+      }
+      const fields = item.querySelectorAll ? item.querySelectorAll("input") : [];
+      for (let i = 0; i < fields.length; i += 1) {
+        const field = fields[i];
+        if (!visible(field)) {
+          continue;
+        }
+        const hint = String(field.placeholder || "") + String(field.type || "") + String(field.name || "");
+        if (/password|密码/.test(hint) && !password) {
+          password = field;
+        } else if (/账号|登录名|用户名/.test(hint) && !/验证码/.test(hint) && !account) {
+          account = field;
+        }
+      }
+    });
+    if (tab && tab.click && !password) {
+      tab.click();
+    }
+    function write(field, value) {
+      if (!field) {
+        return false;
+      }
+      if (field.focus) {
+        field.focus();
+      }
+      const view = field.ownerDocument && field.ownerDocument.defaultView;
+      const proto = view && view.HTMLInputElement && Object.getOwnPropertyDescriptor(view.HTMLInputElement.prototype, "value");
+      if (proto && proto.set) {
+        proto.set.call(field, value);
+      } else {
+        field.value = value;
+      }
+      if (view && view.Event && field.dispatchEvent) {
+        field.dispatchEvent(new view.Event("input", { bubbles: true }));
+        field.dispatchEvent(new view.Event("change", { bubbles: true }));
+      }
+      return true;
+    }
+    return { kind: "filled", account: write(account, loginName), password: write(password, secret) };
   }
   if (action && action.submit) {
     const button = loginSubmit(doc);

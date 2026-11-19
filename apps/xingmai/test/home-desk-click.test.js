@@ -677,6 +677,13 @@ test("a login form captcha is submitted with the 登录 button", () => {
   assert.equal(aim.x, 170);
   assert.equal(aim.y, 188);
   assert.equal(loginPageAction(doc, { submit: true }).kind, "button");
+  const filled = loginPageAction(doc, { fill: { loginName: "shop-user", password: "shop-secret" } });
+  assert.equal(filled.kind, "filled");
+  assert.equal(filled.account, true);
+  assert.equal(filled.password, true);
+  assert.equal(account.value, "shop-user");
+  assert.equal(password.value, "shop-secret");
+  assert.equal(button.value, "");
 });
 
 test("the login page is shown once it is on screen, and typing waits until the form stays up", () => {

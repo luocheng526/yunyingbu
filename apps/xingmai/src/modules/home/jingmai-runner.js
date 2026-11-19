@@ -604,6 +604,7 @@ async function startQueued(shop, epoch) {
       loginName: shop.login,
       password: shop.password,
       reveal: true,
+      manual: shop.manual === true,
       signal: boot ? boot.signal : undefined,
       onStep: function (message) {
         if (epoch != null && epoch !== loginEpoch) {
@@ -629,7 +630,7 @@ async function startQueued(shop, epoch) {
             status: "login",
             message: launchNote() || browserStartFailure()
           });
-        }, deps.startLimitMs || 12000);
+        }, shop.manual === true ? 30000 : (deps.startLimitMs || 12000));
       })
     ]);
   } catch {
@@ -706,7 +707,7 @@ async function queueShops(shops, epoch) {
     return currentLoginState();
   }
   const copies = (shops || []).map(function (shop) {
-    const copy = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "" };
+    const copy = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "", manual: shop.manual === true };
     shop.login = "";
     shop.password = "";
     return copy;
@@ -735,7 +736,7 @@ async function queueShops(shops, epoch) {
   return startQueued(next, epoch);
 }
 
-export async function beginRelogin(store, cookie) {
+export async function beginRelogin(store, cookie, options) {
   const name = String(store || "").trim();
   if (!name) {
     const error = new Error("请选择店铺");
@@ -745,6 +746,7 @@ export async function beginRelogin(store, cookie) {
   if (loginInProgress(name)) {
     return currentLoginState(name);
   }
+  const manual = Boolean(options && options.manual);
   const epoch = ++loginEpoch;
   loginCursor = {
     index: 1,
@@ -778,51 +780,53 @@ export async function beginRelogin(store, cookie) {
       message: !shop || shop.enabled === false ? "这家店已停用" : "组织中心还没有填写这家店的账号"
     };
   }
-  const sessions = await listSessions();
-  const existing = sessions.find(function (item) {
-    return item.store === name;
-  });
-  if (sessionStillValid(existing)) {
-    const alive = await cookiesAlive(existing.cookies || [], {
-      store: name,
-      shopId: (existing && existing.shopId) || (shop && shop.shopId) || ""
+  if (!manual) {
+    const sessions = await listSessions();
+    const existing = sessions.find(function (item) {
+      return item.store === name;
     });
-    if (epoch !== loginEpoch) {
-      return currentLoginState(name);
+    if (sessionStillValid(existing)) {
+      const alive = await cookiesAlive(existing.cookies || [], {
+        store: name,
+        shopId: (existing && existing.shopId) || (shop && shop.shopId) || ""
+      });
+      if (epoch !== loginEpoch) {
+        return currentLoginState(name);
+      }
+      if (alive) {
+        clearOpening();
+        loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
+        shop.login = "";
+        shop.password = "";
+        return { ok: true, status: "done", store: name, message: "「" + name + "」已连接" };
+      }
+      await markAuth(name, "login_expired", "登录已失效，请重新登录", { writer: COLLECTOR_OWNER_HOME });
     }
-    if (alive) {
-      clearOpening();
-      loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
-      shop.login = "";
-      shop.password = "";
-      return { ok: true, status: "done", store: name, message: "「" + name + "」已连接" };
+    try {
+      const renewed = await passwordRelogin({
+        store: shop.store,
+        login: shop.login,
+        password: shop.password,
+        shopId: shop.shopId || ""
+      });
+      if (epoch !== loginEpoch) {
+        return currentLoginState(name);
+      }
+      if (renewed) {
+        clearOpening();
+        loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
+        shop.login = "";
+        shop.password = "";
+        return { ok: true, status: "done", store: name, message: "「" + name + "」已重新登录" };
+      }
+    } catch {
+      /* 掉线店先走账号密码；需要验证码时再打开服务器画面 */
     }
-    await markAuth(name, "login_expired", "登录已失效，请重新登录", { writer: COLLECTOR_OWNER_HOME });
-  }
-  try {
-    const renewed = await passwordRelogin({
-      store: shop.store,
-      login: shop.login,
-      password: shop.password,
-      shopId: shop.shopId || ""
-    });
-    if (epoch !== loginEpoch) {
-      return currentLoginState(name);
-    }
-    if (renewed) {
-      clearOpening();
-      loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
-      shop.login = "";
-      shop.password = "";
-      return { ok: true, status: "done", store: name, message: "「" + name + "」已重新登录" };
-    }
-  } catch {
-    /* 掉线店先走账号密码；需要验证码时再打开服务器画面 */
   }
   if (epoch !== loginEpoch) {
     return currentLoginState(name);
   }
-  const queued = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "" };
+  const queued = { store: shop.store, login: shop.login, password: shop.password, shopId: shop.shopId || "", manual: manual };
   shop.login = "";
   shop.password = "";
   const job = queueShops([queued], epoch);
@@ -1040,7 +1044,8 @@ export async function reloginState(store) {
   if (state.status === "verify" || state.status === "screen") {
     loginCursor.phase = "screen";
     loginCursor.step = "京麦登录页";
-    loginCursor.message = state.message || LOGIN_SCREEN_MESSAGE;
+    const kept = /点登录|账号和密码/.test(String(loginCursor.message || "")) ? loginCursor.message : "";
+    loginCursor.message = kept || state.message || LOGIN_SCREEN_MESSAGE;
     return publicState({
       status: "screen",
       store: name,
