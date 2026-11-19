@@ -1139,6 +1139,8 @@ test("fee target is a range and 费比监控 uses 超标 / 加大付费", () => 
   assert.deepEqual(feeInputs(fns.feeGoalCellHtml({})), { lo: "", hi: "" });
   assert.match(fns.feeGoalCellHtml({ feeLo: 10, feeHi: 20 }), /<input/);
   assert.match(homeJs, /\/api\/home\/fee-goals/);
+  assert.match(homeJs, /key === "feeGoal"\) \{\s*return '<td class="xm-hm-num">' \+ feeGoalCellHtml\(row\) \+ "<\/td>";/);
+  assert.doesNotMatch(homeJs, /escapeHtml\(feeGoalCellHtml\(row\)\)/);
   assert.match(homeJs, /function scrapedFeeRange/);
   assert.match(homeJs, /han-fee-targets/);
   assert.match(homeJs, /shen-fee-targets/);

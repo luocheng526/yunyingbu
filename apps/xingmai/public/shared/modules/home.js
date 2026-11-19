@@ -2648,7 +2648,7 @@
       );
     }
     if (key === "feeGoal") {
-      return '<td class="xm-hm-num">' + escapeHtml(feeGoalCellHtml(row)) + "</td>";
+      return '<td class="xm-hm-num">' + feeGoalCellHtml(row) + "</td>";
     }
     if (key === "liveAt") {
       if (typeof liveScope !== "undefined" && liveScope === "live2") {
