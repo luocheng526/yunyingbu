@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import http from "node:http";
 import test from "node:test";
 import { createApp } from "../src/app.js";
@@ -66,6 +67,8 @@ test("auth.js exports dbMode() and query for academy and other stores", () => {
   assert.equal(typeof resolveDesk, "function");
   assert.equal(resolveDesk(null).home, "/home");
   assert.equal(resolveDesk({ username: "罗成" }).home, "/home");
+  const authSource = fs.readFileSync(new URL("../src/modules/profile/auth.js", import.meta.url), "utf8");
+  assert.doesNotMatch(authSource, /from ["']\.\/duties\.js["']/);
 });
 
 test("GET /shared assets are public and cacheable; APIs are not cached", async () => {

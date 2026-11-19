@@ -483,12 +483,63 @@
           .join("");
       }
 
+      function currentDeviceFallback() {
+        const ua = String(navigator.userAgent || "");
+        let os = "未知系统";
+        if (/iPhone/i.test(ua)) {
+          os = "iPhone";
+        } else if (/Android/i.test(ua)) {
+          os = "Android";
+        } else if (/Mac OS X|Macintosh/i.test(ua)) {
+          os = "Mac";
+        } else if (/Windows/i.test(ua)) {
+          os = "Windows";
+        } else if (/Linux/i.test(ua)) {
+          os = "Linux";
+        }
+        let browser = "未知浏览器";
+        if (/Edg\//i.test(ua)) {
+          browser = "Edge";
+        } else if (/Chrome\//i.test(ua) && !/Edg\//i.test(ua)) {
+          browser = "Chrome";
+        } else if (/Safari\//i.test(ua) && !/Chrome/i.test(ua)) {
+          browser = "Safari";
+        }
+        const now = new Date();
+        const pad = function (n) {
+          return String(n).padStart(2, "0");
+        };
+        const time =
+          now.getFullYear() +
+          "-" +
+          pad(now.getMonth() + 1) +
+          "-" +
+          pad(now.getDate()) +
+          " " +
+          pad(now.getHours()) +
+          ":" +
+          pad(now.getMinutes());
+        return [
+          {
+            sid: "current",
+            device: os + " · " + browser,
+            city: "本机",
+            time: time,
+            current: true,
+            kind: /iPhone|Android|iPad/i.test(os) ? "phone" : "monitor"
+          }
+        ];
+      }
+
       function loadSessions() {
         api("/api/profile/sessions").then(function (result) {
           if (dead) {
             return;
           }
-          const items = result.res && result.res.ok ? result.data.items || [] : [];
+          let items = result.res && result.res.ok ? result.data.items || [] : [];
+          if (!items.length) {
+            items = currentDeviceFallback();
+          }
           root.querySelector("#device-list").innerHTML = deviceTable(items, false);
           root.querySelector("#device-list-all").innerHTML = deviceTable(items, true);
         });
