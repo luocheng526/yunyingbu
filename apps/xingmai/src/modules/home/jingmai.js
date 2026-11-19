@@ -1192,17 +1192,26 @@ export async function runTick(deps) {
         if (roundSignal && roundSignal.aborted) {
           return;
         }
-        const shop = targets[cursor];
+        const queued = targets[cursor];
         cursor += 1;
-        if (!shop || inflight.has(shop.store) || shop.enabled === false) {
+        if (!queued || inflight.has(queued.store) || queued.enabled === false) {
           continue;
         }
         // Slot acquired — only now start this shop's collect deadline.
-        inflight.add(shop.store);
+        inflight.add(queued.store);
         try {
+          // Re-read latest enabled/session after waiting in queue (pause / re-login).
+          let shop = queued;
+          if (typeof deps.reloadShop === "function") {
+            const latest = await deps.reloadShop(queued.store);
+            if (!latest || latest.enabled === false || !shouldCollectShop(latest)) {
+              continue;
+            }
+            shop = latest;
+          }
           await collectOne(shop, deps);
         } finally {
-          inflight.delete(shop.store);
+          inflight.delete(queued.store);
         }
       }
     }
@@ -1230,12 +1239,13 @@ function metricsHaveDeal(metrics) {
   });
 }
 
-async function persistDealSample(deps, shop, now, metrics, paidNote) {
+async function persistDealSample(deps, shop, now, metrics, paidNote, sessionVersion) {
   const fields = sampleFields(
     Object.assign({}, metrics || {}, paidNote ? { paidNote: paidNote } : {})
   );
   await deps.saveSample(
-    Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, fields)
+    Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, fields),
+    sessionVersion ? { sessionVersion: sessionVersion } : undefined
   );
 }
 
@@ -1245,8 +1255,9 @@ function identityMismatchMessage(identity) {
 }
 
 async function verifyCollectIdentity(deps, shop, jar, signal) {
+  // Missing identity reader must not allow unknown / unbound shop landings.
   if (typeof deps.fetchAccountIdentity !== "function") {
-    return { ok: true, identity: null };
+    return { ok: false, reason: "identity_missing", identity: null };
   }
   let identity;
   try {
@@ -1256,11 +1267,8 @@ async function verifyCollectIdentity(deps, shop, jar, signal) {
     if (classified.code === "login") {
       throw classified;
     }
-    // Flaky identity read: do not land samples without proof when shopId is known.
-    if (String(shop.shopId || "").trim()) {
-      return { ok: false, reason: "identity_missing", identity: null };
-    }
-    return { ok: true, identity: null };
+    // Timeout / network / empty identity: never release without proof.
+    return { ok: false, reason: "identity_missing", identity: null };
   }
   const match = matchCollectIdentity({ store: shop.store, shopId: shop.shopId || "" }, identity);
   if (!match.ok) {
@@ -1288,8 +1296,8 @@ async function collectOne(shop, deps) {
   const now = deps.now();
   const expected = { store: shop.store, shopId: shop.shopId || "" };
   const sessionVersion =
-    shop.sessionGen != null && Number(shop.sessionGen) > 0
-      ? "g:" + String(shop.sessionGen)
+    shop.sessionGen != null && shop.sessionGen !== ""
+      ? "g:" + String(Number(shop.sessionGen) || 0)
       : shop.linkedAt || "";
   // Work on a copy so absorbCookies mutations are explicit when written back.
   const jar = Array.isArray(shop.cookies) ? shop.cookies.map(function (item) {
@@ -1299,6 +1307,7 @@ async function collectOne(shop, deps) {
   let earlySaved = false;
   let verifiedIdentity = null;
   const budget = typeof deps.collectBudgetMs === "number" ? deps.collectBudgetMs : 120000;
+  const authOpts = sessionVersion ? { sessionVersion: sessionVersion } : undefined;
   try {
     await withDeadline(
       async function (signal) {
@@ -1333,13 +1342,13 @@ async function collectOne(shop, deps) {
                 return;
               }
               earlySaved = true;
-              await persistDealSample(deps, shop, now, dealMetrics, "");
+              await persistDealSample(deps, shop, now, dealMetrics, "", sessionVersion);
             }
           })
         );
-        await persistDealSample(deps, shop, now, metrics, "");
+        await persistDealSample(deps, shop, now, metrics, "", sessionVersion);
         await refreshCookiesSafe(deps, shop, jar, verifiedIdentity, sessionVersion);
-        await deps.markAuth(shop.store, "ok", "");
+        await deps.markAuth(shop.store, "ok", "", authOpts);
       },
       budget,
       "采集超时"
@@ -1347,32 +1356,32 @@ async function collectOne(shop, deps) {
   } catch (error) {
     if (error && error.code === "identity") {
       // Keep prior samples/cookies; report mismatch only.
-      await deps.markAuth(shop.store, "offline", String(error.message || "身份不符").slice(0, 200));
+      await deps.markAuth(shop.store, "offline", String(error.message || "身份不符").slice(0, 200), authOpts);
       return;
     }
     if (metricsHaveDeal(earlyDeal)) {
       if (!earlySaved) {
-        await persistDealSample(deps, shop, now, earlyDeal, "广告采集超时");
+        await persistDealSample(deps, shop, now, earlyDeal, "广告采集超时", sessionVersion);
         earlySaved = true;
       } else if (earlyDeal && !String((earlyDeal.paidNote || "")).trim()) {
-        await persistDealSample(deps, shop, now, earlyDeal, "广告采集超时");
+        await persistDealSample(deps, shop, now, earlyDeal, "广告采集超时", sessionVersion);
       }
       await refreshCookiesSafe(deps, shop, jar, verifiedIdentity, sessionVersion);
       const decision = collectAuthDecision(error);
       if (decision.authState === "login_expired") {
-        await deps.markAuth(shop.store, "login_expired", decision.authMessage);
+        await deps.markAuth(shop.store, "login_expired", decision.authMessage, authOpts);
         return;
       }
-      await deps.markAuth(shop.store, "offline", decision.authMessage || offlineMessage(error));
+      await deps.markAuth(shop.store, "offline", decision.authMessage || offlineMessage(error), authOpts);
       return;
     }
     const decision = collectAuthDecision(error);
     if (decision.authState === "login_expired") {
-      await deps.markAuth(shop.store, "login_expired", decision.authMessage);
+      await deps.markAuth(shop.store, "login_expired", decision.authMessage, authOpts);
       return;
     }
     if (decision.authState === "offline") {
-      await deps.markAuth(shop.store, "offline", decision.authMessage);
+      await deps.markAuth(shop.store, "offline", decision.authMessage, authOpts);
     }
   }
 }

@@ -12,6 +12,10 @@ import { tmpdir } from "node:os";
 import zlib from "node:zlib";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
 
+if (process.env.SHEN_JINGMAI_MEMORY == null) {
+  process.env.SHEN_JINGMAI_MEMORY = "1";
+}
+
 const homeJs = readFileSync(new URL("../public/shared/modules/home.js", import.meta.url), "utf8");
 
 function deskDeps(extra) {

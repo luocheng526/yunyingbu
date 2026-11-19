@@ -1036,6 +1036,14 @@ export async function jingmaiTick() {
       return deps.client.fetchAccountIdentity(cookies, undefined, signal);
     },
     updateSessionCookies: updateSessionCookies,
+    reloadShop: async function (store) {
+      const rows = await listSessions();
+      return (
+        rows.find(function (row) {
+          return row.store === store;
+        }) || null
+      );
+    },
     recheckJingmai: async function (shop, signal) {
       if (!shop || !shop.cookies || !shop.cookies.length || !deps.client) {
         return false;
@@ -1055,11 +1063,8 @@ export async function jingmaiTick() {
         if (error && error.code === "login") {
           return false;
         }
-        // Without identity proof, do not treat recheck as alive when shopId is bound.
-        if (String(shop.shopId || "").trim()) {
-          return false;
-        }
-        return true;
+        // Timeout / missing identity: never treat recheck as alive.
+        return false;
       }
     },
     saveSample: saveSample,

@@ -4,6 +4,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+// Unit tests use the in-process map unless a fake/real pool is injected.
+if (process.env.SHEN_JINGMAI_MEMORY == null) {
+  process.env.SHEN_JINGMAI_MEMORY = "1";
+}
 import {
   beijingParts,
   buildLiveView,
@@ -34,11 +39,15 @@ import {
 } from "../src/modules/home/jingmai-desk.js";
 import {
   classifySessionRecovery,
+  getSession,
   listCollectTargets,
   listSessions,
   markAuth,
   resetJingmaiStore,
+  saveSample,
   saveSession,
+  sessionVersionOf,
+  setJingmaiPoolForTests,
   updateSessionCookies
 } from "../src/modules/home/jingmai-store.js";
 
@@ -675,6 +684,9 @@ test("runTick/withDeadline persists deal when ads hang past outer deadline; no o
           }
         ];
       },
+      fetchAccountIdentity: async function () {
+        return { shopId: "1", shopName: "挂广告店" };
+      },
       fetchHome: function (cookies, signal, expected) {
         return fetchHome(
           cookies,
@@ -807,6 +819,9 @@ test("runTick rechecks login_expired shops that still have cookies", async () =>
       seen.push("recheck:" + shop.store);
       return true;
     },
+    fetchAccountIdentity: async function () {
+      return { shopId: "9", shopName: "误标店" };
+    },
     fetchHome: async function (cookies, signal, expected) {
       seen.push("fetch:" + expected.store);
       return { dealAmount: 10, paidAmount: 1 };
@@ -834,8 +849,9 @@ test("runTick fair schedule: waiting shops do not burn deadline; failures do not
       store: "店" + index,
       enabled: true,
       authState: "ok",
-      cookies: [{ name: "thor", value: "1", domain: ".jd.com", path: "/" }],
+      cookies: [{ name: "thor", value: "店" + index, domain: ".jd.com", path: "/" }],
       shopId: String(index),
+      sessionGen: 1,
       linkedAt: "2026-11-19 10:00:00"
     };
   });
@@ -846,6 +862,16 @@ test("runTick fair schedule: waiting shops do not burn deadline; failures do not
     collectBudgetMs: 200,
     listTargets: async function () {
       return shops;
+    },
+    fetchAccountIdentity: async function (jar) {
+      const thor = (jar || []).find(function (item) {
+        return item && item.name === "thor";
+      });
+      const store = thor && thor.value;
+      const shop = shops.find(function (row) {
+        return row.store === store;
+      });
+      return { shopId: shop ? shop.shopId : "", shopName: store || "" };
     },
     fetchHome: async function (cookies, signal, expected) {
       startedAt[expected.store] = Date.now();
@@ -996,4 +1022,363 @@ test("matchCollectIdentity requires shopId match; recheck mismatch keeps old sam
   assert.equal(samples.length, 0);
   assert.equal(auths[0].state, "offline");
   assert.match(String(auths[0].message), /身份不符/);
+});
+
+function createJingmaiFakePool() {
+  const sessions = new Map();
+  const samples = [];
+  const sqlLog = [];
+  function cloneSession(row) {
+    return Object.assign({}, row, { cookie_jar: row.cookie_jar });
+  }
+  async function query(sql, params = []) {
+    const text = String(sql).replace(/\s+/g, " ").trim();
+    sqlLog.push({ sql: text, params: params.slice() });
+    if (/^CREATE TABLE/i.test(text) || /^ALTER TABLE/i.test(text)) {
+      return [{ affectedRows: 0 }, undefined];
+    }
+    if (/^INSERT INTO shen_jingmai_session/i.test(text) && /session_gen = session_gen \+ 1/i.test(text)) {
+      const [store, jar, authState, authMessage, enabled, shopId, linkedAt, updatedAt] = params;
+      const existing = sessions.get(store);
+      if (!existing) {
+        sessions.set(store, {
+          store: store,
+          cookie_jar: jar,
+          auth_state: authState,
+          auth_message: authMessage,
+          enabled_flag: enabled,
+          shop_id: shopId,
+          linked_at: linkedAt,
+          updated_at: updatedAt,
+          session_gen: 1
+        });
+      } else {
+        existing.cookie_jar = jar;
+        existing.auth_state = authState;
+        existing.auth_message = authMessage;
+        existing.enabled_flag = enabled;
+        if (shopId) {
+          existing.shop_id = shopId;
+        }
+        existing.linked_at = linkedAt;
+        existing.updated_at = updatedAt;
+        existing.session_gen = (Number(existing.session_gen) || 0) + 1;
+      }
+      return [{ affectedRows: 1 }, undefined];
+    }
+    if (/^UPDATE shen_jingmai_session SET cookie_jar/i.test(text)) {
+      const [jar, updatedAt, store, gen] = params;
+      const row = sessions.get(store);
+      if (!row || Number(row.session_gen) !== Number(gen)) {
+        return [{ affectedRows: 0 }, undefined];
+      }
+      row.cookie_jar = jar;
+      row.updated_at = updatedAt;
+      return [{ affectedRows: 1 }, undefined];
+    }
+    if (/^UPDATE shen_jingmai_session SET auth_state/i.test(text)) {
+      if (/AND session_gen = \?/i.test(text)) {
+        const [authState, authMessage, updatedAt, store, gen] = params;
+        const row = sessions.get(store);
+        if (!row || Number(row.session_gen) !== Number(gen)) {
+          return [{ affectedRows: 0 }, undefined];
+        }
+        row.auth_state = authState;
+        row.auth_message = authMessage;
+        row.updated_at = updatedAt;
+        return [{ affectedRows: 1 }, undefined];
+      }
+      const [authState, authMessage, updatedAt, store] = params;
+      const row = sessions.get(store);
+      if (!row) {
+        return [{ affectedRows: 0 }, undefined];
+      }
+      row.auth_state = authState;
+      row.auth_message = authMessage;
+      row.updated_at = updatedAt;
+      return [{ affectedRows: 1 }, undefined];
+    }
+    if (/^SELECT .+ FROM shen_jingmai_session WHERE store = \?/i.test(text)) {
+      const row = sessions.get(params[0]);
+      return [row ? [cloneSession(row)] : [], undefined];
+    }
+    if (/^SELECT .+ FROM shen_jingmai_session ORDER BY store ASC/i.test(text)) {
+      return [[...sessions.values()].map(cloneSession).sort(function (a, b) {
+        return String(a.store).localeCompare(String(b.store));
+      }), undefined];
+    }
+    if (/^INSERT INTO shen_jingmai_sample/i.test(text)) {
+      samples.push({ params: params.slice(), sql: text });
+      return [{ affectedRows: 1 }, undefined];
+    }
+    if (/^SELECT .+ FROM shen_jingmai_sample/i.test(text)) {
+      return [[], undefined];
+    }
+    if (/^INSERT INTO shen_jingmai_session/i.test(text) && /enabled_flag = VALUES\(enabled_flag\)/i.test(text)) {
+      const [store, enabled, linkedAt, updatedAt] = params;
+      const existing = sessions.get(store);
+      if (!existing) {
+        sessions.set(store, {
+          store: store,
+          cookie_jar: "[]",
+          auth_state: "unlinked",
+          auth_message: "",
+          enabled_flag: enabled,
+          shop_id: "",
+          linked_at: linkedAt,
+          updated_at: updatedAt,
+          session_gen: 0
+        });
+      } else {
+        existing.enabled_flag = enabled;
+        existing.updated_at = updatedAt;
+      }
+      return [{ affectedRows: 1 }, undefined];
+    }
+    throw new Error("unexpected SQL: " + text);
+  }
+  return {
+    query: query,
+    sqlLog: sqlLog,
+    sessions: sessions,
+    samples: samples,
+    seed: function (row) {
+      sessions.set(row.store, Object.assign({ session_gen: 0, shop_id: "", auth_message: "" }, row));
+    }
+  };
+}
+
+test("SQL pool path: atomic session_gen bump + gen0 CAS; process restart does not rewind gen", async () => {
+  process.env.SHEN_JINGMAI_MEMORY = "0";
+  const pool = createJingmaiFakePool();
+  setJingmaiPoolForTests(pool);
+  await resetJingmaiStore();
+  pool.seed({
+    store: "原子店",
+    cookie_jar: JSON.stringify([{ name: "thor", value: "old" }]),
+    auth_state: "ok",
+    auth_message: "",
+    enabled_flag: 1,
+    shop_id: "7",
+    linked_at: "2026-11-19 10:00:00",
+    updated_at: "2026-11-19 10:00:00",
+    session_gen: 0
+  });
+  const cas0 = await updateSessionCookies(
+    "原子店",
+    [{ name: "thor", value: "from-gen0", domain: ".jd.com", path: "/" }],
+    { sessionVersion: "g:0", expectedShopId: "7", identity: { shopId: "7", shopName: "原子店" } }
+  );
+  assert.equal(cas0.updated, true);
+  assert.ok(
+    pool.sqlLog.some(function (entry) {
+      return /session_gen = \?/.test(entry.sql) && entry.params.indexOf(0) >= 0;
+    })
+  );
+  const first = await saveSession("原子店", {
+    cookies: [{ name: "thor", value: "login-1" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "7"
+  });
+  assert.equal(first.sessionGen, 1);
+  assert.ok(
+    pool.sqlLog.some(function (entry) {
+      return /session_gen = session_gen \+ 1/.test(entry.sql);
+    })
+  );
+  // Simulate process restart: drop process mirror, keep DB gen.
+  await resetJingmaiStore();
+  setJingmaiPoolForTests(pool);
+  const afterRestart = await saveSession("原子店", {
+    cookies: [{ name: "thor", value: "login-2" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "7"
+  });
+  assert.equal(afterRestart.sessionGen, 2);
+  assert.ok(afterRestart.sessionGen > first.sessionGen);
+  const stale = await markAuth("原子店", "login_expired", "旧任务晚失败", { sessionVersion: "g:1" });
+  assert.equal(stale.updated, false);
+  assert.equal(stale.reason, "version_conflict");
+  const live = await getSession("原子店");
+  assert.equal(live.authState, "ok");
+  assert.equal(live.cookies[0].value, "login-2");
+  setJingmaiPoolForTests(null);
+  process.env.SHEN_JINGMAI_MEMORY = "1";
+  await resetJingmaiStore();
+});
+
+test("runTick reloads after slot: pause/relogin while queued; late login_expired cannot overwrite new login", async () => {
+  process.env.SHEN_JINGMAI_MEMORY = "1";
+  await resetJingmaiStore();
+  await saveSession("排队店", {
+    cookies: [{ name: "thor", value: "old", domain: ".jd.com", path: "/" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "55"
+  });
+  const before = await getSession("排队店");
+  const liveShops = {
+    慢店: {
+      store: "慢店",
+      enabled: true,
+      authState: "ok",
+      cookies: [{ name: "thor", value: "slow", domain: ".jd.com", path: "/" }],
+      shopId: "54",
+      sessionGen: 1
+    },
+    排队店: Object.assign({}, before)
+  };
+  const auths = [];
+  const samples = [];
+  let releaseSlow;
+  const slowGate = new Promise(function (resolve) {
+    releaseSlow = resolve;
+  });
+  const tickPromise = runTick({
+    inflight: new Set(),
+    tickLock: { busy: false },
+    collectConcurrency: 1,
+    collectBudgetMs: 2000,
+    listTargets: async function () {
+      return [liveShops["慢店"], liveShops["排队店"]];
+    },
+    reloadShop: async function (store) {
+      return liveShops[store] || null;
+    },
+    fetchAccountIdentity: async function (jar) {
+      const thor = (jar || []).find(function (item) {
+        return item && item.name === "thor";
+      });
+      if (thor && thor.value === "fresh") {
+        return { shopId: "55", shopName: "排队店" };
+      }
+      if (thor && thor.value === "slow") {
+        return { shopId: "54", shopName: "慢店" };
+      }
+      return { shopId: "55", shopName: "排队店" };
+    },
+    fetchHome: async function (cookies, signal, expected) {
+      if (expected.store === "慢店") {
+        releaseSlow();
+        await new Promise(function (resolve) {
+          setTimeout(resolve, 80);
+        });
+        return { dealAmount: 1 };
+      }
+      if (expected.store === "排队店") {
+        // Should not fetch if paused; if relogin path runs, use fresh jar only.
+        assert.equal(cookies[0].value, "fresh");
+        return { dealAmount: 8 };
+      }
+      return { dealAmount: 0 };
+    },
+    saveSample: async function (sample) {
+      samples.push(sample);
+    },
+    markAuth: async function (store, state, message, opts) {
+      auths.push({ store: store, state: state, message: message, opts: opts });
+      if (typeof markAuth === "function") {
+        await markAuth(store, state, message, opts);
+      }
+    },
+    now: function () {
+      return { day: "2026-11-19", stamp: "2026-11-19 11:00:00" };
+    }
+  });
+  await slowGate;
+  // While 慢店 holds the only slot, pause then re-login 排队店.
+  liveShops["排队店"] = Object.assign({}, liveShops["排队店"], { enabled: false });
+  await new Promise(function (resolve) {
+    setTimeout(resolve, 20);
+  });
+  await saveSession("排队店", {
+    cookies: [{ name: "thor", value: "fresh", domain: ".jd.com", path: "/" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "55"
+  });
+  const newer = await getSession("排队店");
+  liveShops["排队店"] = Object.assign({}, newer);
+  // Late stale failure from an older collect version must not wipe the new login.
+  const late = await markAuth("排队店", "login_expired", "旧采集晚失败", {
+    sessionVersion: sessionVersionOf(before)
+  });
+  assert.equal(late.updated, false);
+  assert.equal((await getSession("排队店")).authState, "ok");
+  assert.equal((await getSession("排队店")).cookies[0].value, "fresh");
+  await tickPromise;
+  assert.ok(
+    samples.every(function (row) {
+      return row.store !== "排队店" || row.dealAmount === 8;
+    })
+  );
+});
+
+test("fetchAccountIdentity missing or timeout refuses unknown shop landing", async () => {
+  const auths = [];
+  await runTick({
+    inflight: new Set(),
+    tickLock: { busy: false },
+    listTargets: async function () {
+      return [
+        {
+          store: "未知店",
+          enabled: true,
+          authState: "ok",
+          cookies: [{ name: "thor", value: "1", domain: ".jd.com", path: "/" }],
+          shopId: "",
+          sessionGen: 1
+        }
+      ];
+    },
+    fetchHome: async function () {
+      return { dealAmount: 1 };
+    },
+    saveSample: async function () {
+      assert.fail("must not save without identity");
+    },
+    markAuth: async function (store, state, message) {
+      auths.push({ state: state, message: message });
+    },
+    now: function () {
+      return { day: "2026-11-19", stamp: "2026-11-19 10:00:00" };
+    }
+  });
+  assert.equal(auths[0].state, "offline");
+  assert.match(String(auths[0].message), /身份|无法核对/);
+  const timed = [];
+  await runTick({
+    inflight: new Set(),
+    tickLock: { busy: false },
+    listTargets: async function () {
+      return [
+        {
+          store: "超时店",
+          enabled: true,
+          authState: "ok",
+          cookies: [{ name: "thor", value: "1", domain: ".jd.com", path: "/" }],
+          shopId: "88",
+          sessionGen: 1
+        }
+      ];
+    },
+    fetchAccountIdentity: async function () {
+      throw Object.assign(new Error("timeout"), { code: "timeout" });
+    },
+    fetchHome: async function () {
+      return { dealAmount: 1 };
+    },
+    saveSample: async function () {
+      assert.fail("must not save on identity timeout");
+    },
+    markAuth: async function (store, state, message) {
+      timed.push({ state: state, message: message });
+    },
+    now: function () {
+      return { day: "2026-11-19", stamp: "2026-11-19 10:00:00" };
+    }
+  });
+  assert.equal(timed[0].state, "offline");
 });
