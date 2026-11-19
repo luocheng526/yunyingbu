@@ -914,11 +914,24 @@ export function resetStoreForTests() {
   seed();
 }
 
+// 线上 middleware.js 从本文件 import { currentUser, publicProfile, resolveDesk }。
+// 覆盖 auth.js 时必须保留 resolveDesk，否则发版试载 SMOKE_IMPORT_ERROR。
+export function resolveDesk(user) {
+  if (!user) {
+    return { desk: "", home: "/home", board: "" };
+  }
+  const desk = String(user.desk || "").trim();
+  const board = String(user.board || user.center || "").trim();
+  const home = String(user.home || "").trim() || "/home";
+  return { desk, home, board };
+}
+
 export function publicProfile(user) {
   if (!user) {
     return null;
   }
   const duties = buildDutyView(user.dutyIds);
+  const desk = resolveDesk(user);
   return {
     username: user.username,
     displayName: user.displayName,
@@ -933,7 +946,11 @@ export function publicProfile(user) {
     createdAt: user.createdAt || identityDefaults(user.username, user.displayName).createdAt,
     grantedCount: duties.grantedCount,
     dutyTotal: duties.total,
-    avatarUrl: avatarPublicUrl(user.username)
+    avatarUrl: avatarPublicUrl(user.username),
+    desk: desk.desk,
+    home: desk.home,
+    board: desk.board,
+    center: user.center || ""
   };
 }
 

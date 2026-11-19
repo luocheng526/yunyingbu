@@ -7,6 +7,7 @@ import {
   DEMO_USERNAME,
   dbMode,
   query,
+  resolveDesk,
   resetStoreForTests,
   setPeopleLoginForTests,
   setPeopleListLoaderForTests,
@@ -62,6 +63,9 @@ test("auth.js exports dbMode() and query for academy and other stores", () => {
   assert.equal(typeof dbMode, "function");
   assert.equal(dbMode(), "memory");
   assert.equal(typeof query, "function");
+  assert.equal(typeof resolveDesk, "function");
+  assert.equal(resolveDesk(null).home, "/home");
+  assert.equal(resolveDesk({ username: "罗成" }).home, "/home");
 });
 
 test("GET /shared assets are public and cacheable; APIs are not cached", async () => {
