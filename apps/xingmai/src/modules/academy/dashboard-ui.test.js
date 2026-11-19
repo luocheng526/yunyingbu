@@ -44,6 +44,9 @@ test("dashboard controls connect to academy routes and APIs", () => {
 test("dashboard CSS reproduces the reference hierarchy and responsive layout", () => {
   assert.match(css, /\.academy-page\s*\{[^}]*max-width:\s*none/s);
   assert.match(css, /\.academy-page\s*\{[^}]*width:\s*100%/s);
+  assert.match(css, /\.xm-pane\.is-active:has\(\.academy-dashboard\)/);
+  assert.match(css, /\.academy-home-grid\s*\{[^}]*flex:\s*1 1 auto/s);
+  assert.match(css, /\.academy-library-grid\s*\{[^}]*align-items:\s*stretch/s);
   assert.match(css, /\.academy-dashboard/);
   assert.match(css, /\.academy-home-head/);
   assert.match(css, /\.academy-metrics/);

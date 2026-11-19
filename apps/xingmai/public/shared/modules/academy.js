@@ -1,6 +1,6 @@
-/* xm-module-academy 0.1.172 · dashboard */
+/* xm-module-academy 0.1.173 · dashboard */
 (function () {
-  const ASSET_VER = "0.1.172";
+  const ASSET_VER = "0.1.173";
   const CSS_HREF = "/academy.css?v=" + ASSET_VER;
 
   function escapeHtml(value) {
@@ -12,7 +12,11 @@
   }
 
   function ensureCss() {
-    if (document.querySelector('link[href*="academy.css"]')) {
+    const current = document.querySelector('link[href*="academy.css"]');
+    if (current) {
+      if (current.getAttribute("href") !== CSS_HREF) {
+        current.setAttribute("href", CSS_HREF);
+      }
       return;
     }
     const link = document.createElement("link");
