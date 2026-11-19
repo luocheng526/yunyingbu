@@ -4,12 +4,25 @@
  * 京麦经营数据接口取成交金额，京准通 custom-report 当天总览取花费、投产比、总订单金额。
  * 不写旧京麦会话表，不启动旧采集循环。
  */
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { jingmaiClient } from "./jingmai-client.js";
 import { listSessions } from "./jingmai-store.js";
 import { beijingParts, displayStamp } from "./jingmai.js";
 import { blankLive2Record, live2RecordFromMetrics } from "./live2.js";
 
-const CONCURRENCY = 2;
+function workerCount() {
+  const value = Number(process.env.LIVE2_CONCURRENCY);
+  // 京麦成交门闩最多 3 路。再高只会在门闩里排队。
+  return Number.isFinite(value) && value >= 1 ? Math.min(6, Math.floor(value)) : 3;
+}
+
+function shopBudgetMs() {
+  const value = Number(process.env.LIVE2_SHOP_MS);
+  return Number.isFinite(value) && value >= 1000 ? value : 25000;
+}
+
 export const LIVE2_RUNTIME_MARK = "0.1.1278-live2-login";
 
 function stampNow() {
@@ -60,40 +73,138 @@ function publicRecord(row) {
   return copy;
 }
 
+function defaultStorePath() {
+  const env = String(process.env.HOME_LIVE2_STORE || "").trim();
+  if (env) {
+    return env;
+  }
+  const root = String(process.env.MENGKAI_LIVE_ROOT || "").trim();
+  if (root) {
+    return path.join(root, "data", "home-live2.json");
+  }
+  if (fs.existsSync("/opt/mengkai/src")) {
+    return "/opt/mengkai/data/home-live2.json";
+  }
+  return path.join(os.tmpdir(), "xingmai-home-live2.json");
+}
+
+function dayOf(stamp) {
+  return String(stamp || "").replace(/-/g, "/").slice(0, 10);
+}
+
+function hasNumbers(row) {
+  return Boolean(row && (row.liveAmount != null || row.paidAmount != null));
+}
+
+function readStore(file) {
+  if (!file) {
+    return null;
+  }
+  try {
+    const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+    return raw && typeof raw === "object" ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStore(file, payload) {
+  if (!file) {
+    return 0;
+  }
+  const started = Date.now();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = file + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(payload));
+  fs.renameSync(tmp, file);
+  return Date.now() - started;
+}
+
 export function createLive2Collector(deps = {}) {
   const jars = new Map();
-  const samples = new Map();
-  let running = false;
+  const published = new Map();
+  let publishedAt = "";
   let updatedAt = "";
+  let timings = emptyTimings();
+  let running = false;
   const loadOrg = deps.loadOrg || readOrgShops;
   const sessionsOf = deps.listSessions || listSessions;
   const client = deps.client || jingmaiClient;
   const now = deps.now || stampNow;
+  const file = deps.storePath === undefined ? defaultStorePath() : String(deps.storePath || "");
+  const budget = deps.shopBudgetMs == null ? shopBudgetMs() : Number(deps.shopBudgetMs);
+  const widthOf = deps.concurrency == null ? workerCount : function () { return deps.concurrency; };
 
-  function boardFrom(shops) {
-    const records = (shops || []).map(function (shop) {
-      const saved = samples.get(shop.store);
-      if (!saved) {
-        return blankLive2Record(shop);
+  function emptyTimings() {
+    return {
+      shops: 0,
+      queueMs: 0,
+      dealMs: 0,
+      adsMs: 0,
+      saveMs: 0,
+      roundMs: 0,
+      apiMs: 0,
+      concurrency: 0,
+      slowest: ""
+    };
+  }
+
+  function remember(list) {
+    (list || []).forEach(function (row) {
+      const name = String((row && (row.shop || row.store)) || "").trim();
+      if (name) {
+        published.set(name, publicRecord(Object.assign({}, row, { shop: name })));
       }
-      return publicRecord(Object.assign({}, saved, { team: shop.team || saved.team, manager: shop.manager || saved.manager }));
     });
+  }
+
+  const saved = readStore(file);
+  if (saved) {
+    publishedAt = String(saved.publishedAt || "");
+    updatedAt = String(saved.updatedAt || "");
+    timings = Object.assign(emptyTimings(), saved.timings || {});
+    remember(saved.records);
+  }
+  remember(deps.published);
+
+  function blankFor(shop) {
+    const row = blankLive2Record(shop);
+    // 待接入只表示组织中心没有账号。有账号但还没有数，格子留空。
+    if (shop.login || shop.password) {
+      row.pendingCollect = false;
+    }
+    return row;
+  }
+
+  function rowFor(shop) {
+    const savedRow = published.get(shop.store);
+    if (!savedRow) {
+      return blankFor(shop);
+    }
+    return publicRecord(Object.assign({}, savedRow, { team: shop.team || savedRow.team, manager: shop.manager || savedRow.manager }));
+  }
+
+  function boardFrom(shops, apiMs) {
+    const records = (shops || []).map(rowFor);
     return {
       ok: true,
       source: "live2",
       runtimeMark: LIVE2_RUNTIME_MARK,
       running: running,
       updatedAt: updatedAt,
+      publishedAt: publishedAt,
+      timings: Object.assign({}, timings, { apiMs: apiMs || 0 }),
       records: records
     };
   }
 
   async function board(cookie) {
+    const started = Date.now();
     const shops = await loadOrg(cookie);
     shops.forEach(function (shop) {
       shop.password = "";
     });
-    return boardFrom(shops);
+    return boardFrom(shops, Date.now() - started);
   }
 
   async function loginJar(shop) {
@@ -119,9 +230,30 @@ export function createLive2Collector(deps = {}) {
     return jar;
   }
 
-  async function collectShop(shop, known) {
+  function closeSlow(shop, draft) {
+    const current = draft.get(shop.store);
+    const previous = published.get(shop.store);
+    const today = dayOf(now());
+    if (current && current.liveAmount != null && dayOf(current.capturedAt) === today) {
+      const row = publicRecord(Object.assign({}, current, { pendingUpdate: true, pendingCollect: false }));
+      draft.set(shop.store, row);
+      return row;
+    }
+    if (previous && hasNumbers(previous) && dayOf(previous.capturedAt) === today) {
+      const row = publicRecord(Object.assign({}, previous, { pendingUpdate: true, pendingCollect: false }));
+      draft.set(shop.store, row);
+      return row;
+    }
+    const blank = blankFor(shop);
+    blank.pendingCollect = !(shop.login || shop.password);
+    draft.set(shop.store, publicRecord(blank));
+    return blank;
+  }
+
+  async function collectShop(shop, known, draft, phase) {
     const secret = shop.password;
-    const base = blankLive2Record(shop);
+    const base = blankFor(shop);
+    const started = Date.now();
     if (!shop.login || !secret) {
       base.offlineReason = "组织中心还没有填写这家店的账号";
       shop.password = "";
@@ -157,8 +289,24 @@ export function createLive2Collector(deps = {}) {
         store: shop.store,
         shopId: shop.shopId,
         merchantId: shop.merchantId,
-        shopName: shop.store
+        shopName: shop.store,
+        onDeal: function (deal) {
+          if (phase.closed) {
+            return;
+          }
+          phase.dealMs += Date.now() - started;
+          phase.dealMarked = true;
+          const partial = live2RecordFromMetrics(shop, Object.assign({}, deal), now());
+          partial.pendingCollect = false;
+          draft.set(shop.store, publicRecord(partial));
+          phase.saveMs += writeStore(file ? file + ".draft" : "", { records: Array.from(draft.values()) });
+        }
       });
+      if (!phase.dealMarked) {
+        phase.dealMs += Date.now() - started;
+      } else {
+        phase.adsMs += Date.now() - started - phase.dealMs;
+      }
       const row = live2RecordFromMetrics(shop, metrics, now());
       if (!row.online && !row.adsFailed) {
         row.offline = true;
@@ -178,6 +326,9 @@ export function createLive2Collector(deps = {}) {
               merchantId: shop.merchantId,
               shopName: shop.store
             });
+            if (!phase.dealMarked) {
+              phase.dealMs += Date.now() - started;
+            }
             return live2RecordFromMetrics(shop, metrics, now());
           }
         } catch (again) {
@@ -189,7 +340,7 @@ export function createLive2Collector(deps = {}) {
         }
       }
       shop.password = "";
-      const previous = samples.get(shop.store);
+      const previous = draft.get(shop.store) || published.get(shop.store);
       const failed = previous ? Object.assign({}, previous) : base;
       failed.pendingCollect = false;
       failed.loginExpired = Boolean(error && error.code === "login");
@@ -200,26 +351,115 @@ export function createLive2Collector(deps = {}) {
     }
   }
 
+  function publish(draft, nextTimings) {
+    const started = Date.now();
+    published.clear();
+    draft.forEach(function (row, name) {
+      published.set(name, publicRecord(row));
+    });
+    updatedAt = now();
+    publishedAt = updatedAt;
+    const saveMs = writeStore(file, {
+      publishedAt: publishedAt,
+      updatedAt: updatedAt,
+      timings: nextTimings,
+      records: Array.from(published.values())
+    });
+    nextTimings.saveMs += saveMs + (Date.now() - started - saveMs);
+    timings = nextTimings;
+    if (file) {
+      try {
+        fs.unlinkSync(file + ".draft");
+      } catch {
+        /* no draft */
+      }
+    }
+  }
+
+  function slowestOf(totals, shops) {
+    const n = Math.max(1, shops);
+    const parts = [
+      ["queue", totals.queueMs],
+      ["deal", totals.dealMs / n],
+      ["ads", totals.adsMs / n],
+      ["save", totals.saveMs]
+    ];
+    parts.sort(function (a, b) {
+      return b[1] - a[1];
+    });
+    return parts[0][0];
+  }
+
   async function run(shops, only, known) {
     const targets = (shops || []).filter(function (shop) {
       return shop && shop.store && (!only || shop.store === only);
     });
+    const draft = new Map(published);
+    const roundStart = Date.now();
+    const totals = emptyTimings();
+    totals.shops = targets.length;
     let cursor = 0;
+    let lastPicked = roundStart;
+    async function one(shop) {
+      const phase = { dealMs: 0, adsMs: 0, saveMs: 0, dealMarked: false, closed: false };
+      const shopStart = Date.now();
+      let timer = 0;
+      let late = false;
+      const job = collectShop(shop, known, draft, phase).then(function (row) {
+        if (late || phase.closed) {
+          return row;
+        }
+        draft.set(shop.store, publicRecord(row));
+        return row;
+      });
+      const timed = await Promise.race([
+        job.then(function (row) {
+          return { row: row };
+        }),
+        new Promise(function (resolve) {
+          timer = setTimeout(function () {
+            resolve({ timeout: true });
+          }, budget);
+        })
+      ]);
+      clearTimeout(timer);
+      shop.password = "";
+      if (timed.timeout) {
+        late = true;
+        phase.closed = true;
+        const elapsed = Date.now() - shopStart;
+        if (!phase.dealMarked) {
+          phase.dealMs += elapsed;
+        } else {
+          phase.adsMs += Math.max(0, elapsed - phase.dealMs);
+        }
+        closeSlow(shop, draft);
+        job.catch(function () {});
+      }
+      totals.dealMs += phase.dealMs;
+      totals.adsMs += phase.adsMs;
+      totals.saveMs += phase.saveMs;
+    }
     async function worker() {
       while (cursor < targets.length) {
         const index = cursor;
         cursor += 1;
         const shop = targets[index];
-        const row = await collectShop(shop, known);
-        shop.password = "";
-        samples.set(shop.store, publicRecord(row));
-        if (row.capturedAt) {
-          updatedAt = row.capturedAt;
+        lastPicked = Date.now();
+        try {
+          await one(shop);
+        } catch {
+          closeSlow(shop, draft);
         }
       }
     }
-    const width = Math.max(1, Math.min(CONCURRENCY, targets.length));
+    const width = Math.max(1, Math.min(widthOf(), targets.length || 1));
+    totals.concurrency = width;
     await Promise.all(Array.from({ length: width }, function () { return worker(); }));
+    totals.queueMs = lastPicked - roundStart;
+    totals.roundMs = Date.now() - roundStart;
+    totals.slowest = slowestOf(totals, targets.length);
+    publish(draft, totals);
   }
 
   async function start(cookie, only) {
@@ -235,18 +475,20 @@ export function createLive2Collector(deps = {}) {
       running = false;
       throw error;
     }
-    let known = new Map();
-    try {
-      const sessions = await sessionsOf();
-      (sessions || []).forEach(function (session) {
-        if (session && session.store) {
-          known.set(session.store, session);
-        }
-      });
-    } catch {
-      known = new Map();
-    }
-    const task = run(shops, only, known).finally(function () {
+    const task = (async function () {
+      let known = new Map();
+      try {
+        const sessions = await sessionsOf();
+        (sessions || []).forEach(function (session) {
+          if (session && session.store) {
+            known.set(session.store, session);
+          }
+        });
+      } catch {
+        known = new Map();
+      }
+      await run(shops, only, known);
+    })().finally(function () {
       shops.forEach(function (shop) {
         shop.password = "";
       });
@@ -261,7 +503,7 @@ export function createLive2Collector(deps = {}) {
     return view;
   }
 
-  return { board, start, samples };
+  return { board, start, published };
 }
 
 const collector = createLive2Collector();

@@ -2587,6 +2587,9 @@
     return fiveMinuteStamp(latest);
   }
   function liveLinkOf(row) {
+    if (row && row.pendingUpdate) {
+      return { label: "待更新", kind: "stale" };
+    }
     if (row && row.pendingCollect) {
       return { label: "待接入", kind: "wait" };
     }
@@ -2668,6 +2671,9 @@
           ">掉线</button></td>"
         );
       }
+      if (link.kind === "stale") {
+        return '<td class="xm-hm-num is-fee-warm" title="这一轮到截止时间还没采完，沿用今天最近一次成功的数据">' + escapeHtml(link.label) + "</td>";
+      }
       if (link.kind === "wait") {
         if (typeof liveScope !== "undefined" && liveScope === "live2") {
           return (
@@ -2689,6 +2695,9 @@
         );
       }
       if (!link.label) {
+        if (typeof liveScope !== "undefined" && liveScope === "live2") {
+          return '<td class="xm-hm-num">—</td>';
+        }
         return "<td></td>";
       }
       return '<td class="xm-hm-num is-fee-cold">' + escapeHtml(link.label) + "</td>";
@@ -3303,6 +3312,7 @@
         adsFailed: hit.adsFailed === true,
         adsReason: hit.adsReason || "",
         offlineReason: hit.offlineReason || "",
+        pendingUpdate: hit.pendingUpdate === true,
         paidIn: true,
         pendingCollect: false
       };
@@ -5963,8 +5973,12 @@
             if (dead || state.view !== "live2" || !pack) {
               return;
             }
-            state.live2Hint = pack.running ? "正在用组织中心账号登录并读取成交金额、花费、投产比和总订单金额。" : "";
-            paintLive2(pack);
+            var prev = state.live2Pack;
+            var same = prev && prev.publishedAt === pack.publishedAt && prev.running === pack.running;
+            if (!same) {
+              state.live2Hint = pack.running ? "正在读取新一轮。页面仍显示上一轮的金额、排名和登录状态。" : "";
+              paintLive2(pack);
+            }
             if (pack.running) {
               pollLive2();
             }
@@ -5975,7 +5989,7 @@
         useLiveScope("live2");
         state.live2Hint = storeName
           ? storeName + " 登录成功，正在读取成交金额和花费。"
-          : "正在用组织中心账号登录并读取成交金额、花费、投产比和总订单金额。";
+          : "正在读取新一轮。页面仍显示上一轮的金额、排名和登录状态。";
         paint(root, state);
         var body = storeName ? { store: storeName } : {};
         return api("/api/people/org/stores?live2=1&_=" + Date.now()).then(function (org) {
@@ -5997,7 +6011,7 @@
             return;
           }
           state.live2Hint = pack.running
-            ? (storeName ? storeName + " 登录成功，正在读取成交金额和花费。" : "正在用组织中心账号登录并读取成交金额、花费、投产比和总订单金额。")
+            ? (storeName ? storeName + " 登录成功，正在读取成交金额和花费。" : "正在读取新一轮。页面仍显示上一轮的金额、排名和登录状态。")
             : "";
           paintLive2(pack);
           if (pack.running) {
