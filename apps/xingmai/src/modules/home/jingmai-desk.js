@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
-import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, filterPinsBelongingToShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
+import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
 
 const LOGIN_URL =
   "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
@@ -3635,17 +3635,7 @@ export async function readJztOverview(cookies, signal, expected) {
     }
     const records = collectPinRecords(user.code === 1 ? user.data : null, lists.auth && Number(lists.auth.code) === 1 ? lists.auth.data : null);
     const wanted = expected || {};
-    let matched = filterPinsBelongingToShop(records, wanted);
-    if (!matched.length) {
-      const prefix = String(wanted.store || wanted.shopName || "").match(/^[A-Za-z0-9]+/);
-      const token = prefix ? prefix[0].toUpperCase() : "";
-      if (token.length >= 3) {
-        matched = records.filter(function (row) {
-          const raw = row.raw && typeof row.raw === "object" ? row.raw : {};
-          return String(raw.userDisplayName || "").toUpperCase().startsWith(token);
-        });
-      }
-    }
+    const matched = pinsForLoggedInShop(records, wanted);
     if (!matched.length) {
       const err = new Error(records.length ? "待核验：无本店广告账号证据" : "京准通没有可用账号");
       err.code = "paid";

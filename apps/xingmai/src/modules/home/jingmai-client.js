@@ -6,7 +6,7 @@ import {
   classifyTransportError,
   collectPinIds,
   collectPinRecords,
-  filterPinsBelongingToShop,
+  pinsForLoggedInShop,
   extractPaid,
   describeShopPayload,
   extractShopDeal,
@@ -1010,9 +1010,9 @@ async function fetchPaid(jar, fetchImpl, signal, expected) {
   const wantName = String((expected && (expected.shopName || expected.store)) || "").trim();
   let matched = records;
   if (wantId || wantName) {
-    matched = filterPinsBelongingToShop(records, expected);
+    matched = pinsForLoggedInShop(records, expected);
     if (!matched.length) {
-      // No evidence → do not mix other ad accounts; keep deal path via paid-channel note.
+      // Real shop ids on the pins belong to a different shop. Do not mix them in.
       throw jingmaiError("paid", "待核验：无本店广告账号证据");
     }
   }

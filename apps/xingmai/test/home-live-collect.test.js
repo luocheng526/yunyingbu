@@ -16,6 +16,7 @@ import {
   collectPinRecords,
   filterPinsBelongingToShop,
   matchCollectIdentity,
+  pinsForLoggedInShop,
   runTick,
   sampleFields,
   shouldCollectShop,
@@ -947,6 +948,59 @@ test("JZT pin ownership requires exact shopId; rejects id conflict and brand sub
   );
   assert.equal(merchant.length, 1);
   assert.equal(merchant[0].pinId, 44);
+});
+
+test("a shop login's JZT nicknames are that shop, and siteId 0 is not another shop", () => {
+  const nicknames = pinsForLoggedInShop(
+    collectPinRecords({
+      own: [
+        { userId: 1, siteId: "0", userDisplayName: "芦炜卖家1" },
+        { userId: 2, siteId: "0", userDisplayName: "芦炜-2" },
+        { userId: 3, siteId: "0", userDisplayName: "尼莫贸" }
+      ]
+    }),
+    { shopId: "16107402", merchantId: "17648001", store: "DIKTT潮流生活旗舰店" }
+  );
+  assert.equal(nicknames.length, 3);
+  const agency = pinsForLoggedInShop(
+    collectPinRecords({
+      own: [
+        { userId: 1, siteId: "0", userDisplayName: "RASW家居1" },
+        { userId: 2, siteId: "0", userDisplayName: "RASW家居2" },
+        { userId: 3, siteId: "0", userDisplayName: "徐彦菲1" }
+      ]
+    }),
+    { shopId: "16065563", merchantId: "17568184", store: "RASW家居旗舰店" }
+  );
+  assert.deepEqual(agency.map(function (row) { return row.pinId; }), [1, 2]);
+  const minority = pinsForLoggedInShop(
+    collectPinRecords({
+      own: [
+        { userId: 1, siteId: "0", userDisplayName: "彩玥-1" },
+        { userId: 2, siteId: "0", userDisplayName: "彩玥-2" },
+        { userId: 3, siteId: "0", userDisplayName: "飒望苒" }
+      ]
+    }),
+    { shopId: "13341301", store: "飒望日用旗舰店" }
+  );
+  assert.equal(minority.length, 3);
+  const rows = [];
+  for (let i = 0; i < 5; i += 1) {
+    rows.push({ userId: i + 1, siteId: "0", userDisplayName: "德系高端-" + i });
+  }
+  rows.push({ userId: 9, siteId: "0", userDisplayName: "德系甄选-1" });
+  const brand = pinsForLoggedInShop(collectPinRecords({ own: rows }), { shopId: "19969955", store: "德系高端奢品精选店" });
+  assert.equal(brand.length, 5);
+  const conflict = pinsForLoggedInShop(
+    collectPinRecords({
+      own: [
+        { userId: 11, shopId: "10001", shopName: "RASW家居旗舰店" },
+        { userId: 22, shopId: "10002", shopName: "RASW健康电器旗舰店" }
+      ]
+    }),
+    { shopId: "99999", store: "不存在的店" }
+  );
+  assert.equal(conflict.length, 0);
 });
 
 test("fetchHome keeps finished deal when ads hang until abort", async () => {
