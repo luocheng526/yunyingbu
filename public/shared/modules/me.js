@@ -153,6 +153,10 @@
       ".me-pane.on[data-me-pane=logs]>.xm-ui-card{flex:1;min-height:0;display:flex;flex-direction:column;}" +
       ".me-pane.on[data-me-pane=logs] .xm-ui-card__body{flex:1;min-height:0;overflow:auto;}" +
       ".me-logs-tools{margin:0 0 8px;}" +
+      ".me-note-item{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--xm-ui-border,#e4ebf5);}" +
+      ".me-note-item:first-child{border-top:0;}" +
+      ".me-note-item strong{display:block;margin:0 0 4px;}" +
+      ".me-note-item p{margin:0 0 4px;color:var(--xm-ui-text-secondary,#52617a);font-size:13px;}" +
       ".me-page.xm-ui-scope .xm-ui-table th,.me-page.xm-ui-scope .xm-ui-table td{height:32px;padding:0 8px;font-size:12px;}" +
       "#device-list,.me-col > .xm-ui-card:has(#device-list) .xm-ui-card__body{overflow:auto;}" +
       "@media (max-width:900px){.me-banner,.me-split,.me-actions{grid-template-columns:1fr;}.me-page{height:auto;max-height:none;overflow:auto;}}";
@@ -361,11 +365,11 @@
         "</div></div></div>" +
         '<div class="me-pane" data-me-pane="notice">' +
         UI.ContentCard({
-          content: UI.EmptyState({ title: "消息通知设置即将开放", description: "该能力即将上线" }).replace(
-            'class="xm-ui-empty-state"',
-            'class="xm-ui-empty-state me-empty"'
-          )
-        }) +
+          title: "消息通知",
+          description: "异地登录、多客户端登录会在这里提醒",
+          action: "全部已读",
+          content: '<div id="me-notices"></div>'
+        }).replace('class="xm-ui-text-action"', 'class="xm-ui-text-action" id="me-notices-read"') +
         "</div>" +
         '<div class="me-pane" data-me-pane="rights">' +
         UI.ContentCard({
@@ -426,43 +430,103 @@
         if (paneId === "logs") {
           loadLogs();
         }
+        if (paneId === "notice") {
+          loadNotices();
+        }
+        if (paneId === "devices") {
+          loadSessions();
+        }
       }
 
       function showAvatar(src, name) {
         root.querySelector("#who-avatar-img").src = src || virtualAvatar(name || "脉");
       }
 
-      function deviceTable(managed) {
-        const kick = managed
-          ? UI.button({ label: "退出此设备", size: "small", variant: "secondary" }).replace(
-              "xm-ui-button--small",
-              "xm-ui-button--small me-dev-out"
-            )
-          : "⋯";
+      function deviceTable(items, managed) {
         const monitor = ico('<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/>', "#64748b", 18);
         const phone = ico('<rect x="8" y="3" width="8" height="18" rx="2"/><path d="M11 18h2"/>', "#64748b", 18);
         const now = UI.StatusBadge({ label: "当前设备", tone: "success" });
-        function row(icon, name, city, time, current) {
-          return (
-            '<div class="me-dev"><span class="me-dev-n">' +
-            icon +
-            " " +
-            name +
-            (current ? now : "") +
-            '</span><span class="me-city">' +
-            city +
-            '</span><span class="me-time">' +
-            time +
-            "</span><span>" +
-            (current && managed ? "本机" : current ? "⋯" : kick) +
-            "</span></div>"
+        const rows = (items || []).slice(0, managed ? 50 : 3);
+        if (!rows.length) {
+          return UI.EmptyState({ title: "暂无登录记录", description: "登录后会显示真实设备" }).replace(
+            'class="xm-ui-empty-state"',
+            'class="xm-ui-empty-state me-empty"'
           );
         }
-        return (
-          row(monitor, "Windows · Chrome", "深圳市", "2026-11-17 10:24", true) +
-          row(phone, "iPhone 15", "深圳市", "2026-11-16 21:08", false) +
-          row(monitor, "Mac · Safari", "广州市", "2026-11-15 18:32", false)
-        );
+        return rows
+          .map(function (item) {
+            const kick = managed
+              ? UI.button({ label: "退出此设备", size: "small", variant: "secondary" }).replace(
+                  "xm-ui-button--small",
+                  "xm-ui-button--small me-dev-out"
+                )
+              : "⋯";
+            const icon = item.kind === "phone" ? phone : monitor;
+            const action = item.current ? (managed ? "本机" : "⋯") : kick;
+            return (
+              '<div class="me-dev" data-sid="' +
+              escapeHtml(item.sid || "") +
+              '"><span class="me-dev-n">' +
+              icon +
+              " " +
+              escapeHtml(item.device || "未知设备") +
+              (item.current ? now : "") +
+              '</span><span class="me-city">' +
+              escapeHtml(item.city || "") +
+              '</span><span class="me-time">' +
+              escapeHtml(item.time || "") +
+              "</span><span>" +
+              action +
+              "</span></div>"
+            );
+          })
+          .join("");
+      }
+
+      function loadSessions() {
+        api("/api/profile/sessions").then(function (result) {
+          if (dead) {
+            return;
+          }
+          const items = result.res && result.res.ok ? result.data.items || [] : [];
+          root.querySelector("#device-list").innerHTML = deviceTable(items, false);
+          root.querySelector("#device-list-all").innerHTML = deviceTable(items, true);
+        });
+      }
+
+      function loadNotices() {
+        api("/api/profile/notices").then(function (result) {
+          if (dead) {
+            return;
+          }
+          const box = root.querySelector("#me-notices");
+          const items = result.res && result.res.ok ? result.data.items || [] : [];
+          if (!items.length) {
+            box.innerHTML = UI.EmptyState({
+              title: "暂无通知",
+              description: "出现异地登录或多客户端登录时会提醒"
+            }).replace('class="xm-ui-empty-state"', 'class="xm-ui-empty-state me-empty"');
+            return;
+          }
+          box.innerHTML = items
+            .map(function (item) {
+              return (
+                '<div class="me-note-item">' +
+                UI.StatusBadge({
+                  label: item.read ? "已读" : "未读",
+                  tone: item.read ? "neutral" : "warning"
+                }) +
+                "<div><strong>" +
+                escapeHtml(item.title || "") +
+                "</strong><p>" +
+                escapeHtml(item.detail || "") +
+                "</p><span class=\"me-time\">" +
+                escapeHtml(item.time || "") +
+                "</span></div></div>"
+              );
+            })
+            .join("");
+        });
       }
 
       function fillWho(user) {
@@ -503,8 +567,7 @@
         root.querySelector("#edit-name").value = user.displayName || name;
         root.querySelector("#edit-phone").value = user.phone || "";
         root.querySelector("#edit-email").value = user.email || "";
-        root.querySelector("#device-list").innerHTML = deviceTable(false);
-        root.querySelector("#device-list-all").innerHTML = deviceTable(true);
+        loadSessions();
         showAvatar(user.avatarUrl || "", name);
       }
 
@@ -800,6 +863,8 @@
       fillWho(window.__xmBootUser || {});
       fillDuties([]);
       loadLogs();
+      loadSessions();
+      loadNotices();
       api("/api/profile").then(function (result) {
         if (dead || !result.res || !result.res.ok) {
           return;
@@ -840,9 +905,23 @@
           return;
         }
         const row = kick.closest(".me-dev");
-        if (row) {
-          row.remove();
+        const sid = row && row.getAttribute("data-sid");
+        if (!sid) {
+          return;
         }
+        api("/api/profile/sessions/" + encodeURIComponent(sid), { method: "DELETE" }).then(function (result) {
+          if (!result.res.ok) {
+            setStatus(result.data.error || "退出失败", "error");
+            return;
+          }
+          loadSessions();
+          loadLogs();
+        });
+      });
+      root.querySelector("#me-notices-read").addEventListener("click", function () {
+        api("/api/profile/notices/read", { method: "POST" }).then(function () {
+          loadNotices();
+        });
       });
       root.querySelector("#toggle-phone").addEventListener("click", function () {
         phoneOpen = !phoneOpen;

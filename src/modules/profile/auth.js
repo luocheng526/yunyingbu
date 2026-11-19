@@ -154,6 +154,25 @@ export const SCHEMA_SQL = [
     body LONGBLOB NOT NULL,
     updated_at BIGINT NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS xm_me_devices (
+    sid VARCHAR(128) NOT NULL PRIMARY KEY,
+    username VARCHAR(64) NOT NULL,
+    ua VARCHAR(512) NOT NULL DEFAULT '',
+    ip VARCHAR(64) NOT NULL DEFAULT '',
+    device VARCHAR(128) NOT NULL DEFAULT '',
+    city VARCHAR(64) NOT NULL DEFAULT '',
+    created_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS xm_me_notices (
+    id VARCHAR(64) NOT NULL PRIMARY KEY,
+    username VARCHAR(64) NOT NULL,
+    kind VARCHAR(32) NOT NULL,
+    title VARCHAR(128) NOT NULL,
+    detail VARCHAR(500) NOT NULL DEFAULT '',
+    created_at BIGINT NOT NULL,
+    read_flag TINYINT NOT NULL DEFAULT 0
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS release_tickets (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     version VARCHAR(128) NOT NULL,
@@ -639,11 +658,27 @@ async function hydrateSessionsFromMysql() {
     now
   ]);
   sessions.clear();
+  let devices = [];
+  try {
+    await ensureDeviceTable();
+    const [devRows] = await query(
+      "SELECT sid, username, ua, ip, device, city, created_at, expires_at FROM xm_me_devices"
+    );
+    devices = devRows || [];
+  } catch (err) {
+    console.error("device hydrate failed", err);
+  }
+  const bySid = new Map(devices.map((row) => [String(row.sid), row]));
   for (const row of rows || []) {
+    const extra = bySid.get(String(row.sid)) || {};
     sessions.set(String(row.sid), {
       username: row.username,
       createdAt: Number(row.created_at),
-      expiresAt: Number(row.expires_at)
+      expiresAt: Number(row.expires_at),
+      ua: extra.ua || "",
+      ip: extra.ip || "",
+      device: extra.device || "",
+      city: extra.city || ""
     });
   }
 }
@@ -663,11 +698,199 @@ async function persistSession(sid, username, createdAt, expiresAt) {
   );
 }
 
+const DEVICE_TABLE_SQL = SCHEMA_SQL.find((sql) => sql.includes("xm_me_devices"));
+const NOTICE_TABLE_SQL = SCHEMA_SQL.find((sql) => sql.includes("xm_me_notices"));
+const profileNotices = [];
+let deviceTableReady = false;
+let noticeTableReady = false;
+
+async function ensureDeviceTable() {
+  if (deviceTableReady || dbMode() !== "mysql" || !DEVICE_TABLE_SQL) {
+    return;
+  }
+  await query(DEVICE_TABLE_SQL);
+  deviceTableReady = true;
+}
+
+async function ensureNoticeTable() {
+  if (noticeTableReady || dbMode() !== "mysql" || !NOTICE_TABLE_SQL) {
+    return;
+  }
+  await query(NOTICE_TABLE_SQL);
+  noticeTableReady = true;
+}
+
+function parseDevice(ua) {
+  const text = String(ua || "");
+  let os = "未知系统";
+  if (/iPhone/i.test(text)) {
+    os = "iPhone";
+  } else if (/iPad/i.test(text)) {
+    os = "iPad";
+  } else if (/Android/i.test(text)) {
+    os = "Android";
+  } else if (/Mac OS X|Macintosh/i.test(text)) {
+    os = "Mac";
+  } else if (/Windows/i.test(text)) {
+    os = "Windows";
+  } else if (/Linux/i.test(text)) {
+    os = "Linux";
+  }
+  let browser = "未知浏览器";
+  if (/Edg\//i.test(text)) {
+    browser = "Edge";
+  } else if (/Chrome\//i.test(text) && !/Edg\//i.test(text)) {
+    browser = "Chrome";
+  } else if (/Firefox\//i.test(text)) {
+    browser = "Firefox";
+  } else if (/Safari\//i.test(text) && !/Chrome/i.test(text)) {
+    browser = "Safari";
+  }
+  return os + " · " + browser;
+}
+
+function requestCity(req) {
+  const headers = (req && req.headers) || {};
+  const raw = headers["cf-ipcity"] || headers["x-appengine-city"] || headers["x-geo-city"] || "";
+  const city = String(raw).trim();
+  if (city && city !== "XX") {
+    try {
+      return decodeURIComponent(city).slice(0, 64);
+    } catch {
+      return city.slice(0, 64);
+    }
+  }
+  const ip = requestIp(req);
+  if (!ip || ip === "::1" || ip.startsWith("127.") || ip.includes("127.0.0.1")) {
+    return "本机";
+  }
+  return ip;
+}
+
+function liveSessionsFor(username) {
+  const now = Date.now();
+  const name = String(username || "");
+  const out = [];
+  for (const [sid, session] of sessions.entries()) {
+    if (!session || session.username !== name) {
+      continue;
+    }
+    if (session.expiresAt && Number(session.expiresAt) < now) {
+      continue;
+    }
+    out.push({ sid, ...session });
+  }
+  out.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+  return out;
+}
+
+function publicSession(session, currentSid) {
+  return {
+    sid: session.sid,
+    device: session.device || "未知设备",
+    city: session.city || session.ip || "未知地点",
+    ip: session.ip || "",
+    time: shanghaiTime(Number(session.createdAt) || Date.now()),
+    current: session.sid === currentSid,
+    kind: /iPhone|Android|iPad/i.test(String(session.device || "")) ? "phone" : "monitor"
+  };
+}
+
+async function persistDevice(sid, session) {
+  if (dbMode() !== "mysql" || !sid || !session) {
+    return;
+  }
+  await ensureDeviceTable();
+  await query(
+    `INSERT INTO xm_me_devices (sid, username, ua, ip, device, city, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       username = VALUES(username),
+       ua = VALUES(ua),
+       ip = VALUES(ip),
+       device = VALUES(device),
+       city = VALUES(city),
+       created_at = VALUES(created_at),
+       expires_at = VALUES(expires_at)`,
+    [
+      sid,
+      session.username,
+      session.ua || "",
+      session.ip || "",
+      session.device || "",
+      session.city || "",
+      session.createdAt,
+      session.expiresAt
+    ]
+  );
+}
+
+function addNotice(username, kind, title, detail) {
+  const item = {
+    id: `${Date.now().toString(36)}-${randomBytes(6).toString("hex")}`,
+    username,
+    kind,
+    title,
+    detail: String(detail || "").slice(0, 500),
+    createdAt: Date.now(),
+    read: false
+  };
+  profileNotices.unshift(item);
+  if (profileNotices.length > 500) {
+    profileNotices.length = 500;
+  }
+  persistNotice(item).catch(function (err) {
+    console.error("notice persist failed", err);
+  });
+  return item;
+}
+
+async function persistNotice(item) {
+  if (dbMode() !== "mysql") {
+    return;
+  }
+  await ensureNoticeTable();
+  await query(
+    `INSERT INTO xm_me_notices (id, username, kind, title, detail, created_at, read_flag)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [item.id, item.username, item.kind, item.title, item.detail, item.createdAt, item.read ? 1 : 0]
+  );
+}
+
+function listNotices(username) {
+  return profileNotices
+    .filter((item) => item.username === username)
+    .slice(0, 100)
+    .map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      title: item.title,
+      detail: item.detail,
+      time: shanghaiTime(item.createdAt),
+      at: item.createdAt,
+      read: Boolean(item.read)
+    }));
+}
+
+function markNoticesRead(username) {
+  for (const item of profileNotices) {
+    if (item.username === username) {
+      item.read = true;
+    }
+  }
+}
+
 async function dropSession(sid) {
   if (dbMode() !== "mysql" || !sid) {
     return;
   }
   await query("DELETE FROM xm_sessions WHERE sid = ?", [sid]);
+  try {
+    await ensureDeviceTable();
+    await query("DELETE FROM xm_me_devices WHERE sid = ?", [sid]);
+  } catch (err) {
+    console.error("device delete failed", err);
+  }
 }
 
 const LOG_TABLE_SQL = SCHEMA_SQL.find((sql) => sql.includes("xm_me_logs"));
@@ -910,6 +1133,9 @@ export function resetStoreForTests() {
   logTableReady = false;
   avatars.clear();
   avatarTableReady = false;
+  profileNotices.length = 0;
+  deviceTableReady = false;
+  noticeTableReady = false;
   resetDutyCatalogForTests();
   seed();
 }
@@ -1052,12 +1278,42 @@ authRouter.post("/login", async (req, res) => {
   const remember = Boolean(req.body?.remember);
   const maxAgeMs = remember ? SESSION_MS_REMEMBER : SESSION_MS_DEFAULT;
   const expiresAt = createdAt + maxAgeMs;
-  sessions.set(sid, { username: user.username, createdAt, expiresAt });
+  const others = liveSessionsFor(user.username);
+  const meta = {
+    username: user.username,
+    createdAt,
+    expiresAt,
+    ua: String((req.headers && req.headers["user-agent"]) || "").slice(0, 512),
+    ip: requestIp(req),
+    device: parseDevice(req.headers && req.headers["user-agent"]),
+    city: requestCity(req)
+  };
+  sessions.set(sid, meta);
   setSessionCookie(res, req, sid, Math.floor(maxAgeMs / 1000));
   persistSession(sid, user.username, createdAt, expiresAt).catch(function (err) {
     console.error("session persist failed", err);
   });
-  recordProfileLog(req, user, "登录", remember ? "勾选保持登录" : "");
+  persistDevice(sid, meta).catch(function (err) {
+    console.error("device persist failed", err);
+  });
+  if (others.length) {
+    addNotice(
+      user.username,
+      "multi",
+      "多客户端登录",
+      "本账号已有 " + others.length + " 个在线会话，本次从 " + meta.device + "（" + meta.city + "）登录"
+    );
+    const otherIps = others.map((item) => item.ip).filter(Boolean);
+    if (meta.ip && otherIps.some((ip) => ip && ip !== meta.ip)) {
+      addNotice(
+        user.username,
+        "remote",
+        "异地登录",
+        "检测到与已有会话不同的登录来源：" + meta.device + " / " + meta.city
+      );
+    }
+  }
+  recordProfileLog(req, user, "登录", meta.device + " · " + meta.city + (remember ? " · 保持登录" : ""));
   res.json({ ok: true, remember, user: publicProfile(user) });
 });
 
@@ -1209,4 +1465,48 @@ profileRouter.post("/avatar", async (req, res) => {
   }
   recordProfileLog(req, req.user, "上传头像", "已保存到服务器");
   res.json({ ok: true, avatarUrl: result.avatarUrl });
+});
+
+profileRouter.get("/sessions", (req, res) => {
+  const currentSid = parseCookies(req)[COOKIE_NAME] || "";
+  const items = liveSessionsFor(req.user.username).map((item) => publicSession(item, currentSid));
+  res.json({ ok: true, currentSid, items });
+});
+
+profileRouter.delete("/sessions/:sid", (req, res) => {
+  const currentSid = parseCookies(req)[COOKIE_NAME] || "";
+  const sid = String(req.params.sid || "");
+  if (!sid) {
+    res.status(400).json({ ok: false, error: "缺少会话" });
+    return;
+  }
+  if (sid === currentSid) {
+    res.status(400).json({ ok: false, error: "不能退出当前设备" });
+    return;
+  }
+  const session = sessions.get(sid);
+  if (!session || session.username !== req.user.username) {
+    res.status(404).json({ ok: false, error: "会话不存在" });
+    return;
+  }
+  sessions.delete(sid);
+  dropSession(sid).catch(function (err) {
+    console.error("session delete failed", err);
+  });
+  recordProfileLog(req, req.user, "退出设备", (session.device || "未知设备") + " · " + (session.city || ""));
+  res.json({ ok: true });
+});
+
+profileRouter.get("/notices", (req, res) => {
+  const items = listNotices(req.user.username);
+  res.json({
+    ok: true,
+    unread: items.filter((item) => !item.read).length,
+    items
+  });
+});
+
+profileRouter.post("/notices/read", (req, res) => {
+  markNoticesRead(req.user.username);
+  res.json({ ok: true, unread: 0 });
 });

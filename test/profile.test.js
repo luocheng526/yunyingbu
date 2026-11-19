@@ -35,8 +35,8 @@ function cookieHeader(res) {
   return raw.map((part) => part.split(";")[0]).join("; ");
 }
 
-async function request(base, pathname, { method = "GET", body, cookie, redirect = "manual" } = {}) {
-  const headers = {};
+async function request(base, pathname, { method = "GET", body, cookie, redirect = "manual", headers: extraHeaders } = {}) {
+  const headers = { ...(extraHeaders || {}) };
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
   }
@@ -171,6 +171,13 @@ test("login 罗成 sets cookie; GET /api/auth/me 200; wrong password 401", async
     assert.doesNotMatch(moduleJs.text, /操作日志即将开放/);
     assert.match(moduleJs.text, /\/api\/profile\/avatar/);
     assert.doesNotMatch(moduleJs.text, /sessionStorage\.setItem\("xm-me-avatar-/);
+    assert.doesNotMatch(moduleJs.text, /iPhone 15/);
+    assert.doesNotMatch(moduleJs.text, /2026-11-17 10:24/);
+    assert.doesNotMatch(moduleJs.text, /消息通知设置即将开放/);
+    assert.match(moduleJs.text, /\/api\/profile\/sessions/);
+    assert.match(moduleJs.text, /\/api\/profile\/notices/);
+    assert.match(moduleJs.text, /异地登录/);
+    assert.match(moduleJs.text, /多客户端登录/);
   });
 });
 
@@ -369,6 +376,57 @@ test("operation logs record account actions; staff cannot delete; 罗成 sees ev
       redirect: "follow"
     });
     assert.equal(spoof.json.items.every((item) => item.username === "沈子晗"), true);
+  });
+});
+
+test("real sessions replace fake devices and notify multi-client or remote login", async () => {
+  await withServer(async (base) => {
+    const first = await request(base, "/api/auth/login", {
+      method: "POST",
+      body: { username: DEMO_USERNAME, password: DEMO_INITIAL_PASSWORD },
+      redirect: "follow",
+      headers: { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0", "x-forwarded-for": "10.0.0.8" }
+    });
+    assert.equal(first.res.status, 200);
+    const sessions = await request(base, "/api/profile/sessions", { cookie: first.cookie, redirect: "follow" });
+    assert.equal(sessions.res.status, 200);
+    assert.equal(sessions.json.items.length, 1);
+    assert.match(sessions.json.items[0].device, /Windows/);
+    assert.equal(sessions.json.items[0].current, true);
+    assert.doesNotMatch(JSON.stringify(sessions.json), /iPhone 15/);
+
+    const emptyNotice = await request(base, "/api/profile/notices", { cookie: first.cookie, redirect: "follow" });
+    assert.equal(emptyNotice.json.items.length, 0);
+
+    const second = await request(base, "/api/auth/login", {
+      method: "POST",
+      body: { username: DEMO_USERNAME, password: DEMO_INITIAL_PASSWORD },
+      redirect: "follow",
+      headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148", "x-forwarded-for": "203.0.113.9" }
+    });
+    assert.equal(second.res.status, 200);
+    const both = await request(base, "/api/profile/sessions", { cookie: second.cookie, redirect: "follow" });
+    assert.equal(both.json.items.length, 2);
+    const notices = await request(base, "/api/profile/notices", { cookie: second.cookie, redirect: "follow" });
+    assert.ok(notices.json.items.some((item) => item.title === "多客户端登录"));
+    assert.ok(notices.json.items.some((item) => item.title === "异地登录"));
+
+    const other = both.json.items.find((item) => !item.current);
+    const kickSelf = await request(base, "/api/profile/sessions/" + encodeURIComponent(both.json.items.find((item) => item.current).sid), {
+      method: "DELETE",
+      cookie: second.cookie,
+      redirect: "follow"
+    });
+    assert.equal(kickSelf.res.status, 400);
+    const kick = await request(base, "/api/profile/sessions/" + encodeURIComponent(other.sid), {
+      method: "DELETE",
+      cookie: second.cookie,
+      redirect: "follow"
+    });
+    assert.equal(kick.res.status, 200);
+    const after = await request(base, "/api/profile/sessions", { cookie: second.cookie, redirect: "follow" });
+    assert.equal(after.json.items.length, 1);
+    assert.equal(after.json.items[0].current, true);
   });
 });
 
