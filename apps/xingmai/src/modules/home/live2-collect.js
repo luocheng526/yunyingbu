@@ -8,7 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { jingmaiClient } from "./jingmai-client.js";
-import { listSessions } from "./jingmai-store.js";
+import { listSamples, listSessions } from "./jingmai-store.js";
 import { beijingParts, displayStamp } from "./jingmai.js";
 import { blankLive2Record, live2RecordFromMetrics } from "./live2.js";
 
@@ -20,7 +20,8 @@ function workerCount() {
 
 function shopBudgetMs() {
   const value = Number(process.env.LIVE2_SHOP_MS);
-  return Number.isFinite(value) && value >= 1000 ? value : 25000;
+  // 京麦接口遇到 601 会重试，然后用已经登录的会话读首页。25 秒会在这一步之前被掐掉。
+  return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
 export const LIVE2_RUNTIME_MARK = "0.1.1278-live2-login";
@@ -129,6 +130,7 @@ export function createLive2Collector(deps = {}) {
   let running = false;
   const loadOrg = deps.loadOrg || readOrgShops;
   const sessionsOf = deps.listSessions || listSessions;
+  const samplesOf = deps.listSamples || listSamples;
   const client = deps.client || jingmaiClient;
   const now = deps.now || stampNow;
   const file = deps.storePath === undefined ? defaultStorePath() : String(deps.storePath || "");
@@ -230,7 +232,89 @@ export function createLive2Collector(deps = {}) {
     return jar;
   }
 
-  function closeSlow(shop, draft) {
+  function stampOf(value) {
+    if (!value) {
+      return "";
+    }
+    if (value instanceof Date) {
+      return displayStamp(beijingParts(value).stamp);
+    }
+    return displayStamp(String(value).trim().replace("T", " ").slice(0, 19));
+  }
+
+  function rowFromSample(shop, sample) {
+    const row = live2RecordFromMetrics(shop, {
+      dealAmount: sample.dealAmount,
+      paidAmount: sample.paidAmount,
+      paidRoi: sample.paidRoi,
+      paidDeal: sample.paidDeal
+    }, stampOf(sample.capturedAt));
+    row.pendingUpdate = true;
+    row.pendingCollect = false;
+    row.offline = false;
+    row.offlineReason = "";
+    return publicRecord(row);
+  }
+
+  async function loadSampleMap() {
+    const map = new Map();
+    try {
+      const day = beijingParts().day;
+      const rows = await samplesOf(day, day);
+      const today = dayOf(now());
+      (rows || []).forEach(function (sample) {
+        const name = String((sample && sample.store) || "").trim();
+        const at = stampOf(sample && sample.capturedAt);
+        if (!name || !sample || sample.ok === false || dayOf(at) !== today) {
+          return;
+        }
+        if (sample.dealAmount == null && sample.paidAmount == null) {
+          return;
+        }
+        const prev = map.get(name);
+        if (!prev || at >= stampOf(prev.capturedAt)) {
+          map.set(name, sample);
+        }
+      });
+    } catch {
+      /* 没有样本时继续读京麦 */
+    }
+    return map;
+  }
+
+  function adoptSamples(samples) {
+    let changed = false;
+    const today = dayOf(now());
+    samples.forEach(function (sample, name) {
+      const current = published.get(name);
+      const at = stampOf(sample.capturedAt);
+      if (current && hasNumbers(current) && dayOf(current.capturedAt) === today && !current.pendingUpdate) {
+        return;
+      }
+      if (current && hasNumbers(current) && dayOf(current.capturedAt) === today && String(current.capturedAt) >= at) {
+        return;
+      }
+      published.set(name, rowFromSample({
+        store: name,
+        team: current && current.team,
+        manager: current && current.manager
+      }, sample));
+      changed = true;
+    });
+    if (!changed) {
+      return;
+    }
+    updatedAt = now();
+    publishedAt = updatedAt;
+    writeStore(file, {
+      publishedAt: publishedAt,
+      updatedAt: updatedAt,
+      timings: timings,
+      records: Array.from(published.values())
+    });
+  }
+
+  function closeSlow(shop, draft, samples) {
     const current = draft.get(shop.store);
     const previous = published.get(shop.store);
     const today = dayOf(now());
@@ -241,6 +325,12 @@ export function createLive2Collector(deps = {}) {
     }
     if (previous && hasNumbers(previous) && dayOf(previous.capturedAt) === today) {
       const row = publicRecord(Object.assign({}, previous, { pendingUpdate: true, pendingCollect: false }));
+      draft.set(shop.store, row);
+      return row;
+    }
+    const sample = samples && samples.get(shop.store);
+    if (sample && dayOf(stampOf(sample.capturedAt)) === today) {
+      const row = rowFromSample(shop, sample);
       draft.set(shop.store, row);
       return row;
     }
@@ -394,6 +484,8 @@ export function createLive2Collector(deps = {}) {
     const targets = (shops || []).filter(function (shop) {
       return shop && shop.store && (!only || shop.store === only);
     });
+    const samples = await loadSampleMap();
+    adoptSamples(samples);
     const draft = new Map(published);
     const roundStart = Date.now();
     const totals = emptyTimings();
@@ -407,6 +499,10 @@ export function createLive2Collector(deps = {}) {
       let late = false;
       const job = collectShop(shop, known, draft, phase).then(function (row) {
         if (late || phase.closed) {
+          return row;
+        }
+        if (!hasNumbers(row)) {
+          closeSlow(shop, draft, samples);
           return row;
         }
         draft.set(shop.store, publicRecord(row));
@@ -433,7 +529,7 @@ export function createLive2Collector(deps = {}) {
         } else {
           phase.adsMs += Math.max(0, elapsed - phase.dealMs);
         }
-        closeSlow(shop, draft);
+        closeSlow(shop, draft, samples);
         job.catch(function () {});
       }
       totals.dealMs += phase.dealMs;
@@ -449,7 +545,7 @@ export function createLive2Collector(deps = {}) {
         try {
           await one(shop);
         } catch {
-          closeSlow(shop, draft);
+          closeSlow(shop, draft, samples);
         }
       }
     }
