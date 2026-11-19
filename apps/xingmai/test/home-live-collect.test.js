@@ -647,6 +647,17 @@ test("router smoke skip is MENKAI_SMOKE_LIVE only; production still starts colle
   );
 });
 
+test("collectStatusSummary exposes loaded-process runtimeMark", async () => {
+  const { HOME_COLLECTOR_RUNTIME_MARK, collectStatusSummary, resetJingmaiStore } = await import(
+    "../src/modules/home/jingmai-store.js"
+  );
+  await resetJingmaiStore();
+  const summary = await collectStatusSummary();
+  assert.equal(summary.ok, true);
+  assert.equal(summary.runtimeMark, HOME_COLLECTOR_RUNTIME_MARK);
+  assert.match(String(summary.runtimeMark), /home-load-mutex|home-lease|mutex/);
+});
+
 test("cookieParams keeps real domain/path/expiry and only defaults legacy name/value jars", () => {
   const full = cookieParams([
     {

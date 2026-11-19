@@ -21,6 +21,9 @@ export const COLLECTOR_OWNER_HOME = "home";
 export const COLLECTOR_OWNER_SHEN = "shen";
 /** Lease window so a crashed home worker does not block Shen forever. */
 export const COLLECTOR_LEASE_SEC = 15 * 60;
+/** Loaded-process marker for release acceptance (status JSON). */
+export const HOME_COLLECTOR_RUNTIME_MARK = "0.1.1260-home-load-mutex";
+
 
 const CREATE_SAMPLE = `CREATE TABLE IF NOT EXISTS shen_jingmai_sample (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -777,6 +780,7 @@ export async function collectStatusSummary() {
   const sessions = await listSessions();
   const summary = {
     ok: true,
+    runtimeMark: HOME_COLLECTOR_RUNTIME_MARK,
     collectorOwnerDefault: COLLECTOR_OWNER_HOME,
     total: sessions.length,
     enabled: 0,
