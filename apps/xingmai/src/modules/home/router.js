@@ -15,6 +15,7 @@ import {
   beginRelogin,
   beginReloginAll,
   cancelRelogin,
+  jingmaiCollectStatus,
   reloginInput,
   reloginScreen,
   reloginState,
@@ -300,6 +301,16 @@ export function homeRouter() {
         records: [],
         error: err.message || "京麦实时采集失败"
       });
+    }
+  });
+
+  /** Ops evidence: session counts / owner / needsQr — never returns cookie jars. */
+  router.get("/jingmai/status", async (_req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      return res.json(await jingmaiCollectStatus());
+    } catch (err) {
+      res.status(502).json({ ok: false, error: err.message || "无法读取京麦采集状态" });
     }
   });
 

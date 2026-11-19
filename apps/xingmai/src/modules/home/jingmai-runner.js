@@ -10,6 +10,9 @@ import {
   withDeadline
 } from "./jingmai.js";
 import {
+  claimCollectorOwner,
+  COLLECTOR_OWNER_HOME,
+  collectStatusSummary,
   listCollectTargets,
   listSessions,
   markAuth,
@@ -96,12 +99,26 @@ export function shenOwnedStoreSet(shops) {
 }
 
 /**
- * Home is the sole collect writer for every enabled session with a jar.
- * Manual pause (enabled=false) stays excluded via listCollectTargets.
- * Does not call /api/shen/paid or /api/han — reads/writes local jingmai store only.
+ * Home is the sole collect writer. Atomically claim collector_owner=home per shop
+ * before listing targets. Manual pause stays excluded. Shen/Han keep reading same tables.
+ * Does not call /api/shen/paid or /api/han for collection.
  */
 export async function listHomeCollectTargets() {
-  return listCollectTargets();
+  const candidates = await listCollectTargets();
+  const claimed = [];
+  for (let i = 0; i < candidates.length; i += 1) {
+    const session = candidates[i];
+    const result = await claimCollectorOwner(session.store, COLLECTOR_OWNER_HOME);
+    if (result && result.ok) {
+      session.collectorOwner = COLLECTOR_OWNER_HOME;
+      claimed.push(session);
+    }
+  }
+  return claimed;
+}
+
+export async function jingmaiCollectStatus() {
+  return collectStatusSummary();
 }
 
 let deps = defaultDeps;

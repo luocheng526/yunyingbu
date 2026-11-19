@@ -11,8 +11,13 @@ const CREATE_SESSION = `CREATE TABLE IF NOT EXISTS shen_jingmai_session (
   shop_id VARCHAR(32) NOT NULL DEFAULT '',
   linked_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
-  session_gen INT NOT NULL DEFAULT 0
+  session_gen INT NOT NULL DEFAULT 0,
+  collector_owner VARCHAR(16) NOT NULL DEFAULT ''
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
+
+/** Live collect writer. Shen/Han may read; only owner may write cookies/samples. */
+export const COLLECTOR_OWNER_HOME = "home";
+export const COLLECTOR_OWNER_SHEN = "shen";
 
 const CREATE_SAMPLE = `CREATE TABLE IF NOT EXISTS shen_jingmai_sample (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -103,6 +108,14 @@ async function ensure() {
       throw error;
     }
   }
+  try {
+    await query("ALTER TABLE shen_jingmai_session ADD COLUMN collector_owner VARCHAR(16) NOT NULL DEFAULT ''");
+  } catch (error) {
+    const message = String((error && (error.sqlMessage || error.message)) || "");
+    if (!/duplicate|exists/i.test(message)) {
+      throw error;
+    }
+  }
   ready = true;
 }
 
@@ -116,7 +129,8 @@ function memorySession(store) {
       enabled: true,
       shopId: "",
       linkedAt: "",
-      sessionGen: 0
+      sessionGen: 0,
+      collectorOwner: ""
     }
   );
 }
@@ -159,7 +173,8 @@ function mapDbSession(row) {
     enabled: Number(row.enabled_flag) === 1,
     shopId: String(row.shop_id || ""),
     linkedAt: linkedAt,
-    sessionGen: Number(row.session_gen) || 0
+    sessionGen: Number(row.session_gen) || 0,
+    collectorOwner: String(row.collector_owner || "")
   };
 }
 
@@ -181,20 +196,27 @@ export async function getSession(store) {
   let result;
   try {
     result = await query(
-      `SELECT store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at, shop_id, session_gen
+      `SELECT store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at, shop_id, session_gen, collector_owner
        FROM shen_jingmai_session WHERE store = ? LIMIT 1`,
       [store]
     );
   } catch (error) {
     const message = String((error && (error.sqlMessage || error.message)) || "");
-    if (!/session_gen|Unknown column/i.test(message)) {
+    if (/collector_owner|Unknown column/i.test(message)) {
+      result = await query(
+        `SELECT store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at, shop_id, session_gen
+         FROM shen_jingmai_session WHERE store = ? LIMIT 1`,
+        [store]
+      );
+    } else if (/session_gen|Unknown column/i.test(message)) {
+      result = await query(
+        `SELECT store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at, shop_id
+         FROM shen_jingmai_session WHERE store = ? LIMIT 1`,
+        [store]
+      );
+    } else {
       throw error;
     }
-    result = await query(
-      `SELECT store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at, shop_id
-       FROM shen_jingmai_session WHERE store = ? LIMIT 1`,
-      [store]
-    );
   }
   const rows = result && result[0] ? result[0] : [];
   if (!rows.length) {
@@ -215,6 +237,8 @@ export async function saveSession(store, fields) {
       .trim()
       .slice(0, 32);
     const sessionGen = (Number(current.sessionGen) || 0) + 1;
+    const collectorOwner =
+      fields.collectorOwner == null ? current.collectorOwner || "" : String(fields.collectorOwner || "");
     const row = {
       store: store,
       cookies: cookies || [],
@@ -223,7 +247,8 @@ export async function saveSession(store, fields) {
       enabled: enabled,
       shopId: shopId,
       linkedAt: stampNow(),
-      sessionGen: sessionGen
+      sessionGen: sessionGen,
+      collectorOwner: collectorOwner
     };
     memory.sessions.set(store, row);
     return row;
@@ -448,11 +473,15 @@ export async function listSessions() {
   let result;
   try {
     result = await query(
-      `SELECT store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at, shop_id, session_gen FROM shen_jingmai_session ORDER BY store ASC`
+      `SELECT store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at, shop_id, session_gen, collector_owner FROM shen_jingmai_session ORDER BY store ASC`
     );
   } catch (error) {
     const message = String((error && (error.sqlMessage || error.message)) || "");
-    if (/session_gen|Unknown column/i.test(message)) {
+    if (/collector_owner|Unknown column/i.test(message)) {
+      result = await query(
+        `SELECT store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at, shop_id, session_gen FROM shen_jingmai_session ORDER BY store ASC`
+      );
+    } else if (/session_gen|Unknown column/i.test(message)) {
       result = await query(
         `SELECT store, cookie_jar, auth_state, auth_message, enabled_flag, linked_at, shop_id FROM shen_jingmai_session ORDER BY store ASC`
       );
@@ -467,7 +496,65 @@ export async function listSessions() {
   return (result[0] || []).map(mapDbSession);
 }
 
-export async function listCollectTargets() {
+/**
+ * Atomic single-owner handoff. Never flips enabled=false (manual pause).
+ * Empty owner or same owner can be claimed; another owner blocks until released.
+ */
+export async function claimCollectorOwner(store, owner = COLLECTOR_OWNER_HOME) {
+  const name = String(store || "").trim();
+  const who = String(owner || COLLECTOR_OWNER_HOME).trim() || COLLECTOR_OWNER_HOME;
+  if (!name) {
+    return { ok: false, reason: "missing_store" };
+  }
+  await ensure();
+  if (memoryForced()) {
+    const current = memorySession(name);
+    if (current.enabled === false) {
+      return { ok: false, reason: "manual_pause", owner: current.collectorOwner || "" };
+    }
+    const prev = String(current.collectorOwner || "");
+    if (prev && prev !== who) {
+      return { ok: false, reason: "owned_by_other", owner: prev };
+    }
+    current.collectorOwner = who;
+    memory.sessions.set(name, current);
+    return { ok: true, reason: prev === who ? "already" : "claimed", owner: who };
+  }
+  const stamp = stampNow();
+  let result;
+  try {
+    result = await query(
+      `UPDATE shen_jingmai_session
+       SET collector_owner = ?, updated_at = ?
+       WHERE store = ?
+         AND enabled_flag = 1
+         AND (collector_owner = '' OR collector_owner = ?)`,
+      [who, stamp, name, who]
+    );
+  } catch (error) {
+    const message = String((error && (error.sqlMessage || error.message)) || "");
+    if (/collector_owner|Unknown column/i.test(message)) {
+      return { ok: true, reason: "column_missing_fail_open", owner: who };
+    }
+    throw error;
+  }
+  const affected = result[0] && typeof result[0].affectedRows === "number" ? result[0].affectedRows : 0;
+  if (affected) {
+    return { ok: true, reason: "claimed", owner: who };
+  }
+  const session = await getSession(name);
+  if (!session) {
+    return { ok: false, reason: "missing_session" };
+  }
+  if (session.enabled === false) {
+    return { ok: false, reason: "manual_pause", owner: session.collectorOwner || "" };
+  }
+  return { ok: false, reason: "owned_by_other", owner: session.collectorOwner || "" };
+}
+
+export async function listCollectTargets(options) {
+  const opts = options && typeof options === "object" ? options : {};
+  const requireOwner = opts.requireOwner != null ? String(opts.requireOwner) : "";
   const sessions = await listSessions();
   const seenShop = new Set();
   return sessions.filter(function (session) {
@@ -480,6 +567,9 @@ export async function listCollectTargets() {
     if (session.authState !== "ok" && session.authState !== "offline" && session.authState !== "login_expired") {
       return false;
     }
+    if (requireOwner && String(session.collectorOwner || "") !== requireOwner) {
+      return false;
+    }
     if (session.shopId && seenShop.has(session.shopId)) {
       return false;
     }
@@ -488,6 +578,57 @@ export async function listCollectTargets() {
     }
     return true;
   });
+}
+
+/** Counts for ops evidence — never returns cookie jars. */
+export async function collectStatusSummary() {
+  const sessions = await listSessions();
+  const summary = {
+    ok: true,
+    collectorOwnerDefault: COLLECTOR_OWNER_HOME,
+    total: sessions.length,
+    enabled: 0,
+    paused: 0,
+    withJar: 0,
+    authOk: 0,
+    loginExpired: 0,
+    offline: 0,
+    ownerHome: 0,
+    ownerShen: 0,
+    ownerEmpty: 0,
+    ownerOther: 0,
+    needsQr: []
+  };
+  sessions.forEach(function (session) {
+    if (session.enabled === false) {
+      summary.paused += 1;
+    } else {
+      summary.enabled += 1;
+    }
+    if (session.cookies && session.cookies.length) {
+      summary.withJar += 1;
+    } else if (session.enabled !== false) {
+      summary.needsQr.push({ store: session.store, shopId: session.shopId || "", authState: session.authState });
+    }
+    if (session.authState === "ok") {
+      summary.authOk += 1;
+    } else if (session.authState === "login_expired") {
+      summary.loginExpired += 1;
+    } else if (session.authState === "offline") {
+      summary.offline += 1;
+    }
+    const owner = String(session.collectorOwner || "");
+    if (owner === COLLECTOR_OWNER_HOME) {
+      summary.ownerHome += 1;
+    } else if (owner === COLLECTOR_OWNER_SHEN) {
+      summary.ownerShen += 1;
+    } else if (!owner) {
+      summary.ownerEmpty += 1;
+    } else {
+      summary.ownerOther += 1;
+    }
+  });
+  return summary;
 }
 
 /**

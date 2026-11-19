@@ -870,5 +870,14 @@ export async function getHomeLocalPaid(req) {
     req ? pullFeeTargets(req) : Promise.resolve({})
   ]);
   const snap = rememberLocalPaidDay(merged, ymd);
-  return packFromSnap(snap, { summary: merged.summary, from: merged.from || ["jingmai"], feeTargets, hourly: merged.hourly });
+  const packed = packFromSnap(snap, {
+    summary: merged.summary,
+    from: merged.from || ["jingmai"],
+    feeTargets,
+    hourly: merged.hourly
+  });
+  // Independent home live path — does not depend on /api/shen/paid for collection.
+  packed.collectorOwner = "home";
+  packed.source = packed.source || "jingmai-local";
+  return packed;
 }

@@ -386,6 +386,43 @@ test("listHomeCollectTargets: home owns all teams; manual pause still skipped", 
   resetJingmaiDeps();
 });
 
+test("claimCollectorOwner is atomic; manual pause cannot be claimed; other owner blocks", async () => {
+  const { claimCollectorOwner, COLLECTOR_OWNER_HOME, COLLECTOR_OWNER_SHEN, getSession } = await import(
+    "../src/modules/home/jingmai-store.js"
+  );
+  await resetJingmaiStore();
+  await saveSession("可交接", {
+    cookies: [{ name: "thor", value: "1" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "c1"
+  });
+  await saveSession("已暂停", {
+    cookies: [{ name: "thor", value: "1" }],
+    authState: "ok",
+    enabled: false,
+    shopId: "c2"
+  });
+  await saveSession("他主", {
+    cookies: [{ name: "thor", value: "1" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "c3"
+  });
+  const first = await claimCollectorOwner("可交接", COLLECTOR_OWNER_HOME);
+  assert.equal(first.ok, true);
+  assert.equal((await getSession("可交接")).collectorOwner, "home");
+  assert.equal((await claimCollectorOwner("可交接", COLLECTOR_OWNER_HOME)).ok, true);
+  assert.equal((await claimCollectorOwner("他主", COLLECTOR_OWNER_SHEN)).ok, true);
+  const blocked = await claimCollectorOwner("他主", COLLECTOR_OWNER_HOME);
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.reason, "owned_by_other");
+  assert.equal(blocked.owner, "shen");
+  const paused = await claimCollectorOwner("已暂停", COLLECTOR_OWNER_HOME);
+  assert.equal(paused.ok, false);
+  assert.equal(paused.reason, "manual_pause");
+});
+
 test("cookieParams keeps real domain/path/expiry and only defaults legacy name/value jars", () => {
   const full = cookieParams([
     {
