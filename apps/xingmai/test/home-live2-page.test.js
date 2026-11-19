@@ -22,6 +22,9 @@ test("实时（新版） sits after 近七天业绩汇总 and stays independent 
   assert.match(homeJs, /启动浏览器\/\.test\(String\(next\.message \|\| ""\)\) && keptMessage/);
   const panel = homeJs.slice(homeJs.indexOf("function live2PanelHtml"), homeJs.indexOf("function paint"));
   assert.match(panel, /liveDeskHtml\(state\)/);
+  assert.match(panel, /live2Charts\(/);
+  assert.match(homeJs, /xm-home-live2-yday/);
+  assert.match(homeJs, /function live2Charts/);
 });
 
 test("opening 实时（新版） does not call old collect or login endpoints", () => {

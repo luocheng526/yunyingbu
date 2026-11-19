@@ -3323,12 +3323,108 @@
       })
       .filter(Boolean);
   }
-  function live2PanelHtml(state) {
+  var LIVE2_DAY_KEY = "xm-home-live2-yday";
+  function live2Sums(records) {
+    var deal = 0;
+    var spend = 0;
+    var hasDeal = false;
+    var hasSpend = false;
+    (records || []).forEach(function (row) {
+      if (!row || row.pendingCollect) {
+        return;
+      }
+      if (row.liveAmount != null && row.liveAmount !== "") {
+        deal += Number(row.liveAmount) || 0;
+        hasDeal = true;
+      }
+      if (row.paidAmount != null && row.paidAmount !== "") {
+        spend += Number(row.paidAmount) || 0;
+        hasSpend = true;
+      }
+    });
+    return {
+      deal: hasDeal ? deal : null,
+      spend: hasSpend ? spend : null,
+      fee: hasDeal && hasSpend && deal ? spend / deal : null
+    };
+  }
+  function levelDeltas(list, slots) {
+    var src = padHours(list, 24);
+    var last = 0;
+    var out = [];
+    var i;
+    var end = slots == null ? shanghaiHour() : slots - 1;
+    for (i = 0; i <= end && i < 24; i += 1) {
+      var n = asNum(src[i]);
+      var level = n ? n : last;
+      out.push(level - last);
+      last = level;
+    }
+    return out;
+  }
+  function levelDay(list) {
+    var src = padHours(list, 24);
+    var last = 0;
+    var out = [];
+    var i;
+    for (i = 0; i < 24; i += 1) {
+      var n = asNum(src[i]);
+      if (n) {
+        last = n;
+      }
+      out.push(last);
+    }
+    return out;
+  }
+  function stampAtHour(list) {
+    var src = padHours(list, 24);
+    var i;
+    var h = shanghaiHour();
+    for (i = Math.min(h, src.length - 1); i >= 0; i -= 1) {
+      var n = asNum(src[i]);
+      if (n) {
+        return n;
+      }
+    }
+    return null;
+  }
+  function live2Charts(records) {
     var blank = blankLive();
+    var sums = live2Sums(records);
+    if (sums.deal == null && sums.spend == null) {
+      return { hero: blank.hero, paid: blank.paid, fee: blank.fee };
+    }
+    var kept = keepLiveDay(
+      { jingmai: sums.deal, spend: sums.spend, fee: sums.fee },
+      LIVE2_DAY_KEY
+    );
+    var today = kept.todayStamps || emptyLiveDayNums();
+    var yest = kept.yestStamps || emptyLiveDayNums();
+    var yestDeal = stampAtHour(yest.jingmaiAt);
+    var yestSpend = stampAtHour(yest.spendAt);
+    var yestFee = stampAtHour(yest.feeAt);
+    var hero = spendChartOf(sums.deal, yestDeal, {
+      todaySpend: levelDeltas(today.jingmaiAt),
+      yesterdaySpend: yestDeal != null ? levelDeltas(yest.jingmaiAt, 24) : []
+    });
+    hero.key = "jingmai";
+    hero.label = "实时总成交金额";
+    var paid = spendChartOf(sums.spend, yestSpend, {
+      todaySpend: levelDeltas(today.spendAt),
+      yesterdaySpend: yestSpend != null ? levelDeltas(yest.spendAt, 24) : []
+    });
+    var fee = feeChartOf(sums.fee, yestFee, {
+      todayFee: levelDay(today.feeAt).slice(0, shanghaiHour() + 1),
+      yesterdayFee: yestFee != null ? levelDay(yest.feeAt) : []
+    });
+    return { hero: hero, paid: paid, fee: fee };
+  }
+  function live2PanelHtml(state) {
     var roster = adaptLive2Shops(state && state.dutyShops);
     var shops = filterLiveShops(applyLive2Pack(roster, state && state.live2Pack), state);
     shops = sortLiveShops(feePickShops(shops, liveFeePick));
-    var trio = liveChartHtml(blank.hero) + liveChartHtml(blank.paid) + liveChartHtml(blank.fee);
+    var charts = live2Charts((state && state.live2Pack && state.live2Pack.records) || []);
+    var trio = liveChartHtml(charts.hero) + liveChartHtml(charts.paid) + liveChartHtml(charts.fee);
     var cards = live2Cards(shops, state && state.live2Pack);
     var cardMap = {};
     cards.forEach(function (card) {
@@ -4307,13 +4403,13 @@
   function liveDayYmd() {
     return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   }
-  function readLiveDay() {
+  function readLiveDay(key) {
     var blank = { ymd: liveDayYmd(), today: emptyLiveDayNums(), yest: emptyLiveDayNums() };
     try {
       if (typeof localStorage === "undefined") {
         return blank;
       }
-      var raw = JSON.parse(localStorage.getItem(LIVE_DAY_KEY) || "null");
+      var raw = JSON.parse(localStorage.getItem(key || LIVE_DAY_KEY) || "null");
       if (!raw || typeof raw !== "object") {
         return blank;
       }
@@ -4324,12 +4420,12 @@
       return blank;
     }
   }
-  function writeLiveDay(store) {
+  function writeLiveDay(store, key) {
     try {
       if (typeof localStorage === "undefined") {
         return;
       }
-      localStorage.setItem(LIVE_DAY_KEY, JSON.stringify(store));
+      localStorage.setItem(key || LIVE_DAY_KEY, JSON.stringify(store));
     } catch (err) {}
   }
   function rollLiveDay(store) {
@@ -4387,9 +4483,9 @@
     }
     return fallback == null ? null : asNum(fallback);
   }
-  function keepLiveDay(input) {
+  function keepLiveDay(input, key) {
     input = input || {};
-    var store = rollLiveDay(readLiveDay());
+    var store = rollLiveDay(readLiveDay(key));
     if (input.jingmai != null) {
       store.today.jingmai = input.jingmai;
       store.today.jingmaiAt = stampAt(store.today.jingmaiAt, input.jingmai);
@@ -4411,7 +4507,7 @@
     if (input.yestFee != null) {
       store.yest.fee = input.yestFee;
     }
-    writeLiveDay(store);
+    writeLiveDay(store, key);
     var hourly = input.hourly || {};
     var yestJingmai = hourCum(hourly.yesterdayPay, null);
     if (yestJingmai == null) {
@@ -4433,6 +4529,7 @@
       yestSpend: yestSpend,
       yestFee: yestFee,
       hourly: hourly,
+      todayStamps: store.today,
       yestStamps: store.yest
     };
   }
