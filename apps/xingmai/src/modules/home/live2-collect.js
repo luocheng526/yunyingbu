@@ -44,7 +44,8 @@ async function readOrgShops(cookie, fetchImpl = fetch) {
         enabled: store.statusKey === "operating" || (store.statusKey == null && store.remark === "运营中"),
         login: String(store.login || ""),
         password: String(store.password || ""),
-        shopId: String(store.shopId || store.storeId || "").trim()
+        shopId: String(store.shopId || store.storeId || "").trim(),
+        merchantId: String(store.merchantId || "").trim()
       };
     })
     .filter(function (store) {
@@ -155,6 +156,7 @@ export function createLive2Collector(deps = {}) {
       const metrics = await client.fetchHome(jar, {
         store: shop.store,
         shopId: shop.shopId,
+        merchantId: shop.merchantId,
         shopName: shop.store
       });
       const row = live2RecordFromMetrics(shop, metrics, now());
@@ -173,6 +175,7 @@ export function createLive2Collector(deps = {}) {
             const metrics = await client.fetchHome(jar, {
               store: shop.store,
               shopId: shop.shopId,
+              merchantId: shop.merchantId,
               shopName: shop.store
             });
             return live2RecordFromMetrics(shop, metrics, now());

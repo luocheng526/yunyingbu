@@ -941,6 +941,12 @@ test("JZT pin ownership requires exact shopId; rejects id conflict and brand sub
     { shopId: "right-id", store: "RASW家居旗舰店" }
   );
   assert.equal(brandOnly.length, 0);
+  const merchant = filterPinsBelongingToShop(
+    [{ pinId: 44, shopId: "17568184", shopName: "RASW家居旗舰店", raw: { venderId: "17568184" } }],
+    { shopId: "16065563", merchantId: "17568184", store: "RASW家居旗舰店" }
+  );
+  assert.equal(merchant.length, 1);
+  assert.equal(merchant[0].pinId, 44);
 });
 
 test("fetchHome keeps finished deal when ads hang until abort", async () => {

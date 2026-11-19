@@ -396,9 +396,10 @@ function pinShopIds(row) {
  */
 export function filterPinsBelongingToShop(records, expected) {
   const wantId = String((expected && expected.shopId) || "").trim();
+  const merchantId = String((expected && expected.merchantId) || "").trim();
   const wantName = String((expected && (expected.shopName || expected.store)) || "").trim();
   const list = Array.isArray(records) ? records : [];
-  if (!wantId && !wantName) {
+  if (!wantId && !merchantId && !wantName) {
     return list.slice();
   }
   return list.filter(function (row) {
@@ -406,10 +407,10 @@ export function filterPinsBelongingToShop(records, expected) {
       return false;
     }
     const ids = pinShopIds(row);
-    if (wantId) {
+    if (wantId || merchantId) {
       if (ids.size > 0) {
         // ID conflict (e.g. wrong-id vs right-id) must exclude — never soften with name.
-        return ids.has(wantId);
+        return ids.has(wantId) || (merchantId && ids.has(merchantId));
       }
       // No reliable id on the pin: exact full shop name only, no substring/brand match.
       const name = String(row.shopName || "").trim();
@@ -487,14 +488,21 @@ export function accountIdentity(body) {
 
 export function sameShop(expected, actual) {
   const wantId = String((expected && expected.shopId) || "").trim();
+  const merchantId = String((expected && expected.merchantId) || "").trim();
   const gotId = String((actual && actual.shopId) || "").trim();
   const wantName = String((expected && (expected.store || expected.shopName)) || "").replace(/\s+/g, "");
   const gotName = String((actual && actual.shopName) || "").replace(/\s+/g, "");
   if (!gotId && !gotName) {
     return true;
   }
+  if (wantName && gotName && wantName === gotName) {
+    return true;
+  }
+  if (gotId && (gotId === wantId || (merchantId && gotId === merchantId))) {
+    return true;
+  }
   if (wantId && gotId) {
-    return wantId === gotId;
+    return false;
   }
   if (wantName && gotName) {
     return wantName === gotName;

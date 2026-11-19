@@ -4,6 +4,7 @@ import {
   beijingParts,
   bindDecision,
   matchCollectIdentity,
+  sameShop,
   runTick,
   sampleFields,
   sessionStillValid,
@@ -206,6 +207,7 @@ function rememberOrg(shops) {
       login: shop.login,
       password: shop.password,
       shopId: String(shop.shopId || ""),
+      merchantId: String(shop.merchantId || ""),
       team: String(shop.team || ""),
       manager: String(shop.manager || "")
     });
@@ -271,7 +273,8 @@ export async function loadOrgShops(cookie, fetchImpl = fetch) {
         enabled: store.statusKey === "operating" || (store.statusKey == null && store.remark === "运营中"),
         login: String(store.login || ""),
         password: String(store.password || ""),
-        shopId: String(store.shopId || store.storeId || "").trim()
+        shopId: String(store.shopId || store.storeId || "").trim(),
+        merchantId: String(store.merchantId || "").trim()
       };
     })
     .filter(function (store) {
@@ -497,12 +500,13 @@ function publicState(state) {
 
 async function rememberLogin(store, cookies, expected) {
   let identity = { shopId: "", shopName: "" };
+  const pageMatch = Boolean(expected && expected.pageMatch);
   try {
     if (deps.client.fetchAccountIdentity) {
       identity = (await deps.client.fetchAccountIdentity(cookies)) || identity;
     }
   } catch (error) {
-    if (error && error.code === "login") {
+    if (error && error.code === "login" && !pageMatch) {
       const sessions = await listSessions();
       const existing = sessions.find(function (item) {
         return item.store === store;
@@ -517,7 +521,39 @@ async function rememberLogin(store, cookies, expected) {
   const existing = sessions.find(function (item) {
     return item.store === store;
   });
-  const decision = bindDecision(Object.assign({ store: store }, expected || {}), identity, existing);
+  const wanted = Object.assign({ store: store }, expected || {});
+  if (pageMatch || sameShop(wanted, identity)) {
+    const shopId = String((wanted.shopId || identity.shopId) || "").trim();
+    await saveSession(store, {
+      cookies: cookies,
+      authState: "ok",
+      authMessage: "",
+      enabled: true,
+      shopId: shopId
+    });
+    try {
+      const metrics = await deps.client.fetchHome(cookies, undefined, {
+        store: store,
+        shopId: shopId,
+        shopName: store
+      });
+      const now = beijingParts();
+      await saveSample(
+        Object.assign({ store: store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)),
+        { writer: COLLECTOR_OWNER_HOME }
+      );
+    } catch (error) {
+      if (error && error.code === "identity") {
+        await markAuth(store, "offline", String(error.message || "身份不符").slice(0, 200), {
+          writer: COLLECTOR_OWNER_HOME
+        });
+        return "failed";
+      }
+      /* 一次采集超时或没有成交，保留刚保存的登录 */
+    }
+    return "saved";
+  }
+  const decision = bindDecision(wanted, identity, existing);
   if (decision.action === "keep") {
     return "kept";
   }
@@ -656,7 +692,7 @@ async function startQueued(shop, epoch) {
     loginCursor.message = "登录没有通过，请再试一次";
       return publicState({ status: "failed", store: shop.store, step: "核对店铺身份", message: loginCursor.message });
     }
-    return publicState({ status: "ok", store: shop.store, message: shop.store + " 已在服务器登录" });
+    return publicState({ status: "ok", store: shop.store, message: shop.store + " 登录成功" });
   }
   if (opened.status === "verify") {
     loginCursor.phase = "screen";
@@ -690,7 +726,7 @@ async function startQueued(shop, epoch) {
 async function advanceAfterSuccess(store) {
   const next = loginQueue.shift();
   if (!next) {
-    return publicState({ status: "ok", store: store, message: store + " 已在服务器登录" });
+    return publicState({ status: "ok", store: store, message: store + " 登录成功" });
   }
   loginCursor.index += 1;
   return startQueued(next, loginEpoch);
@@ -1064,7 +1100,12 @@ export async function reloginState(store) {
   if (state.status === "ok") {
     const cookies = state.cookies || [];
     const cached = orgCache.get(name);
-    const kept = await rememberLogin(name, cookies, { store: name, shopId: (cached && cached.shopId) || "" });
+    const kept = await rememberLogin(name, cookies, {
+      store: name,
+      shopId: (cached && cached.shopId) || "",
+      merchantId: (cached && cached.merchantId) || "",
+      pageMatch: state.pageMatch === true
+    });
     if (kept === "kept") {
       return publicState({ status: "login", store: name, message: "这次登录到的不是这家店，原来的会话还在" });
     }

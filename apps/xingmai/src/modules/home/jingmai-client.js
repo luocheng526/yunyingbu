@@ -16,7 +16,7 @@ import {
   beijingParts,
   withDeadline
 } from "./jingmai.js";
-import { readHomeDeal } from "./jingmai-desk.js";
+import { readHomeDeal, readJztOverview } from "./jingmai-desk.js";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
@@ -1000,6 +1000,9 @@ async function fetchPaid(jar, fetchImpl, signal, expected) {
   const records = collectPinRecords(userData, authData);
   if (!records.length) {
     const payload = user && user.code != null ? user : auth;
+    if (fetchImpl === fetch && payload && Number(payload.code) !== 1) {
+      return readJztOverview(jar, signal, expected);
+    }
     throw jingmaiError("paid", paidAccountError(payload));
   }
   // Ownership must come from JZT pin metadata belonging to this shop — not Jingmai DSM identity.

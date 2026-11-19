@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
-import { extractShopDeal, parseHomeCard, withDeadline } from "./jingmai.js";
+import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, filterPinsBelongingToShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
 
 const LOGIN_URL =
   "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
@@ -2626,8 +2626,27 @@ export async function pollDesk(store) {
   try {
     const cookies = await readCookies(current.ws);
     const href = await evaluate(current.ws, "location.href");
+    let pageMatch = false;
+    const storeName = String(store || current.store || "").replace(/\s+/g, "");
+    if (storeName) {
+      try {
+        pageMatch = Boolean(await evaluate(current.ws, `(() => {
+          const want = ${JSON.stringify(storeName)};
+          const nodes = document.querySelectorAll("a, span, div, h1, h2, p");
+          for (let i = 0; i < nodes.length && i < 400; i += 1) {
+            const text = String(nodes[i].innerText || "").replace(/\\s+/g, "");
+            if (text !== want && text.indexOf(want) !== 0) continue;
+            const rect = nodes[i].getBoundingClientRect();
+            if (rect.width > 2 && rect.height > 2 && rect.top >= 0 && rect.top < 180) return true;
+          }
+          return false;
+        })()`));
+      } catch {
+        pageMatch = false;
+      }
+    }
     if (sessionReady(href, cookies)) {
-      return { status: "ok", cookies: cookies, href: String(href || "") };
+      return { status: "ok", cookies: cookies, href: String(href || ""), pageMatch: pageMatch };
     }
     loginVisible = true;
   } catch {
@@ -3258,7 +3277,8 @@ function normalizeDealExpected(shopKeyOrExpected) {
   if (shopKeyOrExpected && typeof shopKeyOrExpected === "object") {
     return {
       store: String(shopKeyOrExpected.store || shopKeyOrExpected.shopName || "").trim(),
-      shopId: String(shopKeyOrExpected.shopId || "").trim()
+      shopId: String(shopKeyOrExpected.shopId || "").trim(),
+      merchantId: String(shopKeyOrExpected.merchantId || "").trim()
     };
   }
   const key = String(shopKeyOrExpected || "").trim();
@@ -3382,17 +3402,36 @@ async function readShopBaseName(ws) {
   }
 }
 
-function assertPageShopIdentity(expected, pageName, vane) {
+function shopTitleMatch(want, got) {
+  const left = String(want || "").replace(/\s+/g, "");
+  const right = String(got || "").replace(/\s+/g, "");
+  if (!left || !right) {
+    return false;
+  }
+  return left === right || right.startsWith(left) || left.startsWith(right);
+}
+
+export function assertPageShopIdentity(expected, pageName, vane) {
   const wantName = String((expected && expected.store) || "").trim();
   const wantId = String((expected && expected.shopId) || "").trim();
+  const merchantId = String((expected && expected.merchantId) || "").trim();
   const gotName = String(pageName || (vane && vane.shopName) || "").trim();
   const gotId = String((vane && vane.venderId) || "").trim();
-  if (wantName && gotName && wantName !== gotName) {
+  if (!gotName && !gotId) {
+    return;
+  }
+  if (shopTitleMatch(wantName, gotName)) {
+    return;
+  }
+  if (gotId && (gotId === wantId || (merchantId && gotId === merchantId))) {
+    return;
+  }
+  if (wantName && gotName) {
     const err = new Error("京麦当前店铺：" + gotName + "；网站当前店铺：" + wantName + "。店铺不一致，未保存数据");
     err.code = "identity";
     throw err;
   }
-  if (wantId && gotId && wantId !== gotId) {
+  if (wantId && gotId) {
     const err = new Error("京麦店铺ID不符，未保存数据");
     err.code = "identity";
     throw err;
@@ -3552,6 +3591,83 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
     }
     // Old-site finally: close this shop context only.
     killOwn();
+  }
+}
+
+export async function readJztOverview(cookies, signal, expected) {
+  if (signal && signal.aborted) {
+    throw Object.assign(new Error("广告采集超时"), { code: "timeout", name: "AbortError" });
+  }
+  let desk = null;
+  try {
+    desk = await launchChrome(signal, { ephemeral: true, profileKey: "" });
+    const ws = desk.ws;
+    await send(ws, "Page.enable");
+    await send(ws, "Network.enable");
+    const jar = cookieParams(cookies);
+    if (jar.length) {
+      await send(ws, "Network.setCookies", { cookies: jar });
+    }
+    await send(ws, "Page.navigate", { url: "https://jzt.jd.com/custom-report/#/overview" });
+    await waitDomContentLoaded(ws, signal, 20000);
+    await sleepSignal(1500, signal);
+    const href = await evaluate(ws, "location.href");
+    if (/passport\.|\/login/i.test(String(href || ""))) {
+      const err = new Error("京准通跨域登录未完成");
+      err.code = "paid";
+      throw err;
+    }
+    const lists = await evaluate(
+      ws,
+      `fetch("https://jzt-api.jd.com/dataCenter/index/user/pinlist?requestFrom=0",{credentials:"include",headers:{accept:"application/json, text/plain, */*",siteId:"0"}}).then(r=>r.json()).then(user=>fetch("https://jzt-api.jd.com/dataCenter/index/auth/pinlist?requestFrom=0",{credentials:"include",headers:{accept:"application/json, text/plain, */*",siteId:"0"}}).then(r=>r.json()).catch(()=>null).then(auth=>({user,auth}))).catch(e=>({error:String(e&&e.message||e)}))`,
+      15000
+    );
+    if (!lists || lists.error) {
+      const err = new Error("京准通没有可用账号");
+      err.code = "paid";
+      throw err;
+    }
+    const user = lists.user || {};
+    if (Number(user.code) !== 1) {
+      const err = new Error("京准通没有可用账号 " + String(user.code == null ? "" : user.code) + " " + String(user.msg || user.message || "").replace(/\s+/g, " ").slice(0, 36));
+      err.code = "paid";
+      throw err;
+    }
+    const records = collectPinRecords(user.code === 1 ? user.data : null, lists.auth && Number(lists.auth.code) === 1 ? lists.auth.data : null);
+    const wanted = expected || {};
+    let matched = filterPinsBelongingToShop(records, wanted);
+    if (!matched.length) {
+      const prefix = String(wanted.store || wanted.shopName || "").match(/^[A-Za-z0-9]+/);
+      const token = prefix ? prefix[0].toUpperCase() : "";
+      if (token.length >= 3) {
+        matched = records.filter(function (row) {
+          const raw = row.raw && typeof row.raw === "object" ? row.raw : {};
+          return String(raw.userDisplayName || "").toUpperCase().startsWith(token);
+        });
+      }
+    }
+    if (!matched.length) {
+      const err = new Error(records.length ? "待核验：无本店广告账号证据" : "京准通没有可用账号");
+      err.code = "paid";
+      throw err;
+    }
+    const query = paidQuery(beijingParts().day, matched.map(function (row) { return row.pinId; }));
+    const overview = await evaluate(
+      ws,
+      `fetch("https://jzt-api.jd.com/dataCenter/index/v2/summary/overview?requestFrom=0",{method:"POST",credentials:"include",headers:{accept:"application/json, text/plain, */*","content-type":"application/json",siteId:"0"},body:${JSON.stringify(JSON.stringify(query))}}).then(r=>r.json()).catch(e=>({error:String(e&&e.message||e)}))`,
+      15000
+    );
+    const paid = extractPaid(overview && overview.code === 1 ? overview.data : overview);
+    if (!paid) {
+      const err = new Error("京准通没有返回付费数据");
+      err.code = "paid";
+      throw err;
+    }
+    return paid;
+  } finally {
+    if (desk) {
+      discard(desk);
+    }
   }
 }
 

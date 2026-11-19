@@ -5831,7 +5831,9 @@
       }
       function refreshLive2(storeName) {
         useLiveScope("live2");
-        state.live2Hint = "正在用组织中心账号登录并读取成交金额、花费、投产比和总订单金额。";
+        state.live2Hint = storeName
+          ? storeName + " 登录成功，正在读取成交金额和花费。"
+          : "正在用组织中心账号登录并读取成交金额、花费、投产比和总订单金额。";
         paint(root, state);
         var body = storeName ? { store: storeName } : {};
         return api("/api/people/org/stores?live2=1&_=" + Date.now()).then(function (org) {
@@ -5852,7 +5854,9 @@
             paint(root, state);
             return;
           }
-          state.live2Hint = pack.running ? "正在用组织中心账号登录并读取成交金额、花费、投产比和总订单金额。" : "";
+          state.live2Hint = pack.running
+            ? (storeName ? storeName + " 登录成功，正在读取成交金额和花费。" : "正在用组织中心账号登录并读取成交金额、花费、投产比和总订单金额。")
+            : "";
           paintLive2(pack);
           if (pack.running) {
             pollLive2();

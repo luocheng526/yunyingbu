@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { accountIdentity, bindDecision, buildLiveView, collectAuthDecision } from "../src/modules/home/jingmai.js";
+import { accountIdentity, bindDecision, buildLiveView, collectAuthDecision, sameShop } from "../src/modules/home/jingmai.js";
 import { beginRelogin, beginReloginAll, recoverDroppedShops, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/home/jingmai-runner.js";
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { browserCandidates, browserFailure, browserLaunchOrder, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginTipBlocked, loginScreenState, readDebugTargets, realBrowserBinary, resolveBrowserBinary, sessionReady, unpackDebBuffer, waitForDebugPort } from "../src/modules/home/jingmai-desk.js";
+import { assertPageShopIdentity, browserCandidates, browserFailure, browserLaunchOrder, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginTipBlocked, loginScreenState, readDebugTargets, realBrowserBinary, resolveBrowserBinary, sessionReady, unpackDebBuffer, waitForDebugPort } from "../src/modules/home/jingmai-desk.js";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import zlib from "node:zlib";
@@ -308,6 +308,63 @@ test("typing the code aims at the confirm button and fills the field", () => {
   assert.equal(aim.kind, "button");
   assert.equal(aim.x, 140);
   assert.equal(aim.y, 236);
+});
+
+test("a homepage whose vender id is the merchant id still belongs to this shop", () => {
+  assert.doesNotThrow(() => assertPageShopIdentity(
+    { store: "RASW家居旗舰店", shopId: "16065563", merchantId: "17568184" },
+    "RASW家居旗舰店POP",
+    { venderId: "17568184" }
+  ));
+  assert.throws(() => assertPageShopIdentity(
+    { store: "RASW家居旗舰店", shopId: "16065563", merchantId: "17568184" },
+    "另一家旗舰店",
+    { venderId: "999" }
+  ), /店铺不一致/);
+});
+
+test("the same shop name matches even when Jingmai returns the merchant id", () => {
+  assert.equal(sameShop(
+    { store: "RASW家居旗舰店", shopId: "16065563", merchantId: "17568184" },
+    { shopId: "17568184", shopName: "RASW家居旗舰店" }
+  ), true);
+  assert.equal(sameShop(
+    { store: "RASW家居旗舰店", shopId: "16065563" },
+    { shopId: "999", shopName: "另一家旗舰店" }
+  ), false);
+});
+
+test("a page showing this shop is saved even when the account api rejects the old session", async () => {
+  await resetJingmaiStore();
+  await saveSession("RASW家居旗舰店", {
+    cookies: [{ name: "thor", value: "old" }],
+    authState: "ok",
+    shopId: "16065563"
+  });
+  setJingmaiDeps(deskDeps({
+    desk: {
+      poll: async () => ({ status: "ok", cookies: [{ name: "thor", value: "fresh" }], pageMatch: true }),
+      close: async () => {}
+    },
+    client: {
+      fetchAccountIdentity: async () => {
+        const error = new Error("登录已失效，请重新登录");
+        error.code = "login";
+        throw error;
+      },
+      fetchHome: async () => ({ dealAmount: 3009, paidAmount: 1841.39 })
+    }
+  }));
+  try {
+    const state = await reloginState("RASW家居旗舰店");
+    assert.equal(state.status, "ok");
+    assert.match(state.message, /登录成功/);
+    const row = (await listSessions()).find((item) => item.store === "RASW家居旗舰店");
+    assert.equal(row.cookies[0].value, "fresh");
+    assert.equal(row.authState, "ok");
+  } finally {
+    resetJingmaiDeps();
+  }
 });
 
 test("a login is bound only when the platform shop id matches", () => {
