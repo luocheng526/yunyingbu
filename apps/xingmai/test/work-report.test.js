@@ -458,6 +458,55 @@ test("人事按模板填报，免报和移出不计入未报", async () => {
   }
 });
 
+test("部门设置全选默认勾席位为运营和助理的人", async () => {
+  const js = readFileSync(join(root, "../public/shared/modules/work.js"), "utf8");
+  assert.match(js, /data-assign-defaults/);
+  assert.match(js, /席位为运营、助理/);
+  const start = js.indexOf("function rosterSeatParts");
+  const end = js.indexOf("function rosterPeople");
+  const seats = new Function(`${js.slice(start, end)} return { rosterDefaultSeat };`)();
+  assert.equal(seats.rosterDefaultSeat({ seat: "运营" }), true);
+  assert.equal(seats.rosterDefaultSeat({ seat: "助理" }), true);
+  assert.equal(seats.rosterDefaultSeat({ seat: "主管、运营" }), true);
+  assert.equal(seats.rosterDefaultSeat({ seat: "经理" }), false);
+  assert.equal(seats.rosterDefaultSeat({ seat: "储备", role: "运营" }), false);
+  assert.equal(seats.rosterDefaultSeat({ seat: "" }), false);
+
+  resetPeopleStore();
+  resetWorkStore();
+  const app = express();
+  app.use(express.json());
+  app.use(withUser(luocheng));
+  app.use("/api/work", workRouter);
+  const { base, close } = await listen(app);
+  try {
+    const assigned = await json(base, "/api/work/settings/members", {
+      method: "PUT",
+      body: {
+        members: [
+          { personId: 4, deptCode: "ops" },
+          { personId: 5, deptCode: "ops" }
+        ]
+      }
+    });
+    assert.equal(assigned.status, 200);
+    assert.equal(assigned.data.members.filter((item) => item.deptCode === "ops").length, 2);
+    const cleared = await json(base, "/api/work/settings/members", {
+      method: "PUT",
+      body: {
+        members: [
+          { personId: 4, deptCode: "" },
+          { personId: 5, deptCode: "" }
+        ]
+      }
+    });
+    assert.equal(cleared.status, 200);
+    assert.equal(cleared.data.members.some((item) => item.personId === 4 || item.personId === 5), false);
+  } finally {
+    await close();
+  }
+});
+
 test("发布任务页面把组织里的管理员显示成罗成", () => {
   const js = readFileSync(join(root, "../public/shared/modules/work-tasks.js"), "utf8");
   assert.match(js, /person\.name === "管理员" \? "罗成"/);

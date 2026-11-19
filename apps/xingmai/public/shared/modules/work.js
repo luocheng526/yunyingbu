@@ -107,7 +107,7 @@
   }
   style.setAttribute("data-rev", "xmui1");
   style.textContent =
-   ".work-page.xm-ui-scope{padding:24px 28px 32px;min-height:100%}.work-page .xm-ui-filter-toolbar,.work-page .xm-ui-stat-grid{margin-bottom:16px}.work-page .work-stack{display:grid;gap:16px}.work-page .work-form,.work-page .work-tools,.work-page .work-filters,.work-page .work-checks{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}.work-page .work-field{display:flex;flex-direction:column;gap:4px;min-width:140px;color:var(--xm-ui-text-secondary);font-size:12px}.work-page .work-field input,.work-page .work-field select,.work-page .work-field textarea{border:1px solid var(--xm-ui-border-strong);border-radius:8px;background:var(--xm-ui-surface);color:var(--xm-ui-text);font:inherit}.work-page .work-field input,.work-page .work-field select{height:34px;padding:0 10px}.work-page .work-field textarea,.work-page .xm-ui-table textarea{min-height:72px;width:100%;padding:8px 10px;box-sizing:border-box}.work-page .work-field.is-grow{flex:1;min-width:200px}.work-page .work-msg{min-height:18px;margin:0 0 12px;color:var(--xm-ui-text-secondary);font-size:13px}.work-page .work-msg.is-error{color:var(--xm-ui-red)}.work-page .work-lead,.work-page .work-muted,.work-page .work-sub{color:var(--xm-ui-text-muted);font-size:12px}.work-page .work-filler strong{margin-left:4px;color:var(--xm-ui-text)}.work-page .work-context{display:flex;align-items:center;flex-wrap:wrap;gap:10px 22px}.work-page .work-context .work-field{flex-direction:row;align-items:center}.work-page .xm-ui-tab{position:relative}.work-page .xm-ui-tab [data-work-count]{margin-left:6px}.work-page .work-sheet{min-width:0}.work-page .work-storebar,.work-page .work-storetitle,.work-page .work-storeactions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.work-page .work-storebar{justify-content:space-between;margin-bottom:12px}.work-page .work-groups{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}.work-page .work-lanes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.work-page .work-lanes.is-single{grid-template-columns:minmax(0,1fr)}.work-page .work-item-line{min-height:52px;display:grid;align-items:center;column-gap:8px;grid-template-columns:minmax(0,1fr) minmax(62px,92px) auto}.work-page .work-metric-num{display:flex;align-items:center;gap:6px}.work-page .work-metric-num input{width:72px;height:34px;border:1px solid var(--xm-ui-border-strong);border-radius:8px;padding:0 8px;font:inherit}.work-page .work-diary-more{display:grid;gap:10px;margin:0 0 12px}.work-page .work-diary-more[hidden]{display:none}.work-page .work-orders{display:grid;grid-template-columns:minmax(200px,.8fr) minmax(0,1.2fr);gap:16px}.work-page .work-shot{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.work-page .work-shot img{max-width:148px;max-height:72px;object-fit:cover;border-radius:8px}.work-page .work-submitbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px}.work-page .work-guide{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.work-page .work-guide b,.work-page .work-guide small{display:block}.work-page .work-guide small{color:var(--xm-ui-text-muted)}.work-page .work-modal{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;background:rgba(16,24,40,.36)}.work-page .work-dialog{width:min(920px,100%)}.work-page .work-sum-split{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(280px,1.6fr);gap:16px}.work-page .work-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.work-page .work-row .work-main{flex:1;min-width:180px;color:var(--xm-ui-text-secondary)}@media(max-width:980px){.work-page .work-lanes,.work-page .work-orders,.work-page .work-sum-split,.work-page .work-guide{grid-template-columns:1fr}}.xm-work-badge{position:absolute;top:2px;right:8px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#e23b3b;color:#fff;font:700 11px/16px inherit;text-align:center}";
+   ".work-page.xm-ui-scope{padding:24px 28px 32px;min-height:100%}.work-page .xm-ui-filter-toolbar,.work-page .xm-ui-stat-grid{margin-bottom:16px}.work-page .work-stack{display:grid;gap:16px}.work-page .work-form,.work-page .work-tools,.work-page .work-filters,.work-page .work-checks{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}.work-page .work-field{display:flex;flex-direction:column;gap:4px;min-width:140px;color:var(--xm-ui-text-secondary);font-size:12px}.work-page .work-field input,.work-page .work-field select,.work-page .work-field textarea{border:1px solid var(--xm-ui-border-strong);border-radius:8px;background:var(--xm-ui-surface);color:var(--xm-ui-text);font:inherit}.work-page .work-field input,.work-page .work-field select{height:34px;padding:0 10px}.work-page .work-field textarea,.work-page .xm-ui-table textarea{min-height:72px;width:100%;padding:8px 10px;box-sizing:border-box}.work-page .work-field.is-grow{flex:1;min-width:200px}.work-page .work-msg{min-height:18px;margin:0 0 12px;color:var(--xm-ui-text-secondary);font-size:13px}.work-page .work-msg.is-error{color:var(--xm-ui-red)}.work-page .work-lead,.work-page .work-muted,.work-page .work-sub{color:var(--xm-ui-text-muted);font-size:12px}.work-page .work-filler strong{margin-left:4px;color:var(--xm-ui-text)}.work-page .work-context{display:flex;align-items:center;flex-wrap:wrap;gap:10px 22px}.work-page .work-context .work-field{flex-direction:row;align-items:center}.work-page .xm-ui-tab{position:relative}.work-page .xm-ui-tab [data-work-count]{margin-left:6px}.work-page .work-sheet{min-width:0}.work-page .work-storebar,.work-page .work-storetitle,.work-page .work-storeactions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.work-page .work-storebar{justify-content:space-between;margin-bottom:12px}.work-page .work-groups{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}.work-page .work-lanes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.work-page .work-lanes.is-single{grid-template-columns:minmax(0,1fr)}.work-page .work-item-line{min-height:52px;display:grid;align-items:center;column-gap:8px;grid-template-columns:minmax(0,1fr) minmax(62px,92px) auto}.work-page .work-metric-num{display:flex;align-items:center;gap:6px}.work-page .work-metric-num input{width:72px;height:34px;border:1px solid var(--xm-ui-border-strong);border-radius:8px;padding:0 8px;font:inherit}.work-page .work-diary-more{display:grid;gap:10px;margin:0 0 12px}.work-page .work-diary-more[hidden]{display:none}.work-page .work-orders{display:grid;grid-template-columns:minmax(200px,.8fr) minmax(0,1.2fr);gap:16px}.work-page .work-shot{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.work-page .work-shot img{max-width:148px;max-height:72px;object-fit:cover;border-radius:8px}.work-page .work-submitbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px}.work-page .work-guide{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.work-page .work-guide b,.work-page .work-guide small{display:block}.work-page .work-guide small{color:var(--xm-ui-text-muted)}.work-page .work-modal{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;background:rgba(16,24,40,.36)}.work-page .work-dialog{width:min(920px,100%)}.work-page .work-sum-split{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(280px,1.6fr);gap:16px}.work-page .work-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.work-page .work-row .work-main{flex:1;min-width:180px;color:var(--xm-ui-text-secondary)}@media(max-width:980px){.work-page .work-lanes,.work-page .work-orders,.work-page .work-sum-split,.work-page .work-guide{grid-template-columns:1fr}}.xm-work-badge{position:absolute;top:2px;right:8px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#e23b3b;color:#fff;font:700 11px/16px inherit;text-align:center}.work-page .work-check{display:flex;align-items:center;gap:6px;height:34px;margin:0;color:var(--xm-ui-text);font-size:13px;white-space:nowrap}.work-page .work-check input{width:16px;height:16px;margin:0}";
  }
 
  function oops(root) {
@@ -265,6 +265,20 @@
    return false;
   }
   return true;
+ }
+
+ function rosterSeatParts(person) {
+  return String((person && person.seat) || "")
+   .split("、")
+   .map(function (item) {
+    return item.trim();
+   })
+   .filter(Boolean);
+ }
+
+ function rosterDefaultSeat(person) {
+  var parts = rosterSeatParts(person);
+  return parts.indexOf("运营") >= 0 || parts.indexOf("助理") >= 0;
  }
 
  function rosterPeople() {
@@ -1550,9 +1564,21 @@
       rows: people
      })
    : uiEmpty(all.length ? "没有符合筛选的人" : "组织中心还没有人");
+  var targets = people.filter(rosterDefaultSeat);
+  var picked = targets.filter(function (person) {
+   return person.deptCode === state.settingsDept;
+  }).length;
+  var allOn = targets.length > 0 && picked === targets.length;
+  var selectAll =
+   '<label class="work-check"><input type="checkbox" data-assign-defaults' +
+   (allOn ? " checked" : "") +
+   (targets.length ? "" : " disabled") +
+   ">全选</label>";
   return uiCard(
    "按责权加人",
-   '<div class="work-form"><label class="work-field is-grow">搜索<input data-roster-q data-keep-focus="roster" value="' +
+   '<div class="work-form">' +
+    selectAll +
+    '<label class="work-field is-grow">搜索<input data-roster-q data-keep-focus="roster" value="' +
     esc(state.rosterQuery) +
     '" placeholder="姓名、中心、店铺、主管"></label><span class="work-muted" data-roster-count>显示 ' +
     people.length +
@@ -1573,7 +1599,7 @@
       .join("")
     ) +
     table,
-   "名单来自组织中心在职人员。勾上的人按当前部门模板填报。"
+   "名单来自组织中心在职人员。全选勾上当前名单里席位为运营、助理的人，勾上的人按当前部门模板填报。"
   );
  }
 
@@ -2262,6 +2288,37 @@
    if (person) {
     state.personId = Number(person.value || 0);
     paint(root);
+    return;
+   }
+   var defaults = event.target.closest("[data-assign-defaults]");
+   if (defaults) {
+    var on = defaults.checked;
+    var chosen = rosterPeople().filter(rosterDefaultSeat).filter(function (person) {
+     var here = person.deptCode === state.settingsDept;
+     return on ? !here : here;
+    });
+    if (!chosen.length) {
+     setMsg(on ? "席位为运营、助理的人已经在这个部门" : "当前名单里没有要取消的运营、助理");
+     paint(root);
+     return;
+    }
+    api("/api/work/settings/members", {
+     method: "PUT",
+     body: {
+      members: chosen.map(function (person) {
+       return { personId: Number(person.id), deptCode: on ? state.settingsDept : "" };
+      })
+     }
+    })
+     .then(function (data) {
+      state.settings = data;
+      setMsg((on ? "已加入" + (deptLabel(state.settingsDept) || "当前部门") + " " : "已移出 ") + chosen.length + " 人");
+      paint(root);
+     })
+     .catch(function (err) {
+      setMsg(err.message, true);
+      defaults.checked = !on;
+     });
     return;
    }
    var assign = event.target.closest("[data-assign]");
