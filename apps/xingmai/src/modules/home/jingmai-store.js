@@ -227,7 +227,8 @@ export function collectorLeaseExpired(session, nowStamp) {
  * Cross-worker write gate. Expired lease is reclaimable (failure recovery).
  * writer must match collector_owner when lease is still valid.
  */
-export async function assertCollectorWrite(store, writer) {
+export async function assertCollectorWrite(store, writer, options) {
+  const opts = options || {};
   const name = String(store || "").trim();
   if (!name) {
     return { ok: false, reason: "missing_store" };
@@ -236,6 +237,10 @@ export async function assertCollectorWrite(store, writer) {
   if (!session) {
     // First insert / login may create the row.
     return { ok: true, reason: "missing_session_allow_create", owner: "" };
+  }
+  // Manual pause must invalidate in-flight collect writes (sample/auth/jar).
+  if (opts.allowPaused !== true && session.enabled === false) {
+    return { ok: false, reason: "manual_pause", owner: String(session.collectorOwner || "") };
   }
   const owner = String(session.collectorOwner || "");
   if (!owner || collectorLeaseExpired(session)) {
@@ -348,7 +353,10 @@ export async function getSession(store) {
 export async function saveSession(store, fields) {
   await ensure();
   const writer = fields && fields.writer != null ? fields.writer : COLLECTOR_OWNER_HOME;
-  const gate = await assertCollectorWrite(store, writer);
+  // Human login / roster may rewrite jars while paused; collect writes use saveSample/markAuth instead.
+  const gate = await assertCollectorWrite(store, writer, {
+    allowPaused: fields && fields.allowPaused !== false
+  });
   if (!gate.ok) {
     return null;
   }
