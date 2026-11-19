@@ -277,12 +277,15 @@ export async function listCollectTargets() {
   const sessions = await listSessions();
   const seenShop = new Set();
   return sessions.filter(function (session) {
-    if (
-      !session.enabled ||
-      (session.authState !== "ok" && session.authState !== "offline") ||
-      !session.cookies ||
-      !session.cookies.length
-    ) {
+    // Manual pause never auto-enables.
+    if (!session.enabled) {
+      return false;
+    }
+    if (!session.cookies || !session.cookies.length) {
+      return false;
+    }
+    // login_expired with a surviving jar gets a controlled recheck (do not skip forever).
+    if (session.authState !== "ok" && session.authState !== "offline" && session.authState !== "login_expired") {
       return false;
     }
     if (session.shopId && seenShop.has(session.shopId)) {
@@ -293,6 +296,71 @@ export async function listCollectTargets() {
     }
     return true;
   });
+}
+
+/**
+ * Split sessions after historical markAuth(login_expired) wiped jars.
+ * profileKeys: optional Set of safeProfileKey() strings that still exist on disk.
+ * Never promotes enabled=false (manual pause).
+ */
+export function classifySessionRecovery(sessions, profileKeys) {
+  const profiles = profileKeys instanceof Set ? profileKeys : new Set(profileKeys || []);
+  const recheck = [];
+  const needsReauth = [];
+  const paused = [];
+  const active = [];
+  (sessions || []).forEach(function (session) {
+    if (!session || !session.store) {
+      return;
+    }
+    if (session.enabled === false) {
+      paused.push({ store: session.store, shopId: session.shopId || "", reason: "manual_pause" });
+      return;
+    }
+    const hasJar = Array.isArray(session.cookies) && session.cookies.length > 0;
+    const profileKey = String(session.shopId || session.store || "")
+      .trim()
+      .replace(/[^a-zA-Z0-9._-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 96);
+    const hasProfile = Boolean(profileKey && profiles.has(profileKey));
+    const expiredLike =
+      session.authState === "login_expired" ||
+      session.authState === "unlinked" ||
+      /登录已失效|未登录京麦/.test(String(session.authMessage || ""));
+    if (session.authState === "ok" && hasJar) {
+      active.push({ store: session.store, shopId: session.shopId || "" });
+      return;
+    }
+    if (session.authState === "offline" && hasJar) {
+      recheck.push({
+        store: session.store,
+        shopId: session.shopId || "",
+        reason: "offline_with_jar",
+        authMessage: String(session.authMessage || "").slice(0, 120)
+      });
+      return;
+    }
+    if (expiredLike && (hasJar || hasProfile)) {
+      recheck.push({
+        store: session.store,
+        shopId: session.shopId || "",
+        reason: hasJar ? "expired_with_jar" : "expired_with_profile",
+        authMessage: String(session.authMessage || "").slice(0, 120)
+      });
+      return;
+    }
+    if (expiredLike || !hasJar) {
+      needsReauth.push({
+        store: session.store,
+        shopId: session.shopId || "",
+        reason: hasProfile ? "empty_jar_but_profile_unchecked" : "empty_jar_no_backup",
+        authState: session.authState || "",
+        authMessage: String(session.authMessage || "").slice(0, 120)
+      });
+    }
+  });
+  return { recheck: recheck, needsReauth: needsReauth, paused: paused, active: active };
 }
 
 export async function saveSample(sample) {

@@ -3,7 +3,14 @@ import assert from "node:assert/strict";
 import { collectAuthDecision, sampleFields, buildLiveView, beijingParts, withDeadline, shouldCollectShop, runTick } from "../src/modules/home/jingmai.js";
 import { fetchHome, parseSetCookieLine, absorbCookies } from "../src/modules/home/jingmai-client.js";
 import { cookieParams, normalizeCookie, safeProfileKey } from "../src/modules/home/jingmai-desk.js";
-import { markAuth, resetJingmaiStore, saveSession, listSessions } from "../src/modules/home/jingmai-store.js";
+import {
+  markAuth,
+  resetJingmaiStore,
+  saveSession,
+  listSessions,
+  listCollectTargets,
+  classifySessionRecovery
+} from "../src/modules/home/jingmai-store.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -195,7 +202,7 @@ test("fetchHome cancels hanging paid and deal requests when the collect signal a
   assert.equal(dealAborted || paidAborted, true);
 });
 
-test("restart helper keeps the exact sudoers argv and drops --no-block/systemd-run", () => {
+test("restart helper keeps the exact sudoers argv and requires verify helpers", () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const source = readFileSync(join(here, "../src/modules/releases/restart.js"), "utf8");
   const spawnMatch = source.match(/spawn\(\s*"\/usr\/bin\/sudo"\s*,\s*\[([\s\S]*?)\]\s*,/);
@@ -205,8 +212,82 @@ test("restart helper keeps the exact sudoers argv and drops --no-block/systemd-r
   assert.match(argv, /"restart"/);
   assert.match(argv, /"mengkai\.service"/);
   assert.doesNotMatch(argv, /no-block/);
-  assert.doesNotMatch(argv, /systemd/);
-  assert.match(source, /detached:\s*true/);
+  assert.doesNotMatch(argv, /systemd-run/);
+  assert.match(source, /dispatched_unverified/);
+  assert.match(source, /verifyMengkaiRestart/);
+  assert.match(source, /probeMengkaiHealth/);
+  assert.doesNotMatch(source, /Treat as scheduled/);
+});
+
+test("classifySessionRecovery never auto-enables paused shops and lists empty-jar reauth", () => {
+  const split = classifySessionRecovery(
+    [
+      {
+        store: "停用店",
+        enabled: false,
+        authState: "login_expired",
+        cookies: [{ name: "thor", value: "1" }]
+      },
+      {
+        store: "可复核",
+        enabled: true,
+        authState: "login_expired",
+        cookies: [{ name: "thor", value: "1", domain: ".jd.com" }],
+        shopId: "1"
+      },
+      {
+        store: "需重登",
+        enabled: true,
+        authState: "login_expired",
+        cookies: [],
+        authMessage: "登录已失效，请重新登录",
+        shopId: "2"
+      },
+      {
+        store: "在线",
+        enabled: true,
+        authState: "ok",
+        cookies: [{ name: "thor", value: "1" }]
+      }
+    ],
+    new Set()
+  );
+  assert.equal(split.paused.length, 1);
+  assert.equal(split.paused[0].store, "停用店");
+  assert.equal(split.recheck.length, 1);
+  assert.equal(split.recheck[0].store, "可复核");
+  assert.equal(split.needsReauth.length, 1);
+  assert.equal(split.needsReauth[0].store, "需重登");
+  assert.equal(split.active.length, 1);
+});
+
+test("listCollectTargets includes login_expired jars and skips empty jars / paused", async () => {
+  await resetJingmaiStore();
+  await saveSession("有jar过期", {
+    cookies: [{ name: "thor", value: "1" }],
+    authState: "login_expired",
+    enabled: true,
+    shopId: "a"
+  });
+  await saveSession("空jar过期", {
+    cookies: [],
+    authState: "login_expired",
+    enabled: true,
+    shopId: "b"
+  });
+  await saveSession("人工暂停", {
+    cookies: [{ name: "thor", value: "1" }],
+    authState: "ok",
+    enabled: false,
+    shopId: "c"
+  });
+  const targets = await listCollectTargets();
+  const names = targets.map(function (row) {
+    return row.store;
+  });
+  assert.ok(names.includes("有jar过期"));
+  assert.ok(!names.includes("空jar过期"));
+  assert.ok(!names.includes("人工暂停"));
 });
 
 test("cookieParams keeps real domain/path/expiry and only defaults legacy name/value jars", () => {
