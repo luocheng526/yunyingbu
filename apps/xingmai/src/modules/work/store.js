@@ -1,5 +1,8 @@
+/* 工作汇报填报。 */
 import { dbMode, query } from "../profile/auth.js";
-import { listPeople } from "../people/store.js";
+import { bindRoster, diaryObligation, loadOrg, noteMemberAdded, obligationBundle, readyDiary, resetDiaryStore } from "./diary.js";
+import { releaseReminder } from "./dingtalk.js";
+import { resetTaskStore } from "./tasks.js";
 
 export const WORK_DEPTS = [
   { code: "ops", name: "运营部" },
@@ -63,6 +66,51 @@ function formatRights(person) {
   return `${shops.slice(0, 2).join("、")} 等${shops.length}店`;
 }
 
+export const ORG_BOARDS = [
+  { code: "ops", name: "运营部门" },
+  { code: "hrTech", name: "人事和技术部门" },
+  { code: "backend", name: "后端部门" }
+];
+
+const SEATS = [
+  ["director", "总监"],
+  ["lineManager", "经理"],
+  ["supervisor", "主管"],
+  ["reserve", "储备"],
+  ["operator", "运营"],
+  ["assistant", "助理"]
+];
+
+function dutyValue(value) {
+  const text = String(value || "").trim();
+  return text === "无" ? "" : text;
+}
+
+export function orgBoardName(code) {
+  return ORG_BOARDS.find((item) => item.code === code)?.name || "";
+}
+
+export function seatOf(person) {
+  const name = String(person?.name || "").trim();
+  if (!name) {
+    return "";
+  }
+  return SEATS.filter(([key]) => dutyValue(person[key]) === name)
+    .map(([, label]) => label)
+    .join("、");
+}
+
+export function dutyText(person) {
+  const name = String(person?.name || "").trim();
+  return SEATS.filter(([key]) => key !== "director" || dutyValue(person?.director) === name)
+    .map(([key, label]) => {
+      const value = dutyValue(person?.[key]);
+      return value ? `${label} ${value}` : "";
+    })
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function namesOf(user) {
   if (!user) {
     return [];
@@ -104,6 +152,8 @@ export function resetWorkStore() {
   members = new Map();
   templates = new Map();
   rows = new Map();
+  resetDiaryStore();
+  resetTaskStore();
 }
 
 async function ignoreDuplicate(work) {
@@ -194,11 +244,13 @@ async function readyStore() {
   } else {
     seedDefaultTemplates();
   }
+  await readyDiary();
   ready = true;
 }
 
-async function orgPeople() {
-  const list = await listPeople();
+export async function orgPeople() {
+  const packed = await loadOrg();
+  const list = packed.people;
   let usernameById = new Map();
   if (dbMode() === "mysql") {
     try {
@@ -213,6 +265,7 @@ async function orgPeople() {
       usernameById.get(Number(person.id)) ||
       person.username ||
       (person.employeeNo === "XM001" || person.center === "人员管理" ? "罗成" : "");
+    const board = String(person.board || person.orgBoard || "").trim();
     return {
       id: Number(person.id),
       name: String(person.name || ""),
@@ -223,6 +276,13 @@ async function orgPeople() {
       managerName: String(person.managerName || ""),
       status: String(person.status || ""),
       username,
+      director: dutyValue(person.director),
+      lineManager: dutyValue(person.lineManager),
+      supervisor: dutyValue(person.supervisor),
+      reserve: dutyValue(person.reserve),
+      operator: dutyValue(person.operator),
+      assistant: dutyValue(person.assistant),
+      board,
       visibleShops: Array.isArray(person.visibleShops) ? person.visibleShops.map((item) => String(item)) : [],
       rights: formatRights(person)
     };
@@ -333,6 +393,7 @@ function itemsFor(personId, deptCode) {
 }
 
 function publicPerson(person, deptCode) {
+  const board = String(person.board || "");
   return {
     id: person.id,
     name: person.name,
@@ -344,6 +405,10 @@ function publicPerson(person, deptCode) {
     username: person.username,
     rights: person.rights,
     visibleShops: person.visibleShops,
+    orgBoard: board,
+    orgBoardName: orgBoardName(board),
+    seat: seatOf(person),
+    duty: dutyText(person),
     deptCode: deptCode || "",
     deptName: deptName(deptCode)
   };
@@ -359,6 +424,7 @@ export async function snapshot(user) {
     today: todayShanghai(),
     isAdmin: admin,
     depts: WORK_DEPTS,
+    orgBoards: ORG_BOARDS,
     me: me ? publicPerson(me, deptCode) : null,
     needReport: Boolean(deptCode) || admin
   };
@@ -396,6 +462,7 @@ export async function getSettings(user) {
   return {
     ok: true,
     depts: WORK_DEPTS,
+    orgBoards: ORG_BOARDS,
     people: people.map((person) => publicPerson(person, members.get(person.id) || "")),
     members: memberList,
     templates: templateMap,
@@ -433,8 +500,14 @@ export async function saveMembers(user, input) {
       if (dbMode() === "mysql") {
         await query("DELETE FROM work_report_members WHERE person_id = ?", [personId]);
       }
+      try {
+        await releaseReminder(personId, `${todayShanghai()}#new`);
+      } catch {
+        /* 取消提醒标记失败不影响移出。 */
+      }
       continue;
     }
+    const isNew = !members.has(personId);
     members.set(personId, deptCode);
     if (dbMode() === "mysql") {
       await query(
@@ -444,8 +517,30 @@ export async function saveMembers(user, input) {
         [personId, deptCode, nowStamp()]
       );
     }
+    if (isNew) {
+      try {
+        await noteMemberAdded(personId);
+      } catch {
+        /* 提醒失败不影响排进部门。 */
+      }
+    }
   }
   return getSettings(user);
+}
+
+export async function myTodoCount(user) {
+  await readyStore();
+  const me = await matchPerson(user);
+  if (!me || me.status === "离职") {
+    return 0;
+  }
+  const deptCode = members.get(Number(me.id));
+  if (!deptCode) {
+    return 0;
+  }
+  const date = todayShanghai();
+  const row = await applyDayStatus(reportOf(me, deptCode, date), me, date, await obligationBundle(date));
+  return row.status === "未报" ? 1 : 0;
 }
 
 export async function saveTemplate(user, input) {
@@ -505,15 +600,38 @@ function reportOf(person, deptCode, date) {
     label: item.label,
     content: rows.get(rowKey(person.id, date, item.key)) || ""
   }));
-  const submitted = items.some((item) => item.content.trim());
+  const templateFilled = items.some((item) => item.content.trim());
   return {
     person: publicPerson(person, deptCode),
     deptCode,
     deptName: deptName(deptCode),
     items,
-    submitted,
-    status: submitted ? "已报" : "未报"
+    templateFilled,
+    submitted: templateFilled,
+    status: templateFilled ? "已报" : "未报"
   };
+}
+
+async function applyDayStatus(row, person, date, ctx) {
+  const obligation = await diaryObligation({
+    person,
+    date,
+    onRoster: true,
+    templateFilled: row.templateFilled,
+    templateLabels: row.items.map((item) => item.label),
+    bundle: ctx && ctx.bundle,
+    reportsByPerson: ctx && ctx.reportsByPerson,
+    attendance: ctx && ctx.attendance
+  });
+  row.submitted = obligation.status === "已报";
+  row.status = obligation.status;
+  row.statusNote = obligation.note || "";
+  row.diary = {
+    shopRequired: obligation.shopRequired,
+    templateRequired: obligation.templateRequired,
+    shopDone: obligation.shopDone
+  };
+  return row;
 }
 
 export async function getReport(user, queryInput) {
@@ -530,6 +648,7 @@ export async function getReport(user, queryInput) {
   }
   const people = await orgPeople();
   const byId = new Map(people.map((person) => [Number(person.id), person]));
+  const ctx = await obligationBundle(date);
   if (!admin) {
     if (!me || !members.get(Number(me.id))) {
       return {
@@ -543,7 +662,7 @@ export async function getReport(user, queryInput) {
       };
     }
     const deptCode = members.get(Number(me.id));
-    const row = reportOf(me, deptCode, date);
+    const row = await applyDayStatus(reportOf(me, deptCode, date), me, date, ctx);
     return {
       ok: true,
       date,
@@ -551,7 +670,11 @@ export async function getReport(user, queryInput) {
       isAdmin: false,
       needReport: true,
       rows: [row],
-      summary: { should: 1, done: row.submitted ? 1 : 0, miss: row.submitted ? 0 : 1 }
+      summary: {
+        should: row.status === "免报" ? 0 : 1,
+        done: row.status === "已报" ? 1 : 0,
+        miss: row.status === "已报" || row.status === "免报" ? 0 : 1
+      }
     };
   }
   const list = [];
@@ -563,7 +686,7 @@ export async function getReport(user, queryInput) {
     if (!person || person.status === "离职") {
       continue;
     }
-    list.push(reportOf(person, deptCode, date));
+    list.push(await applyDayStatus(reportOf(person, deptCode, date), person, date, ctx));
   }
   list.sort((a, b) => {
     const dept = a.deptCode.localeCompare(b.deptCode);
@@ -572,7 +695,8 @@ export async function getReport(user, queryInput) {
     }
     return a.person.name.localeCompare(b.person.name, "zh");
   });
-  const done = list.filter((item) => item.submitted).length;
+  const counted = list.filter((item) => item.status === "已报" || item.status === "未报");
+  const done = counted.filter((item) => item.status === "已报").length;
   return {
     ok: true,
     date,
@@ -580,9 +704,40 @@ export async function getReport(user, queryInput) {
     isAdmin: true,
     needReport: true,
     rows: list,
-    summary: { should: list.length, done, miss: list.length - done }
+    summary: { should: counted.length, done, miss: counted.length - done }
   };
 }
+
+bindRoster(async () => ({
+  memberDept(id) {
+    return members.get(Number(id)) || "";
+  },
+  deptName(code) {
+    return deptName(code);
+  },
+  templateLabels(person, date) {
+    const deptCode = members.get(Number(person.id));
+    if (!deptCode) {
+      return [];
+    }
+    return itemsFor(person.id, deptCode).map((item) => item.label);
+  },
+  templateFilled(person, date) {
+    const deptCode = members.get(Number(person.id));
+    if (!deptCode) {
+      return false;
+    }
+    return itemsFor(person.id, deptCode).some((item) => String(rows.get(rowKey(person.id, date, item.key)) || "").trim());
+  },
+  templateContent(person, date, label) {
+    const deptCode = members.get(Number(person.id));
+    if (!deptCode) {
+      return "";
+    }
+    const item = itemsFor(person.id, deptCode).find((entry) => entry.label === label);
+    return item ? rows.get(rowKey(person.id, date, item.key)) || "" : "";
+  }
+}));
 
 export async function saveReport(user, input) {
   await readyStore();
