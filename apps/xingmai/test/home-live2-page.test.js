@@ -11,6 +11,7 @@ test("实时（新版） sits after 近七天业绩汇总 and stays independent 
   assert.match(homeJs, /function adaptLive2Shops/);
   assert.match(homeJs, /xm-home-live2-/);
   assert.match(homeJs, /采集功能待接入/);
+  assert.match(homeJs, /实时费比 =（实时付费金额 \/ 实时成交金额）× 100%/);
   assert.match(homeJs, /data-connect-live2/);
   assert.match(homeJs, /data-refresh-live2/);
   assert.match(homeJs, /pendingCollect/);
@@ -23,6 +24,7 @@ test("opening 实时（新版） does not call old collect or login endpoints", 
   const body = homeJs.slice(start, end);
   assert.equal(start > 0, true);
   assert.match(body, /\/api\/people\/org\/stores/);
+  assert.match(body, /\/api\/home\/live2/);
   assert.doesNotMatch(body, /local-paid|live-login|jingmai|erp-paid|\/api\/shen\/paid|\/api\/han\/paid/);
   const mount = homeJs.slice(homeJs.lastIndexOf("pullBoard();"));
   assert.match(mount, /state\.view === "live2"[\s\S]*refreshLive2\(\)[\s\S]*pullLive\(\)/);

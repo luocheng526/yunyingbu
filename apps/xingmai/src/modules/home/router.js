@@ -21,6 +21,7 @@ import {
   reloginState,
   startJingmaiCollector
 } from "./jingmai-runner.js";
+import { getLive2Board, startLive2Round } from "./live2-collect.js";
 import {
   buildWeekPack,
   saveWeekCells,
@@ -297,6 +298,35 @@ export function homeRouter() {
       return res.status(Number(err.statusCode) || 502).json({
         ok: false,
         error: err.message || "星脉 ERP 调用失败"
+      });
+    }
+  });
+
+  router.get("/live2", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      return res.json(await getLive2Board(req.headers.cookie || ""));
+    } catch (err) {
+      return res.status(Number(err.statusCode) || 502).json({
+        ok: false,
+        source: "live2",
+        records: [],
+        error: err.message || "实时（新版）还没有读到数据"
+      });
+    }
+  });
+
+  router.post("/live2", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      const store = req.body && req.body.store;
+      return res.json(await startLive2Round(req.headers.cookie || "", store));
+    } catch (err) {
+      return res.status(Number(err.statusCode) || 502).json({
+        ok: false,
+        source: "live2",
+        records: [],
+        error: err.message || "实时（新版）采集没有开始"
       });
     }
   });

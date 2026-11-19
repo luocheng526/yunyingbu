@@ -291,6 +291,7 @@
   var headSetOpen = false;
   var teamsRefreshing = false;
   var liveRefreshing = false;
+  var live2Poll = 0;
   var deskTimer = 0;
   function viewStore(kind) {
     return viewKey === "team" || viewKey === "chief"
@@ -1954,7 +1955,14 @@
         if (pick.team && String(row.team || "") !== pick.team) {
           return false;
         }
-        if (pick.link === "on" || pick.link === "off") {
+        var liveKind = liveLinkOf(row).kind;
+        if (pick.link === "on" && liveKind !== "on" && !(liveKind === "ads" && row.online === true)) {
+          return false;
+        }
+        if (pick.link === "off" && liveKind !== "off") {
+          return false;
+        }
+        if (pick.paid === "no" && !(row && row.pendingCollect)) {
           return false;
         }
       } else {
@@ -2057,7 +2065,7 @@
       "</button></div></div>"
     );
   }
-  function live2FilterHtml(allShops) {
+  function live2FilterHtml(allShops, updatedAt) {
     var pick = liveFilter();
     var cur = liveFilterValue(pick);
     var teams = [];
@@ -2097,9 +2105,9 @@
         : "") +
       "</select></span></div>" +
       '<div class="xm-hm-live-filter-right">' +
-      '<span class="xm-hm-live-at">更新时间 —</span>' +
+      '<span class="xm-hm-live-at">更新时间 ' + escapeHtml(updatedAt || "—") + "</span>" +
       '<button type="button" class="xm-hm-live-heads" data-live-heads>表头设置</button>' +
-      '<button type="button" class="xm-hm-live-refresh" data-connect-live2 title="采集功能待接入">连接京麦</button>' +
+      '<button type="button" class="xm-hm-live-refresh" data-connect-live2 title="用组织中心账号登录京麦和京准通">连接京麦</button>' +
       '<button type="button" class="xm-hm-live-refresh" data-refresh-live2>刷新</button></div></div>'
     );
   }
@@ -2603,6 +2611,9 @@
       return '<td class="xm-hm-num">' + escapeHtml(feeGoalCellHtml(row)) + "</td>";
     }
     if (key === "liveAt") {
+      if (typeof liveScope !== "undefined" && liveScope === "live2") {
+        return '<td class="xm-hm-num">' + escapeHtml(row && row.capturedAt ? row.capturedAt : "—") + "</td>";
+      }
       var ownAt = row && (row.capturedAt || row.ingestedAt || row.liveAt);
       return '<td class="xm-hm-num">' + escapeHtml(ownAt && liveBoardSlot ? liveBoardSlot : "—") + "</td>";
     }
@@ -3178,9 +3189,9 @@
     );
   }
   /**
-   * 实时（新版）数据适配入口。本轮只读组织中心店铺名、分组、负责人。
-   * 成交额、广告花费、ROI、费比、登录状态、采集时间留空，等下一条需求再接采集。
-   * 禁止在这里请求 /api/home/local-paid、/api/home/live-login、京麦/京准通。
+   * 实时（新版）展示适配。组织中心给出店铺、分组、负责人。
+   * 采集结果由 /api/home/live2 填入：成交金额、花费、投产比、总订单金额。
+   * 费比 = 花费 / 成交金额。没有读到的格子保持空，不写成 0 或在线。
    * 字段：shop, team, manager, liveAmount, paidAmount, roi, paidDeal, feeRate, capturedAt, pendingCollect
    */
   function adaptLive2Shops(orgRows) {
@@ -3211,19 +3222,91 @@
         return row.shop;
       });
   }
-  function live2Cards() {
+  function applyLive2Pack(rows, pack) {
+    var byName = {};
+    ((pack && pack.records) || []).forEach(function (row) {
+      var name = String((row && (row.shop || row.store)) || "").trim();
+      if (name) {
+        byName[name] = row;
+      }
+    });
+    return (rows || []).map(function (row) {
+      var hit = byName[row.shop];
+      if (!hit || hit.pendingCollect) {
+        return row;
+      }
+      var fee = hit.feeRate == null ? null : fmtRate(hit.feeRate);
+      return {
+        shop: row.shop,
+        team: row.team || hit.team || "",
+        manager: row.manager || hit.manager || "",
+        liveAmount: hit.liveAmount == null ? null : fmtMoney(hit.liveAmount),
+        paidAmount: hit.paidAmount == null ? null : fmtMoney(hit.paidAmount),
+        roi: hit.roi == null ? null : asNum(hit.roi).toFixed(2),
+        paidDeal: hit.paidDeal == null ? null : fmtMoney(hit.paidDeal),
+        feeRate: fee,
+        capturedAt: hit.capturedAt || "",
+        online: hit.online === true,
+        offline: hit.offline === true,
+        loginExpired: hit.loginExpired === true,
+        adsFailed: hit.adsFailed === true,
+        adsReason: hit.adsReason || "",
+        offlineReason: hit.offlineReason || "",
+        paidIn: true,
+        pendingCollect: false
+      };
+    });
+  }
+  function live2Cards(shops, pack) {
+    var paidDeal = 0;
+    var spend = 0;
+    var hasPay = false;
+    var hasSpend = false;
+    var shopsIn = 0;
+    var hot = 0;
+    var cold = 0;
+    ((pack && pack.records) || []).forEach(function (row) {
+      if (!row || row.pendingCollect) {
+        return;
+      }
+      if (row.paidDeal != null) {
+        paidDeal += Number(row.paidDeal);
+        hasPay = true;
+      }
+      if (row.paidAmount != null) {
+        spend += Number(row.paidAmount);
+        hasSpend = true;
+      }
+      if (row.liveAmount != null || row.paidAmount != null) {
+        shopsIn += 1;
+      }
+    });
+    (shops || []).forEach(function (row) {
+      if (!row || row.pendingCollect) {
+        return;
+      }
+      var mon = feeMonitorOf(row);
+      if (mon.kind === "hot") {
+        hot += 1;
+      }
+      if (mon.kind === "cold") {
+        cold += 1;
+      }
+    });
+    var any = hasPay || hasSpend || shopsIn;
+    var at = (pack && pack.updatedAt) || "";
     return [
-      { key: "livePay", label: "实时付费成交额", value: "—" },
-      { key: "roi", label: "付费成交ROI", value: "—" },
-      { key: "livePaid", label: "实时付费接入店铺数量", value: "—" },
-      { key: "feeHot", label: "实时付费超标店铺", value: "—" },
-      { key: "feeCold", label: "实时费比低店铺", value: "—" },
-      { key: "liveAt", label: "更新时间", value: "—" }
+      { key: "livePay", label: "实时付费成交额", value: hasPay ? fmtMoney(paidDeal) : "—" },
+      { key: "roi", label: "付费成交ROI", value: hasPay && hasSpend && spend ? fmtRoi(paidDeal, spend) : "—" },
+      { key: "livePaid", label: "实时付费接入店铺数量", value: any ? fmtInt(shopsIn) : "—" },
+      { key: "feeHot", label: "实时付费超标店铺", value: any ? String(hot) : "—" },
+      { key: "feeCold", label: "实时费比低店铺", value: any ? String(cold) : "—" },
+      { key: "liveAt", label: "更新时间", value: at || "—" }
     ];
   }
   function orderedLive2Cards() {
     var map = {};
-    live2Cards().forEach(function (card) {
+    live2Cards(null, null).forEach(function (card) {
       map[card.key] = card;
     });
     return liveCardOrder()
@@ -3234,18 +3317,24 @@
   }
   function live2PanelHtml(state) {
     var blank = blankLive();
-    var shops = filterLiveShops(adaptLive2Shops(state && state.dutyShops), state);
+    var roster = adaptLive2Shops(state && state.dutyShops);
+    var shops = filterLiveShops(applyLive2Pack(roster, state && state.live2Pack), state);
     shops = sortLiveShops(feePickShops(shops, liveFeePick));
     var trio = liveChartHtml(blank.hero) + liveChartHtml(blank.paid) + liveChartHtml(blank.fee);
+    var cards = live2Cards(shops, state && state.live2Pack);
+    var cardMap = {};
+    cards.forEach(function (card) {
+      cardMap[card.key] = card;
+    });
     liveBoardSlot = "";
     return (
-      live2FilterHtml(adaptLive2Shops(state && state.dutyShops)) +
+      live2FilterHtml(roster, state && state.live2Pack && state.live2Pack.updatedAt) +
       '<div class="xm-hm-live-charts">' +
       trio +
       '</div><div class="xm-hm-live-cards">' +
       orderedLive2Cards()
         .map(function (card) {
-          return liveCardHtml(card, liveFeePick);
+          return liveCardHtml(cardMap[card.key] || card, liveFeePick);
         })
         .join("") +
       "</div>" +
@@ -3396,7 +3485,7 @@
       : state.view === "live"
         ? "实时按付费中心的方式，用组织中心账号在服务器登录京麦，抓京麦成交和京准通付费。点掉线的店，在页面中间弹出这一家的登录画面。连接京麦登录还没有会话的店。在线只算 15 分钟内还在采集的店。"
         : state.view === "live2"
-          ? state.live2Hint || "实时（新版）只读组织中心的店铺、分组和负责人。成交、广告、费比、登录状态显示为待接入。连接京麦暂不可用：采集功能待接入。"
+          ? state.live2Hint || "实时（新版）用组织中心账号在服务器登录。实时成交金额取京麦经营数据的成交金额；实时付费金额、实时付费ROI、实时付费成交额取京准通当天的花费、投产比、总订单金额。实时费比 =（实时付费金额 / 实时成交金额）× 100%。还没有读到的格子显示—或待接入。"
         : state.view === "week"
           ? "近七天业绩汇总：爬虫填店铺和当天数字，其余可手填；一键发送图片发到钉钉。"
           : "数字来自星脉 ERP。";
@@ -5213,6 +5302,7 @@
         people: [],
         dutyShops: [],
         live2Hint: "",
+        live2Pack: null,
         dutyKeys: null,
         dutyReady: false,
         ownCards: blankCompanyCards(),
@@ -5678,18 +5768,59 @@
           }
         } catch (_err) {}
       }
-      function refreshLive2() {
-        useLiveScope("live2");
-        state.live2Hint = "";
-        paint(root, state);
-        return api("/api/people/org/stores?live2=1&_=" + Date.now()).then(function (org) {
-          if (dead || !org) {
+      function paintLive2(pack) {
+        if (pack) {
+          state.live2Pack = pack;
+        }
+        if (state.view === "live2") {
+          paint(root, state);
+        }
+      }
+      function pollLive2() {
+        window.clearTimeout(live2Poll);
+        live2Poll = window.setTimeout(function () {
+          if (dead || state.view !== "live2") {
             return;
           }
-          state.dutyShops = dutyShopsFrom(org, { shops: [] });
-          state.orgIdle = orgIdleNames(org);
-          if (state.view === "live2") {
+          api("/api/home/live2?_=" + Date.now()).then(function (pack) {
+            if (dead || state.view !== "live2" || !pack) {
+              return;
+            }
+            state.live2Hint = pack.running ? "正在用组织中心账号登录并读取成交金额、花费、投产比和总订单金额。" : "";
+            paintLive2(pack);
+            if (pack.running) {
+              pollLive2();
+            }
+          });
+        }, 4000);
+      }
+      function refreshLive2(storeName) {
+        useLiveScope("live2");
+        state.live2Hint = "正在用组织中心账号登录并读取成交金额、花费、投产比和总订单金额。";
+        paint(root, state);
+        var body = storeName ? { store: storeName } : {};
+        return api("/api/people/org/stores?live2=1&_=" + Date.now()).then(function (org) {
+          if (dead) {
+            return null;
+          }
+          if (org) {
+            state.dutyShops = dutyShopsFrom(org, { shops: [] });
+            state.orgIdle = orgIdleNames(org);
+          }
+          return api("/api/home/live2", body);
+        }).then(function (pack) {
+          if (dead || state.view !== "live2") {
+            return;
+          }
+          if (!pack) {
+            state.live2Hint = "采集接口还没有返回数据。成交、花费、投产比和总订单金额仍显示为—。";
             paint(root, state);
+            return;
+          }
+          state.live2Hint = pack.running ? "正在用组织中心账号登录并读取成交金额、花费、投产比和总订单金额。" : "";
+          paintLive2(pack);
+          if (pack.running) {
+            pollLive2();
           }
         });
       }
@@ -6028,13 +6159,12 @@
           return;
         }
         if (event.target.closest("[data-connect-live2]")) {
-          state.live2Hint = "采集功能待接入";
-          paint(root, state);
+          refreshLive2();
           return;
         }
         if (state.view === "live2" && event.target.closest("[data-live-login]")) {
-          state.live2Hint = "采集功能待接入";
-          paint(root, state);
+          var retryShop = event.target.closest("[data-live-login]").getAttribute("data-live-login") || "";
+          refreshLive2(retryShop);
           return;
         }
         if (event.target.closest("[data-refresh-live]")) {
@@ -6046,8 +6176,7 @@
         }
         if (event.target.closest("[data-connect-jingmai]")) {
           if (state.view === "live2") {
-            state.live2Hint = "采集功能待接入";
-            paint(root, state);
+            refreshLive2();
             return;
           }
           openConnectJingmai();
