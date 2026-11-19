@@ -1146,7 +1146,9 @@ export function buildLiveView({ shops, samples, now }) {
   }).length;
   return {
     ok: true,
+    // Shared MySQL namespace (shen_jingmai_*). Live writer is home; 沈/韩 may keep reading.
     source: "shen-jingmai",
+    collectorOwner: "home",
     updatedAt: displayStamp(updated),
     successShops: successShops,
     enabledShops: enabled.length,

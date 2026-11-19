@@ -326,15 +326,17 @@ test("listCollectTargets includes login_expired jars and skips empty jars / paus
   assert.ok(!names.includes("人工暂停"));
 });
 
-test("listHomeCollectTargets skips Shen-owned shops and keeps manual pause", async () => {
+test("listHomeCollectTargets: home owns all teams; manual pause still skipped", async () => {
   const {
     listHomeCollectTargets,
-    isShenOwnedShop,
+    isShenTeamShop,
+    JINGMAI_COLLECTOR_OWNER,
     resetJingmaiDeps,
     setJingmaiDeps
   } = await import("../src/modules/home/jingmai-runner.js");
   await resetJingmaiStore();
   resetJingmaiDeps();
+  assert.equal(JINGMAI_COLLECTOR_OWNER, "home");
   await saveSession("沈店A", {
     cookies: [{ name: "thor", value: "1" }],
     authState: "ok",
@@ -353,8 +355,7 @@ test("listHomeCollectTargets skips Shen-owned shops and keeps manual pause", asy
     enabled: false,
     shopId: "s2"
   });
-  assert.equal(isShenOwnedShop({ team: "沈子晗组", manager: "" }), true);
-  assert.equal(isShenOwnedShop({ team: "韩梦凯组", manager: "韩梦凯" }), false);
+  assert.equal(isShenTeamShop({ team: "沈子晗组", manager: "" }), true);
   setJingmaiDeps({
     loadOrg: async () => [
       { store: "沈店A", team: "沈子晗组", manager: "沈子晗", login: "a", password: "a", enabled: true },
@@ -363,8 +364,9 @@ test("listHomeCollectTargets skips Shen-owned shops and keeps manual pause", asy
     ]
   });
   const targets = await listHomeCollectTargets();
-  const names = targets.map((row) => row.store);
-  assert.deepEqual(names, ["韩店B"]);
+  const names = targets.map((row) => row.store).sort();
+  // Home collects both teams; paused store stays out (enabled=false).
+  assert.deepEqual(names, ["沈店A", "韩店B"].sort());
   resetJingmaiDeps();
 });
 

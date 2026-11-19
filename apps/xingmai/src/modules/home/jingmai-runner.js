@@ -46,10 +46,21 @@ const defaultDeps = {
   desk: jingmaiDesk
 };
 
-/** Shen module owns these shops' cookie/profile/sample writes. Home only reads. */
-export function isShenOwnedShop(shop) {
+/**
+ * Live Jingmai collection owner is always home (shared service).
+ * 沈子晗/韩梦凯 modules stay intact and may keep reading the same DB tables;
+ * they must not remain long-term writers. Org team labels are metadata only.
+ */
+export const JINGMAI_COLLECTOR_OWNER = "home";
+
+export function isShenTeamShop(shop) {
   const text = `${(shop && shop.team) || ""}${(shop && shop.manager) || ""}`;
   return text.includes("沈子晗");
+}
+
+/** @deprecated use isShenTeamShop — team label ≠ collector owner */
+export function isShenOwnedShop(shop) {
+  return isShenTeamShop(shop);
 }
 
 function rememberOrgMeta(shops) {
@@ -66,45 +77,29 @@ function rememberOrgMeta(shops) {
   });
 }
 
-export function shenOwnedStoreSet(shops) {
+export function shenTeamStoreSet(shops) {
   const rows = Array.isArray(shops) && shops.length ? shops : [...orgMeta.values()];
   const owned = new Set();
   rows.forEach(function (shop) {
-    if (shop && shop.store && isShenOwnedShop(shop)) {
+    if (shop && shop.store && isShenTeamShop(shop)) {
       owned.add(shop.store);
     }
   });
   return owned;
 }
 
+/** @deprecated use shenTeamStoreSet */
+export function shenOwnedStoreSet(shops) {
+  return shenTeamStoreSet(shops);
+}
+
 /**
- * Home collector targets: shared listCollectTargets minus Shen-owned stores.
- * Manual pause (enabled=false) already excluded by listCollectTargets.
- * Override: HOME_JINGMAI_OWN_SHEN=1 lets home also collect Shen shops (break-glass only).
+ * Home is the sole collect writer for every enabled session with a jar.
+ * Manual pause (enabled=false) stays excluded via listCollectTargets.
+ * Does not call /api/shen/paid or /api/han — reads/writes local jingmai store only.
  */
 export async function listHomeCollectTargets() {
-  const sessions = await listCollectTargets();
-  if (process.env.HOME_JINGMAI_OWN_SHEN === "1") {
-    return sessions;
-  }
-  let org = [...orgMeta.values()];
-  if (!org.length) {
-    try {
-      org = await deps.loadOrg("");
-      rememberOrgMeta(org);
-      org = [...orgMeta.values()];
-    } catch {
-      org = [...orgMeta.values()];
-    }
-  }
-  // Without org roster we cannot tell Shen-owned shops — skip home writes to avoid dual-worker races.
-  if (!org.length) {
-    return [];
-  }
-  const owned = shenOwnedStoreSet(org);
-  return sessions.filter(function (session) {
-    return !owned.has(session.store);
-  });
+  return listCollectTargets();
 }
 
 let deps = defaultDeps;
@@ -796,8 +791,6 @@ export async function recoverDroppedShops(cookie) {
         };
       });
     }
-    const ownShen = process.env.HOME_JINGMAI_OWN_SHEN === "1";
-    const shenOwned = ownShen ? new Set() : shenOwnedStoreSet(shops);
     const sessions = await listSessions();
     const byName = new Map(
       sessions.map(function (session) {
@@ -819,9 +812,7 @@ export async function recoverDroppedShops(cookie) {
       if (!shop || shop.enabled === false || !shop.login || !shop.password || inflight.has(shop.store)) {
         return;
       }
-      if (shenOwned.has(shop.store)) {
-        return;
-      }
+      // Home recovers every org shop (including 沈子晗 team). Manual pause stays skipped above.
       const session = byName.get(shop.store);
       const needs =
         dropped.has(shop.store) ||
@@ -1099,7 +1090,7 @@ export async function jingmaiTick() {
     inflight: inflight,
     tickLock: tickLock,
     collectConcurrency: 3,
-    // One writer per shop: Shen-owned stores stay on Shen worker; home keeps per-shop isolation elsewhere.
+    // Sole writer: home collector (shared tables). Shen/Han UI may still read the same store.
     listTargets: listHomeCollectTargets,
     fetchHome: function (cookies, signal, expected) {
       return deps.client.fetchHome(cookies, signal, expected);
