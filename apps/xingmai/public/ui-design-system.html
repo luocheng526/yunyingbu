@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>星迈业务页面 UI 母版</title>
+    <link rel="stylesheet" href="/shared/xm-ui.css" />
+  </head>
+  <body>
+    <main class="xm-ui-scope xm-ui-showcase">
+      <div class="xm-ui-showcase__inner" id="xm-ui-demo"></div>
+    </main>
+    <script src="/shared/xm-ui.js"></script>
+    <script>
+      (function () {
+        var ui = window.XmUI;
+        var root = document.querySelector("#xm-ui-demo");
+
+        var chartSvg =
+          '<svg viewBox="0 0 680 220" preserveAspectRatio="none">' +
+          '<defs><linearGradient id="xmUiChartGradient" x1="0" x2="0" y1="0" y2="1">' +
+          '<stop offset="0%" stop-color="#1677ff" stop-opacity=".24"/>' +
+          '<stop offset="100%" stop-color="#1677ff" stop-opacity="0"/>' +
+          "</linearGradient></defs>" +
+          [24, 68, 112, 156, 200].map(function (y) {
+            return '<line class="xm-ui-chart-grid-line" x1="38" x2="664" y1="' + y + '" y2="' + y + '"/>';
+          }).join("") +
+          '<path class="xm-ui-chart-area" d="M40 180 C90 154 118 168 155 132 S225 146 270 106 S350 120 405 76 S495 92 535 58 S610 62 662 34 L662 200 L40 200 Z"/>' +
+          '<path class="xm-ui-chart-line" d="M40 180 C90 154 118 168 155 132 S225 146 270 106 S350 120 405 76 S495 92 535 58 S610 62 662 34"/>' +
+          [
+            [40, 180, "周一", "124"],
+            [155, 132, "周二", "218"],
+            [270, 106, "周三", "286"],
+            [405, 76, "周四", "342"],
+            [535, 58, "周五", "396"],
+            [662, 34, "周六", "458"]
+          ].map(function (point) {
+            return '<circle class="xm-ui-chart-point" cx="' + point[0] + '" cy="' + point[1] + '" r="5" fill="#fff" stroke="#1677ff" stroke-width="3" data-label="' + point[2] + '" data-value="' + point[3] + '"/>' +
+              '<text class="xm-ui-chart-axis-label" x="' + point[0] + '" y="216" text-anchor="middle">' + point[2] + "</text>";
+          }).join("") +
+          "</svg><div class=\"xm-ui-tooltip\" id=\"chart-tooltip\"></div>";
+
+        var tableRows = [
+          { course: "京东店铺运营入门 SOP", category: "运营基础", owner: "罗成运营部", progress: "82%", status: { label: "进行中", tone: "blue" } },
+          { course: "京准通付费投放实战", category: "流量投放", owner: "增长组", progress: "100%", status: { label: "已完成", tone: "success" } },
+          { course: "商品数据分析与经营诊断", category: "数据分析", owner: "数据组", progress: "64%", status: { label: "待复训", tone: "warning" } },
+          { course: "爆款选品与测品方法论", category: "选品策略", owner: "商品组", progress: "—", status: { label: "未开始", tone: "neutral" } }
+        ];
+
+        var courseCards = [
+          ui.ProgressCard({ title: "京东店铺运营入门 SOP", badge: "新人必修", tone: "success", meta: "2.4 万人学习 · 12 节", value: 60, action: "继续学习", cover: ui.icon("play") }),
+          ui.ProgressCard({ title: "京准通付费投放实战", badge: "进阶提升", tone: "purple", meta: "1.1 万人学习 · 18 节", value: 25, action: "开始学习", cover: ui.icon("chart") }),
+          ui.ProgressCard({ title: "商品数据分析与经营诊断", badge: "数据分析", tone: "blue", meta: "8,736 人学习 · 10 节", value: 0, action: "查看课程", cover: ui.icon("chart") })
+        ].join("");
+
+        root.innerHTML =
+          ui.PageContentHeader({
+            eyebrow: "MAIN CONTENT UI TEMPLATE",
+            title: "业务页面 UI 母版",
+            description: "统一页面内容区的卡片、数据、筛选与状态表达；不影响系统 Header、Sidebar 和业务路由。",
+            actions: [
+              { label: "导出规范", variant: "secondary", icon: "file" },
+              { label: "新建内容", icon: "play" }
+            ]
+          }) +
+          '<div class="xm-ui-stat-grid">' +
+          ui.StatCard({ label: "在学人数", value: "50", unit: "人", note: "较上月 +12%", trend: "up", icon: "users", tone: "blue" }) +
+          ui.StatCard({ label: "课程总数", value: "286", unit: "门", note: "本月新增 18 门", icon: "play", tone: "green" }) +
+          ui.StatCard({ label: "题库数量", value: "1,240", unit: "题", note: "已覆盖 12 个分类", icon: "file", tone: "purple" }) +
+          ui.StatCard({ label: "学习完成率", value: "82%", note: "较上月 +6%", trend: "up", icon: "chart", tone: "orange" }) +
+          "</div>" +
+          ui.ContentCard({
+            title: "推荐课程",
+            description: "课程卡片、状态标签和学习进度",
+            action: "查看全部",
+            content: '<div class="xm-ui-course-grid">' + courseCards + "</div>"
+          }) +
+          '<div class="xm-ui-layout-grid">' +
+          '<div class="xm-ui-stack">' +
+          ui.ChartCard({
+            title: "学习趋势",
+            action: "查看报表",
+            ariaLabel: "近六日学习人数持续增长的折线图",
+            legend: [{ label: "学习人数", color: "#1677ff" }, { label: "目标值", color: "#cdd7e5" }],
+            content: chartSvg
+          }) +
+          ui.ContentCard({
+            title: "培训任务",
+            description: "表格使用 42px 表头和 52px 数据行",
+            content:
+              ui.FilterToolbar({
+                tabs: [{ label: "全部", active: true }, { label: "进行中" }, { label: "已完成" }],
+                filters: [{ label: "分类", name: "category", options: ["全部分类", "运营基础", "数据分析"] }],
+                searchPlaceholder: "搜索课程名称"
+              }) +
+              '<div class="xm-ui-spacer-3"></div>' +
+              ui.DataTable({
+                columns: [
+                  { key: "course", label: "课程名称" },
+                  { key: "category", label: "分类" },
+                  { key: "owner", label: "负责人" },
+                  { key: "progress", label: "进度" },
+                  { key: "status", label: "状态", type: "status" }
+                ],
+                rows: tableRows
+              })
+          }) +
+          "</div>" +
+          '<div class="xm-ui-stack">' +
+          ui.ContentCard({
+            title: "状态与按钮",
+            description: "业务状态只使用语义色",
+            content:
+              '<div class="xm-ui-demo-row">' +
+              ui.StatusBadge({ label: "进行中", tone: "blue" }) +
+              ui.StatusBadge({ label: "已完成", tone: "success" }) +
+              ui.StatusBadge({ label: "待处理", tone: "warning" }) +
+              ui.StatusBadge({ label: "异常", tone: "danger" }) +
+              ui.StatusBadge({ label: "草稿", tone: "purple" }) +
+              "</div>" +
+              '<div class="xm-ui-demo-row xm-ui-demo-row--spaced">' +
+              ui.button({ label: "主要操作" }) +
+              ui.button({ label: "次要操作", variant: "secondary" }) +
+              ui.button({ label: "禁用操作", disabled: true }) +
+              "</div>"
+          }) +
+          ui.ContentCard({
+            title: "空状态",
+            content: ui.EmptyState({ title: "暂无培训任务", description: "创建任务后，相关人员会在这里看到学习安排。", action: "创建任务" })
+          }) +
+          "</div></div>" +
+          '<div class="xm-ui-spacer-4"></div>' +
+          '<section class="xm-ui-card">' +
+          ui.SectionTitle({
+            title: "弹窗、抽屉与加载状态",
+            description: "反馈组件沿用同一圆角、阴影和间距体系"
+          }) +
+          '<div class="xm-ui-card__body"><div class="xm-ui-state-grid">' +
+              '<div class="xm-ui-state-sample xm-ui-modal-demo"><div class="xm-ui-modal-demo__dialog"><h3>确认发布课程？</h3><p>发布后学员即可查看课程内容。</p><div class="xm-ui-demo-row">' +
+              ui.button({ label: "取消", variant: "secondary", size: "small" }) +
+              ui.button({ label: "确认发布", size: "small" }) +
+              "</div></div></div>" +
+              '<div class="xm-ui-state-sample xm-ui-drawer-demo"><h3>课程详情</h3><p>抽屉标题区固定，内容区独立滚动，底部操作保持可见。</p>' +
+              ui.FilterToolbar({ search: false, filters: [{ label: "权限", options: ["全部成员", "指定成员"] }] }) +
+              "</div>" +
+              '<div class="xm-ui-state-sample xm-ui-skeleton" aria-label="正在加载"><i></i><i></i><i></i><i></i><i></i><i></i></div>' +
+              "</div></div></section>";
+
+        root.addEventListener("click", function (event) {
+          var tab = event.target.closest("[data-xm-ui-tab]");
+          if (tab) {
+            tab.parentNode.querySelectorAll(".xm-ui-tab").forEach(function (item) {
+              item.classList.toggle("is-active", item === tab);
+            });
+          }
+        });
+
+        var chart = root.querySelector(".xm-ui-chart");
+        var tooltip = root.querySelector("#chart-tooltip");
+        chart.addEventListener("pointerover", function (event) {
+          if (!event.target.matches(".xm-ui-chart-point")) return;
+          var bounds = chart.getBoundingClientRect();
+          var point = event.target.getBoundingClientRect();
+          tooltip.textContent = event.target.dataset.label + " · " + event.target.dataset.value + " 人";
+          tooltip.style.left = point.left - bounds.left + point.width / 2 + "px";
+          tooltip.style.top = point.top - bounds.top + "px";
+          tooltip.classList.add("is-visible");
+        });
+        chart.addEventListener("pointerout", function () {
+          tooltip.classList.remove("is-visible");
+        });
+
+        var search = root.querySelector('.xm-ui-search input');
+        search.addEventListener("input", function () {
+          var keyword = search.value.trim().toLowerCase();
+          root.querySelectorAll(".xm-ui-table tbody tr").forEach(function (row) {
+            row.hidden = !row.textContent.toLowerCase().includes(keyword);
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>
