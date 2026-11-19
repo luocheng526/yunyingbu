@@ -1308,7 +1308,7 @@ async function persistDealSample(deps, shop, now, metrics, paidNote, sessionVers
   );
   await deps.saveSample(
     Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, fields),
-    sessionVersion ? { sessionVersion: sessionVersion } : undefined
+    Object.assign({ writer: "home" }, sessionVersion ? { sessionVersion: sessionVersion } : {})
   );
 }
 
@@ -1346,6 +1346,7 @@ async function refreshCookiesSafe(deps, shop, jar, identity, sessionVersion) {
   }
   try {
     await deps.updateSessionCookies(shop.store, jar, {
+      writer: "home",
       sessionVersion: sessionVersion,
       expectedShopId: shop.shopId || "",
       identity: identity
@@ -1371,7 +1372,10 @@ async function collectOne(shop, deps) {
   let verifiedIdentity = null;
   // Old-site single-shop timeout is 85s (finally closes this shop context).
   const budget = typeof deps.collectBudgetMs === "number" ? deps.collectBudgetMs : 85000;
-  const authOpts = sessionVersion ? { sessionVersion: sessionVersion } : undefined;
+  const authOpts = Object.assign(
+    { writer: "home" },
+    sessionVersion ? { sessionVersion: sessionVersion } : {}
+  );
   try {
     await withDeadline(
       async function (signal) {

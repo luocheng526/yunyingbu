@@ -349,7 +349,10 @@ async function connectOne(shop) {
       shopId: String(identity.shopId || shop.shopId || "").trim()
     });
     const now = beijingParts();
-    await saveSample(Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)));
+    await saveSample(
+      Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)),
+      { writer: COLLECTOR_OWNER_HOME }
+    );
     return { store: shop.store, ok: true };
   } catch (error) {
     if (error && error.code === "login") {
@@ -468,10 +471,15 @@ async function rememberLogin(store, cookies, expected) {
       shopId: decision.shopId || (expected && expected.shopId) || ""
     });
     const now = beijingParts();
-    await saveSample(Object.assign({ store: store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)));
+    await saveSample(
+      Object.assign({ store: store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics)),
+      { writer: COLLECTOR_OWNER_HOME }
+    );
   } catch (error) {
     if (error && error.code === "identity") {
-      await markAuth(store, "offline", String(error.message || "身份不符").slice(0, 200));
+      await markAuth(store, "offline", String(error.message || "身份不符").slice(0, 200), {
+        writer: COLLECTOR_OWNER_HOME
+      });
       return "failed";
     }
     /* 一次采集超时或没有成交，保留刚保存的登录 */
@@ -607,7 +615,7 @@ async function advanceAfterSuccess(store) {
 }
 
 async function advanceAfterFailure(store, message) {
-  await markAuth(store, "login_expired", message);
+  await markAuth(store, "login_expired", message, { writer: COLLECTOR_OWNER_HOME });
   const next = loginQueue.shift();
   if (!next) {
     return publicState({ status: "login", store: store, message: message });
@@ -716,7 +724,7 @@ export async function beginRelogin(store, cookie) {
       shop.password = "";
       return { ok: true, status: "done", store: name, message: "「" + name + "」已连接" };
     }
-    await markAuth(name, "login_expired", "登录已失效，请重新登录");
+    await markAuth(name, "login_expired", "登录已失效，请重新登录", { writer: COLLECTOR_OWNER_HOME });
   }
   try {
     const renewed = await passwordRelogin({

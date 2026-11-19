@@ -387,9 +387,15 @@ test("listHomeCollectTargets: home owns all teams; manual pause still skipped", 
 });
 
 test("claimCollectorOwner is atomic; manual pause cannot be claimed; other owner blocks", async () => {
-  const { claimCollectorOwner, COLLECTOR_OWNER_HOME, COLLECTOR_OWNER_SHEN, getSession } = await import(
-    "../src/modules/home/jingmai-store.js"
-  );
+  const {
+    claimCollectorOwner,
+    COLLECTOR_OWNER_HOME,
+    COLLECTOR_OWNER_SHEN,
+    getSession,
+    saveSample,
+    needsJingmaiQr,
+    isAdsOnlyAuthMessage
+  } = await import("../src/modules/home/jingmai-store.js");
   await resetJingmaiStore();
   await saveSession("可交接", {
     cookies: [{ name: "thor", value: "1" }],
@@ -412,15 +418,83 @@ test("claimCollectorOwner is atomic; manual pause cannot be claimed; other owner
   const first = await claimCollectorOwner("可交接", COLLECTOR_OWNER_HOME);
   assert.equal(first.ok, true);
   assert.equal((await getSession("可交接")).collectorOwner, "home");
+  assert.ok((await getSession("可交接")).collectorLeaseUntil);
   assert.equal((await claimCollectorOwner("可交接", COLLECTOR_OWNER_HOME)).ok, true);
   assert.equal((await claimCollectorOwner("他主", COLLECTOR_OWNER_SHEN)).ok, true);
   const blocked = await claimCollectorOwner("他主", COLLECTOR_OWNER_HOME);
   assert.equal(blocked.ok, false);
   assert.equal(blocked.reason, "owned_by_other");
   assert.equal(blocked.owner, "shen");
+  const denied = await saveSample(
+    { store: "他主", day: "2026-11-19", capturedAt: "2026-11-19 12:00:00", dealAmount: 1, ok: true },
+    { writer: COLLECTOR_OWNER_HOME }
+  );
+  assert.equal(denied.saved, false);
+  assert.equal(denied.reason, "owned_by_other");
+  // Expired lease is reclaimable (failure recovery).
+  const held = await getSession("他主");
+  await saveSession("他主", {
+    cookies: held.cookies,
+    authState: "ok",
+    enabled: true,
+    shopId: "c3",
+    collectorOwner: COLLECTOR_OWNER_SHEN,
+    collectorLeaseUntil: "2020-01-01 00:00:00",
+    writer: COLLECTOR_OWNER_SHEN
+  });
+  const reclaimed = await claimCollectorOwner("他主", COLLECTOR_OWNER_HOME);
+  assert.equal(reclaimed.ok, true);
   const paused = await claimCollectorOwner("已暂停", COLLECTOR_OWNER_HOME);
   assert.equal(paused.ok, false);
   assert.equal(paused.reason, "manual_pause");
+  assert.equal(isAdsOnlyAuthMessage("登录已失效，请重新登录；京准通没有返回账号 -100"), true);
+  assert.equal(
+    needsJingmaiQr({
+      enabled: true,
+      cookies: [{ name: "thor", value: "1" }],
+      authState: "login_expired",
+      authMessage: "登录已失效，请重新登录；京准通没有返回账号 -100"
+    }),
+    false
+  );
+  assert.equal(
+    needsJingmaiQr({
+      enabled: true,
+      cookies: [],
+      authState: "login_expired",
+      authMessage: "登录已失效，请重新登录"
+    }),
+    true
+  );
+});
+
+test("shen store wrapper refuses write while home lease is active", async () => {
+  const home = await import("../src/modules/home/jingmai-store.js");
+  const shen = await import("../src/modules/shen/jingmai-store.js");
+  await home.resetJingmaiStore();
+  await home.saveSession("互斥店", {
+    cookies: [{ name: "thor", value: "1" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "x1"
+  });
+  assert.equal((await home.claimCollectorOwner("互斥店", home.COLLECTOR_OWNER_HOME)).ok, true);
+  const blocked = await shen.saveSample({
+    store: "互斥店",
+    day: "2026-11-19",
+    capturedAt: "2026-11-19 12:01:00",
+    dealAmount: 9,
+    ok: true
+  });
+  assert.equal(blocked.saved, false);
+  assert.equal(blocked.reason, "owned_by_other");
+  const targets = await shen.listCollectTargets();
+  assert.equal(
+    targets.some(function (row) {
+      return row.store === "互斥店";
+    }),
+    false
+  );
 });
 
 test("cookieParams keeps real domain/path/expiry and only defaults legacy name/value jars", () => {
