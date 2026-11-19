@@ -509,6 +509,39 @@ test("过期后仍核对页面上的二维码，扫完就登录", async () => {
   assert.match(status.message, /已登录/);
 });
 
+test("刚生成的二维码遇到接口抖动也不换", async () => {
+  resetBoundStore();
+  let issued = 0;
+  setBoundFetch(async (url) => {
+    const href = String(url);
+    const json = (body) => ({
+      headers: {
+        get(name) {
+          return String(name).toLowerCase() === "content-type" ? "application/json" : null;
+        },
+        getSetCookie() {
+          return [];
+        }
+      },
+      json: async () => body,
+      arrayBuffer: async () => new ArrayBuffer(0)
+    });
+    if (href.includes("/auth/qrcode")) {
+      issued += 1;
+      return json({ code: 0, data: { url: `https://biprodapi.ecbis.cn/prod/auth/showQr?scene=keep${issued}`, scene: `keep${issued}` } });
+    }
+    if (href.includes("/auth/checkQrcode")) {
+      return json({ code: -1, content: "用户未登录或登录状态已过期" });
+    }
+    return json({ code: 0, data: {} });
+  });
+  await startLink("WECHAT");
+  const status = await pollLink();
+  assert.equal(issued, 1);
+  assert.equal(status.phase, "waiting_scan");
+  assert.equal(status.qrToken, "keep1");
+});
+
 test("页面只请求边界接口，并画出四个模块", async () => {
   const js = readFileSync(clientPath, "utf8");
   const routerSrc = readFileSync(routerPath, "utf8");
@@ -518,6 +551,7 @@ test("页面只请求边界接口，并画出四个模块", async () => {
   assert.match(js, /访客相关的指标默认将单日的数据直接累加计算/);
   assert.match(js, /XmModules\["\/bound"\]/);
   assert.doesNotMatch(js, /\/api\/data|\/api\/home|jingmai|hejun\.ecbis|biprodapi/);
+  assert.doesNotMatch(js, /link\/qr\?ts=/);
   assert.doesNotMatch(routerSrc, /modules\/data|jingmai/);
   assert.doesNotMatch(storeSrc, /modules\/data|jingmai|xingmai-erp/);
   const calls = [];

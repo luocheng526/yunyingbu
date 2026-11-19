@@ -1155,11 +1155,12 @@
   function renderLink() {
     var link = state.link || {};
     var showQr = link.qrReady && (link.phase === "waiting_scan" || link.phase === "needs_scan" || link.phase === "choose_account");
-    var qr = showQr ? '<img class="bd-qr" alt="旧站登录二维码" src="/api/bound/link/qr?ts=' + Date.now() + '">' : "";
+    var token = link.qrToken || "current";
+    var qr = showQr ? '<img class="bd-qr" data-qr="' + esc(token) + '" alt="旧站登录二维码" src="/api/bound/link/qr?v=' + encodeURIComponent(token) + '">' : "";
     var accounts = (link.accounts || []).map(function (account) {
       return '<button type="button" data-act="pick" data-company="' + esc(account.companyId) + '">' + esc(account.companyName || account.name || account.companyId) + "</button>";
     }).join("");
-    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>扫码连接旧站</h1><p class="bd-sub">二维码来自旧站官方登录接口，和登录页同一张。扫码后服务器沿用这个会话补采，页面查询不再打旧站。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + "</p></div></header><section class=\"bd-block\"><p>" + esc(link.message || "") + "</p>" + qr + '<div class="bd-tools"><button type="button" data-act="scan" data-provider="WECHAT">微信</button><button type="button" data-act="scan" data-provider="FEISHU">飞书</button><button type="button" data-act="scan" data-provider="DINGTALK">钉钉</button><button type="button" data-act="scan" data-provider="QYWX">企业微信</button>' + accounts + "</div></section>" + renderProgress() + "</section>";
+    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>扫码连接旧站</h1><p class="bd-sub">二维码来自旧站官方登录接口，和登录页同一张。扫码后服务器沿用这个会话补采，页面查询不再打旧站。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + "</p></div></header><section class=\"bd-block\"><p data-bd=\"link-msg\">" + esc(link.message || "") + "</p>" + qr + '<div class="bd-tools"><button type="button" data-act="scan" data-provider="WECHAT">微信</button><button type="button" data-act="scan" data-provider="FEISHU">飞书</button><button type="button" data-act="scan" data-provider="DINGTALK">钉钉</button><button type="button" data-act="scan" data-provider="QYWX">企业微信</button>' + accounts + "</div></section>" + renderProgress().replace('class="bd-block"', 'class="bd-block" data-bd="progress"') + "</section>";
   }
 
   function renderMain() {
@@ -1289,7 +1290,30 @@
     }
     state.admin = link.ok;
     state.link = link.ok ? await link.json() : null;
-    paint(root);
+    if (state.page === "link" && root.querySelector && root.querySelector("img.bd-qr")) {
+      refreshLink(root);
+    } else {
+      paint(root);
+    }
+  }
+
+  function refreshLink(root) {
+    var link = state.link || {};
+    var token = link.qrToken || "current";
+    var showQr = link.qrReady && (link.phase === "waiting_scan" || link.phase === "needs_scan" || link.phase === "choose_account");
+    var img = root.querySelector("img.bd-qr");
+    if (!showQr || !img || img.getAttribute("data-qr") !== token) {
+      paint(root);
+      return;
+    }
+    var msg = root.querySelector("[data-bd='link-msg']");
+    if (msg) {
+      msg.textContent = link.message || "";
+    }
+    var box = root.querySelector("[data-bd='progress']");
+    if (box) {
+      box.outerHTML = renderProgress().replace('class="bd-block"', 'class="bd-block" data-bd="progress"');
+    }
   }
 
   function openPicker(root, preset) {

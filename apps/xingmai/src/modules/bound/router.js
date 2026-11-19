@@ -170,7 +170,7 @@ boundRouter.get("/link/qr", async (req, res) => {
     return;
   }
   res.setHeader("Content-Type", image.type || "image/png");
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "private, max-age=120");
   res.send(image.buffer);
 });
 

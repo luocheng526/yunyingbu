@@ -206,6 +206,7 @@ export async function linkStatus() {
     provider: current.provider,
     deviceId: current.deviceId,
     message: current.message,
+    qrToken: current.scene || "",
     userName: current.userName,
     accounts: current.accounts || [],
     qrReady: Boolean(current.qrUrl),
@@ -233,10 +234,14 @@ export async function startLink(provider) {
   }
   current.scene = payload.data.scene || "";
   current.qrUrl = payload.data.url || "";
-  current.message = "请用微信扫这一张二维码。扫旧站网页上的码不会登录这里。";
+  current.qrIssuedAt = new Date().toISOString();
+  current.qrCheckedAt = "";
+  current.message = "请用微信扫这一张二维码。这一张会保持约一分半，扫旧站网页上的码不会登录这里。";
   await saveSession(current);
   return linkStatus();
 }
+
+let qrCache = { url: "", type: "", buffer: null };
 
 export async function qrBytes() {
   const current = await session();
@@ -246,6 +251,9 @@ export async function qrBytes() {
   if (current.provider !== "WECHAT") {
     return { kind: "url", url: current.qrUrl };
   }
+  if (qrCache.url === current.qrUrl && qrCache.buffer) {
+    return { kind: "image", type: qrCache.type, buffer: qrCache.buffer };
+  }
   const response = await fetchImpl(current.qrUrl, {
     headers: {
       Referer: `${ORIGIN}/login`,
@@ -253,7 +261,9 @@ export async function qrBytes() {
     }
   });
   const type = response.headers.get("content-type") || "image/png";
-  return { kind: "image", type, buffer: Buffer.from(await response.arrayBuffer()) };
+  const buffer = Buffer.from(await response.arrayBuffer());
+  qrCache = { url: current.qrUrl, type, buffer };
+  return { kind: "image", type, buffer };
 }
 
 async function finishLogin(current, data) {
@@ -264,10 +274,20 @@ async function finishLogin(current, data) {
   await saveSession(current);
 }
 
+const QR_HOLD_MS = 90 * 1000;
+
+function issuedAge(current) {
+  const issued = Date.parse(current.qrIssuedAt || "");
+  return Number.isFinite(issued) ? Date.now() - issued : 0;
+}
+
 export async function pollLink() {
   const current = await session();
   if (!current.scene || (current.phase !== "waiting_scan" && current.phase !== "needs_scan")) {
     return linkStatus();
+  }
+  if (!current.qrIssuedAt) {
+    current.qrIssuedAt = new Date().toISOString();
   }
   const payload = await callUpstream(current, {
     method: "get",
@@ -281,10 +301,11 @@ export async function pollLink() {
   });
   const code = payload && payload.code;
   const content = String((payload && payload.content) || "");
-  if (code === 1000102) {
+  const qrExpired = code === 1000103 || code === -1 || code === -7 || /未登录|登录状态已过期|请重新登录/.test(content);
+  if (code === 1000102 || (qrExpired && issuedAge(current) < QR_HOLD_MS)) {
     current.phase = "waiting_scan";
-    current.message = "未扫码。请扫这一张二维码，扫旧站网页上的码不会登录这里。";
-  } else if (code === 1000103 || code === -1 || code === -7 || /未登录|登录状态已过期|请重新登录/.test(content)) {
+    current.message = "未扫码。请用微信扫这一张，它会保持约一分半。扫旧站网页上的码不会登录这里。";
+  } else if (qrExpired) {
     current.scene = "";
     current.qrUrl = "";
     current.message = "刚才那张二维码已经失效，正在换一张。";
