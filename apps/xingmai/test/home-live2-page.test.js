@@ -16,6 +16,8 @@ test("实时（新版） sits after 近七天业绩汇总 and stays independent 
   assert.match(homeJs, /data-refresh-live2/);
   assert.match(homeJs, /pendingCollect/);
   assert.match(homeJs, /待接入/);
+  assert.match(homeJs, /待更新/);
+  assert.match(homeJs, /publishedAt === pack\.publishedAt/);
   assert.match(homeJs, /xm-hm-login-link is-wait[\s\S]{0,180}待接入<\/button>/);
   assert.match(homeJs, /manual: state\.view === "live2"/);
   assert.match(homeJs, /账号和密码已经填好，请在画面里点登录/);
