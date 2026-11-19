@@ -1486,6 +1486,49 @@ let loginVisible = false;
 let booting = null;
 let bootAbort = null;
 
+function profileBusy(text) {
+  return /multiple instances|profile corruption|process_singleton/i.test(String(text || ""));
+}
+
+function releaseProfileDir(dir) {
+  if (!dir || dir.indexOf(sep) < 0) {
+    return;
+  }
+  const marker = "--user-data-dir=" + dir;
+  let entries = [];
+  try {
+    entries = readdirSync("/proc");
+  } catch {
+    entries = [];
+  }
+  entries.forEach(function (name) {
+    if (!/^\d+$/.test(name)) {
+      return;
+    }
+    let cmd = "";
+    try {
+      cmd = readFileSync("/proc/" + name + "/cmdline").toString().replace(/\0/g, " ");
+    } catch {
+      return;
+    }
+    if (cmd.indexOf(marker) < 0) {
+      return;
+    }
+    try {
+      process.kill(Number(name), "SIGKILL");
+    } catch {
+      /* already gone */
+    }
+  });
+  ["SingletonLock", "SingletonSocket", "SingletonCookie"].forEach(function (name) {
+    try {
+      unlinkSync(dir + sep + name);
+    } catch {
+      /* lock already gone */
+    }
+  });
+}
+
 function stopBooting() {
   if (bootAbort) {
     bootAbort.abort();
@@ -1686,8 +1729,11 @@ function connectSocket(url) {
   });
 }
 
-function browserFailure(stderr) {
+export function browserFailure(stderr) {
   const text = String(stderr || "");
+  if (/multiple instances|profile corruption|process_singleton/i.test(text)) {
+    return "这家店的登录窗口被占用，正在重新打开";
+  }
   const library = text.match(/error while loading shared libraries: (\S+)/);
   if (library) {
     return "服务器浏览器缺少 " + library[1].replace(/[,:]/g, "") + "，登录开不了";
@@ -1793,6 +1839,7 @@ async function launchChrome(signal, options) {
       ["--headless=new", "--remote-allow-origins=*"],
       ["--headless", "--remote-allow-origins=*"]
     ];
+    let freedProfile = false;
     for (let f = 0; f < flagSets.length; f += 1) {
       if (signal && signal.aborted) {
         throw browserAbortError();
@@ -1807,6 +1854,12 @@ async function launchChrome(signal, options) {
           lastLaunchNote = message;
         }
         stopBooting();
+        if (!freedProfile && !opts.ephemeral && profileBusy(message)) {
+          freedProfile = true;
+          releaseProfileDir(profileDirForShop(opts.identity || { store: opts.profileKey || "", shopId: opts.shopId || "" }));
+          await sleep(300);
+          f -= 1;
+        }
         if (signal && signal.aborted) {
           throw browserAbortError();
         }
@@ -2236,7 +2289,7 @@ async function disguiseDesk(ws) {
   }
 }
 
-async function acquireDesk(store, ticket, signal, shopId) {
+async function acquireDesk(store, ticket, signal, shopId, manual) {
   if (ticket != null && ticket !== openTicket) {
     return null;
   }
@@ -2275,8 +2328,8 @@ async function acquireDesk(store, ticket, signal, shopId) {
     return null;
   }
   const desk = await launchChrome(signal, {
-    profileKey: profileKey,
-    ephemeral: identity.ephemeral || !profileKey,
+    profileKey: manual === true ? "" : profileKey,
+    ephemeral: manual === true || identity.ephemeral || !profileKey,
     identity: identity
   });
   if ((ticket != null && ticket !== openTicket) || (signal && signal.aborted)) {
@@ -2463,7 +2516,7 @@ export async function openDesk({ store, loginName, password, reveal, onStep, sig
     shotCache = { at: 0, store: "", image: null, ready: false };
     lastLaunchNote = "正在启动浏览器";
     step("正在启动浏览器");
-    const launching = acquireDesk(store, ticket, linked, shopId);
+    const launching = acquireDesk(store, ticket, linked, shopId, manual === true);
     launching.catch(function () {});
     desk = await Promise.race([
       launching,

@@ -6,7 +6,7 @@ import { beginRelogin, beginReloginAll, recoverDroppedShops, reloginState, reset
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { browserCandidates, browserLaunchOrder, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginTipBlocked, loginScreenState, readDebugTargets, realBrowserBinary, resolveBrowserBinary, sessionReady, unpackDebBuffer, waitForDebugPort } from "../src/modules/home/jingmai-desk.js";
+import { browserCandidates, browserFailure, browserLaunchOrder, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginTipBlocked, loginScreenState, readDebugTargets, realBrowserBinary, resolveBrowserBinary, sessionReady, unpackDebBuffer, waitForDebugPort } from "../src/modules/home/jingmai-desk.js";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import zlib from "node:zlib";
@@ -875,6 +875,12 @@ test("the login connects as soon as the debug port answers", async () => {
       server.close(resolve);
     });
   }
+});
+
+test("a locked shop profile is reported as a busy login window", () => {
+  const text = browserFailure("Opening multiple instances would start multiple browser processes rather than opening a new window in the existing process. Aborting now to avoid profile corruption.");
+  assert.equal(text, "这家店的登录窗口被占用，正在重新打开");
+  assert.equal(text.includes("multiple instances"), false);
 });
 
 test("a shell wrapper is not used as the login browser", () => {
