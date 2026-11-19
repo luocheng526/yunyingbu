@@ -338,6 +338,61 @@ test("cookieParams keeps real domain/path/expiry and only defaults legacy name/v
   assert.equal(legacy.domain, ".jd.com");
   assert.equal(legacy.path, "/");
   assert.equal(normalizeCookie({ name: "x", value: "1", domain: ".jzt.jd.com" }).domain, ".jzt.jd.com");
+  // hostOnly must not widen to .jd.com for CDP.
+  const hostOnly = cookieParams([
+    { name: "sid", value: "test-only", hostOnly: true, host: "passport.jd.com", path: "/" }
+  ])[0];
+  assert.equal(hostOnly.domain, undefined);
+  assert.equal(hostOnly.url, "https://passport.jd.com/");
+  assert.equal(hostOnly.path, "/");
+  // Non-legacy without domain/host: drop instead of inventing .jd.com.
+  assert.equal(cookieParams([{ name: "x", value: "1", path: "/x", secure: true }]).length, 0);
+});
+
+test("hostOnly jar survives client absorb → DB → cookieParams for CDP", async () => {
+  process.env.SHEN_JINGMAI_MEMORY = "1";
+  await resetJingmaiStore();
+  const jar = [];
+  absorbCookies(
+    {
+      url: "https://passport.jd.com/login",
+      headers: {
+        getSetCookie: function () {
+          return ["sid=test-only; Path=/; Secure"];
+        }
+      }
+    },
+    jar,
+    "https://passport.jd.com/login"
+  );
+  assert.equal(jar[0].hostOnly, true);
+  assert.equal(jar[0].host, "passport.jd.com");
+  await saveSession("hostOnly店", {
+    cookies: jar,
+    authState: "ok",
+    enabled: true,
+    shopId: "42"
+  });
+  const row = (await listSessions()).find(function (item) {
+    return item.store === "hostOnly店";
+  });
+  assert.equal(row.cookies[0].hostOnly, true);
+  assert.equal(row.cookies[0].host, "passport.jd.com");
+  const cdp = cookieParams(row.cookies)[0];
+  assert.equal(cdp.domain, undefined);
+  assert.equal(cdp.url, "https://passport.jd.com/");
+  assert.notEqual(cdp.domain, ".jd.com");
+  // Direct normalize must keep hostOnly fields (regression for 6b04000 call shape).
+  const normalized = normalizeCookie({
+    name: "sid",
+    value: "test-only",
+    hostOnly: true,
+    host: "passport.jd.com",
+    path: "/"
+  });
+  assert.equal(normalized.hostOnly, true);
+  assert.equal(normalized.host, "passport.jd.com");
+  assert.equal(normalized.domain, undefined);
 });
 
 test("safeProfileKey no longer collapses RASW* / 飒望* shops into RASW or anon", () => {

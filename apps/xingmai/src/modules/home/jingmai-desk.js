@@ -219,36 +219,69 @@ export function normalizeCookie(item) {
   if (item.session != null) {
     next.session = Boolean(item.session);
   }
+  // Preserve host-only scope for CDP round-trips (absorb → DB → cookieParams).
+  if (item.host != null && String(item.host).trim()) {
+    next.host = String(item.host).replace(/^\./, "").toLowerCase();
+  }
+  if (item.hostOnly === true || (item.hostOnly !== false && next.host && !next.domain)) {
+    next.hostOnly = true;
+  } else if (item.hostOnly === false) {
+    next.hostOnly = false;
+  }
   return next;
 }
 
-/** CDP Network.setCookies payload. Legacy name/value-only jars keep .jd.com defaults. */
+/**
+ * CDP Network.setCookies payload.
+ * - Legacy name/value-only jars keep .jd.com defaults.
+ * - hostOnly cookies keep exact host via url= (never widen to .jd.com).
+ * - Scoped non-legacy cookies without domain/host are dropped (no invented scope).
+ */
 export function cookieParams(cookies) {
   return (cookies || [])
     .map(normalizeCookie)
     .filter(Boolean)
     .map(function (item) {
-      const legacy = !item.domain && !item.path && item.expires == null && item.sameSite == null;
+      const hasHost = Boolean(item.host);
+      const hostOnly = item.hostOnly === true || (hasHost && !item.domain);
+      const legacy =
+        !item.domain &&
+        !hasHost &&
+        !hostOnly &&
+        !item.path &&
+        item.expires == null &&
+        item.sameSite == null &&
+        item.secure == null &&
+        item.httpOnly == null;
+      const path = item.path || "/";
       const row = {
         name: item.name,
         value: item.value,
-        domain: item.domain || (legacy ? ".jd.com" : undefined),
-        path: item.path || (legacy ? "/" : undefined),
+        path: path,
         secure: item.secure != null ? item.secure : true,
         httpOnly: item.httpOnly != null ? item.httpOnly : false,
         sameSite: item.sameSite || (legacy ? "None" : "Lax")
       };
-      if (!row.domain) {
-        row.domain = ".jd.com";
-      }
-      if (!row.path) {
-        row.path = "/";
-      }
       if (item.expires != null && Number(item.expires) > 0) {
         row.expires = Number(item.expires);
       }
-      return row;
-    });
+      if (hostOnly && hasHost) {
+        // CDP: omit domain + provide url → host-only cookie for that origin.
+        row.url = "https://" + item.host + (path.startsWith("/") ? path : "/" + path);
+        return row;
+      }
+      if (item.domain) {
+        row.domain = String(item.domain);
+        return row;
+      }
+      if (legacy) {
+        row.domain = ".jd.com";
+        return row;
+      }
+      // Non-legacy but no domain/host: do not invent .jd.com.
+      return null;
+    })
+    .filter(Boolean);
 }
 
 async function sleepSignal(ms, signal) {
