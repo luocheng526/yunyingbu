@@ -1343,10 +1343,9 @@ async function verifyCollectIdentity(deps, shop, jar, signal) {
     identity = await deps.fetchAccountIdentity(jar, signal);
   } catch (error) {
     const classified = classifyTransportError(error);
-    if (classified.code === "login") {
+    if (classified.code === "login" || classified.code === "network" || classified.code === "timeout") {
       throw classified;
     }
-    // Timeout / network / empty identity: never release without proof.
     return { ok: false, reason: "identity_missing", identity: null };
   }
   const match = matchCollectIdentity(
