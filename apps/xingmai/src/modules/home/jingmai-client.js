@@ -614,27 +614,58 @@ function jztHeaders() {
   };
 }
 
+function paidAccountError(payload) {
+  const code = payload && payload.code != null ? String(payload.code) : "";
+  const message = String((payload && (payload.msg || payload.message)) || "")
+    .replace(/\s+/g, " ")
+    .slice(0, 36);
+  return ("京准通没有可用账号" + (code ? " " + code : "") + (message ? " " + message : "")).trim();
+}
+
+async function warmJzt(jar, fetchImpl) {
+  try {
+    const response = await request(fetchImpl, jar, "https://jzt.jd.com/custom-report/", {
+      headers: {
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        referer: "https://shop.jd.com/"
+      }
+    });
+    await response.arrayBuffer();
+  } catch {
+    /* pinlist still runs; the warm page only seeds jzt cookies */
+  }
+}
+
 async function fetchPaid(jar, fetchImpl) {
   const headers = jztHeaders();
-  const user = await getJson(fetchImpl, jar, JZT_ORIGIN + "/dataCenter/index/user/pinlist?requestFrom=0", headers);
+  await warmJzt(jar, fetchImpl);
+  let user = null;
+  try {
+    user = await getJson(fetchImpl, jar, JZT_ORIGIN + "/dataCenter/index/user/pinlist?requestFrom=0", headers);
+  } catch (error) {
+    const classified = classifyTransportError(error);
+    if (classified.code === "login") {
+      throw jingmaiError("paid", "京准通账号未授权或需要重新开通");
+    }
+    throw jingmaiError("paid", classified.message || "京准通暂时读不到账号");
+  }
   let auth = null;
   try {
     auth = await getJson(fetchImpl, jar, JZT_ORIGIN + "/dataCenter/index/auth/pinlist?requestFrom=0", headers);
   } catch (error) {
-    if (classifyTransportError(error).code === "login") {
-      throw classifyTransportError(error);
+    const classified = classifyTransportError(error);
+    if (classified.code !== "login" && classified.code !== "paid") {
+      /* own-account list is enough when auth list is flaky */
+    } else if (!user || Number(user.code) !== 1) {
+      throw jingmaiError("paid", classified.message || "京准通账号未授权");
     }
   }
-  const userData = user && Number(user.code) === 1 ? user.data : user;
-  const authData = auth && Number(auth.code) === 1 ? auth.data : auth;
+  const userData = user && Number(user.code) === 1 ? user.data : null;
+  const authData = auth && Number(auth.code) === 1 ? auth.data : null;
   const pinIds = collectPinIds(userData, authData);
   if (!pinIds.length) {
     const payload = user && user.code != null ? user : auth;
-    const code = payload && payload.code != null ? String(payload.code) : "";
-    const message = String((payload && (payload.msg || payload.message)) || "")
-      .replace(/\s+/g, " ")
-      .slice(0, 36);
-    throw jingmaiError("network", ("京准通没有返回账号" + (code ? " " + code : "") + (message ? " " + message : "")).trim());
+    throw jingmaiError("paid", paidAccountError(payload));
   }
   const day = beijingParts().day;
   const overview = await postJson(
@@ -645,11 +676,11 @@ async function fetchPaid(jar, fetchImpl) {
     Object.assign({ "content-type": "application/json" }, headers)
   );
   if (overview && overview.code != null && Number(overview.code) !== 1) {
-    throw jingmaiError("network", "京准通没有返回付费数据");
+    throw jingmaiError("paid", "京准通没有返回付费数据");
   }
   const paid = extractPaid(overview && overview.code === 1 ? overview.data : overview);
   if (!paid) {
-    throw jingmaiError("network", "京准通没有返回付费数据");
+    throw jingmaiError("paid", "京准通没有返回付费数据");
   }
   return paid;
 }
@@ -679,7 +710,14 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard) {
       return { paid: value, paidError: null };
     },
     function (error) {
-      return { paid: null, paidError: classifyTransportError(error) };
+      const classified = classifyTransportError(error);
+      if (classified.code === "login") {
+        return { paid: null, paidError: jingmaiError("paid", "京准通账号未授权或需要重新开通") };
+      }
+      if (classified.code !== "paid") {
+        return { paid: null, paidError: jingmaiError("paid", classified.message || "京准通暂时读不到数据") };
+      }
+      return { paid: null, paidError: classified };
     }
   );
   const [dealResult, paidResult] = await Promise.all([dealTask, paidTask]);
@@ -695,16 +733,30 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard) {
       yesterdayAmount: null,
       paidAmount: null,
       paidDeal: null,
-      paidRoi: null
+      paidRoi: null,
+      dealNote: "",
+      paidNote: ""
     },
-    deal,
-    paid
+    deal || {},
+    paid || {}
   );
   if (dealError && deal == null) {
     metrics.dealNote = String(dealError.message || "京麦首页没有成交字段").slice(0, 160);
   }
+  if (paidError && paid == null) {
+    metrics.paidNote = String(paidError.message || "京准通暂时读不到数据").slice(0, 160);
+  }
   if (hasCollected(metrics)) {
     return metrics;
+  }
+  if (dealError && dealError.code === "login" && (!paid || paidError)) {
+    throw jingmaiError("login", "登录已失效，请重新登录");
+  }
+  if (paidError && !dealError) {
+    throw jingmaiError("paid", paidError.message || "京准通暂时读不到数据");
+  }
+  if (dealError && dealError.code === "timeout") {
+    throw jingmaiError("timeout", dealError.message || "采集超时");
   }
   const parts = [];
   if (dealError && dealError.message) {
@@ -713,8 +765,7 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard) {
   if (paidError && paidError.message) {
     parts.push(String(paidError.message));
   }
-  const login = dealError && dealError.code === "login" && (!paidError || paidError.code === "login");
-  throw jingmaiError(login ? "login" : "network", parts.join("；").slice(0, 180) || "京麦没有返回数据");
+  throw jingmaiError("network", parts.join("；").slice(0, 180) || "京麦没有返回数据");
 }
 
 export const jingmaiClient = {

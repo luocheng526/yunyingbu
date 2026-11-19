@@ -95,7 +95,14 @@ function sessionNeedsLogin(session) {
   if (session.authState === "login_expired" || !session.cookies || !session.cookies.length) {
     return true;
   }
-  return /登录已失效|请重新登录|未登录|登录失败/.test(String(session.authMessage || ""));
+  const message = String(session.authMessage || "");
+  if (/京准通/.test(message) && !/登录已失效，请重新登录/.test(message)) {
+    return false;
+  }
+  if (session.authState === "offline" && /采集超时|采集已停止/.test(message)) {
+    return false;
+  }
+  return /登录已失效，请重新登录|未登录京麦/.test(message);
 }
 
 export async function loadOrgShops(cookie, fetchImpl = fetch) {
@@ -251,7 +258,7 @@ export async function jingmaiLive() {
 function publicState(state) {
   return {
     ok: true,
-    build: "deskua",
+    build: "livefix",
     store: state.store || loginCursor.store,
     status: state.status,
     message: state.message || "",
