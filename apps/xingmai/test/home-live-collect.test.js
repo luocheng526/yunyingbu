@@ -326,6 +326,48 @@ test("listCollectTargets includes login_expired jars and skips empty jars / paus
   assert.ok(!names.includes("人工暂停"));
 });
 
+test("listHomeCollectTargets skips Shen-owned shops and keeps manual pause", async () => {
+  const {
+    listHomeCollectTargets,
+    isShenOwnedShop,
+    resetJingmaiDeps,
+    setJingmaiDeps
+  } = await import("../src/modules/home/jingmai-runner.js");
+  await resetJingmaiStore();
+  resetJingmaiDeps();
+  await saveSession("沈店A", {
+    cookies: [{ name: "thor", value: "1" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "s1"
+  });
+  await saveSession("韩店B", {
+    cookies: [{ name: "thor", value: "2" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "h1"
+  });
+  await saveSession("沈店暂停", {
+    cookies: [{ name: "thor", value: "3" }],
+    authState: "ok",
+    enabled: false,
+    shopId: "s2"
+  });
+  assert.equal(isShenOwnedShop({ team: "沈子晗组", manager: "" }), true);
+  assert.equal(isShenOwnedShop({ team: "韩梦凯组", manager: "韩梦凯" }), false);
+  setJingmaiDeps({
+    loadOrg: async () => [
+      { store: "沈店A", team: "沈子晗组", manager: "沈子晗", login: "a", password: "a", enabled: true },
+      { store: "韩店B", team: "韩梦凯组", manager: "韩梦凯", login: "b", password: "b", enabled: true },
+      { store: "沈店暂停", team: "沈子晗组", manager: "沈子晗", login: "c", password: "c", enabled: false }
+    ]
+  });
+  const targets = await listHomeCollectTargets();
+  const names = targets.map((row) => row.store);
+  assert.deepEqual(names, ["韩店B"]);
+  resetJingmaiDeps();
+});
+
 test("cookieParams keeps real domain/path/expiry and only defaults legacy name/value jars", () => {
   const full = cookieParams([
     {

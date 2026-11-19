@@ -34,6 +34,8 @@ let loginCursor = { index: 0, total: 0, store: "" };
 let loginEpoch = 0;
 let openingMark = 0;
 const orgCache = new Map();
+/** store → { store, team, manager, enabled } for ownership (no secrets). */
+const orgMeta = new Map();
 let refreshing = false;
 let recovering = false;
 let deskLock = Promise.resolve();
@@ -43,6 +45,67 @@ const defaultDeps = {
   client: jingmaiClient,
   desk: jingmaiDesk
 };
+
+/** Shen module owns these shops' cookie/profile/sample writes. Home only reads. */
+export function isShenOwnedShop(shop) {
+  const text = `${(shop && shop.team) || ""}${(shop && shop.manager) || ""}`;
+  return text.includes("沈子晗");
+}
+
+function rememberOrgMeta(shops) {
+  (shops || []).forEach(function (shop) {
+    if (!shop || !shop.store) {
+      return;
+    }
+    orgMeta.set(shop.store, {
+      store: shop.store,
+      team: String(shop.team || ""),
+      manager: String(shop.manager || ""),
+      enabled: shop.enabled !== false
+    });
+  });
+}
+
+export function shenOwnedStoreSet(shops) {
+  const rows = Array.isArray(shops) && shops.length ? shops : [...orgMeta.values()];
+  const owned = new Set();
+  rows.forEach(function (shop) {
+    if (shop && shop.store && isShenOwnedShop(shop)) {
+      owned.add(shop.store);
+    }
+  });
+  return owned;
+}
+
+/**
+ * Home collector targets: shared listCollectTargets minus Shen-owned stores.
+ * Manual pause (enabled=false) already excluded by listCollectTargets.
+ * Override: HOME_JINGMAI_OWN_SHEN=1 lets home also collect Shen shops (break-glass only).
+ */
+export async function listHomeCollectTargets() {
+  const sessions = await listCollectTargets();
+  if (process.env.HOME_JINGMAI_OWN_SHEN === "1") {
+    return sessions;
+  }
+  let org = [...orgMeta.values()];
+  if (!org.length) {
+    try {
+      org = await deps.loadOrg("");
+      rememberOrgMeta(org);
+      org = [...orgMeta.values()];
+    } catch {
+      org = [...orgMeta.values()];
+    }
+  }
+  // Without org roster we cannot tell Shen-owned shops — skip home writes to avoid dual-worker races.
+  if (!org.length) {
+    return [];
+  }
+  const owned = shenOwnedStoreSet(org);
+  return sessions.filter(function (session) {
+    return !owned.has(session.store);
+  });
+}
 
 let deps = defaultDeps;
 
@@ -75,6 +138,7 @@ export function resetJingmaiDeps() {
     shop.password = "";
   });
   orgCache.clear();
+  orgMeta.clear();
   refreshing = false;
   recovering = false;
   deskLock = Promise.resolve();
@@ -82,6 +146,7 @@ export function resetJingmaiDeps() {
 }
 
 function rememberOrg(shops) {
+  rememberOrgMeta(shops);
   (shops || []).forEach(function (shop) {
     if (!shop || !shop.store || !shop.login || !shop.password) {
       return;
@@ -89,10 +154,12 @@ function rememberOrg(shops) {
     orgCache.set(shop.store, {
       store: shop.store,
       enabled: shop.enabled !== false,
-        login: shop.login,
-        password: shop.password,
-        shopId: String(shop.shopId || "")
-      });
+      login: shop.login,
+      password: shop.password,
+      shopId: String(shop.shopId || ""),
+      team: String(shop.team || ""),
+      manager: String(shop.manager || "")
+    });
   });
 }
 
@@ -723,10 +790,14 @@ export async function recoverDroppedShops(cookie) {
           login: shop.login,
           password: shop.password,
           shopId: shop.shopId || "",
-          enabled: shop.enabled !== false
+          enabled: shop.enabled !== false,
+          team: shop.team || "",
+          manager: shop.manager || ""
         };
       });
     }
+    const ownShen = process.env.HOME_JINGMAI_OWN_SHEN === "1";
+    const shenOwned = ownShen ? new Set() : shenOwnedStoreSet(shops);
     const sessions = await listSessions();
     const byName = new Map(
       sessions.map(function (session) {
@@ -746,6 +817,9 @@ export async function recoverDroppedShops(cookie) {
     const targets = [];
     shops.forEach(function (shop) {
       if (!shop || shop.enabled === false || !shop.login || !shop.password || inflight.has(shop.store)) {
+        return;
+      }
+      if (shenOwned.has(shop.store)) {
         return;
       }
       const session = byName.get(shop.store);
@@ -1025,7 +1099,8 @@ export async function jingmaiTick() {
     inflight: inflight,
     tickLock: tickLock,
     collectConcurrency: 3,
-    listTargets: listCollectTargets,
+    // One writer per shop: Shen-owned stores stay on Shen worker; home keeps per-shop isolation elsewhere.
+    listTargets: listHomeCollectTargets,
     fetchHome: function (cookies, signal, expected) {
       return deps.client.fetchHome(cookies, signal, expected);
     },
