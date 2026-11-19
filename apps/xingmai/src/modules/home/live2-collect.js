@@ -10,7 +10,7 @@ import { beijingParts, displayStamp } from "./jingmai.js";
 import { blankLive2Record, live2RecordFromMetrics } from "./live2.js";
 
 const CONCURRENCY = 2;
-export const LIVE2_RUNTIME_MARK = "0.1.1277-live2-login";
+export const LIVE2_RUNTIME_MARK = "0.1.1278-live2-login";
 
 function stampNow() {
   return displayStamp(beijingParts().stamp);
@@ -96,10 +96,22 @@ export function createLive2Collector(deps = {}) {
   }
 
   async function loginJar(shop) {
-    if (!shop.login || !shop.password || !client.login) {
+    if (!shop.login || !shop.password) {
       return null;
     }
-    const jar = await client.login(shop.login, shop.password);
+    let jar = null;
+    if (client.openPassword && client.submitPassword) {
+      const opened = await client.openPassword();
+      jar = await client.submitPassword({
+        jar: opened.jar,
+        init: opened.init,
+        loginName: shop.login,
+        password: shop.password,
+        authCode: ""
+      });
+    } else if (client.login) {
+      jar = await client.login(shop.login, shop.password);
+    }
     if (jar && jar.length) {
       jars.set(shop.store, jar.slice());
     }
