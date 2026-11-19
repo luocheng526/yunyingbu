@@ -28,8 +28,20 @@ const SUMMER_URL = "https://jrsecstatic.jdpay.com/jr-sec-dev-static/summer-crypt
 const LOGIN_POST = "https://passport.shop.jd.com/login/doLogin";
 const SESSION_COOKIES = new Set(["thor", "pin", "pt_key", "pt_pin", "flash", "light_key"]);
 
+export function defaultCookiePath(pathname) {
+  const path = String(pathname || "/");
+  if (!path.startsWith("/")) {
+    return "/";
+  }
+  const index = path.lastIndexOf("/");
+  if (index <= 0) {
+    return "/";
+  }
+  return path.slice(0, index) || "/";
+}
+
 export function cookieMatchesUrl(cookie, urlString) {
-  if (!cookie || !cookie.name || cookie.value == null) {
+  if (!cookie || !cookie.name || cookie.value == null || cookie.value === "") {
     return false;
   }
   let url;
@@ -45,17 +57,27 @@ export function cookieMatchesUrl(cookie, urlString) {
     return false;
   }
   const host = String(url.hostname || "").toLowerCase();
-  const domainRaw = String(cookie.domain || "").trim();
-  if (domainRaw) {
-    const domain = domainRaw.replace(/^\./, "").toLowerCase();
-    if (host !== domain && !host.endsWith("." + domain)) {
+  const hostOnly = cookie.hostOnly === true || (!cookie.domain && Boolean(cookie.host));
+  if (hostOnly) {
+    const cookieHost = String(cookie.host || "").replace(/^\./, "").toLowerCase();
+    // Exact host only — sub.passport.jd.com must not receive passport.jd.com hostOnly cookies.
+    if (!cookieHost || host !== cookieHost) {
       return false;
     }
+  } else if (cookie.domain) {
+    const domain = String(cookie.domain).replace(/^\./, "").toLowerCase();
+    if (!domain || (host !== domain && !host.endsWith("." + domain))) {
+      return false;
+    }
+  } else {
+    // Unknown-origin legacy cookie (no domain/host): never spray across arbitrary URLs.
+    return false;
   }
   const path = String(cookie.path || "/");
   const uPath = String(url.pathname || "/");
   if (path !== "/") {
-    if (uPath !== path && !uPath.startsWith(path.endsWith("/") ? path : path + "/")) {
+    const prefix = path.endsWith("/") ? path : path + "/";
+    if (uPath !== path && !uPath.startsWith(prefix)) {
       return false;
     }
   }
@@ -69,6 +91,10 @@ export function cookieHeader(jar, url) {
         return false;
       }
       if (!url) {
+        // Without a target URL, only allow cookies that already carry an explicit scope.
+        if (!item.domain && !item.host) {
+          return false;
+        }
         return item.expires == null || Number(item.expires) <= 0 || Number(item.expires) * 1000 > Date.now();
       }
       return cookieMatchesUrl(item, url);
@@ -93,6 +119,9 @@ export function parseSetCookieLine(line) {
   if (!next.name) {
     return null;
   }
+  let maxAge = null;
+  let expiresAt = null;
+  let sawMaxAge = false;
   for (let i = 1; i < parts.length; i += 1) {
     const chunk = String(parts[i] || "").trim();
     if (!chunk) {
@@ -103,25 +132,19 @@ export function parseSetCookieLine(line) {
     const val = eq >= 0 ? chunk.slice(eq + 1).trim() : "";
     if (key === "domain" && val) {
       next.domain = val;
+      next.hostOnly = false;
     } else if (key === "path" && val) {
       next.path = val;
     } else if (key === "expires" && val) {
       const ms = Date.parse(val);
       if (Number.isFinite(ms)) {
-        next.expires = Math.floor(ms / 1000);
-        if (ms <= Date.now()) {
-          next.expired = true;
-        }
+        expiresAt = Math.floor(ms / 1000);
       }
     } else if (key === "max-age" && val !== "") {
       const seconds = Number(val);
       if (Number.isFinite(seconds)) {
-        if (seconds <= 0) {
-          next.expires = 0;
-          next.expired = true;
-        } else {
-          next.expires = Math.floor(Date.now() / 1000) + Math.floor(seconds);
-        }
+        sawMaxAge = true;
+        maxAge = seconds;
       }
     } else if (key === "secure") {
       next.secure = true;
@@ -131,19 +154,60 @@ export function parseSetCookieLine(line) {
       next.sameSite = val;
     }
   }
+  // RFC 6265: Max-Age overrides Expires when both are present.
+  if (sawMaxAge) {
+    if (maxAge <= 0) {
+      next.expires = 0;
+      next.expired = true;
+    } else {
+      next.expires = Math.floor(Date.now() / 1000) + Math.floor(maxAge);
+    }
+  } else if (expiresAt != null) {
+    next.expires = expiresAt;
+    if (expiresAt * 1000 <= Date.now()) {
+      next.expired = true;
+    }
+  }
   return next;
 }
 
-export function absorbCookies(response, jar) {
+export function absorbCookies(response, jar, requestUrl) {
   const lines = typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [];
+  let base = null;
+  const baseHref = String((response && response.url) || requestUrl || "").trim();
+  if (baseHref) {
+    try {
+      base = new URL(baseHref);
+    } catch {
+      base = null;
+    }
+  }
   lines.forEach(function (line) {
     const next = parseSetCookieLine(line);
     if (!next) {
       return;
     }
+    if (next.domain) {
+      next.hostOnly = false;
+      next.host = String(next.domain).replace(/^\./, "").toLowerCase();
+    } else if (base) {
+      // No Domain attribute → host-only cookie bound to the response/request host.
+      next.hostOnly = true;
+      next.host = String(base.hostname || "").toLowerCase();
+      delete next.domain;
+    } else {
+      // Cannot infer origin — keep unscopeable so cookieHeader never sprays it.
+      next.hostOnly = true;
+    }
+    if (!next.path) {
+      next.path = base ? defaultCookiePath(base.pathname) : "/";
+    }
     const found = jar.findIndex(function (item) {
       if (!item || item.name !== next.name) {
         return false;
+      }
+      if (next.hostOnly || item.hostOnly) {
+        return String(item.host || "") === String(next.host || "") && String(item.path || "/") === String(next.path || "/");
       }
       if (next.domain && item.domain && String(item.domain) !== String(next.domain)) {
         return false;
@@ -217,7 +281,7 @@ async function request(fetchImpl, jar, url, options) {
         options.headers || {}
       )
     });
-    absorbCookies(response, jar);
+    absorbCookies(response, jar, url);
     return response;
   } catch (error) {
     throw classifyTransportError(error);
@@ -945,7 +1009,8 @@ async function fetchPaid(jar, fetchImpl, signal, expected) {
   if (wantId || wantName) {
     matched = filterPinsBelongingToShop(records, expected);
     if (!matched.length) {
-      throw jingmaiError("paid", "京准通广告账号不属于本店");
+      // No evidence → do not mix other ad accounts; keep deal path via paid-channel note.
+      throw jingmaiError("paid", "待核验：无本店广告账号证据");
     }
   }
   const pinIds = matched.map(function (row) {
@@ -987,6 +1052,41 @@ export async function fetchAccountIdentity(jar, fetchImpl = fetch, signal) {
   return accountIdentity(account);
 }
 
+function paidBudgetMs() {
+  const value = Number(process.env.SHEN_PAID_BUDGET_MS);
+  // Ads must finish (or self-timeout) before the outer collect round (default 120s).
+  return Number.isFinite(value) && value > 0 ? value : 90000;
+}
+
+function linkAbort(outer, local) {
+  if (!outer) {
+    return local;
+  }
+  if (typeof AbortSignal.any === "function") {
+    return AbortSignal.any([outer, local]);
+  }
+  if (outer.aborted) {
+    try {
+      local.abort();
+    } catch {
+      /* already */
+    }
+    return outer;
+  }
+  outer.addEventListener(
+    "abort",
+    function () {
+      try {
+        local.abort();
+      } catch {
+        /* already */
+      }
+    },
+    { once: true }
+  );
+  return local;
+}
+
 export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expected) {
   // Shapes: fetchHome(jar), fetchHome(jar, signal), fetchHome(jar, signal, expected),
   // fetchHome(jar, fetchImpl, readCard, signal, expected).
@@ -999,11 +1099,12 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
     expected = signal && typeof signal === "object" && !("aborted" in signal) ? signal : expected;
     signal = readCard;
     readCard = undefined;
-  } else if (signal && typeof signal === "object" && !("aborted" in signal) && (signal.shopId != null || signal.store)) {
+  } else if (signal && typeof signal === "object" && !("aborted" in signal) && (signal.shopId != null || signal.store || signal.onDeal)) {
     expected = signal;
     signal = undefined;
   }
   const shopKey = String((expected && (expected.shopId || expected.store)) || "").trim();
+  const onDeal = expected && typeof expected.onDeal === "function" ? expected.onDeal : null;
 
   const dealTask = fetchDeal(jar, fetchImpl, readCard, signal, shopKey).then(
     function (value) {
@@ -1013,12 +1114,27 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
       return { deal: null, dealError: classifyTransportError(error) };
     }
   );
-  const paidTask = fetchPaid(jar, fetchImpl, signal, expected).then(
+
+  // Independent ads deadline earlier than the outer collect round, so a finished deal can
+  // return from fetchHome before withDeadline(outer) settles/rejects and drops the value.
+  const paidLocal = typeof AbortController === "function" ? new AbortController() : null;
+  const paidSignal = paidLocal ? linkAbort(signal, paidLocal.signal) : signal;
+  const paidTask = withDeadline(
+    function (inner) {
+      return fetchPaid(jar, fetchImpl, inner || paidSignal, expected);
+    },
+    paidBudgetMs(),
+    "广告采集超时",
+    paidSignal
+  ).then(
     function (value) {
       return { paid: value, paidError: null };
     },
     function (error) {
       const classified = classifyTransportError(error);
+      if (classified.code === "timeout" || (error && error.name === "AbortError")) {
+        return { paid: null, paidError: jingmaiError("timeout", "广告采集超时") };
+      }
       if (classified.code === "login") {
         return { paid: null, paidError: jingmaiError("paid", "京准通账号未授权或需要重新开通") };
       }
@@ -1028,7 +1144,17 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
       return { paid: null, paidError: classified };
     }
   );
-  const [dealResult, paidResult] = await Promise.all([dealTask, paidTask]);
+
+  const dealResult = await dealTask;
+  if (dealResult.deal && hasDealFields(dealResult.deal) && onDeal) {
+    try {
+      await onDeal(dealResult.deal);
+    } catch {
+      /* early persist must not fail the collect round */
+    }
+  }
+
+  const paidResult = await paidTask;
   const deal = dealResult.deal;
   const dealError = dealResult.dealError;
   const paid = paidResult.paid;
@@ -1056,7 +1182,12 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
   }
   // Keep a finished Jingmai deal even if ads timed out / outer signal aborted.
   if (hasDealFields(metrics)) {
-    if ((signal && signal.aborted) || (paidError && (paidError.code === "timeout" || paidError.name === "AbortError"))) {
+    if (paidError && /待核验/.test(String(paidError.message || ""))) {
+      metrics.paidNote = String(paidError.message).slice(0, 160);
+    } else if (
+      (signal && signal.aborted) ||
+      (paidError && (paidError.code === "timeout" || paidError.name === "AbortError"))
+    ) {
       metrics.paidNote = "广告采集超时";
     }
     return metrics;

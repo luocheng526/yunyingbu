@@ -19,6 +19,7 @@ import {
   absorbCookies,
   cookieHeader,
   cookieMatchesUrl,
+  defaultCookiePath,
   fetchHome,
   parseSetCookieLine
 } from "../src/modules/home/jingmai-client.js";
@@ -380,17 +381,28 @@ test("safeProfileKey no longer collapses RASW* / 飒望* shops into RASW or anon
   assert.notEqual(safeProfileKey({ store: "DIKTT潮流护理旗舰店" }), "DIKTT");
 });
 
-test("cookieHeader matches domain/path/secure/expiry per target URL", () => {
+test("cookieHeader matches domain/path/secure/expiry and hostOnly exact host", () => {
   const jar = [
     { name: "thor", value: "all", domain: ".jd.com", path: "/", secure: true, expires: 1900000000 },
     { name: "shop_only", value: "1", domain: ".shop.jd.com", path: "/jdm", secure: true, expires: 1900000000 },
     { name: "http_only_path", value: "2", domain: "passport.jd.com", path: "/login", secure: false, expires: 1900000000 },
-    { name: "expired", value: "x", domain: ".jd.com", path: "/", secure: true, expires: 1 }
+    { name: "expired", value: "x", domain: ".jd.com", path: "/", secure: true, expires: 1 },
+    {
+      name: "hostSession",
+      value: "test",
+      domain: "passport.jd.com",
+      path: "/",
+      hostOnly: true,
+      host: "passport.jd.com"
+    }
   ];
   assert.equal(cookieMatchesUrl(jar[1], "https://shop.jd.com/jdm/home"), true);
   assert.equal(cookieMatchesUrl(jar[1], "https://shop.jd.com/other"), false);
   assert.equal(cookieMatchesUrl(jar[0], "http://jd.com/"), false);
   assert.equal(cookieMatchesUrl(jar[3], "https://sz.jd.com/"), false);
+  assert.equal(cookieMatchesUrl(jar[4], "https://passport.jd.com/"), true);
+  assert.equal(cookieMatchesUrl(jar[4], "https://sub.passport.jd.com/"), false);
+  assert.equal(cookieHeader([jar[4]], "https://sub.passport.jd.com/"), "");
   const forShop = cookieHeader(jar, "https://shop.jd.com/jdm/home");
   assert.match(forShop, /thor=all/);
   assert.match(forShop, /shop_only=1/);
@@ -400,16 +412,43 @@ test("cookieHeader matches domain/path/secure/expiry per target URL", () => {
   assert.match(forPassport, /thor=all/);
   assert.match(forPassport, /http_only_path=2/);
   assert.doesNotMatch(forPassport, /shop_only/);
+  // Unknown-origin cookies must not spray to arbitrary URLs.
+  assert.equal(cookieHeader([{ name: "sid", value: "x" }], "https://example.org/"), "");
+  assert.equal(defaultCookiePath("/login/index"), "/login");
 });
 
-test("Set-Cookie absorb keeps domain/path and applies delete/expiry", () => {
+test("Set-Cookie absorb binds hostOnly from response URL; Max-Age overrides Expires", () => {
   const parsed = parseSetCookieLine("thor=keep; Domain=.jd.com; Path=/; Secure; HttpOnly; SameSite=None");
   assert.equal(parsed.name, "thor");
   assert.equal(parsed.domain, ".jd.com");
   assert.equal(parsed.path, "/");
   assert.equal(parsed.secure, true);
   assert.equal(parsed.httpOnly, true);
+  const both = parseSetCookieLine(
+    "sid=1; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=3600"
+  );
+  assert.equal(both.expired, undefined);
+  assert.ok(both.expires > Math.floor(Date.now() / 1000));
   const jar = [];
+  absorbCookies(
+    {
+      url: "https://passport.jd.com/login",
+      headers: {
+        getSetCookie: function () {
+          return ["sid=test; Path=/; Secure"];
+        }
+      }
+    },
+    jar,
+    "https://passport.jd.com/login"
+  );
+  assert.equal(jar[0].name, "sid");
+  assert.equal(jar[0].hostOnly, true);
+  assert.equal(jar[0].host, "passport.jd.com");
+  assert.equal(jar[0].domain, undefined);
+  assert.equal(cookieHeader(jar, "https://example.org/"), "");
+  assert.equal(cookieHeader(jar, "https://sub.passport.jd.com/"), "");
+  assert.match(cookieHeader(jar, "https://passport.jd.com/"), /sid=test/);
   absorbCookies(
     {
       headers: {
@@ -418,39 +457,29 @@ test("Set-Cookie absorb keeps domain/path and applies delete/expiry", () => {
         }
       }
     },
-    jar
+    jar,
+    "https://passport.jd.com/"
   );
-  assert.equal(jar[0].domain, ".passport.jd.com");
-  assert.ok(jar[0].expires > Math.floor(Date.now() / 1000));
+  assert.equal(jar.find(function (item) { return item.name === "pt_key"; }).domain, ".passport.jd.com");
   absorbCookies(
     {
       headers: {
         getSetCookie: function () {
           return [
             "pt_key=; Domain=.passport.jd.com; Path=/; Max-Age=0",
-            "thor=gone; Domain=.jd.com; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+            "sid=; Path=/; Max-Age=0"
           ];
         }
       }
     },
-    jar
-  );
-  jar.push({ name: "thor", value: "alive", domain: ".jd.com", path: "/" });
-  absorbCookies(
-    {
-      headers: {
-        getSetCookie: function () {
-          return ["thor=; Domain=.jd.com; Path=/; Max-Age=0"];
-        }
-      }
-    },
-    jar
+    jar,
+    "https://passport.jd.com/login"
   );
   assert.equal(jar.find(function (item) { return item.name === "pt_key"; }), undefined);
-  assert.equal(jar.find(function (item) { return item.name === "thor"; }), undefined);
+  assert.equal(jar.find(function (item) { return item.name === "sid"; }), undefined);
 });
 
-test("JZT pin ownership filters by shop metadata, not Jingmai identity alone", () => {
+test("JZT pin ownership requires exact shopId; rejects id conflict and brand substring", () => {
   const records = collectPinRecords({
     own: [
       { userId: 11, shopId: "10001", shopName: "RASW家居旗舰店" },
@@ -464,12 +493,91 @@ test("JZT pin ownership filters by shop metadata, not Jingmai identity alone", (
   assert.equal(mine[0].pinId, 11);
   const none = filterPinsBelongingToShop(records, { shopId: "99999", store: "不存在的店" });
   assert.equal(none.length, 0);
+  const conflict = filterPinsBelongingToShop(
+    [{ pinId: 22, shopId: "wrong-id", shopName: "RASW", raw: {} }],
+    { shopId: "right-id", store: "RASW家居旗舰店" }
+  );
+  assert.equal(conflict.length, 0);
+  const brandOnly = filterPinsBelongingToShop(
+    [{ pinId: 9, shopName: "RASW", raw: {} }],
+    { shopId: "right-id", store: "RASW家居旗舰店" }
+  );
+  assert.equal(brandOnly.length, 0);
 });
 
 test("fetchHome keeps finished deal when ads hang until abort", async () => {
+  const prev = process.env.SHEN_PAID_BUDGET_MS;
+  process.env.SHEN_PAID_BUDGET_MS = "40";
   const controller = new AbortController();
   let dealDone = false;
+  try {
+    const fetchImpl = async (url, init) => {
+      const href = String(url);
+      if (href.includes("jzt") || href.includes("pinlist") || href.includes("overview") || href.includes("custom-report")) {
+        return await new Promise(function (resolve, reject) {
+          const timer = setTimeout(function () {
+            resolve(new Response(JSON.stringify({ code: 1, data: {} }), { status: 200 }));
+          }, 5000);
+          if (init && init.signal) {
+            init.signal.addEventListener(
+              "abort",
+              function () {
+                clearTimeout(timer);
+                reject(Object.assign(new Error("aborted"), { name: "AbortError", code: "timeout" }));
+              },
+              { once: true }
+            );
+          }
+        });
+      }
+      if (href.includes("sff.jd.com") || href.includes("realtimeSummary") || href.includes("getSummary")) {
+        return new Response(JSON.stringify({ code: 200, content: {} }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response("{}", { status: 200 });
+    };
+    const pending = fetchHome(
+      [{ name: "thor", value: "ok", domain: ".jd.com", path: "/" }],
+      fetchImpl,
+      async function () {
+        dealDone = true;
+        return { dealAmount: 66, orderCount: 3, customerCount: 2 };
+      },
+      controller.signal,
+      { store: "测店", shopId: "1" }
+    );
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 80);
+    });
+    assert.equal(dealDone, true);
+    const metrics = await pending;
+    assert.equal(metrics.dealAmount, 66);
+    assert.equal(metrics.orderCount, 3);
+    assert.match(String(metrics.paidNote || ""), /超时|待核验|京准通/);
+  } finally {
+    if (prev == null) {
+      delete process.env.SHEN_PAID_BUDGET_MS;
+    } else {
+      process.env.SHEN_PAID_BUDGET_MS = prev;
+    }
+  }
+});
+
+test("runTick/withDeadline persists deal when ads hang past outer deadline; no orphan requests", async () => {
+  const prev = process.env.SHEN_PAID_BUDGET_MS;
+  // Paid budget longer than outer round — reproduces withDeadline settling before fetchHome returns.
+  process.env.SHEN_PAID_BUDGET_MS = "5000";
+  let dealFinished = false;
+  let sampleReturned = false;
+  let roundOver = false;
+  let orphan = 0;
+  const samples = [];
   const fetchImpl = async (url, init) => {
+    if (roundOver) {
+      orphan += 1;
+    }
     const href = String(url);
     if (href.includes("jzt") || href.includes("pinlist") || href.includes("overview") || href.includes("custom-report")) {
       return await new Promise(function (resolve, reject) {
@@ -488,34 +596,66 @@ test("fetchHome keeps finished deal when ads hang until abort", async () => {
         }
       });
     }
-    // Force deal path onto readCard: shop/sz APIs return empty so the card reader wins.
-    if (href.includes("sff.jd.com") || href.includes("realtimeSummary") || href.includes("getSummary")) {
-      return new Response(JSON.stringify({ code: 200, content: {} }), {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      });
-    }
-    return new Response("{}", { status: 200 });
+    return new Response(JSON.stringify({ code: 200, content: {} }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
   };
-  const pending = fetchHome(
-    [{ name: "thor", value: "ok", domain: ".jd.com", path: "/" }],
-    fetchImpl,
-    async function () {
-      dealDone = true;
-      return { dealAmount: 66, orderCount: 3, customerCount: 2 };
-    },
-    controller.signal,
-    { store: "测店", shopId: "1" }
-  );
+  try {
+    await runTick({
+      inflight: new Set(),
+      collectBudgetMs: 200,
+      listTargets: async function () {
+        return [
+          {
+            store: "挂广告店",
+            enabled: true,
+            authState: "ok",
+            cookies: [{ name: "thor", value: "1", domain: ".jd.com", path: "/" }],
+            shopId: "1"
+          }
+        ];
+      },
+      fetchHome: function (cookies, signal, expected) {
+        return fetchHome(
+          cookies,
+          fetchImpl,
+          async function () {
+            dealFinished = true;
+            return { dealAmount: 66, orderCount: 3, customerCount: 2 };
+          },
+          signal,
+          expected
+        );
+      },
+      saveSample: async function (sample) {
+        samples.push(sample);
+        sampleReturned = true;
+      },
+      markAuth: async function () {},
+      now: function () {
+        return { day: "2026-11-19", stamp: "2026-11-19 10:00:00" };
+      }
+    });
+  } finally {
+    roundOver = true;
+    if (prev == null) {
+      delete process.env.SHEN_PAID_BUDGET_MS;
+    } else {
+      process.env.SHEN_PAID_BUDGET_MS = prev;
+    }
+  }
   await new Promise(function (resolve) {
-    setTimeout(resolve, 80);
+    setTimeout(resolve, 120);
   });
-  assert.equal(dealDone, true);
-  controller.abort();
-  const metrics = await pending;
-  assert.equal(metrics.dealAmount, 66);
-  assert.equal(metrics.orderCount, 3);
-  assert.match(String(metrics.paidNote || ""), /超时|京准通/);
+  assert.equal(dealFinished, true);
+  assert.equal(sampleReturned, true);
+  assert.ok(
+    samples.some(function (row) {
+      return row.dealAmount === 66;
+    })
+  );
+  assert.equal(orphan, 0);
 });
 
 test("login_expired shops with cookies are still collected; manual pause is not", () => {

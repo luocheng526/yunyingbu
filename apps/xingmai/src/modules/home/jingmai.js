@@ -339,7 +339,28 @@ export function collectPinIds() {
   });
 }
 
-/** Keep only JZT pins that declare this shop — never treat Jingmai identity as ad-account proof. */
+function pinShopIds(row) {
+  const ids = new Set();
+  if (!row || typeof row !== "object") {
+    return ids;
+  }
+  const raw = row.raw && typeof row.raw === "object" ? row.raw : {};
+  [row.shopId, raw.shopId, raw.venderId, raw.belongBizId, raw.providerCode, raw.siteId]
+    .filter(function (value) {
+      return value != null && String(value).trim() !== "";
+    })
+    .forEach(function (value) {
+      ids.add(String(value).trim());
+    });
+  return ids;
+}
+
+/**
+ * Keep only JZT pins with hard shop ownership evidence.
+ * - shopId present on both sides: exact id match only; any other id = conflict → exclude
+ * - never use partial/brand/substring shopName as proof
+ * - name fallback only when pin has no shop id fields and names are exact equal
+ */
 export function filterPinsBelongingToShop(records, expected) {
   const wantId = String((expected && expected.shopId) || "").trim();
   const wantName = String((expected && (expected.shopName || expected.store)) || "").trim();
@@ -351,25 +372,18 @@ export function filterPinsBelongingToShop(records, expected) {
     if (!row) {
       return false;
     }
-    if (wantId && row.shopId && String(row.shopId) === wantId) {
-      return true;
-    }
-    if (wantName && row.shopName) {
-      const name = String(row.shopName);
-      if (name === wantName || name.indexOf(wantName) >= 0 || wantName.indexOf(name) >= 0) {
-        return true;
+    const ids = pinShopIds(row);
+    if (wantId) {
+      if (ids.size > 0) {
+        // ID conflict (e.g. wrong-id vs right-id) must exclude — never soften with name.
+        return ids.has(wantId);
       }
+      // No reliable id on the pin: exact full shop name only, no substring/brand match.
+      const name = String(row.shopName || "").trim();
+      return Boolean(wantName && name && name === wantName);
     }
-    const raw = row.raw || {};
-    const ids = [raw.shopId, raw.venderId, raw.belongBizId, raw.providerCode, raw.siteId]
-      .filter(Boolean)
-      .map(function (value) {
-        return String(value);
-      });
-    if (wantId && ids.indexOf(wantId) >= 0) {
-      return true;
-    }
-    return false;
+    const name = String(row.shopName || "").trim();
+    return Boolean(wantName && name && name === wantName);
   });
 }
 
@@ -1141,9 +1155,26 @@ function offlineMessage(error) {
   return String(classified.message || "采集超时").replace(/\s+/g, " ").slice(0, 120) || "采集超时";
 }
 
+function metricsHaveDeal(metrics) {
+  return ["dealAmount", "orderCount", "customerCount", "yesterdayAmount"].some(function (key) {
+    return metrics && metrics[key] != null;
+  });
+}
+
+async function persistDealSample(deps, shop, now, metrics, paidNote) {
+  const fields = sampleFields(
+    Object.assign({}, metrics || {}, paidNote ? { paidNote: paidNote } : {})
+  );
+  await deps.saveSample(
+    Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, fields)
+  );
+}
+
 async function collectOne(shop, deps) {
   const now = deps.now();
   const expected = { store: shop.store, shopId: shop.shopId || "" };
+  let earlyDeal = null;
+  let earlySaved = false;
   try {
     if (shop.authState === "login_expired" && typeof deps.recheckJingmai === "function") {
       const alive = await withDeadline(function (signal) {
@@ -1155,13 +1186,41 @@ async function collectOne(shop, deps) {
       }
     }
     const metrics = await withDeadline(function (signal) {
-      return deps.fetchHome(shop.cookies, signal, expected);
-    }, 120000);
-    await deps.saveSample(
-      Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics))
-    );
+      return deps.fetchHome(
+        shop.cookies,
+        signal,
+        Object.assign({}, expected, {
+          onDeal: async function (dealMetrics) {
+            earlyDeal = dealMetrics;
+            if (earlySaved || !metricsHaveDeal(dealMetrics)) {
+              return;
+            }
+            earlySaved = true;
+            // Persist deal as soon as it arrives — outer withDeadline may reject before fetchHome returns.
+            await persistDealSample(deps, shop, now, dealMetrics, "");
+          }
+        })
+      );
+    }, typeof deps.collectBudgetMs === "number" ? deps.collectBudgetMs : 120000);
+    await persistDealSample(deps, shop, now, metrics, "");
     await deps.markAuth(shop.store, "ok", "");
   } catch (error) {
+    if (metricsHaveDeal(earlyDeal)) {
+      if (!earlySaved) {
+        await persistDealSample(deps, shop, now, earlyDeal, "广告采集超时");
+        earlySaved = true;
+      } else if (earlyDeal && !String((earlyDeal.paidNote || "")).trim()) {
+        // Refresh note when the round timed out after an early clean save.
+        await persistDealSample(deps, shop, now, earlyDeal, "广告采集超时");
+      }
+      const decision = collectAuthDecision(error);
+      if (decision.authState === "login_expired") {
+        await deps.markAuth(shop.store, "login_expired", decision.authMessage);
+        return;
+      }
+      await deps.markAuth(shop.store, "offline", decision.authMessage || offlineMessage(error));
+      return;
+    }
     const decision = collectAuthDecision(error);
     if (decision.authState === "login_expired") {
       await deps.markAuth(shop.store, "login_expired", decision.authMessage);
