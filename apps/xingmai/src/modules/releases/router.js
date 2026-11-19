@@ -88,7 +88,15 @@ export function createReleasesRouter(options = {}) {
     let extra = "";
     if (shouldRestart) {
       const result = await restart();
-      extra = result && result.skipped ? `未执行 systemctl：${result.reason}` : "已 systemctl restart mengkai.service";
+      if (result && result.skipped) {
+        extra = `未执行 systemctl：${result.reason}`;
+      } else if (result && result.verified) {
+        extra = `已验证 systemctl restart mengkai.service（${result.reason || "新 PID + health"}）`;
+      } else if (result && result.status === "dispatched_unverified") {
+        extra = `已派发 systemctl restart，待验证新 PID/健康检查：${result.reason || ""}`.trim();
+      } else {
+        extra = result && result.reason ? String(result.reason) : "已派发 systemctl restart mengkai.service（未验证）";
+      }
     } else {
       extra = "文档要求不重启，已跳过 systemctl。";
     }

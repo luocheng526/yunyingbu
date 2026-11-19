@@ -23,6 +23,121 @@ const DESK_UA =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + CHROME_VERSION + " Safari/537.36";
 const SESSION_NAMES = new Set(["thor", "pt_key"]);
 
+/** Stable per-shop Chromium profiles (not mkdtemp). Prefer writable ops roots. */
+function profileRoots() {
+  return [
+    process.env.JINGMAI_PROFILE_ROOT,
+    process.env.SHEN_CHROME_DIR ? String(process.env.SHEN_CHROME_DIR).replace(/\/$/, "") + "/profiles" : "",
+    "/opt/mengkai/.jingmai-profiles",
+    "/var/lib/mengkai/jingmai-profiles",
+    tmpdir() + "/mengkai-jingmai-profiles"
+  ].filter(Boolean);
+}
+
+export function safeProfileKey(shopKey) {
+  const raw = String(shopKey || "").trim();
+  const cleaned = raw.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 96);
+  return cleaned || "anon";
+}
+
+export function profileDirForShop(shopKey) {
+  const key = safeProfileKey(shopKey);
+  const roots = profileRoots();
+  for (let index = 0; index < roots.length; index += 1) {
+    const root = roots[index];
+    try {
+      mkdirSync(root, { recursive: true });
+      const dir = root + sep + key;
+      mkdirSync(dir, { recursive: true });
+      return dir;
+    } catch {
+      /* try next root */
+    }
+  }
+  return mkdtempSync(tmpdir() + "/shen-jingmai-");
+}
+
+export function normalizeCookie(item) {
+  if (!item || item.name == null || item.value == null) {
+    return null;
+  }
+  const name = String(item.name).trim();
+  const value = String(item.value);
+  if (!name) {
+    return null;
+  }
+  const next = { name: name, value: value };
+  if (item.domain) {
+    next.domain = String(item.domain);
+  }
+  if (item.path) {
+    next.path = String(item.path);
+  }
+  const expires = item.expires != null ? item.expires : item.expirationDate;
+  if (expires != null && expires !== "" && Number(expires) > 0) {
+    next.expires = Number(expires);
+  }
+  if (item.secure != null) {
+    next.secure = Boolean(item.secure);
+  }
+  if (item.httpOnly != null) {
+    next.httpOnly = Boolean(item.httpOnly);
+  }
+  if (item.sameSite != null && item.sameSite !== "") {
+    next.sameSite = String(item.sameSite);
+  }
+  if (item.session != null) {
+    next.session = Boolean(item.session);
+  }
+  return next;
+}
+
+/** CDP Network.setCookies payload. Legacy name/value-only jars keep .jd.com defaults. */
+export function cookieParams(cookies) {
+  return (cookies || [])
+    .map(normalizeCookie)
+    .filter(Boolean)
+    .map(function (item) {
+      const legacy = !item.domain && !item.path && item.expires == null && item.sameSite == null;
+      const row = {
+        name: item.name,
+        value: item.value,
+        domain: item.domain || (legacy ? ".jd.com" : undefined),
+        path: item.path || (legacy ? "/" : undefined),
+        secure: item.secure != null ? item.secure : true,
+        httpOnly: item.httpOnly != null ? item.httpOnly : false,
+        sameSite: item.sameSite || (legacy ? "None" : "Lax")
+      };
+      if (!row.domain) {
+        row.domain = ".jd.com";
+      }
+      if (!row.path) {
+        row.path = "/";
+      }
+      if (item.expires != null && Number(item.expires) > 0) {
+        row.expires = Number(item.expires);
+      }
+      return row;
+    });
+}
+
+async function sleepSignal(ms, signal) {
+  if (signal && signal.aborted) {
+    throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
+  }
+  if (!signal) {
+    return sleep(ms);
+  }
+  await new Promise(function (resolve, reject) {
+    const timer = setTimeout(resolve, ms);
+    const onAbort = function () {
+      clearTimeout(timer);
+      reject(Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" }));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 const SYSTEM_SONAMES = new Set(["libc.so.6", "libdl.so.2", "libpthread.so.0", "libm.so.6", "libgcc_s.so.1", "ld-linux-x86-64.so.2", "linux-vdso.so.1"]);
 const SONAME_PACKAGES = {
   "libatk-1.0.so.0": ["libatk1.0-0t64", "libatk1.0-0"],
@@ -1140,6 +1255,17 @@ async function reconnectDesk(desk) {
   }
 }
 
+function removeDeskDir(desk) {
+  if (!desk || !desk.dir || desk.persistProfile) {
+    return;
+  }
+  try {
+    rmSync(desk.dir, { recursive: true, force: true });
+  } catch {
+    /* temp dir already gone */
+  }
+}
+
 function discard(desk) {
   if (!desk) {
     return;
@@ -1157,11 +1283,7 @@ function discard(desk) {
     /* already closed */
   }
   const removeDir = function () {
-    try {
-      rmSync(desk.dir, { recursive: true, force: true });
-    } catch {
-      /* temp dir already gone */
-    }
+    removeDeskDir(desk);
   };
   try {
     if (desk.chrome && desk.chrome.exitCode == null) {
@@ -1241,11 +1363,7 @@ function stopCurrent() {
     /* already closed */
   }
   const removeDir = function () {
-    try {
-      rmSync(desk.dir, { recursive: true, force: true });
-    } catch {
-      /* temp dir already gone */
-    }
+    removeDeskDir(desk);
   };
   try {
     if (desk.chrome && desk.chrome.exitCode == null) {
@@ -1460,10 +1578,11 @@ function browserLaunchError(error) {
 
 let lastLaunchNote = "";
 
-async function launchChrome(signal) {
+async function launchChrome(signal, options) {
   if (signal && signal.aborted) {
     throw browserAbortError();
   }
+  const opts = options || {};
   lastLaunchNote = "正在找服务器上的 Chrome";
   stopBooting();
   const bins = [];
@@ -1517,7 +1636,7 @@ async function launchChrome(signal) {
       }
       lastLaunchNote = "正在启动浏览器 " + (i + 1) + "/" + bins.length;
       try {
-        return await startChromeProcess(chromePath, signal, 8000, flagSets[f]);
+        return await startChromeProcess(chromePath, signal, 8000, flagSets[f], opts);
       } catch (error) {
         lastError = error;
         const message = String((error && error.message) || "");
@@ -1534,8 +1653,11 @@ async function launchChrome(signal) {
   throw browserLaunchError(lastError || new Error(browserStartFailure()));
 }
 
-async function startChromeProcess(chromePath, signal, budgetMs, extraFlags) {
-  const dir = mkdtempSync(tmpdir() + "/shen-jingmai-");
+async function startChromeProcess(chromePath, signal, budgetMs, extraFlags, options) {
+  const opts = options || {};
+  const profileKey = String(opts.profileKey || "").trim();
+  const ephemeral = opts.ephemeral === true || !profileKey;
+  const dir = ephemeral ? mkdtempSync(tmpdir() + "/shen-jingmai-") : profileDirForShop(profileKey);
   const env = Object.assign({}, process.env);
   if (libraryPath) {
     env.LD_LIBRARY_PATH = libraryPath + (env.LD_LIBRARY_PATH ? ":" + env.LD_LIBRARY_PATH : "");
@@ -1662,7 +1784,16 @@ async function startChromeProcess(chromePath, signal, budgetMs, extraFlags) {
     if (ws) {
       ws.__sessionId = sessionId || "";
     }
-    return { chrome: chrome, dir: dir, ws: ws, port: readyPort, sessionId: sessionId || "", password: "" };
+    return {
+      chrome: chrome,
+      dir: dir,
+      ws: ws,
+      port: readyPort,
+      sessionId: sessionId || "",
+      password: "",
+      profileKey: ephemeral ? "" : safeProfileKey(profileKey),
+      persistProfile: !ephemeral
+    };
   } catch (error) {
     if (booting === chrome) {
       booting = null;
@@ -1672,7 +1803,13 @@ async function startChromeProcess(chromePath, signal, budgetMs, extraFlags) {
     } catch {
       /* already gone */
     }
-    rmSync(dir, { recursive: true, force: true });
+    if (ephemeral) {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* temp dir already gone */
+      }
+    }
     throw error;
   }
 }
@@ -1684,8 +1821,19 @@ async function readCookies(ws) {
       return String(cookie.domain || "").includes("jd.com") && cookie.name && cookie.value;
     })
     .map(function (cookie) {
-      return { name: cookie.name, value: cookie.value };
-    });
+      return normalizeCookie({
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain,
+        path: cookie.path,
+        expires: cookie.expires,
+        secure: cookie.secure,
+        httpOnly: cookie.httpOnly,
+        sameSite: cookie.sameSite,
+        session: cookie.session
+      });
+    })
+    .filter(Boolean);
 }
 
 function hasSession(cookies) {
@@ -1920,18 +2068,18 @@ async function disguiseDesk(ws) {
   }
 }
 
-async function acquireDesk(store, ticket, signal) {
+async function acquireDesk(store, ticket, signal, shopId) {
   if (ticket != null && ticket !== openTicket) {
     return null;
   }
   if (signal && signal.aborted) {
     return null;
   }
-  if (deskUsable(current)) {
+  const profileKey = String(shopId || store || "").trim();
+  if (deskUsable(current) && current.profileKey && profileKey && current.profileKey === safeProfileKey(profileKey)) {
     current.store = store;
     current.password = "";
     try {
-      await send(current.ws, "Network.clearBrowserCookies", {}, undefined, 2000);
       try {
         await disguiseDesk(current.ws);
       } catch {
@@ -1942,10 +2090,14 @@ async function acquireDesk(store, ticket, signal) {
       stopCurrent();
     }
   }
+  if (deskUsable(current)) {
+    // Different shop: close prior desk without wiping the other shop's persistent profile.
+    stopCurrent();
+  }
   if ((ticket != null && ticket !== openTicket) || (signal && signal.aborted)) {
     return null;
   }
-  const desk = await launchChrome(signal);
+  const desk = await launchChrome(signal, { profileKey: profileKey, ephemeral: !profileKey });
   if ((ticket != null && ticket !== openTicket) || (signal && signal.aborted)) {
     discard(desk);
     return null;
@@ -2072,7 +2224,7 @@ async function finishOpen(desk, loginName, password, ticket) {
   }
 }
 
-export async function openDesk({ store, loginName, password, reveal, onStep, signal } = {}) {
+export async function openDesk({ store, loginName, password, reveal, onStep, signal, shopId } = {}) {
   const ticket = ++openTicket;
   const step = function (message) {
     if (message && typeof onStep === "function") {
@@ -2089,7 +2241,7 @@ export async function openDesk({ store, loginName, password, reveal, onStep, sig
     shotCache = { at: 0, store: "", image: null, ready: false };
     lastLaunchNote = "正在启动浏览器";
     step("正在启动浏览器");
-    const launching = acquireDesk(store, ticket, linked);
+    const launching = acquireDesk(store, ticket, linked, shopId || store);
     launching.catch(function () {});
     desk = await Promise.race([
       launching,
@@ -2687,24 +2839,6 @@ async function prepareReader() {
   return desk;
 }
 
-function cookieParams(cookies) {
-  return (cookies || [])
-    .filter(function (item) {
-      return item && item.name && item.value != null;
-    })
-    .map(function (item) {
-      return {
-        name: String(item.name),
-        value: String(item.value),
-        domain: ".jd.com",
-        path: "/",
-        secure: true,
-        httpOnly: true,
-        sameSite: "None"
-      };
-    });
-}
-
 function homeCardText(ws) {
   return evaluate(ws, `(() => {
     const parts = [];
@@ -2721,32 +2855,41 @@ function homeCardText(ws) {
   })()`);
 }
 
-async function readHomeDealNow(cookies) {
-  if (readerIdle) {
-    clearTimeout(readerIdle);
-    readerIdle = null;
+async function readHomeDealNow(cookies, signal, shopKey) {
+  if (signal && signal.aborted) {
+    throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
   }
+  // Isolated ephemeral context per shop — never clear+switch a shared readerDesk.
+  let desk = null;
+  let settled = false;
   try {
-    const desk = await prepareReader();
-    if (!desk) {
-      return null;
+    desk = await launchChrome(signal, { ephemeral: true, profileKey: "" });
+    if (signal && signal.aborted) {
+      throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
     }
     const ws = desk.ws;
     ws.__shopRequests = new Map();
+    await send(ws, "Page.enable");
+    await send(ws, "Network.enable");
     try {
-      await send(ws, "Network.clearBrowserCookies");
+      await send(ws, "Network.setCacheDisabled", { cacheDisabled: true });
     } catch {
-      /* older chrome still replaces cookies by name */
+      /* optional */
     }
     try {
       await send(ws, "Page.navigate", { url: "about:blank" });
     } catch {
       /* a fresh target can reject the first navigation */
     }
-    await sleep(300);
+    await sleepSignal(300, signal);
     let networkDone = false;
+    let lateBody = null;
     const pending = watchShopData(ws).then(function (body) {
+      if (settled) {
+        return null;
+      }
       networkDone = true;
+      lateBody = body;
       return body;
     });
     const jar = cookieParams(cookies);
@@ -2756,17 +2899,25 @@ async function readHomeDealNow(cookies) {
     await send(ws, "Page.navigate", { url: "https://shop.jd.com/jdm/home" });
     let card = null;
     for (let attempt = 0; attempt < 12 && !card && !networkDone; attempt += 1) {
-      await sleep(1000);
+      if (signal && signal.aborted) {
+        throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
+      }
+      await sleepSignal(1000, signal);
       card = parseHomeCard(await homeCardText(ws));
     }
     if (card) {
+      settled = true;
       return card;
     }
-    const body = await pending;
+    const body = lateBody || (await pending);
+    if (settled) {
+      return null;
+    }
     if (body) {
       try {
         const metrics = extractShopDeal(JSON.parse(body));
         if (metrics) {
+          settled = true;
           return metrics;
         }
       } catch {
@@ -2775,15 +2926,16 @@ async function readHomeDealNow(cookies) {
     }
     card = parseHomeCard(await homeCardText(ws));
     if (card) {
+      settled = true;
       return card;
     }
     const error = new Error("京麦首页卡片没有成交金额");
     error.code = "network";
     throw error;
   } catch (error) {
-    const keep = error && error.code === "network" && /没有成交金额/.test(String(error.message || ""));
-    if (!keep) {
-      closeReader();
+    settled = true;
+    if (error && (error.code === "timeout" || error.name === "AbortError")) {
+      throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
     }
     if (error && error.code === "network") {
       throw error;
@@ -2795,24 +2947,50 @@ async function readHomeDealNow(cookies) {
     wrapped.code = "network";
     throw wrapped;
   } finally {
-    if (readerDesk) {
-      armReaderIdle();
+    settled = true;
+    if (desk) {
+      discard(desk);
     }
   }
 }
 
-export function readHomeDeal(cookies) {
+export function readHomeDeal(cookies, signal, shopKey) {
+  let cancelled = false;
+  const onAbort = function () {
+    cancelled = true;
+  };
+  if (signal) {
+    if (signal.aborted) {
+      return Promise.reject(Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" }));
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+  }
   const job = dealQueue.then(function () {
-    return withDeadline(function () {
-      return readHomeDealNow(cookies);
-    }, 45000);
+    if (cancelled || (signal && signal.aborted)) {
+      throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
+    }
+    return withDeadline(
+      function (inner) {
+        return readHomeDealNow(cookies, inner || signal, shopKey);
+      },
+      45000,
+      "采集超时",
+      signal
+    );
   });
-  dealQueue = job.then(function () {
-    return null;
-  }, function () {
-    return null;
+  dealQueue = job.then(
+    function () {
+      return null;
+    },
+    function () {
+      return null;
+    }
+  );
+  return job.finally(function () {
+    if (signal) {
+      signal.removeEventListener("abort", onAbort);
+    }
   });
-  return job;
 }
 
 const STOCK_PAGE = "https://trade-warehousing-jdm.jd.com/inventory-manage";
@@ -3040,17 +3218,31 @@ async function readShopStockNow(cookies) {
   }
 }
 
-export function readShopStock(cookies) {
+export function readShopStock(cookies, signal) {
   const job = dealQueue.then(function () {
-    return withDeadline(function () {
-      return readShopStockNow(cookies);
-    }, 45000);
+    if (signal && signal.aborted) {
+      throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
+    }
+    return withDeadline(
+      function (inner) {
+        if (inner && inner.aborted) {
+          throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
+        }
+        return readShopStockNow(cookies);
+      },
+      45000,
+      "采集超时",
+      signal
+    );
   });
-  dealQueue = job.then(function () {
-    return null;
-  }, function () {
-    return null;
-  });
+  dealQueue = job.then(
+    function () {
+      return null;
+    },
+    function () {
+      return null;
+    }
+  );
   return job;
 }
 

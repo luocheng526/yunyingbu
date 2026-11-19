@@ -149,8 +149,8 @@ async function cookiesAlive(cookies) {
     return false;
   }
   try {
-    await withDeadline(function () {
-      return deps.client.fetchHome(cookies);
+    await withDeadline(function (signal) {
+      return deps.client.fetchHome(cookies, signal);
     }, 12000);
     return true;
   } catch (error) {
@@ -364,6 +364,7 @@ async function startQueued(shop, epoch) {
   try {
     const opening = deps.desk.open({
       store: shop.store,
+      shopId: shop.shopId || "",
       loginName: shop.login,
       password: shop.password,
       reveal: true,
@@ -877,7 +878,12 @@ export async function finishRelogin(store, authCode) {
 }
 
 async function silentOne(shop) {
-  const opened = await deps.desk.open({ store: shop.store, loginName: shop.login, password: shop.password });
+  const opened = await deps.desk.open({
+    store: shop.store,
+    shopId: shop.shopId || "",
+    loginName: shop.login,
+    password: shop.password
+  });
   shop.login = "";
   shop.password = "";
   if (opened.status === "ok") {
@@ -940,8 +946,29 @@ export async function jingmaiTick() {
   await runTick({
     inflight: inflight,
     listTargets: listCollectTargets,
-    fetchHome: function (cookies) {
-      return deps.client.fetchHome(cookies);
+    fetchHome: function (cookies, signal, expected) {
+      return deps.client.fetchHome(cookies, signal, expected);
+    },
+    recheckJingmai: async function (shop, signal) {
+      if (!shop || !shop.cookies || !shop.cookies.length || !deps.client) {
+        return false;
+      }
+      try {
+        if (deps.client.fetchAccountIdentity) {
+          const identity = await deps.client.fetchAccountIdentity(shop.cookies, undefined, signal);
+          if (identity && (identity.shopId || identity.shopName)) {
+            return true;
+          }
+        }
+        await deps.client.fetchHome(shop.cookies, signal, { store: shop.store, shopId: shop.shopId || "" });
+        return true;
+      } catch (error) {
+        if (error && error.code === "login") {
+          return false;
+        }
+        // Network/paid/timeout during recheck: session may still be valid — allow collectOne path.
+        return true;
+      }
     },
     saveSample: saveSample,
     markAuth: markAuth,

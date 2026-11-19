@@ -548,34 +548,74 @@ export function classifyTransportError(error) {
   return jingmaiError("network", "采集超时");
 }
 
-export function withDeadline(work, ms, message) {
+export function withDeadline(work, ms, message, outerSignal) {
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const signal = controller ? controller.signal : undefined;
   return new Promise(function (resolve, reject) {
     let settled = false;
-    const timer = setTimeout(function () {
+    let removeOuter = null;
+
+    function abortLocal() {
+      if (controller && !controller.signal.aborted) {
+        try {
+          controller.abort();
+        } catch {
+          /* already aborted */
+        }
+      }
+    }
+
+    function finish(error, value) {
       if (settled) {
         return;
       }
       settled = true;
-      reject(jingmaiError("timeout", message || "采集超时"));
+      clearTimeout(timer);
+      if (typeof removeOuter === "function") {
+        removeOuter();
+      }
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(value);
+    }
+
+    const timer = setTimeout(function () {
+      abortLocal();
+      finish(jingmaiError("timeout", message || "采集超时"));
     }, ms);
+
+    if (outerSignal) {
+      if (outerSignal.aborted) {
+        abortLocal();
+        finish(jingmaiError("timeout", message || "采集超时"));
+        return;
+      }
+      const onOuter = function () {
+        abortLocal();
+        finish(jingmaiError("timeout", message || "采集超时"));
+      };
+      outerSignal.addEventListener("abort", onOuter, { once: true });
+      removeOuter = function () {
+        outerSignal.removeEventListener("abort", onOuter);
+      };
+    }
+
     Promise.resolve()
-      .then(work)
+      .then(function () {
+        return typeof work === "function" ? work(signal) : work;
+      })
       .then(
         function (value) {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          clearTimeout(timer);
-          resolve(value);
+          finish(null, value);
         },
         function (error) {
-          if (settled) {
+          if (signal && signal.aborted) {
+            finish(jingmaiError("timeout", message || "采集超时"));
             return;
           }
-          settled = true;
-          clearTimeout(timer);
-          reject(error);
+          finish(error);
         }
       );
   });
@@ -1019,15 +1059,23 @@ export function buildLiveView({ shops, samples, now }) {
   };
 }
 
+/** login_expired shops with cookies get one controlled Jingmai recheck; empty jars stay skipped. */
+export function shouldCollectShop(shop) {
+  if (!shop || shop.enabled === false) {
+    return false;
+  }
+  if (!shop.cookies || !shop.cookies.length) {
+    return false;
+  }
+  return true;
+}
+
 export async function runTick(deps) {
   const inflight = deps.inflight;
   const targets = await deps.listTargets();
   const jobs = [];
   for (const shop of targets) {
-    if (!shop || shop.enabled === false || shop.authState === "login_expired") {
-      continue;
-    }
-    if (!shop.cookies || !shop.cookies.length) {
+    if (!shouldCollectShop(shop)) {
       continue;
     }
     if (inflight.has(shop.store)) {
@@ -1050,9 +1098,19 @@ function offlineMessage(error) {
 
 async function collectOne(shop, deps) {
   const now = deps.now();
+  const expected = { store: shop.store, shopId: shop.shopId || "" };
   try {
-    const metrics = await withDeadline(function () {
-      return deps.fetchHome(shop.cookies);
+    if (shop.authState === "login_expired" && typeof deps.recheckJingmai === "function") {
+      const alive = await withDeadline(function (signal) {
+        return deps.recheckJingmai(shop, signal);
+      }, 30000);
+      if (!alive) {
+        await deps.markAuth(shop.store, "login_expired", "登录已失效，请重新登录");
+        return;
+      }
+    }
+    const metrics = await withDeadline(function (signal) {
+      return deps.fetchHome(shop.cookies, signal, expected);
     }, 120000);
     await deps.saveSample(
       Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics))
