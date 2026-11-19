@@ -152,6 +152,10 @@ test("login 罗成 sets cookie; GET /api/auth/me 200; wrong password 401", async
     assert.match(moduleJs.text, /我的权限/);
     assert.match(moduleJs.text, /我的责权清单/);
     assert.match(moduleJs.text, /\/api\/profile\/duties/);
+    assert.match(moduleJs.text, /\/api\/people\/org\/site-acl\/me/);
+    assert.match(moduleJs.text, /暂无设置/);
+    assert.doesNotMatch(moduleJs.text, /责权清单暂未从服务端同步/);
+    assert.doesNotMatch(moduleJs.text, /label: "账号安全", value: "security"/);
     assert.match(moduleJs.text, /退出登录/);
     assert.match(moduleJs.text, /me-btn-logout/);
     assert.match(moduleJs.text, /\/api\/auth\/logout/);

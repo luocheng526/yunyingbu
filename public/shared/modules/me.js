@@ -222,7 +222,6 @@
         search: false,
         tabs: [
           { label: "基本信息", value: "basic", active: true },
-          { label: "账号安全", value: "security" },
           { label: "消息通知", value: "notice" },
           { label: "我的权限", value: "rights" },
           { label: "登录设备管理", value: "devices" },
@@ -367,7 +366,7 @@
         '<div class="me-pane" data-me-pane="rights">' +
         UI.ContentCard({
           title: "我的责权清单",
-          description: "灰色表示当前角色未授予",
+          description: "与组织中心当前账号同步",
           content: '<div id="duties"></div>'
         }) +
         "</div>" +
@@ -509,30 +508,63 @@
         showAvatar(uploaded, name);
       }
 
-      function fillDuties(groups) {
-        const granted = [];
-        (groups || []).forEach(function (group) {
-          (group.items || []).forEach(function (item) {
-            if (item.granted) {
-              granted.push(item.label);
-            }
-          });
+      function emptyDuties() {
+        return UI.EmptyState({
+          title: "暂无设置",
+          description: "组织中心尚未为本账号配置责权"
+        }).replace('class="xm-ui-empty-state"', 'class="xm-ui-empty-state me-empty"');
+      }
+
+      function userKeys() {
+        const user = currentUser || {};
+        return [user.username, user.displayName, user.name].filter(Boolean);
+      }
+
+      function samePerson(row) {
+        const keys = userKeys();
+        const names = [row && row.username, row && row.name, row && row.displayName, row && row.actor];
+        return names.some(function (name) {
+          return name && keys.indexOf(name) !== -1;
         });
-        const count = Math.max(granted.length, 12);
-        root.querySelector("#perm-name").textContent = "运营管理权限组";
-        root.querySelector("#perm-desc").textContent =
-          "包含：店铺数据、商品管理、推广管理、运营报表等 " + count + " 项权限";
-        if (!groups || !groups.length) {
-          root.querySelector("#duties").innerHTML = UI.EmptyState({ title: "责权清单暂未从服务端同步" });
+      }
+
+      function grantedOnly(groups) {
+        return (groups || [])
+          .map(function (group) {
+            return {
+              name: group.name,
+              items: (group.items || []).filter(function (item) {
+                return item && (item.granted !== false) && item.label;
+              })
+            };
+          })
+          .filter(function (group) {
+            return group.items.length;
+          });
+      }
+
+      function fillDuties(groups, summary) {
+        const shown = grantedOnly(groups);
+        const count = shown.reduce(function (sum, group) {
+          return sum + group.items.length;
+        }, 0);
+        const title = (summary && summary.title) || (count ? (currentUser.role || "已授权") : "暂无设置");
+        const desc =
+          (summary && summary.desc) ||
+          (count ? "已同步 " + count + " 项责权" : "组织中心尚未为本账号配置责权");
+        root.querySelector("#perm-name").textContent = title;
+        root.querySelector("#perm-desc").textContent = desc;
+        if (!shown.length) {
+          root.querySelector("#duties").innerHTML = emptyDuties();
           return;
         }
-        root.querySelector("#duties").innerHTML = groups
+        root.querySelector("#duties").innerHTML = shown
           .map(function (group) {
-            const tags = (group.items || [])
+            const tags = group.items
               .map(function (item) {
                 return UI.StatusBadge({
                   label: item.label,
-                  tone: item.granted ? "success" : "neutral"
+                  tone: "success"
                 });
               })
               .join("");
@@ -545,6 +577,133 @@
             );
           })
           .join("");
+      }
+
+      function aclOn(state) {
+        return Boolean(state && (state.see || state.enter || state.edit));
+      }
+
+      function groupsFromAcl(me, catalog) {
+        if (!me || me.configured === false) {
+          return [];
+        }
+        const modules = me.modules || {};
+        const list = catalog && catalog.length ? catalog : Object.keys(modules).map(function (id) {
+          return {
+            id: id,
+            name: id,
+            features: Object.keys((modules[id] && modules[id].features) || {}).map(function (featId) {
+              return { id: featId, name: featId };
+            })
+          };
+        });
+        return list
+          .map(function (mod) {
+            const state = modules[mod.id] || {};
+            const items = [];
+            if (aclOn(state)) {
+              items.push({
+                label: (mod.name || mod.id) + (state.edit ? "（可改）" : state.enter ? "（可进）" : "（可见）"),
+                granted: true
+              });
+            }
+            (mod.features || []).forEach(function (feat) {
+              const featState = (state.features || {})[feat.id] || {};
+              if (aclOn(featState)) {
+                items.push({ label: feat.name || feat.id, granted: true });
+              }
+            });
+            return { name: mod.name || mod.id, items: items };
+          })
+          .filter(function (group) {
+            return group.items.length;
+          });
+      }
+
+      function groupsFromPerson(person, boardRow) {
+        const groups = [];
+        const post = [];
+        const role = (person && person.role) || (boardRow && boardRow.role) || "";
+        const center = (person && (person.center || person.department)) || "";
+        if (role) {
+          post.push({ label: role, granted: true });
+        }
+        if (center) {
+          post.push({ label: center, granted: true });
+        }
+        if (post.length) {
+          groups.push({ name: "岗位责权", items: post });
+        }
+        const shops = (person && person.visibleShops) || [];
+        if (shops.length) {
+          groups.push({
+            name: "管辖店铺",
+            items: shops.map(function (shop) {
+              return { label: shop, granted: true };
+            })
+          });
+        } else if (boardRow && Number(boardRow.stores) > 0) {
+          groups.push({
+            name: "管辖店铺",
+            items: [{ label: "共 " + boardRow.stores + " 家", granted: true }]
+          });
+        }
+        return groups;
+      }
+
+      function findBoardPerson(board) {
+        const cols = (board && board.columns) || [];
+        for (let i = 0; i < cols.length; i++) {
+          const people = cols[i].people || [];
+          for (let j = 0; j < people.length; j++) {
+            if (samePerson(people[j])) {
+              return people[j];
+            }
+          }
+        }
+        return null;
+      }
+
+      function loadDuties() {
+        Promise.all([
+          api("/api/people/org/site-acl/me"),
+          api("/api/people/org/site-acl"),
+          api("/api/people"),
+          api("/api/people/org/rights-board"),
+          api("/api/profile/duties")
+        ]).then(function (results) {
+          if (dead) {
+            return;
+          }
+          const meAcl = results[0].res && results[0].res.ok ? results[0].data : {};
+          const aclAll = results[1].res && results[1].res.ok ? results[1].data : {};
+          const peoplePack = results[2].res && results[2].res.ok ? results[2].data : {};
+          const board = results[3].res && results[3].res.ok ? results[3].data : {};
+          const overlay = results[4].res && results[4].res.ok ? results[4].data : {};
+          if (overlay.identity) {
+            fillWho(overlay.identity);
+          }
+          const person = ((peoplePack.people || []).filter(samePerson)[0]) || null;
+          const boardRow = findBoardPerson(board);
+          const aclMe = meAcl.me || meAcl;
+          const catalog = aclAll.catalog || [];
+          const fromOrg = groupsFromPerson(person, boardRow).concat(groupsFromAcl(aclMe, catalog));
+          if (fromOrg.length) {
+            fillDuties(fromOrg, {
+              title: (person && person.role) || (boardRow && boardRow.role) || currentUser.role || "已授权",
+              desc: "已从组织中心同步当前账号责权"
+            });
+            return;
+          }
+          if (overlay.groups && overlay.grantedCount > 0) {
+            fillDuties(overlay.groups, {
+              title: currentUser.role || "已授权",
+              desc: "已同步 " + overlay.grantedCount + " 项责权"
+            });
+            return;
+          }
+          fillDuties([]);
+        });
       }
 
       async function api(path, options) {
@@ -576,13 +735,7 @@
         }
         fillWho(result.data.user || result.data);
       });
-      api("/api/profile/duties").then(function (result) {
-        if (dead || !result.res || !result.res.ok) {
-          return;
-        }
-        fillWho(result.data.identity || result.data);
-        fillDuties(result.data.groups);
-      });
+      loadDuties();
 
       root.querySelector("#me-tabs").addEventListener("click", function (event) {
         const btn = event.target.closest("[data-me-tab]");
