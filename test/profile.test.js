@@ -175,6 +175,7 @@ test("login 罗成 sets cookie; GET /api/auth/me 200; wrong password 401", async
     assert.doesNotMatch(moduleJs.text, /操作日志即将开放/);
     assert.match(moduleJs.text, /\/api\/profile\/avatar/);
     assert.doesNotMatch(moduleJs.text, /sessionStorage\.setItem\("xm-me-avatar-/);
+    assert.match(moduleJs.text, /localStorage\.setItem\(avatarCacheKey/);
     assert.doesNotMatch(moduleJs.text, /iPhone 15/);
     assert.doesNotMatch(moduleJs.text, /2026-11-17 10:24/);
     assert.doesNotMatch(moduleJs.text, /消息通知设置即将开放/);

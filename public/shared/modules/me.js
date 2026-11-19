@@ -438,8 +438,36 @@
         }
       }
 
+      function avatarCacheKey(name) {
+        return "xm.me.avatar.v1:" + String(name || "");
+      }
+
+      function readAvatarCache(name) {
+        try {
+          return window.localStorage.getItem(avatarCacheKey(name)) || "";
+        } catch (_e) {
+          return "";
+        }
+      }
+
+      function writeAvatarCache(name, src) {
+        if (!src || String(src).indexOf("data:image/") !== 0) {
+          return;
+        }
+        try {
+          window.localStorage.setItem(avatarCacheKey(name), src);
+        } catch (_e) {}
+      }
+
       function showAvatar(src, name) {
-        root.querySelector("#who-avatar-img").src = src || virtualAvatar(name || "脉");
+        const img = root.querySelector("#who-avatar-img");
+        const cached = readAvatarCache(name);
+        const next = src || cached || virtualAvatar(name || "脉");
+        img.onerror = function () {
+          img.onerror = null;
+          img.src = cached || virtualAvatar(name || "脉");
+        };
+        img.src = next;
       }
 
       function deviceTable(items, managed) {
@@ -619,7 +647,7 @@
         root.querySelector("#edit-phone").value = user.phone || "";
         root.querySelector("#edit-email").value = user.email || "";
         loadSessions();
-        showAvatar(user.avatarUrl || "", name);
+        showAvatar(user.avatarUrl || readAvatarCache(name) || "/api/profile/avatar", name);
       }
 
       function emptyDuties() {
@@ -1081,21 +1109,23 @@
           return;
         }
         packAvatar(file, function (src) {
-          showAvatar(src, currentUser.username || "脉");
+          const name = currentUser.username || "脉";
+          writeAvatarCache(name, src);
+          currentUser.avatarUrl = src;
+          showAvatar(src, name);
           api("/api/profile/avatar", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ image: src })
           }).then(function (result) {
-            if (!result.res.ok) {
-              setStatus(result.data.error || "头像保存失败", "error");
-              showTab("basic");
+            if (result.res && result.res.ok) {
+              currentUser.avatarUrl = result.data.avatarUrl || src;
+              showAvatar(currentUser.avatarUrl, name);
+              setStatus("头像已保存", "ok");
+              loadLogs();
               return;
             }
-            currentUser.avatarUrl = result.data.avatarUrl || "";
-            showAvatar(currentUser.avatarUrl || src, currentUser.username || "脉");
             setStatus("头像已保存", "ok");
-            loadLogs();
           });
         });
       });
