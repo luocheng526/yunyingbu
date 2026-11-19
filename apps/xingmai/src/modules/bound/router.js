@@ -8,6 +8,7 @@ import {
   exportView,
   isBoundAdmin,
   linkStatus,
+  noteQrClient,
   pickAccount,
   pollLink,
   qrBytes,
@@ -160,6 +161,7 @@ boundRouter.get("/link/qr", async (req, res) => {
   if (!requireAdmin(req, res)) {
     return;
   }
+  noteQrClient(req.query || {});
   const image = await qrBytes();
   if (!image) {
     res.status(404).json({ ok: false, error: "二维码还没生成", module: "bound", source: "crawler", erp: false });

@@ -1235,7 +1235,18 @@
   }
 
   function render(root) {
+    var prev = root.querySelector && root.querySelector("img.bd-qr");
+    var held = prev && prev.parentNode ? prev.parentNode.removeChild(prev) : null;
     root.innerHTML = '<div class="bd-app xm-ui-scope" data-bound-erp="false"><nav class="bd-side" aria-label="边界数据中心">' + renderNav() + '</nav>' + renderMain() + "</div>";
+    var slot = held && root.querySelector ? root.querySelector("img.bd-qr") : null;
+    if (!held || !slot || !slot.parentNode) {
+      return;
+    }
+    if (held.getAttribute("data-qr") !== slot.getAttribute("data-qr")) {
+      held.setAttribute("data-qr", slot.getAttribute("data-qr") || "");
+      held.src = slot.src || slot.getAttribute("src") || held.src;
+    }
+    slot.parentNode.replaceChild(held, slot);
   }
 
   function paint(root) {

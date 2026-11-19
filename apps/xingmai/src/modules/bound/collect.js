@@ -205,7 +205,9 @@ export async function linkStatus() {
     phase: current.phase,
     provider: current.provider,
     deviceId: current.deviceId,
-    message: current.message,
+    message: qrClient === "old"
+      ? "二维码还在闪，是因为浏览器锁着旧页面。请按 Ctrl+Shift+R 强制刷新一次（Mac 用 Command+Shift+R）。刷新后请用微信扫这一张，它会停住。"
+      : current.message,
     qrToken: current.scene || "",
     userName: current.userName,
     accounts: current.accounts || [],
@@ -242,6 +244,21 @@ export async function startLink(provider) {
 }
 
 let qrCache = { url: "", type: "", buffer: null };
+let qrClient = "";
+
+export function noteQrClient(query) {
+  if (query && Object.prototype.hasOwnProperty.call(query, "ts")) {
+    qrClient = "old";
+    return;
+  }
+  if (query && Object.prototype.hasOwnProperty.call(query, "v")) {
+    qrClient = "new";
+  }
+}
+
+export function resetQrClient() {
+  qrClient = "";
+}
 
 export async function qrBytes() {
   const current = await session();

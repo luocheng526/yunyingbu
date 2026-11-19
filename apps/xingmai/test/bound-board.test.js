@@ -6,7 +6,7 @@ import test from "node:test";
 import vm from "node:vm";
 import express from "express";
 import { boundRouter } from "../src/modules/bound/router.js";
-import { pollLink, resetBoundStore, setBoundClock, setBoundFetch, startLink, tick } from "../src/modules/bound/store.js";
+import { linkStatus, noteQrClient, pollLink, resetBoundStore, setBoundClock, setBoundFetch, startLink, tick } from "../src/modules/bound/store.js";
 import { readState, writeSheet, writeState } from "../src/modules/bound/persist.js";
 import { publicCatalog, reports } from "../src/modules/bound/catalog.js";
 import { reportBody } from "../src/modules/bound/collect.js";
@@ -540,6 +540,36 @@ test("刚生成的二维码遇到接口抖动也不换", async () => {
   assert.equal(issued, 1);
   assert.equal(status.phase, "waiting_scan");
   assert.equal(status.qrToken, "keep1");
+});
+
+test("旧页面脚本取图时，提示强制刷新，新脚本不再提示", async () => {
+  resetBoundStore();
+  setBoundFetch(async (url) => {
+    const href = String(url);
+    const json = (body) => ({
+      headers: {
+        get() { return "application/json"; },
+        getSetCookie() { return []; }
+      },
+      json: async () => body,
+      arrayBuffer: async () => new ArrayBuffer(0)
+    });
+    if (href.includes("/auth/qrcode")) {
+      return json({ code: 0, data: { url: "https://biprodapi.ecbis.cn/prod/auth/showQr?scene=stay", scene: "stay" } });
+    }
+    if (href.includes("/auth/checkQrcode")) {
+      return json({ code: 1000102, content: "未扫码" });
+    }
+    return json({ code: 0, data: {} });
+  });
+  await startLink("WECHAT");
+  noteQrClient({ ts: String(Date.now()) });
+  const oldClient = await linkStatus();
+  assert.match(oldClient.message, /Ctrl\+Shift\+R/);
+  noteQrClient({ v: "stay" });
+  const current = await linkStatus();
+  assert.doesNotMatch(current.message, /Ctrl\+Shift\+R/);
+  assert.equal(current.qrToken, "stay");
 });
 
 test("页面只请求边界接口，并画出四个模块", async () => {

@@ -1,13 +1,14 @@
-import { stopCollectLoop, setBoundFetch } from "./collect.js";
+import { resetQrClient, stopCollectLoop, setBoundFetch } from "./collect.js";
 import { resetBoundStore as resetMemory } from "./persist.js";
 import { setBoundClock } from "./time.js";
 
-export { setBoundFetch, startLink, pollLink, pickAccount, qrBytes, linkStatus, tick, ensureCollectLoop } from "./collect.js";
+export { setBoundFetch, startLink, pollLink, pickAccount, qrBytes, linkStatus, noteQrClient, resetQrClient, tick, ensureCollectLoop } from "./collect.js";
 export { readView, savePagePref, saveRowMark, exportView, catalogBody, coverageBody, progressBody } from "./view.js";
 export { setBoundClock } from "./time.js";
 
 export function resetBoundStore() {
   stopCollectLoop();
+  resetQrClient();
   setBoundFetch(globalThis.fetch);
   setBoundClock(null);
   resetMemory();
