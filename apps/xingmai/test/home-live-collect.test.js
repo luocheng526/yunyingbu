@@ -58,6 +58,22 @@ test("paid-only failures do not expire the whole shop login", () => {
   assert.notEqual(paid.authState, "login_expired");
 });
 
+test("parseHomeCard follows old-site parse_home: needs 经营数据; dashes keep last sample", async () => {
+  const { parseHomeCard, collectBucketId } = await import("../src/modules/home/jingmai.js");
+  assert.equal(parseHomeCard("只有成交金额\n100"), null);
+  assert.equal(
+    parseHomeCard("经营数据\n成交金额\n—\n成交单量\n1\n成交客户数\n1"),
+    null
+  );
+  const ok = parseHomeCard("经营数据\n成交金额\n¥1,234.5\n成交单量\n2\n成交客户数\n3");
+  assert.equal(ok.dealAmount, 1234.5);
+  assert.equal(ok.orderCount, 2);
+  assert.equal(ok.customerCount, 3);
+  assert.equal(collectBucketId(0), 0);
+  assert.equal(collectBucketId(5 * 60 * 1000 - 1), 0);
+  assert.equal(collectBucketId(5 * 60 * 1000), 1);
+});
+
 test("timeout keeps the session and only marks collection offline", () => {
   const row = collectAuthDecision({ code: "timeout", message: "采集超时" });
   assert.equal(row.authState, "offline");
@@ -105,10 +121,12 @@ test("stale shops keep the last capture time while offline", () => {
       }
     ]
   });
-  assert.equal(view.shops[0].offline, true);
+  // Ads/JZT failure keeps Jingmai session; surface adsFailed, not whole-shop 掉线.
+  assert.equal(view.shops[0].offline, false);
   assert.equal(view.shops[0].loginExpired, false);
+  assert.equal(view.shops[0].adsFailed, true);
+  assert.match(view.shops[0].adsReason, /京准通/);
   assert.equal(view.shops[0].capturedAt, "2026/11/19 08:25:45");
-  assert.match(view.shops[0].offlineReason, /京准通/);
 });
 
 test("fetchHome keeps deal data when Jingzhuntong pinlist returns -100", async () => {
@@ -324,6 +342,360 @@ test("listCollectTargets includes login_expired jars and skips empty jars / paus
   assert.ok(names.includes("有jar过期"));
   assert.ok(!names.includes("空jar过期"));
   assert.ok(!names.includes("人工暂停"));
+});
+
+test("listHomeCollectTargets: home owns all teams; manual pause still skipped", async () => {
+  const {
+    listHomeCollectTargets,
+    isShenTeamShop,
+    JINGMAI_COLLECTOR_OWNER,
+    resetJingmaiDeps,
+    setJingmaiDeps
+  } = await import("../src/modules/home/jingmai-runner.js");
+  await resetJingmaiStore();
+  resetJingmaiDeps();
+  assert.equal(JINGMAI_COLLECTOR_OWNER, "home");
+  await saveSession("沈店A", {
+    cookies: [{ name: "thor", value: "1" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "s1"
+  });
+  await saveSession("韩店B", {
+    cookies: [{ name: "thor", value: "2" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "h1"
+  });
+  await saveSession("沈店暂停", {
+    cookies: [{ name: "thor", value: "3" }],
+    authState: "ok",
+    enabled: false,
+    shopId: "s2"
+  });
+  assert.equal(isShenTeamShop({ team: "沈子晗组", manager: "" }), true);
+  setJingmaiDeps({
+    loadOrg: async () => [
+      { store: "沈店A", team: "沈子晗组", manager: "沈子晗", login: "a", password: "a", enabled: true },
+      { store: "韩店B", team: "韩梦凯组", manager: "韩梦凯", login: "b", password: "b", enabled: true },
+      { store: "沈店暂停", team: "沈子晗组", manager: "沈子晗", login: "c", password: "c", enabled: false }
+    ]
+  });
+  const targets = await listHomeCollectTargets();
+  const names = targets.map((row) => row.store).sort();
+  // Home collects both teams; paused store stays out (enabled=false).
+  assert.deepEqual(names, ["沈店A", "韩店B"].sort());
+  resetJingmaiDeps();
+});
+
+test("claimCollectorOwner is atomic; manual pause cannot be claimed; other owner blocks", async () => {
+  const {
+    claimCollectorOwner,
+    COLLECTOR_OWNER_HOME,
+    COLLECTOR_OWNER_SHEN,
+    getSession,
+    saveSample,
+    needsJingmaiQr,
+    isAdsOnlyAuthMessage
+  } = await import("../src/modules/home/jingmai-store.js");
+  await resetJingmaiStore();
+  await saveSession("可交接", {
+    cookies: [{ name: "thor", value: "1" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "c1"
+  });
+  await saveSession("已暂停", {
+    cookies: [{ name: "thor", value: "1" }],
+    authState: "ok",
+    enabled: false,
+    shopId: "c2"
+  });
+  await saveSession("他主", {
+    cookies: [{ name: "thor", value: "1" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "c3"
+  });
+  const first = await claimCollectorOwner("可交接", COLLECTOR_OWNER_HOME);
+  assert.equal(first.ok, true);
+  assert.equal((await getSession("可交接")).collectorOwner, "home");
+  assert.ok((await getSession("可交接")).collectorLeaseUntil);
+  assert.equal((await claimCollectorOwner("可交接", COLLECTOR_OWNER_HOME)).ok, true);
+  assert.equal((await claimCollectorOwner("他主", COLLECTOR_OWNER_SHEN)).ok, true);
+  const blocked = await claimCollectorOwner("他主", COLLECTOR_OWNER_HOME);
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.reason, "owned_by_other");
+  assert.equal(blocked.owner, "shen");
+  const denied = await saveSample(
+    { store: "他主", day: "2026-11-19", capturedAt: "2026-11-19 12:00:00", dealAmount: 1, ok: true },
+    { writer: COLLECTOR_OWNER_HOME }
+  );
+  assert.equal(denied.saved, false);
+  assert.equal(denied.reason, "owned_by_other");
+  // Expired lease is reclaimable (failure recovery).
+  const held = await getSession("他主");
+  await saveSession("他主", {
+    cookies: held.cookies,
+    authState: "ok",
+    enabled: true,
+    shopId: "c3",
+    collectorOwner: COLLECTOR_OWNER_SHEN,
+    collectorLeaseUntil: "2020-01-01 00:00:00",
+    writer: COLLECTOR_OWNER_SHEN
+  });
+  const reclaimed = await claimCollectorOwner("他主", COLLECTOR_OWNER_HOME);
+  assert.equal(reclaimed.ok, true);
+  const paused = await claimCollectorOwner("已暂停", COLLECTOR_OWNER_HOME);
+  assert.equal(paused.ok, false);
+  assert.equal(paused.reason, "manual_pause");
+  assert.equal(isAdsOnlyAuthMessage("登录已失效，请重新登录；京准通没有返回账号 -100"), true);
+  assert.equal(
+    needsJingmaiQr({
+      enabled: true,
+      cookies: [{ name: "thor", value: "1" }],
+      authState: "login_expired",
+      authMessage: "登录已失效，请重新登录；京准通没有返回账号 -100"
+    }),
+    false
+  );
+  assert.equal(
+    needsJingmaiQr({
+      enabled: true,
+      cookies: [],
+      authState: "login_expired",
+      authMessage: "登录已失效，请重新登录"
+    }),
+    true
+  );
+});
+
+test("shen store wrapper refuses write while home lease is active", async () => {
+  const home = await import("../src/modules/home/jingmai-store.js");
+  const shen = await import("../src/modules/shen/jingmai-store.js");
+  await home.resetJingmaiStore();
+  await home.saveSession("互斥店", {
+    cookies: [{ name: "thor", value: "1" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "x1"
+  });
+  assert.equal((await home.claimCollectorOwner("互斥店", home.COLLECTOR_OWNER_HOME)).ok, true);
+  const blocked = await shen.saveSample({
+    store: "互斥店",
+    day: "2026-11-19",
+    capturedAt: "2026-11-19 12:01:00",
+    dealAmount: 9,
+    ok: true
+  });
+  assert.equal(blocked.saved, false);
+  assert.equal(blocked.reason, "owned_by_other");
+  const steal = await shen.claimShenCollectorOwner("互斥店");
+  assert.equal(steal.ok, false);
+  assert.equal(steal.reason, "owned_by_other");
+  const targets = await shen.listCollectTargets();
+  assert.equal(
+    targets.some(function (row) {
+      return row.store === "互斥店";
+    }),
+    false
+  );
+  // Same-shop home write still allowed under its own lease.
+  const okHome = await home.saveSample(
+    { store: "互斥店", day: "2026-11-19", capturedAt: "2026-11-19 12:02:00", dealAmount: 11, ok: true },
+    { writer: home.COLLECTOR_OWNER_HOME }
+  );
+  assert.equal(okHome.saved, true);
+});
+
+test("lease expiry recovers: shen may reclaim and write after home lease dies", async () => {
+  const home = await import("../src/modules/home/jingmai-store.js");
+  const shen = await import("../src/modules/shen/jingmai-store.js");
+  await home.resetJingmaiStore();
+  await home.saveSession("租约店", {
+    cookies: [{ name: "thor", value: "1" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "lease1"
+  });
+  assert.equal((await home.claimCollectorOwner("租约店", home.COLLECTOR_OWNER_HOME)).ok, true);
+  const held = await home.getSession("租约店");
+  await home.saveSession("租约店", {
+    cookies: held.cookies,
+    authState: "ok",
+    enabled: true,
+    shopId: "lease1",
+    collectorOwner: home.COLLECTOR_OWNER_HOME,
+    collectorLeaseUntil: "2020-01-01 00:00:00",
+    writer: home.COLLECTOR_OWNER_HOME
+  });
+  const reclaim = await shen.claimShenCollectorOwner("租约店");
+  assert.equal(reclaim.ok, true);
+  const written = await shen.saveSample({
+    store: "租约店",
+    day: "2026-11-19",
+    capturedAt: "2026-11-19 12:10:00",
+    dealAmount: 22,
+    ok: true
+  });
+  assert.equal(written.saved, true);
+  // Late home return after reclaim must not write.
+  const lateHome = await home.saveSample(
+    {
+      store: "租约店",
+      day: "2026-11-19",
+      capturedAt: "2026-11-19 12:11:00",
+      dealAmount: 99,
+      ok: true
+    },
+    { writer: home.COLLECTOR_OWNER_HOME }
+  );
+  assert.equal(lateHome.saved, false);
+  assert.equal(lateHome.reason, "owned_by_other");
+});
+
+test("manual pause blocks collect writeback but allows human relogin save", async () => {
+  const {
+    claimCollectorOwner,
+    COLLECTOR_OWNER_HOME,
+    COLLECTOR_OWNER_SHEN,
+    getSession,
+    markAuth,
+    saveSample,
+    saveSession,
+    sessionVersionOf,
+    updateSessionCookies,
+    WRITE_PURPOSE_HUMAN
+  } = await import("../src/modules/home/jingmai-store.js");
+  await resetJingmaiStore();
+  await saveSession("暂停店", {
+    cookies: [{ name: "thor", value: "old" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "p1",
+    purpose: WRITE_PURPOSE_HUMAN
+  });
+  assert.equal((await claimCollectorOwner("暂停店", COLLECTOR_OWNER_HOME)).ok, true);
+  // Foreign active lease must not block human pause/relogin.
+  const held = await getSession("暂停店");
+  await saveSession("暂停店", {
+    cookies: held.cookies,
+    authState: "ok",
+    enabled: true,
+    shopId: "p1",
+    collectorOwner: COLLECTOR_OWNER_SHEN,
+    collectorLeaseUntil: "2099-01-01 00:00:00",
+    purpose: WRITE_PURPOSE_HUMAN
+  });
+  const before = await getSession("暂停店");
+  const staleVer = sessionVersionOf(before);
+  assert.equal(before.collectorOwner, COLLECTOR_OWNER_SHEN);
+  await saveSession("暂停店", {
+    cookies: before.cookies,
+    authState: "ok",
+    enabled: false,
+    shopId: "p1",
+    purpose: WRITE_PURPOSE_HUMAN
+  });
+  const lateSample = await saveSample(
+    { store: "暂停店", day: "2026-11-19", capturedAt: "2026-11-19 12:20:00", dealAmount: 3, ok: true },
+    { writer: COLLECTOR_OWNER_HOME }
+  );
+  assert.equal(lateSample.saved, false);
+  assert.equal(lateSample.reason, "manual_pause");
+  const lateJar = await updateSessionCookies(
+    "暂停店",
+    [{ name: "thor", value: "collect-blocked" }],
+    { writer: COLLECTOR_OWNER_HOME, sessionVersion: staleVer }
+  );
+  assert.equal(lateJar.updated, false);
+  assert.equal(lateJar.reason, "manual_pause");
+  const lateAuth = await markAuth("暂停店", "login_expired", "旧任务晚返回", {
+    writer: COLLECTOR_OWNER_HOME,
+    sessionVersion: staleVer
+  });
+  assert.equal(lateAuth.updated, false);
+  assert.equal(lateAuth.reason, "manual_pause");
+  // Human may re-login while still paused and persist a new jar/gen.
+  const humanWhilePaused = await saveSession("暂停店", {
+    cookies: [{ name: "thor", value: "human-paused" }],
+    authState: "ok",
+    enabled: false,
+    shopId: "p1",
+    human: true
+  });
+  assert.ok(humanWhilePaused);
+  assert.equal(humanWhilePaused.cookies[0].value, "human-paused");
+  assert.equal(humanWhilePaused.enabled, false);
+  assert.equal(humanWhilePaused.collectorOwner, "");
+  assert.notEqual(sessionVersionOf(humanWhilePaused), staleVer);
+  // Enable + relogin bumps gen again; stale collect gen cannot overwrite.
+  await saveSession("暂停店", {
+    cookies: [{ name: "thor", value: "new" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "p1",
+    purpose: WRITE_PURPOSE_HUMAN
+  });
+  const after = await getSession("暂停店");
+  assert.notEqual(sessionVersionOf(after), staleVer);
+  assert.equal(after.cookies[0].value, "new");
+  const staleAfterRelogin = await markAuth("暂停店", "login_expired", "更旧任务", {
+    writer: COLLECTOR_OWNER_HOME,
+    sessionVersion: staleVer
+  });
+  assert.equal(staleAfterRelogin.updated, false);
+  assert.equal(staleAfterRelogin.reason, "version_conflict");
+  assert.equal((await getSession("暂停店")).authState, "ok");
+  assert.equal((await getSession("暂停店")).cookies[0].value, "new");
+});
+
+test("shen store exports match live runner import surface; han has no jingmai writer", async () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const shen = await import("../src/modules/shen/jingmai-store.js");
+  const needed = [
+    "listCollectTargets",
+    "listSessions",
+    "markAuth",
+    "readJingmaiLive",
+    "saveSample",
+    "saveSession",
+    "setRoster"
+  ];
+  needed.forEach(function (name) {
+    assert.equal(typeof shen[name], "function", name);
+  });
+  // Wrapper is not a historical whole-file restore (uses home auth pool path).
+  const source = readFileSync(join(here, "../src/modules/shen/jingmai-store.js"), "utf8");
+  assert.match(source, /from \"\.\.\/home\/jingmai-store\.js\"/);
+  assert.doesNotMatch(source, /db\/pool\.js/);
+  assert.equal(existsSync(join(here, "../src/modules/han/jingmai-store.js")), false);
+  assert.equal(existsSync(join(here, "../src/modules/han/jingmai-runner.js")), false);
+});
+
+test("router smoke skip is MENKAI_SMOKE_LIVE only; production still starts collector", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const source = readFileSync(join(here, "../src/modules/home/router.js"), "utf8");
+  assert.match(source, /startJingmaiCollector\(/);
+  assert.match(source, /MENGKAI_SMOKE_LIVE/);
+  assert.match(source, /if \(!process\.env\.MENGKAI_SMOKE_LIVE\)/);
+  // Unguarded production would end with bare startJingmaiCollector(); guarded form ends with }.
+  assert.equal(source.trim().endsWith("startJingmaiCollector();"), false);
+  assert.match(
+    source,
+    /if \(!process\.env\.MENGKAI_SMOKE_LIVE\) \{\s*startJingmaiCollector\(\);\s*\}/
+  );
+});
+
+test("collectStatusSummary exposes loaded-process runtimeMark", async () => {
+  const { HOME_COLLECTOR_RUNTIME_MARK, collectStatusSummary, resetJingmaiStore } = await import(
+    "../src/modules/home/jingmai-store.js"
+  );
+  await resetJingmaiStore();
+  const summary = await collectStatusSummary();
+  assert.equal(summary.ok, true);
+  assert.equal(summary.runtimeMark, HOME_COLLECTOR_RUNTIME_MARK);
+  assert.match(String(summary.runtimeMark), /home-atomic-mutex|home-load-mutex|home-live-fix|mutex/);
 });
 
 test("cookieParams keeps real domain/path/expiry and only defaults legacy name/value jars", () => {
@@ -928,6 +1300,7 @@ test("runTick fair schedule: waiting shops do not burn deadline; failures do not
 });
 
 test("updateSessionCookies writes jar for next listSessions without unpausing or clearing shopId", async () => {
+  const { claimCollectorOwner, COLLECTOR_OWNER_HOME } = await import("../src/modules/home/jingmai-store.js");
   process.env.SHEN_JINGMAI_MEMORY = "1";
   await resetJingmaiStore();
   await saveSession("会话店", {
@@ -936,6 +1309,20 @@ test("updateSessionCookies writes jar for next listSessions without unpausing or
     enabled: false,
     shopId: "100"
   });
+  const paused = await updateSessionCookies(
+    "会话店",
+    [{ name: "thor", value: "paused-blocked", domain: ".jd.com", path: "/" }],
+    { expectedShopId: "100", identity: { shopId: "100", shopName: "会话店" } }
+  );
+  assert.equal(paused.updated, false);
+  assert.equal(paused.reason, "manual_pause");
+  await saveSession("会话店", {
+    cookies: [{ name: "thor", value: "old", domain: ".jd.com", path: "/" }],
+    authState: "ok",
+    enabled: true,
+    shopId: "100"
+  });
+  assert.equal((await claimCollectorOwner("会话店", COLLECTOR_OWNER_HOME)).ok, true);
   const before = (await listSessions()).find(function (row) {
     return row.store === "会话店";
   });
@@ -946,13 +1333,14 @@ test("updateSessionCookies writes jar for next listSessions without unpausing or
   const ok = await updateSessionCookies("会话店", refreshed, {
     sessionVersion: beforeVersion,
     expectedShopId: "100",
-    identity: { shopId: "100", shopName: "会话店" }
+    identity: { shopId: "100", shopName: "会话店" },
+    writer: COLLECTOR_OWNER_HOME
   });
   assert.equal(ok.updated, true);
   const after = (await listSessions()).find(function (row) {
     return row.store === "会话店";
   });
-  assert.equal(after.enabled, false);
+  assert.equal(after.enabled, true);
   assert.equal(after.shopId, "100");
   assert.equal(after.linkedAt, before.linkedAt);
   assert.equal(after.sessionGen, before.sessionGen);
@@ -962,7 +1350,8 @@ test("updateSessionCookies writes jar for next listSessions without unpausing or
     cookies: [{ name: "thor", value: "login-fresh", domain: ".jd.com", path: "/" }],
     authState: "ok",
     enabled: true,
-    shopId: "100"
+    shopId: "100",
+    writer: COLLECTOR_OWNER_HOME
   });
   const newer = (await listSessions()).find(function (row) {
     return row.store === "会话店";
@@ -971,7 +1360,12 @@ test("updateSessionCookies writes jar for next listSessions without unpausing or
   const denied = await updateSessionCookies(
     "会话店",
     [{ name: "thor", value: "stale-collect", domain: ".jd.com", path: "/" }],
-    { sessionVersion: beforeVersion, expectedShopId: "100", identity: { shopId: "100", shopName: "会话店" } }
+    {
+      sessionVersion: beforeVersion,
+      expectedShopId: "100",
+      identity: { shopId: "100", shopName: "会话店" },
+      writer: COLLECTOR_OWNER_HOME
+    }
   );
   assert.equal(denied.updated, false);
   assert.equal(denied.reason, "version_conflict");
@@ -1066,10 +1460,22 @@ function createJingmaiFakePool() {
       }
       return [{ affectedRows: 1 }, undefined];
     }
+    function leaseAllows(row, who, nowStamp) {
+      const owner = String(row.collector_owner || "");
+      const until = String(row.collector_lease_until || "");
+      if (!owner || owner === who || !until || until <= nowStamp) {
+        return true;
+      }
+      return false;
+    }
     if (/^UPDATE shen_jingmai_session SET cookie_jar/i.test(text)) {
-      const [jar, updatedAt, store, gen] = params;
+      // packed, stamp, store, gen, who, stamp, expectedShopId, expectedShopId
+      const [jar, updatedAt, store, gen, who, nowStamp] = params;
       const row = sessions.get(store);
-      if (!row || Number(row.session_gen) !== Number(gen)) {
+      if (!row || Number(row.enabled_flag) !== 1 || Number(row.session_gen) !== Number(gen)) {
+        return [{ affectedRows: 0 }, undefined];
+      }
+      if (!leaseAllows(row, who, nowStamp)) {
         return [{ affectedRows: 0 }, undefined];
       }
       row.cookie_jar = jar;
@@ -1078,9 +1484,12 @@ function createJingmaiFakePool() {
     }
     if (/^UPDATE shen_jingmai_session SET auth_state/i.test(text)) {
       if (/AND session_gen = \?/i.test(text)) {
-        const [authState, authMessage, updatedAt, store, gen] = params;
+        const [authState, authMessage, updatedAt, store, gen, who, nowStamp] = params;
         const row = sessions.get(store);
-        if (!row || Number(row.session_gen) !== Number(gen)) {
+        if (!row || Number(row.enabled_flag) !== 1 || Number(row.session_gen) !== Number(gen)) {
+          return [{ affectedRows: 0 }, undefined];
+        }
+        if (!leaseAllows(row, who, nowStamp)) {
           return [{ affectedRows: 0 }, undefined];
         }
         row.auth_state = authState;
@@ -1088,14 +1497,75 @@ function createJingmaiFakePool() {
         row.updated_at = updatedAt;
         return [{ affectedRows: 1 }, undefined];
       }
-      const [authState, authMessage, updatedAt, store] = params;
+      const [authState, authMessage, updatedAt, store, who, nowStamp] = params;
       const row = sessions.get(store);
-      if (!row) {
+      if (!row || Number(row.enabled_flag) !== 1) {
+        return [{ affectedRows: 0 }, undefined];
+      }
+      if (!leaseAllows(row, who, nowStamp)) {
         return [{ affectedRows: 0 }, undefined];
       }
       row.auth_state = authState;
       row.auth_message = authMessage;
       row.updated_at = updatedAt;
+      return [{ affectedRows: 1 }, undefined];
+    }
+    if (/^UPDATE shen_jingmai_session SET updated_at = \?/i.test(text) && /enabled_flag = 1/i.test(text)) {
+      // collect write permit touch
+      if (/AND session_gen = \?/i.test(text)) {
+        const [updatedAt, store, gen, who, nowStamp] = params;
+        const row = sessions.get(store);
+        if (!row || Number(row.enabled_flag) !== 1 || Number(row.session_gen) !== Number(gen)) {
+          return [{ affectedRows: 0 }, undefined];
+        }
+        if (!leaseAllows(row, who, nowStamp)) {
+          return [{ affectedRows: 0 }, undefined];
+        }
+        row.updated_at = updatedAt;
+        return [{ affectedRows: 1 }, undefined];
+      }
+      const [updatedAt, store, who, nowStamp] = params;
+      const row = sessions.get(store);
+      if (!row || Number(row.enabled_flag) !== 1) {
+        return [{ affectedRows: 0 }, undefined];
+      }
+      if (!leaseAllows(row, who, nowStamp)) {
+        return [{ affectedRows: 0 }, undefined];
+      }
+      row.updated_at = updatedAt;
+      return [{ affectedRows: 1 }, undefined];
+    }
+    if (/^INSERT INTO shen_jingmai_session/i.test(text) && /collector_owner = ''/i.test(text)) {
+      const [store, jar, authState, authMessage, enabled, shopId, linkedAt, updatedAt] = params;
+      const existing = sessions.get(store);
+      if (!existing) {
+        sessions.set(store, {
+          store: store,
+          cookie_jar: jar,
+          auth_state: authState,
+          auth_message: authMessage,
+          enabled_flag: enabled,
+          shop_id: shopId,
+          linked_at: linkedAt,
+          updated_at: updatedAt,
+          session_gen: 1,
+          collector_owner: "",
+          collector_lease_until: ""
+        });
+      } else {
+        existing.cookie_jar = jar;
+        existing.auth_state = authState;
+        existing.auth_message = authMessage;
+        existing.enabled_flag = enabled;
+        if (shopId) {
+          existing.shop_id = shopId;
+        }
+        existing.linked_at = linkedAt;
+        existing.updated_at = updatedAt;
+        existing.session_gen = (Number(existing.session_gen) || 0) + 1;
+        existing.collector_owner = "";
+        existing.collector_lease_until = "";
+      }
       return [{ affectedRows: 1 }, undefined];
     }
     if (/^SELECT .+ FROM shen_jingmai_session WHERE store = \?/i.test(text)) {
@@ -1162,19 +1632,45 @@ test("SQL pool path: atomic session_gen bump + gen0 CAS; process restart does no
     shop_id: "7",
     linked_at: "2026-11-19 10:00:00",
     updated_at: "2026-11-19 10:00:00",
-    session_gen: 0
+    session_gen: 0,
+    collector_owner: "home",
+    collector_lease_until: "2099-01-01 00:00:00"
   });
   const cas0 = await updateSessionCookies(
     "原子店",
     [{ name: "thor", value: "from-gen0", domain: ".jd.com", path: "/" }],
-    { sessionVersion: "g:0", expectedShopId: "7", identity: { shopId: "7", shopName: "原子店" } }
+    {
+      sessionVersion: "g:0",
+      expectedShopId: "7",
+      identity: { shopId: "7", shopName: "原子店" },
+      writer: "home"
+    }
   );
   assert.equal(cas0.updated, true);
   assert.ok(
     pool.sqlLog.some(function (entry) {
-      return /session_gen = \?/.test(entry.sql) && entry.params.indexOf(0) >= 0;
-    })
+      return (
+        /SET cookie_jar/.test(entry.sql) &&
+        /enabled_flag = 1/.test(entry.sql) &&
+        /collector_owner = \?/.test(entry.sql) &&
+        /session_gen = \?/.test(entry.sql) &&
+        entry.params.indexOf(0) >= 0
+      );
+    }),
+    "collect jar write must be one conditional UPDATE (pause+owner+gen), not SELECT-then-blind"
   );
+  const foreign = await updateSessionCookies(
+    "原子店",
+    [{ name: "thor", value: "stolen", domain: ".jd.com", path: "/" }],
+    {
+      sessionVersion: "g:0",
+      expectedShopId: "7",
+      identity: { shopId: "7", shopName: "原子店" },
+      writer: "shen"
+    }
+  );
+  assert.equal(foreign.updated, false);
+  assert.equal(foreign.reason, "owned_by_other");
   const first = await saveSession("原子店", {
     cookies: [{ name: "thor", value: "login-1" }],
     authState: "ok",

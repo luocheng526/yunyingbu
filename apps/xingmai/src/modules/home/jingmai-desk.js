@@ -3037,14 +3037,169 @@ function homeCardText(ws) {
   })()`);
 }
 
-async function readHomeDealNow(cookies, signal, shopKey) {
+function normalizeDealExpected(shopKeyOrExpected) {
+  if (shopKeyOrExpected && typeof shopKeyOrExpected === "object") {
+    return {
+      store: String(shopKeyOrExpected.store || shopKeyOrExpected.shopName || "").trim(),
+      shopId: String(shopKeyOrExpected.shopId || "").trim()
+    };
+  }
+  const key = String(shopKeyOrExpected || "").trim();
+  if (/^\d{5,}$/.test(key)) {
+    return { store: "", shopId: key };
+  }
+  return { store: key, shopId: "" };
+}
+
+function waitDomContentLoaded(ws, signal, ms) {
+  return new Promise(function (resolve, reject) {
+    const budget = typeof ms === "number" ? ms : 30000;
+    const timer = setTimeout(function () {
+      cleanup();
+      resolve(false);
+    }, budget);
+    function onMessage(event) {
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (message.method === "Page.domContentEventFired" || message.method === "Page.loadEventFired") {
+        cleanup();
+        resolve(true);
+      }
+    }
+    function onAbort() {
+      cleanup();
+      reject(Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" }));
+    }
+    function cleanup() {
+      clearTimeout(timer);
+      ws.removeEventListener("message", onMessage);
+      if (signal) {
+        signal.removeEventListener("abort", onAbort);
+      }
+    }
+    ws.addEventListener("message", onMessage);
+    if (signal) {
+      if (signal.aborted) {
+        cleanup();
+        reject(Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" }));
+        return;
+      }
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+  });
+}
+
+function watchVaneIdentity(ws) {
+  const seen = { shopName: "", venderId: "" };
+  function onMessage(event) {
+    let message;
+    try {
+      message = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+    if (message.method === "Network.responseReceived") {
+      const url = message.params && message.params.response ? String(message.params.response.url || "") : "";
+      if (url.includes("sff.jd.com") || /vaneStarsParam/i.test(url)) {
+        ws.__vaneRequests = ws.__vaneRequests || new Map();
+        ws.__vaneRequests.set(message.params.requestId, message.sessionId || "");
+      }
+      return;
+    }
+    if (message.method !== "Network.loadingFinished" || !ws.__vaneRequests || !ws.__vaneRequests.has(message.params.requestId)) {
+      return;
+    }
+    const sessionId = ws.__vaneRequests.get(message.params.requestId);
+    send(ws, "Network.getResponseBody", { requestId: message.params.requestId }, sessionId)
+      .then(function (result) {
+        const text = result.base64Encoded
+          ? Buffer.from(result.body || "", "base64").toString("utf8")
+          : String(result.body || "");
+        if (!/vaneStarsParam|shopName|venderId/i.test(text)) {
+          return;
+        }
+        try {
+          const payload = JSON.parse(text);
+          const blob = JSON.stringify(payload);
+          const nameHit = blob.match(/"shopName"\s*:\s*"([^"]+)"/);
+          const idHit = blob.match(/"venderId"\s*:\s*"?(\d+)"?/);
+          if (nameHit && nameHit[1]) {
+            seen.shopName = nameHit[1];
+          }
+          if (idHit && idHit[1]) {
+            seen.venderId = idHit[1];
+          }
+        } catch {
+          /* keep waiting */
+        }
+      })
+      .catch(function () {});
+  }
+  ws.addEventListener("message", onMessage);
+  return {
+    read: function () {
+      return { shopName: seen.shopName, venderId: seen.venderId };
+    },
+    stop: function () {
+      ws.removeEventListener("message", onMessage);
+    }
+  };
+}
+
+async function readShopBaseName(ws) {
+  try {
+    const value = await evaluate(
+      ws,
+      `(() => {
+        const el = document.querySelector("#shop-base-name");
+        return el ? String(el.innerText || el.textContent || "").trim() : "";
+      })()`
+    );
+    return String(value || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function assertPageShopIdentity(expected, pageName, vane) {
+  const wantName = String((expected && expected.store) || "").trim();
+  const wantId = String((expected && expected.shopId) || "").trim();
+  const gotName = String(pageName || (vane && vane.shopName) || "").trim();
+  const gotId = String((vane && vane.venderId) || "").trim();
+  if (wantName && gotName && wantName !== gotName) {
+    const err = new Error("京麦当前店铺：" + gotName + "；网站当前店铺：" + wantName + "。店铺不一致，未保存数据");
+    err.code = "identity";
+    throw err;
+  }
+  if (wantId && gotId && wantId !== gotId) {
+    const err = new Error("京麦店铺ID不符，未保存数据");
+    err.code = "identity";
+    throw err;
+  }
+}
+
+async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
   if (signal && signal.aborted) {
     throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
   }
-  // Isolated ephemeral context per shop — never clear+switch a shared readerDesk.
+  const expected = normalizeDealExpected(shopKeyOrExpected);
+  // Old-site: launch_persistent_context per shop; finally close this shop context only.
   let desk = null;
   let settled = false;
+  let vaneWatch = null;
   const killOwn = function () {
+    if (vaneWatch) {
+      try {
+        vaneWatch.stop();
+      } catch {
+        /* ignore */
+      }
+      vaneWatch = null;
+    }
     if (desk) {
       const owned = desk;
       desk = null;
@@ -3058,7 +3213,11 @@ async function readHomeDealNow(cookies, signal, shopKey) {
     signal.addEventListener("abort", onAbort, { once: true });
   }
   try {
-    desk = await launchChrome(signal, { ephemeral: true, profileKey: "" });
+    const identity = profileIdentity({ store: expected.store, shopId: expected.shopId });
+    const usePersist = identity && identity.key && !identity.ephemeral && !isForbiddenLegacyProfileKey(identity.key);
+    desk = await launchChrome(signal, usePersist
+      ? { ephemeral: false, profileKey: identity.key, shopId: expected.shopId, store: expected.store, identity: identity }
+      : { ephemeral: true, profileKey: "" });
     if (signal && signal.aborted) {
       killOwn();
       throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
@@ -3088,20 +3247,40 @@ async function readHomeDealNow(cookies, signal, shopKey) {
       lateBody = body;
       return body;
     });
+    vaneWatch = watchVaneIdentity(ws);
     const jar = cookieParams(cookies);
     if (jar.length) {
       await send(ws, "Network.setCookies", { cookies: jar });
     }
+    // Old-site: wait_until=domcontentloaded — never networkidle.
     await send(ws, "Page.navigate", { url: "https://shop.jd.com/jdm/home" });
+    await waitDomContentLoaded(ws, signal, 30000);
+    // Detect explicit login-domain redirect only.
+    try {
+      const href = await evaluate(ws, "location.href");
+      if (/passport\.|\/login/i.test(String(href || ""))) {
+        const err = new Error("登录已失效，请重新登录");
+        err.code = "login";
+        throw err;
+      }
+    } catch (error) {
+      if (error && error.code === "login") {
+        throw error;
+      }
+    }
     let card = null;
     for (let attempt = 0; attempt < 12 && !card && !networkDone; attempt += 1) {
       if (signal && signal.aborted) {
         throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
       }
       await sleepSignal(1000, signal);
+      const pageName = await readShopBaseName(ws);
+      assertPageShopIdentity(expected, pageName, vaneWatch.read());
       card = parseHomeCard(await homeCardText(ws));
     }
     if (card) {
+      const pageName = await readShopBaseName(ws);
+      assertPageShopIdentity(expected, pageName, vaneWatch.read());
       settled = true;
       return card;
     }
@@ -3113,15 +3292,22 @@ async function readHomeDealNow(cookies, signal, shopKey) {
       try {
         const metrics = extractShopDeal(JSON.parse(body));
         if (metrics) {
+          const pageName = await readShopBaseName(ws);
+          assertPageShopIdentity(expected, pageName, vaneWatch.read());
           settled = true;
           return metrics;
         }
-      } catch {
+      } catch (error) {
+        if (error && error.code === "identity") {
+          throw error;
+        }
         /* fall through to the rendered card */
       }
     }
     card = parseHomeCard(await homeCardText(ws));
     if (card) {
+      const pageName = await readShopBaseName(ws);
+      assertPageShopIdentity(expected, pageName, vaneWatch.read());
       settled = true;
       return card;
     }
@@ -3133,7 +3319,7 @@ async function readHomeDealNow(cookies, signal, shopKey) {
     if (error && (error.code === "timeout" || error.name === "AbortError")) {
       throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
     }
-    if (error && error.code === "network") {
+    if (error && (error.code === "network" || error.code === "login" || error.code === "identity")) {
       throw error;
     }
     if (error && error.code === "browser") {
@@ -3147,11 +3333,12 @@ async function readHomeDealNow(cookies, signal, shopKey) {
     if (signal) {
       signal.removeEventListener("abort", onAbort);
     }
+    // Old-site finally: close this shop context only.
     killOwn();
   }
 }
 
-export function readHomeDeal(cookies, signal, shopKey) {
+export function readHomeDeal(cookies, signal, shopKeyOrExpected) {
   let cancelled = false;
   const onAbort = function () {
     cancelled = true;
@@ -3168,9 +3355,10 @@ export function readHomeDeal(cookies, signal, shopKey) {
     }
     return withDeadline(
       function (inner) {
-        return readHomeDealNow(cookies, inner || signal, shopKey);
+        return readHomeDealNow(cookies, inner || signal, shopKeyOrExpected);
       },
-      45000,
+      // Leave headroom inside the outer 85s shop budget.
+      70000,
       "采集超时",
       signal
     );

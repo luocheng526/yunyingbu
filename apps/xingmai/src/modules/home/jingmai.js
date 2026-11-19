@@ -173,29 +173,62 @@ export function extractShopDeal(body) {
   };
 }
 
+/**
+ * Old-site parse_home (zhenxuan2 jingmai.py): require 经营数据/成交金额;
+ * placeholder dashes mean "unavailable — keep last sample" (return null).
+ */
 export function parseHomeCard(text) {
   const source = String(text || "").replace(/\u00a0/g, " ");
+  if (!source.includes("经营数据") || !source.includes("成交金额")) {
+    return null;
+  }
   const start = source.indexOf("经营数据");
   const section = start >= 0 ? source.slice(start, start + 900) : source.slice(0, 900);
-  function pick(label) {
-    const match = section.match(new RegExp(label + "[^\\d¥￥]{0,40}[¥￥]?\\s*([\\d,]+(?:\\.\\d+)?)"));
+  const lines = section
+    .split(/\r?\n/)
+    .map(function (line) {
+      return line.trim();
+    })
+    .filter(Boolean);
+  function pick(label, money) {
+    const hits = lines
+      .map(function (line, index) {
+        return line === label ? index : -1;
+      })
+      .filter(function (index) {
+        return index >= 0;
+      });
+    if (hits.length !== 1) {
+      return { unavailable: false, value: null };
+    }
+    const value = lines[hits[0] + 1] || "";
+    if (value === "-" || value === "--" || value === "—" || value === "–") {
+      return { unavailable: true, value: null };
+    }
+    const pattern = money
+      ? /^[¥￥]?\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)$/
+      : /^([0-9]+)$/;
+    const match = value.match(pattern);
     if (!match) {
-      return null;
+      return { unavailable: false, value: null };
     }
     const number = Number(match[1].replace(/,/g, ""));
-    return Number.isFinite(number) ? number : null;
+    return { unavailable: false, value: Number.isFinite(number) ? number : null };
   }
-  const dealAmount = pick("成交金额");
-  const orderCount = pick("成交单量");
-  const customerCount = pick("成交客户数");
-  if (dealAmount == null && orderCount == null && customerCount == null) {
+  const deal = pick("成交金额", true);
+  const orders = pick("成交单量", false);
+  const customers = pick("成交客户数", false);
+  if (deal.unavailable || orders.unavailable || customers.unavailable) {
+    return null;
+  }
+  if (deal.value == null && orders.value == null && customers.value == null) {
     return null;
   }
   const compare = readCardCompare(section);
   return {
-    dealAmount: dealAmount,
-    orderCount: orderCount,
-    customerCount: customerCount,
+    dealAmount: deal.value,
+    orderCount: orders.value,
+    customerCount: customers.value,
     yesterdayAmount: null,
     dealRate: compare.rate,
     dealRateLabel: compare.label,
@@ -1080,29 +1113,34 @@ export function buildLiveView({ shops, samples, now }) {
     const compare = resolveDealCompare(reading || {});
     const hasSession = shop.enabled !== false && Array.isArray(shop.cookies) && shop.cookies.length > 0;
     const loggedStamp = asStamp(shop.linkedAt);
-    const loginExpired = shop.enabled !== false && shop.authState === "login_expired";
+    const authMessage = String(shop.authMessage || "");
+    const adsOnly = /京准通|JZT|-100|广告采集|广告账号|待核验/i.test(authMessage);
+    // Ads/JZT failure must not present as whole-shop Jingmai logout.
+    const loginExpired =
+      shop.enabled !== false && shop.authState === "login_expired" && !adsOnly;
     const fresh = sampleIsFresh(latestDataStamp(mine), now);
     const collectFailed = shop.authState === "offline";
-    const watched = shop.authState === "ok" || collectFailed;
+    const watched = shop.authState === "ok" || collectFailed || (shop.authState === "login_expired" && adsOnly);
     const loggedIn = hasSession && !loginExpired;
+    const adsFailed = adsOnly && loggedIn;
+    // Keep online when Jingmai deal/session is fresh even if ads channel failed.
     const online = loggedIn && watched && fresh;
     let offline = false;
     let offlineReason = "";
-    if (loggedIn && watched && !online && (collectFailed || !fresh)) {
+    let adsReason = "";
+    if (adsFailed) {
+      adsReason = authMessage.slice(0, 120);
+    }
+    if (loggedIn && watched && !online && !adsFailed && (collectFailed || !fresh)) {
       offline = true;
-      const message = String(shop.authMessage || "");
-      if (collectFailed && message) {
-        if (/京准通/.test(message) && !/登录已失效，请重新登录/.test(message)) {
-          offlineReason = message;
-        } else if (/采集超时|采集已停止/.test(message)) {
-          offlineReason = message;
-        } else if (/登录已失效/.test(message)) {
-          offlineReason = message;
+      if (collectFailed && authMessage) {
+        if (/采集超时|采集已停止|网络/.test(authMessage)) {
+          offlineReason = authMessage;
         } else {
-          offlineReason = message;
+          offlineReason = authMessage;
         }
       } else if (!fresh) {
-        offlineReason = "采集已停止";
+        offlineReason = "采集异常（保留上次成功时间）";
       } else {
         offlineReason = "采集超时";
       }
@@ -1113,6 +1151,8 @@ export function buildLiveView({ shops, samples, now }) {
       online: online,
       offline: offline,
       offlineReason: offlineReason,
+      adsFailed: adsFailed,
+      adsReason: adsReason,
       loginExpired: loginExpired,
       dealAmount: compare.today,
       orderCount: today && today.orderCount != null ? today.orderCount : null,
@@ -1146,7 +1186,9 @@ export function buildLiveView({ shops, samples, now }) {
   }).length;
   return {
     ok: true,
+    // Shared MySQL namespace (shen_jingmai_*). Live writer is home; 沈/韩 may keep reading.
     source: "shen-jingmai",
+    collectorOwner: "home",
     updatedAt: displayStamp(updated),
     successShops: successShops,
     enabledShops: enabled.length,
@@ -1168,9 +1210,16 @@ export function shouldCollectShop(shop) {
 
 const defaultTickLock = { busy: false };
 
+/** Old-site 5-minute bucket key (Asia/Shanghai wall via Date ms is fine for dedupe). */
+export function collectBucketId(nowMs) {
+  const ms = typeof nowMs === "number" ? nowMs : Date.now();
+  return Math.floor(ms / (5 * 60 * 1000));
+}
+
 /**
  * Bounded fair collect: a shop's withDeadline budget starts only after it acquires a worker slot.
- * Waiting in queue does not burn the 120s budget. Previous unfinished round is not stacked.
+ * Waiting in queue does not burn the per-shop budget (old-site 85s). Previous unfinished round is not stacked.
+ * Per-shop lock + 5-minute bucket dedupe match zhenxuan2 jingmai_browser.collect.
  */
 export async function runTick(deps) {
   const lock = deps.tickLock || defaultTickLock;
@@ -1182,8 +1231,22 @@ export async function runTick(deps) {
     const inflight = deps.inflight;
     const concurrency = Math.max(1, Number(deps.collectConcurrency) || 3);
     const roundSignal = deps.signal;
+    const bucketMap = deps.collectBuckets || (deps.collectBuckets = new Map());
+    const bucket = collectBucketId();
+    const humanBlocks =
+      typeof deps.humanProtectsShop === "function"
+        ? deps.humanProtectsShop
+        : function () {
+            return false;
+          };
+    const holdFn =
+      typeof deps.backoffHold === "function"
+        ? deps.backoffHold
+        : function () {
+            return null;
+          };
     const targets = (await deps.listTargets()).filter(function (shop) {
-      return shouldCollectShop(shop) && !inflight.has(shop.store);
+      return shouldCollectShop(shop) && !inflight.has(shop.store) && !humanBlocks(shop.store) && !holdFn(shop.store);
     });
     let cursor = 0;
 
@@ -1197,6 +1260,15 @@ export async function runTick(deps) {
         if (!queued || inflight.has(queued.store) || queued.enabled === false) {
           continue;
         }
+        if (humanBlocks(queued.store)) {
+          continue;
+        }
+        if (holdFn(queued.store)) {
+          continue;
+        }
+        if (bucketMap.get(queued.store) === bucket) {
+          continue;
+        }
         // Slot acquired — only now start this shop's collect deadline.
         inflight.add(queued.store);
         try {
@@ -1207,9 +1279,21 @@ export async function runTick(deps) {
             if (!latest || latest.enabled === false || !shouldCollectShop(latest)) {
               continue;
             }
+            if (humanBlocks(latest.store) || holdFn(latest.store)) {
+              continue;
+            }
             shop = latest;
           }
-          await collectOne(shop, deps);
+          const outcome = await collectOne(shop, deps);
+          // Bucket only after a finished attempt that kept/wrote data (or confirmed offline metrics).
+          if (outcome && outcome.bucketed) {
+            bucketMap.set(shop.store, bucket);
+          }
+          if (outcome && outcome.ok && typeof deps.clearFailBackoff === "function") {
+            deps.clearFailBackoff(shop.store);
+          } else if (outcome && outcome.failKind && typeof deps.noteFailBackoff === "function") {
+            deps.noteFailBackoff(shop.store, outcome.failKind);
+          }
         } finally {
           inflight.delete(queued.store);
         }
@@ -1245,7 +1329,7 @@ async function persistDealSample(deps, shop, now, metrics, paidNote, sessionVers
   );
   await deps.saveSample(
     Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, fields),
-    sessionVersion ? { sessionVersion: sessionVersion } : undefined
+    Object.assign({ writer: "home" }, sessionVersion ? { sessionVersion: sessionVersion } : {})
   );
 }
 
@@ -1283,6 +1367,7 @@ async function refreshCookiesSafe(deps, shop, jar, identity, sessionVersion) {
   }
   try {
     await deps.updateSessionCookies(shop.store, jar, {
+      writer: "home",
       sessionVersion: sessionVersion,
       expectedShopId: shop.shopId || "",
       identity: identity
@@ -1306,8 +1391,12 @@ async function collectOne(shop, deps) {
   let earlyDeal = null;
   let earlySaved = false;
   let verifiedIdentity = null;
-  const budget = typeof deps.collectBudgetMs === "number" ? deps.collectBudgetMs : 120000;
-  const authOpts = sessionVersion ? { sessionVersion: sessionVersion } : undefined;
+  // Old-site single-shop timeout is 85s (finally closes this shop context).
+  const budget = typeof deps.collectBudgetMs === "number" ? deps.collectBudgetMs : 85000;
+  const authOpts = Object.assign(
+    { writer: "home" },
+    sessionVersion ? { sessionVersion: sessionVersion } : {}
+  );
   try {
     await withDeadline(
       async function (signal) {
@@ -1346,18 +1435,35 @@ async function collectOne(shop, deps) {
             }
           })
         );
+        const paidNote = String((metrics && metrics.paidNote) || "").trim();
         await persistDealSample(deps, shop, now, metrics, "", sessionVersion);
         await refreshCookiesSafe(deps, shop, jar, verifiedIdentity, sessionVersion);
-        await deps.markAuth(shop.store, "ok", "", authOpts);
+        if (paidNote) {
+          // Jingmai deal kept; surface ads channel only — do not mark login_expired.
+          await deps.markAuth(shop.store, "offline", paidNote.slice(0, 200), authOpts);
+          earlyDeal = metrics;
+          earlyDeal.__adsOnly = true;
+        } else {
+          await deps.markAuth(shop.store, "ok", "", authOpts);
+        }
       },
       budget,
       "采集超时"
     );
+    if (earlyDeal && earlyDeal.__adsOnly) {
+      const note = String(earlyDeal.paidNote || "广告采集失败").slice(0, 120);
+      return {
+        bucketed: true,
+        ok: true,
+        failKind: /超时/.test(note) ? "timeout" : "ads"
+      };
+    }
+    return { bucketed: true, ok: true, failKind: "" };
   } catch (error) {
     if (error && error.code === "identity") {
-      // Keep prior samples/cookies; report mismatch only.
+      // Keep prior samples/cookies; report mismatch only — never cross-shop write.
       await deps.markAuth(shop.store, "offline", String(error.message || "身份不符").slice(0, 200), authOpts);
-      return;
+      return { bucketed: true, ok: false, failKind: "identity" };
     }
     if (metricsHaveDeal(earlyDeal)) {
       if (!earlySaved) {
@@ -1370,19 +1476,28 @@ async function collectOne(shop, deps) {
       const decision = collectAuthDecision(error);
       if (decision.authState === "login_expired") {
         await deps.markAuth(shop.store, "login_expired", decision.authMessage, authOpts);
-        return;
+        return { bucketed: true, ok: false, failKind: "login" };
       }
-      await deps.markAuth(shop.store, "offline", decision.authMessage || offlineMessage(error), authOpts);
-      return;
+      // Deal kept; ads/timeout noted — bucket + ads backoff, do not mark whole shop login-dead.
+      const adsMsg = decision.authMessage || offlineMessage(error);
+      await deps.markAuth(shop.store, "offline", adsMsg, authOpts);
+      return {
+        bucketed: true,
+        ok: true,
+        failKind: decision.authState === "offline" && /超时/.test(adsMsg) ? "timeout" : "ads"
+      };
     }
     const decision = collectAuthDecision(error);
     if (decision.authState === "login_expired") {
       await deps.markAuth(shop.store, "login_expired", decision.authMessage, authOpts);
-      return;
+      return { bucketed: true, ok: false, failKind: "login" };
     }
     if (decision.authState === "offline") {
       await deps.markAuth(shop.store, "offline", decision.authMessage, authOpts);
+      const kind = /超时|网络/.test(decision.authMessage || "") ? "timeout" : "ads";
+      return { bucketed: true, ok: false, failKind: kind };
     }
+    return { bucketed: false, ok: false, failKind: "timeout" };
   }
 }
 

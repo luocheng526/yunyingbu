@@ -784,6 +784,8 @@ export function packJingmaiShops(view, org) {
       offline: false,
       loginExpired: false,
       offlineReason: "",
+      adsFailed: false,
+      adsReason: "",
       dealAmount: null,
       paidAmount: null,
       paidDeal: null,
@@ -807,6 +809,8 @@ export function packJingmaiShops(view, org) {
         online: shop.online === true,
         offline: offline,
         offlineReason: shop.offlineReason || (savedAccount && sessionMissing ? "组织中心有账号，京麦会话还没有" : ""),
+        adsFailed: shop.adsFailed === true,
+        adsReason: shop.adsReason || "",
         loginExpired: shop.loginExpired === true,
         shopId: String(meta.shopId || shop.shopId || ""),
         capturedAt: shop.capturedAt || "",
@@ -870,5 +874,14 @@ export async function getHomeLocalPaid(req) {
     req ? pullFeeTargets(req) : Promise.resolve({})
   ]);
   const snap = rememberLocalPaidDay(merged, ymd);
-  return packFromSnap(snap, { summary: merged.summary, from: merged.from || ["jingmai"], feeTargets, hourly: merged.hourly });
+  const packed = packFromSnap(snap, {
+    summary: merged.summary,
+    from: merged.from || ["jingmai"],
+    feeTargets,
+    hourly: merged.hourly
+  });
+  // Independent home live path — does not depend on /api/shen/paid for collection.
+  packed.collectorOwner = "home";
+  packed.source = packed.source || "jingmai-local";
+  return packed;
 }
