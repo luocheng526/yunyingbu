@@ -388,10 +388,10 @@ test("扫码后按进度补采，过期保留断点", async () => {
     }
     if (href.includes("/v2/channel/channelOverViewList")) {
       reports += 1;
-      if (reports === 2) {
-        expired = true;
-        return json({ code: -1, content: "用户未登录或登录状态已过期" });
-      }
+    }
+    if (reports >= 1 && !href.includes("/auth/") && !href.includes("/v2/channel/channelOverViewList")) {
+      expired = true;
+      return json({ code: -1, content: "用户未登录或登录状态已过期" });
     }
     if (expired) {
       return json({ code: -1, content: "用户未登录或登录状态已过期" });
@@ -409,8 +409,8 @@ test("扫码后按进度补采，过期保留断点", async () => {
     }
   }
   assert.equal(status.phase, "needs_scan");
-  const september = () => calls.filter((line) => line.includes("channelOverViewList") && line.includes("2026-09-01") && line.includes("2026-09-30")).length;
-  assert.equal(september(), 1);
+  const newest = () => calls.filter((line) => line.includes("channelOverViewList") && line.includes("2026-11-16")).length;
+  assert.equal(newest(), 1);
   const before = calls.length;
   const paused = await tick();
   assert.equal(paused.phase, "needs_scan");
@@ -421,7 +421,58 @@ test("扫码后按进度补采，过期保留断点", async () => {
   await tick();
   await tick();
   await tick();
-  assert.equal(september(), 1);
+  assert.equal(newest(), 1);
+});
+
+test("失败重试让开最近还没采的日期", async () => {
+  setBoundClock(() => new Date("2026-11-19T04:00:00Z"));
+  const calls = [];
+  setBoundFetch(async (url, options = {}) => {
+    calls.push(`${options.body || ""} ${url}`);
+    return {
+      headers: {
+        get(name) {
+          return String(name).toLowerCase() === "content-type" ? "application/json" : null;
+        },
+        getSetCookie() {
+          return [];
+        }
+      },
+      json: async () => ({ code: 0, data: { list: [{ shopName: "甲店", payAmount: 1 }], total: 1 } }),
+      arrayBuffer: async () => new ArrayBuffer(0)
+    };
+  });
+  const masters = {};
+  ["profile", "perms", "projects", "shops", "teams", "members", "goods"].forEach((id) => {
+    masters[id] = { status: "done", page: 1, attempts: 0 };
+  });
+  await writeState("masters", masters);
+  await writeState("session", {
+    phase: "collecting",
+    deviceId: "pace",
+    cookies: { JSESSIONID: "pace" },
+    message: ""
+  });
+  await writeSheet({
+    reportId: "qdfx_llfx",
+    dim: "all",
+    startOn: "2026-09-01",
+    endOn: "2026-09-01",
+    pageNo: 1,
+    status: "failed",
+    kind: "list",
+    attempts: 1,
+    errorText: "q=1 daysType=1 error",
+    payload: {}
+  });
+  const status = await tick();
+  assert.equal(status.phase, "collecting");
+  assert.equal(calls.length, 3);
+  assert.equal(calls.some((line) => line.includes("flowChannelAnalyzeExpert")), false);
+  calls.forEach((line) => {
+    assert.match(line, /2026-11-19/);
+  });
+  assert.match(calls[0], /channelOverViewList/);
 });
 
 test("过期后仍核对页面上的二维码，扫完就登录", async () => {

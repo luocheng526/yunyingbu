@@ -26,7 +26,7 @@ export function ensureCollectLoop() {
   }
   timer = setInterval(() => {
     tick().catch(() => {});
-  }, 4000);
+  }, 1000);
   if (typeof timer.unref === "function") {
     timer.unref();
   }
@@ -487,8 +487,8 @@ export function reportBody(report, dim, scope, page) {
   };
 }
 
-function sheetHole(report, dim, scope, sheets) {
-  const pages = sheets.filter(
+function sheetHole(report, dim, scope, sheets, indexedPages = null) {
+  const pages = indexedPages || sheets.filter(
     (row) => row.reportId === report.id && row.dim === dim && row.startOn === scope.start && row.endOn === scope.end
   );
   const first = pages.find((row) => row.pageNo === 1);
@@ -548,6 +548,35 @@ function sheetHole(report, dim, scope, sheets) {
   return null;
 }
 
+function sheetIndex(sheets) {
+  const index = new Map();
+  sheets.forEach((row) => {
+    const key = `${row.reportId}|${row.dim}|${row.startOn}|${row.endOn}`;
+    const pages = index.get(key);
+    if (pages) {
+      pages.push(row);
+    } else {
+      index.set(key, [row]);
+    }
+  });
+  return index;
+}
+
+function freshScopes(scopes) {
+  const days = [];
+  const months = [];
+  scopes.forEach((scope) => {
+    if (scope.start === scope.end) {
+      days.push(scope);
+    } else {
+      months.push(scope);
+    }
+  });
+  days.reverse();
+  months.reverse();
+  return days.concat(months);
+}
+
 async function nextUnit(current) {
   const masters = await masterState();
   for (const master of MASTERS) {
@@ -559,16 +588,23 @@ async function nextUnit(current) {
   }
   const allowed = Array.isArray(current.allowed) ? new Set(current.allowed) : null;
   const sheets = await listSheetHeads();
+  const indexed = sheetIndex(sheets);
   const scopes = collectScopes(shanghaiToday());
-  for (const cause of ["retry", "empty", "page", "new"]) {
-    for (const report of reports()) {
-      if (allowed && report.access && !allowed.has(report.access)) {
-        continue;
-      }
-      for (const dim of report.dims || ["all"]) {
-        for (const scope of scopes) {
-          const hole = sheetHole(report, dim, scope, sheets);
-          if (hole && hole.cause === cause) {
+  const passes = [
+    { causes: new Set(["new", "page"]), list: freshScopes(scopes) },
+    { causes: new Set(["empty"]), list: freshScopes(scopes) },
+    { causes: new Set(["retry"]), list: scopes }
+  ];
+  for (const pass of passes) {
+    for (const scope of pass.list) {
+      for (const report of reports()) {
+        if (allowed && report.access && !allowed.has(report.access)) {
+          continue;
+        }
+        for (const dim of report.dims || ["all"]) {
+          const pages = indexed.get(`${report.id}|${dim}|${scope.start}|${scope.end}`) || [];
+          const hole = sheetHole(report, dim, scope, sheets, pages);
+          if (hole && pass.causes.has(hole.cause)) {
             return { type: "report", report, dim, scope, ...hole };
           }
         }
@@ -754,37 +790,68 @@ async function runReport(current, unit) {
   });
 }
 
+function cursorOf(unit) {
+  if (unit.type === "master") {
+    return { id: unit.master.id, label: unit.master.label, page: "基础资料", dim: "all", start: "2026-09-01", end: shanghaiToday(), pageNo: unit.page || 1 };
+  }
+  return {
+    id: unit.report.id,
+    label: unit.report.label,
+    page: unit.report.pageLabel || "",
+    dim: unit.dim || "all",
+    start: unit.scope.start,
+    end: unit.scope.end,
+    pageNo: unit.page || 1
+  };
+}
+
+async function runUnit(current, unit) {
+  current.phase = "collecting";
+  current.cursor = cursorOf(unit);
+  await saveSession(current);
+  if (unit.type === "master") {
+    await runMaster(current, unit);
+  } else {
+    await runReport(current, unit);
+  }
+}
+
 export async function tick() {
   if (busy) {
     return { ok: true, skipped: true };
   }
   busy = true;
   try {
-    const current = await session();
+    let current = await session();
     if (current.phase === "waiting_scan") {
       return pollLink();
     }
     if (current.phase !== "collecting" && current.phase !== "logged_in") {
       return { ok: true, idle: true, phase: current.phase };
     }
-    const unit = await nextUnit(current);
-    if (!unit) {
-      current.phase = "logged_in";
-      current.message = `已补到 ${shanghaiToday()} 之前能确定的范围。之后按天增量。`;
-      await saveSession(current);
-      return { ok: true, idle: true, phase: current.phase };
+    let last = null;
+    for (let step = 0; step < 3; step += 1) {
+      if (step > 0) {
+        current = await session();
+        if (current.phase !== "collecting" && current.phase !== "logged_in") {
+          break;
+        }
+      }
+      const unit = await nextUnit(current);
+      if (!unit) {
+        if (!last) {
+          current.phase = "logged_in";
+          current.message = `已补到 ${shanghaiToday()} 之前能确定的范围。之后按天增量。`;
+          await saveSession(current);
+          return { ok: true, idle: true, phase: current.phase };
+        }
+        break;
+      }
+      await runUnit(current, unit);
+      last = unit;
     }
-    current.phase = "collecting";
-    current.cursor = unit.type === "master"
-      ? { id: unit.master.id, label: unit.master.label, page: "基础资料", dim: "all", start: "2026-09-01", end: shanghaiToday(), pageNo: unit.page || 1 }
-      : { id: unit.report.id, label: unit.report.label, page: unit.report.pageLabel || "", dim: unit.dim || "all", start: unit.scope.start, end: unit.scope.end, pageNo: unit.page || 1 };
-    await saveSession(current);
-    if (unit.type === "master") {
-      await runMaster(current, unit);
-    } else {
-      await runReport(current, unit);
-    }
-    return { ok: true, phase: (await session()).phase, unit: unit.type === "master" ? unit.master.id : unit.report.id };
+    const phase = (await session()).phase;
+    return { ok: true, phase, unit: last.type === "master" ? last.master.id : last.report.id };
   } finally {
     busy = false;
   }
