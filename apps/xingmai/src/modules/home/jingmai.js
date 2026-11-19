@@ -478,6 +478,8 @@ export function describeShopPayload(body) {
 
 export function sampleFields(metrics) {
   const source = metrics || {};
+  const dealNote = source.dealNote ? String(source.dealNote).slice(0, 160) : "";
+  const paidNote = source.paidNote ? String(source.paidNote).slice(0, 160) : "";
   return {
     dealAmount: source.dealAmount == null ? null : source.dealAmount,
     orderCount: source.orderCount == null ? null : source.orderCount,
@@ -489,7 +491,7 @@ export function sampleFields(metrics) {
     paidAmount: source.paidAmount == null ? null : source.paidAmount,
     paidDeal: source.paidDeal == null ? null : source.paidDeal,
     paidRoi: source.paidRoi == null ? null : source.paidRoi,
-    dealNote: source.dealNote ? String(source.dealNote).slice(0, 160) : ""
+    dealNote: [dealNote, paidNote].filter(Boolean).join("；").slice(0, 160)
   };
 }
 
@@ -537,7 +539,7 @@ export function parseRealtime(status, text, location) {
 }
 
 export function classifyTransportError(error) {
-  if (error && (error.code === "login" || error.code === "timeout" || error.code === "network")) {
+  if (error && (error.code === "login" || error.code === "timeout" || error.code === "network" || error.code === "paid")) {
     return error;
   }
   if (error && (error.name === "TimeoutError" || error.name === "AbortError")) {
@@ -952,8 +954,17 @@ export function buildLiveView({ shops, samples, now }) {
     let offlineReason = "";
     if (loggedIn && watched && !online && (collectFailed || !fresh)) {
       offline = true;
-      if (collectFailed && shop.authMessage) {
-        offlineReason = String(shop.authMessage);
+      const message = String(shop.authMessage || "");
+      if (collectFailed && message) {
+        if (/京准通/.test(message) && !/登录已失效，请重新登录/.test(message)) {
+          offlineReason = message;
+        } else if (/采集超时|采集已停止/.test(message)) {
+          offlineReason = message;
+        } else if (/登录已失效/.test(message)) {
+          offlineReason = message;
+        } else {
+          offlineReason = message;
+        }
       } else if (!fresh) {
         offlineReason = "采集已停止";
       } else {
@@ -1032,22 +1043,29 @@ export async function runTick(deps) {
   await Promise.all(jobs);
 }
 
+function offlineMessage(error) {
+  const classified = classifyTransportError(error);
+  return String(classified.message || "采集超时").replace(/\s+/g, " ").slice(0, 120) || "采集超时";
+}
+
 async function collectOne(shop, deps) {
   const now = deps.now();
   try {
     const metrics = await withDeadline(function () {
       return deps.fetchHome(shop.cookies);
-    }, 600000);
+    }, 120000);
     await deps.saveSample(
       Object.assign({ store: shop.store, day: now.day, capturedAt: now.stamp, ok: true }, sampleFields(metrics))
     );
-    if (shop.authState === "offline") {
-      await deps.markAuth(shop.store, "ok", "");
-    }
+    await deps.markAuth(shop.store, "ok", "");
   } catch (error) {
     const decision = collectAuthDecision(error);
     if (decision.authState === "login_expired") {
       await deps.markAuth(shop.store, "login_expired", decision.authMessage);
+      return;
+    }
+    if (decision.authState === "offline") {
+      await deps.markAuth(shop.store, "offline", decision.authMessage);
     }
   }
 }
@@ -1056,6 +1074,12 @@ export function collectAuthDecision(error) {
   const classified = classifyTransportError(error);
   if (classified.code === "login") {
     return { authState: "login_expired", authMessage: "登录已失效，请重新登录" };
+  }
+  if (classified.code === "paid") {
+    return { authState: "offline", authMessage: offlineMessage(classified) };
+  }
+  if (classified.code === "timeout" || classified.code === "network") {
+    return { authState: "offline", authMessage: offlineMessage(classified) };
   }
   return { authState: "ok", authMessage: "" };
 }

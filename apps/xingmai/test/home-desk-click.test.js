@@ -640,8 +640,11 @@ test("a shop that fails to open keeps other shops logged in and names the step",
 });
 
 test("one collect timeout or an empty deal does not mark the login offline", () => {
-  assert.equal(collectAuthDecision({ code: "timeout", message: "采集超时" }).authState, "ok");
+  assert.equal(collectAuthDecision({ code: "timeout", message: "采集超时" }).authState, "offline");
+  assert.equal(collectAuthDecision({ code: "paid", message: "京准通没有可用账号 -100" }).authState, "offline");
+  assert.equal(collectAuthDecision({ code: "paid", message: "京准通没有可用账号 -100" }).authMessage.includes("京准通"), true);
   assert.equal(collectAuthDecision({ code: "login", message: "登录已失效" }).authState, "login_expired");
+  assert.equal(collectAuthDecision({ code: "login", message: "登录已失效" }).authMessage, "登录已失效，请重新登录");
 });
 
 test("the connect picker patch turns the old all-shop opener into a shop list", () => {
