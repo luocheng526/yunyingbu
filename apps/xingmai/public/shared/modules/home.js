@@ -1985,16 +1985,13 @@
       if (pick.shop && name !== pick.shop) {
         return false;
       }
-      if (!(typeof liveScope !== "undefined" && liveScope === "live2") && teamMap && !teamMap[normShopName(name)]) {
+      if (teamMap && !teamMap[normShopName(name)]) {
         return false;
       }
       if (q && name.toLowerCase().indexOf(q) < 0) {
         return false;
       }
       if (typeof liveScope !== "undefined" && liveScope === "live2") {
-        if (pick.team && String(row.team || "") !== pick.team) {
-          return false;
-        }
         var liveKind = liveLinkOf(row).kind;
         if (pick.link === "on" && liveKind !== "on" && !(liveKind === "ads" && row.online === true)) {
           return false;
@@ -2105,19 +2102,11 @@
       "</button></div></div>"
     );
   }
-  function live2FilterHtml(allShops, updatedAt) {
+  function live2FilterHtml(allShops, state) {
     var pick = liveFilter();
     var cur = liveFilterValue(pick);
-    var teams = [];
-    var seenTeam = {};
-    (allShops || []).forEach(function (row) {
-      var name = String((row && row.team) || "").trim();
-      if (!name || seenTeam[name]) {
-        return;
-      }
-      seenTeam[name] = true;
-      teams.push(name);
-    });
+    var teams = visibleDutyTeams(state, allShops);
+    var updatedAt = state && state.live2Pack && state.live2Pack.updatedAt;
     var shops = liveFilterShopNames(allShops);
     return (
       '<div class="xm-hm-live-filter">' +
@@ -2128,8 +2117,8 @@
       (teams.length
         ? '<optgroup label="责权团队">' +
           teams
-            .map(function (name) {
-              return liveFilterOption("team:" + name, dutyTeamLabel(name), cur === "team:" + name);
+            .map(function (team) {
+              return liveFilterOption("team:" + team.name, dutyTeamLabel(team.name), cur === "team:" + team.name);
             })
             .join("") +
           "</optgroup>"
@@ -3318,31 +3307,11 @@
       };
     });
   }
-  function live2Cards(shops, pack) {
-    var paidDeal = 0;
-    var spend = 0;
-    var hasPay = false;
-    var hasSpend = false;
-    var shopsIn = 0;
+  function live2Cards(shops, countShops, updatedAt) {
+    var sums = live2Sums(shops);
     var hot = 0;
     var cold = 0;
-    ((pack && pack.records) || []).forEach(function (row) {
-      if (!row || row.pendingCollect) {
-        return;
-      }
-      if (row.paidDeal != null) {
-        paidDeal += Number(row.paidDeal);
-        hasPay = true;
-      }
-      if (row.paidAmount != null) {
-        spend += Number(row.paidAmount);
-        hasSpend = true;
-      }
-      if (row.liveAmount != null || row.paidAmount != null) {
-        shopsIn += 1;
-      }
-    });
-    (shops || []).forEach(function (row) {
+    (countShops || shops || []).forEach(function (row) {
       if (!row || row.pendingCollect) {
         return;
       }
@@ -3354,20 +3323,19 @@
         cold += 1;
       }
     });
-    var any = hasPay || hasSpend || shopsIn;
-    var at = (pack && pack.updatedAt) || "";
+    var any = sums.paidDeal != null || sums.spend != null || sums.shops;
     return [
-      { key: "livePay", label: "实时付费成交额", value: hasPay ? fmtMoney(paidDeal) : "—" },
-      { key: "roi", label: "付费成交ROI", value: hasPay && hasSpend && spend ? fmtRoi(paidDeal, spend) : "—" },
-      { key: "livePaid", label: "实时付费接入店铺数量", value: any ? fmtInt(shopsIn) : "—" },
+      { key: "livePay", label: "实时付费成交额", value: sums.paidDeal != null ? fmtMoney(sums.paidDeal) : "—" },
+      { key: "roi", label: "付费成交ROI", value: sums.paidDeal != null && sums.spend ? fmtRoi(sums.paidDeal, sums.spend) : "—" },
+      { key: "livePaid", label: "实时付费接入店铺数量", value: any ? fmtInt(sums.shops) : "—" },
       { key: "feeHot", label: "实时付费超标店铺", value: any ? String(hot) : "—" },
       { key: "feeCold", label: "实时费比低店铺", value: any ? String(cold) : "—" },
-      { key: "liveAt", label: "更新时间", value: at || "—" }
+      { key: "liveAt", label: "更新时间", value: updatedAt || "—" }
     ];
   }
   function orderedLive2Cards() {
     var map = {};
-    live2Cards(null, null).forEach(function (card) {
+    live2Cards(null, null, "").forEach(function (card) {
       map[card.key] = card;
     });
     return liveCardOrder()
@@ -3380,26 +3348,85 @@
   function live2Sums(records) {
     var deal = 0;
     var spend = 0;
+    var paidDeal = 0;
     var hasDeal = false;
     var hasSpend = false;
+    var hasPay = false;
+    var shops = 0;
     (records || []).forEach(function (row) {
       if (!row || row.pendingCollect) {
         return;
       }
-      if (row.liveAmount != null && row.liveAmount !== "") {
-        deal += Number(row.liveAmount) || 0;
+      var gmv = asNum(row.liveAmount);
+      var ad = asNum(row.paidAmount);
+      var pay = asNum(row.paidDeal);
+      if (gmv != null) {
+        deal += gmv;
         hasDeal = true;
       }
-      if (row.paidAmount != null && row.paidAmount !== "") {
-        spend += Number(row.paidAmount) || 0;
+      if (ad != null) {
+        spend += ad;
         hasSpend = true;
+      }
+      if (pay != null) {
+        paidDeal += pay;
+        hasPay = true;
+      }
+      if (gmv != null || ad != null) {
+        shops += 1;
       }
     });
     return {
       deal: hasDeal ? deal : null,
       spend: hasSpend ? spend : null,
+      paidDeal: hasPay ? paidDeal : null,
+      shops: shops,
       fee: hasDeal && hasSpend && deal ? spend / deal : null
     };
+  }
+  function live2ScopeShops(shops, state) {
+    var pick = liveFilter();
+    var teamMap = pick.shop ? null : pick.team ? shopsInDutyTeam(state, pick.team) : null;
+    var idle = (state && state.orgIdle) || {};
+    return (shops || []).filter(function (row) {
+      var name = String((row && row.shop) || "").trim();
+      if (!name || idle[normShopName(name)]) {
+        return false;
+      }
+      if (pick.shop && name !== pick.shop) {
+        return false;
+      }
+      if (teamMap && !teamMap[normShopName(name)]) {
+        return false;
+      }
+      return true;
+    });
+  }
+  function scaleHourList(list, ratio) {
+    return padHours(list, 24).map(function (n) {
+      var v = asNum(n);
+      return v ? v * ratio : 0;
+    });
+  }
+  function scaleLive2Day(day, dealRatio, spendRatio, exact) {
+    var deal = scaleHourList(day && day.jingmaiAt, dealRatio);
+    var spend = scaleHourList(day && day.spendAt, spendRatio);
+    var fee = deal.map(function (d, i) {
+      return d ? spend[i] / d : 0;
+    });
+    if (exact) {
+      var h = shanghaiHour();
+      if (exact.deal != null) {
+        deal[h] = exact.deal;
+      }
+      if (exact.spend != null) {
+        spend[h] = exact.spend;
+      }
+      if (exact.fee != null) {
+        fee[h] = exact.fee;
+      }
+    }
+    return { jingmaiAt: deal, spendAt: spend, feeAt: fee };
   }
   function levelDeltas(list, slots) {
     var src = padHours(list, 24);
@@ -3441,44 +3468,65 @@
     }
     return null;
   }
-  function live2Charts(records) {
+  function live2ChartsFrom(sums, stamps) {
     var blank = blankLive();
-    var sums = live2Sums(records);
-    if (sums.deal == null && sums.spend == null) {
+    if (!sums || (sums.deal == null && sums.spend == null)) {
       return { hero: blank.hero, paid: blank.paid, fee: blank.fee };
     }
-    var kept = keepLiveDay(
-      { jingmai: sums.deal, spend: sums.spend, fee: sums.fee },
-      LIVE2_DAY_KEY
-    );
-    var today = kept.todayStamps || emptyLiveDayNums();
-    var yest = kept.yestStamps || emptyLiveDayNums();
-    var yestDeal = stampAtHour(yest.jingmaiAt);
-    var yestSpend = stampAtHour(yest.spendAt);
-    var yestFee = stampAtHour(yest.feeAt);
+    var today = stamps && stamps.today;
+    var yest = stamps && stamps.yest;
+    if (!stamps) {
+      var kept = keepLiveDay(
+        { jingmai: sums.deal, spend: sums.spend, fee: sums.fee },
+        LIVE2_DAY_KEY
+      );
+      today = kept.todayStamps || emptyLiveDayNums();
+      yest = kept.yestStamps || emptyLiveDayNums();
+    }
+    var yestDeal = stampAtHour(yest && yest.jingmaiAt);
+    var yestSpend = stampAtHour(yest && yest.spendAt);
+    var yestFee = stampAtHour(yest && yest.feeAt);
     var hero = spendChartOf(sums.deal, yestDeal, {
-      todaySpend: levelDeltas(today.jingmaiAt),
+      todaySpend: levelDeltas(today && today.jingmaiAt),
       yesterdaySpend: yestDeal != null ? levelDeltas(yest.jingmaiAt, 24) : []
     });
     hero.key = "jingmai";
     hero.label = "实时总成交金额";
     var paid = spendChartOf(sums.spend, yestSpend, {
-      todaySpend: levelDeltas(today.spendAt),
+      todaySpend: levelDeltas(today && today.spendAt),
       yesterdaySpend: yestSpend != null ? levelDeltas(yest.spendAt, 24) : []
     });
     var fee = feeChartOf(sums.fee, yestFee, {
-      todayFee: levelDay(today.feeAt).slice(0, shanghaiHour() + 1),
+      todayFee: levelDay(today && today.feeAt).slice(0, shanghaiHour() + 1),
       yesterdayFee: yestFee != null ? levelDay(yest.feeAt) : []
     });
     return { hero: hero, paid: paid, fee: fee };
   }
+  function live2Charts(allRecords, scopedRecords) {
+    var allSums = live2Sums(allRecords);
+    var company = live2ChartsFrom(allSums, null);
+    var pick = liveFilter();
+    if (!pick.shop && !pick.team) {
+      return company;
+    }
+    var scopeSums = live2Sums(scopedRecords || []);
+    var dealRatio = allSums.deal ? (scopeSums.deal || 0) / allSums.deal : 0;
+    var spendRatio = allSums.spend ? (scopeSums.spend || 0) / allSums.spend : 0;
+    var store = readLiveDay(LIVE2_DAY_KEY);
+    return live2ChartsFrom(scopeSums, {
+      today: scaleLive2Day(store.today, dealRatio, spendRatio, scopeSums),
+      yest: scaleLive2Day(store.yest, dealRatio, spendRatio, null)
+    });
+  }
   function live2PanelHtml(state) {
     var roster = adaptLive2Shops(state && state.dutyShops);
-    var shops = filterLiveShops(applyLive2Pack(roster, state && state.live2Pack), state);
-    shops = sortLiveShops(feePickShops(shops, liveFeePick));
-    var charts = live2Charts((state && state.live2Pack && state.live2Pack.records) || []);
+    var packed = applyLive2Pack(roster, state && state.live2Pack);
+    var scoped = live2ScopeShops(packed, state);
+    var shops = filterLiveShops(packed, state);
+    var charts = live2Charts(packed, scoped);
     var trio = liveChartHtml(charts.hero) + liveChartHtml(charts.paid) + liveChartHtml(charts.fee);
-    var cards = live2Cards(shops, state && state.live2Pack);
+    var cards = live2Cards(scoped, shops, state && state.live2Pack && state.live2Pack.updatedAt);
+    shops = sortLiveShops(feePickShops(shops, liveFeePick));
     var cardMap = {};
     cards.forEach(function (card) {
       cardMap[card.key] = card;
@@ -3486,7 +3534,7 @@
     liveBoardSlot = "";
     return (
       liveDeskHtml(state) +
-      live2FilterHtml(roster, state && state.live2Pack && state.live2Pack.updatedAt) +
+      live2FilterHtml(roster, state) +
       '<div class="xm-hm-live-charts">' +
       trio +
       '</div><div class="xm-hm-live-cards">' +
