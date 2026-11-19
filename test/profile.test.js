@@ -162,6 +162,9 @@ test("login 罗成 sets cookie; GET /api/auth/me 200; wrong password 401", async
     assert.match(moduleJs.text, /id="me-hard-reload"/);
     assert.match(moduleJs.text, /强制刷新/);
     assert.match(moduleJs.text, /__xmHardReload/);
+    assert.match(moduleJs.text, /\/api\/profile\/logs/);
+    assert.match(moduleJs.text, /个人不可删除/);
+    assert.doesNotMatch(moduleJs.text, /操作日志即将开放/);
   });
 });
 
@@ -304,6 +307,62 @@ test("people login uses organization listPeople overlay not mysql columns", asyn
     });
     assert.equal(ok.res.status, 200);
     assert.equal(ok.json.user.username, "张文静");
+  });
+});
+
+test("operation logs record account actions; staff cannot delete; 罗成 sees everyone", async () => {
+  setPeopleLoginForTests([
+    { name: "沈子晗", username: "沈子晗", password: "OrgLogin-test1", role: "经理", department: "沈子晗运营中心", status: "在职" }
+  ]);
+  await withServer(async (base) => {
+    const staff = await request(base, "/api/auth/login", {
+      method: "POST",
+      body: { username: "沈子晗", password: "OrgLogin-test1" },
+      redirect: "follow"
+    });
+    assert.equal(staff.res.status, 200);
+    const staffLogs = await request(base, "/api/profile/logs", { cookie: staff.cookie, redirect: "follow" });
+    assert.equal(staffLogs.res.status, 200);
+    assert.equal(staffLogs.json.scope, "self");
+    assert.equal(staffLogs.json.canDelete, false);
+    assert.ok(staffLogs.json.items.some((item) => item.username === "沈子晗" && item.action === "登录"));
+    assert.equal(
+      staffLogs.json.items.every((item) => item.username === "沈子晗"),
+      true
+    );
+
+    const denied = await request(base, "/api/profile/logs/abc", {
+      method: "DELETE",
+      cookie: staff.cookie,
+      redirect: "follow"
+    });
+    assert.equal(denied.res.status, 403);
+    assert.match(denied.json.error, /不可删除/);
+
+    const admin = await request(base, "/api/auth/login", {
+      method: "POST",
+      body: { username: DEMO_USERNAME, password: DEMO_INITIAL_PASSWORD },
+      redirect: "follow"
+    });
+    assert.equal(admin.res.status, 200);
+    const allLogs = await request(base, "/api/profile/logs", { cookie: admin.cookie, redirect: "follow" });
+    assert.equal(allLogs.res.status, 200);
+    assert.equal(allLogs.json.scope, "all");
+    assert.equal(allLogs.json.canDelete, false);
+    assert.ok(allLogs.json.items.some((item) => item.username === "沈子晗"));
+    assert.ok(allLogs.json.items.some((item) => item.username === DEMO_USERNAME));
+
+    const onlyStaff = await request(base, "/api/profile/logs?username=" + encodeURIComponent("沈子晗"), {
+      cookie: admin.cookie,
+      redirect: "follow"
+    });
+    assert.equal(onlyStaff.json.items.every((item) => item.username === "沈子晗"), true);
+
+    const spoof = await request(base, "/api/profile/logs?username=" + encodeURIComponent(DEMO_USERNAME), {
+      cookie: staff.cookie,
+      redirect: "follow"
+    });
+    assert.equal(spoof.json.items.every((item) => item.username === "沈子晗"), true);
   });
 });
 

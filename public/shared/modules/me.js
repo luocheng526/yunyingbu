@@ -149,6 +149,10 @@
       ".me-pane.on{display:block;flex:1;min-height:0;overflow:auto;}" +
       ".me-pane.on[data-me-pane=basic]{display:flex;flex-direction:column;overflow:hidden;}" +
       ".me-pane.on[data-me-pane=rights]{display:flex;flex-direction:column;overflow:auto;}" +
+      ".me-pane.on[data-me-pane=logs]{display:flex;flex-direction:column;overflow:hidden;}" +
+      ".me-pane.on[data-me-pane=logs]>.xm-ui-card{flex:1;min-height:0;display:flex;flex-direction:column;}" +
+      ".me-pane.on[data-me-pane=logs] .xm-ui-card__body{flex:1;min-height:0;overflow:auto;}" +
+      ".me-logs-tools{margin:0 0 8px;}" +
       ".me-page.xm-ui-scope .xm-ui-table th,.me-page.xm-ui-scope .xm-ui-table td{height:32px;padding:0 8px;font-size:12px;}" +
       "#device-list,.me-col > .xm-ui-card:has(#device-list) .xm-ui-card__body{overflow:auto;}" +
       "@media (max-width:900px){.me-banner,.me-split,.me-actions{grid-template-columns:1fr;}.me-page{height:auto;max-height:none;overflow:auto;}}";
@@ -379,10 +383,9 @@
         "</div>" +
         '<div class="me-pane" data-me-pane="logs">' +
         UI.ContentCard({
-          content: UI.EmptyState({ title: "操作日志即将开放", description: "设备列表见登录设备管理" }).replace(
-            'class="xm-ui-empty-state"',
-            'class="xm-ui-empty-state me-empty"'
-          )
+          title: "操作日志",
+          description: "记录本账号操作，个人不可删除",
+          content: '<div class="me-logs-tools" id="me-logs-tools"></div><div id="me-logs"></div>'
         }) +
         "</div></div>";
 
@@ -419,6 +422,9 @@
           if (field) {
             field.focus();
           }
+        }
+        if (paneId === "logs") {
+          loadLogs();
         }
       }
 
@@ -706,6 +712,82 @@
         });
       }
 
+      let logItems = [];
+      let logScope = "self";
+
+      function renderLogs(keyword) {
+        const box = root.querySelector("#me-logs");
+        const tools = root.querySelector("#me-logs-tools");
+        const desc = root.querySelector('[data-me-pane="logs"] .xm-ui-card-desc, [data-me-pane="logs"] .xm-ui-section-desc, [data-me-pane="logs"] p');
+        const note =
+          logScope === "all"
+            ? "管理员可查看全部账号操作，日志不可删除"
+            : "仅显示本账号操作，个人不可删除";
+        if (desc && desc.tagName !== "DIV") {
+          desc.textContent = note;
+        }
+        if (logScope === "all") {
+          tools.innerHTML = UI.FilterToolbar({
+            search: true,
+            searchPlaceholder: "按账号筛选"
+          }).replace('class="xm-ui-filter-toolbar"', 'class="xm-ui-filter-toolbar" id="me-log-filter"');
+          const search = tools.querySelector("input[type=search]");
+          if (search) {
+            search.value = keyword || "";
+            search.addEventListener("input", function () {
+              renderLogs(search.value);
+            });
+          }
+        } else {
+          tools.innerHTML = "";
+        }
+        const needle = String(keyword || "").trim();
+        const rows = logItems.filter(function (item) {
+          if (!needle) {
+            return true;
+          }
+          return (
+            String(item.actor || "").indexOf(needle) !== -1 ||
+            String(item.username || "").indexOf(needle) !== -1 ||
+            String(item.action || "").indexOf(needle) !== -1
+          );
+        });
+        if (!rows.length) {
+          box.innerHTML = UI.EmptyState({
+            title: "暂无操作记录",
+            description: logScope === "all" ? "还没有账号产生操作" : "本账号还没有操作记录"
+          }).replace('class="xm-ui-empty-state"', 'class="xm-ui-empty-state me-empty"');
+          return;
+        }
+        box.innerHTML = UI.DataTable({
+          columns: [
+            { key: "time", label: "时间" },
+            { key: "actor", label: "账号" },
+            { key: "action", label: "操作" },
+            { key: "detail", label: "说明" }
+          ],
+          rows: rows
+        });
+      }
+
+      function loadLogs() {
+        api("/api/profile/logs").then(function (result) {
+          if (dead) {
+            return;
+          }
+          if (!result.res || !result.res.ok) {
+            logItems = [];
+            logScope = "self";
+            renderLogs("");
+            return;
+          }
+          logScope = result.data.scope === "all" ? "all" : "self";
+          logItems = result.data.items || [];
+          const search = root.querySelector("#me-log-filter input[type=search]");
+          renderLogs(search ? search.value : "");
+        });
+      }
+
       async function api(path, options) {
         const res = await fetch(path, Object.assign({ credentials: "same-origin" }, options));
         if (res.status === 401) {
@@ -723,6 +805,7 @@
 
       fillWho(window.__xmBootUser || {});
       fillDuties([]);
+      loadLogs();
       api("/api/profile").then(function (result) {
         if (dead || !result.res || !result.res.ok) {
           return;
@@ -855,6 +938,13 @@
           try {
             sessionStorage.setItem("xm-me-avatar-" + (currentUser.username || ""), src);
           } catch (_e) {}
+          api("/api/profile/logs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "上传头像" })
+          }).then(function () {
+            loadLogs();
+          });
         };
         reader.readAsDataURL(file);
       });

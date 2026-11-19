@@ -138,6 +138,16 @@ export const SCHEMA_SQL = [
     created_at BIGINT NOT NULL,
     expires_at BIGINT NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS xm_me_logs (
+    id VARCHAR(64) NOT NULL PRIMARY KEY,
+    username VARCHAR(64) NOT NULL,
+    display_name VARCHAR(128) NOT NULL DEFAULT '',
+    action VARCHAR(128) NOT NULL,
+    detail VARCHAR(500) NOT NULL DEFAULT '',
+    ip VARCHAR(64) NOT NULL DEFAULT '',
+    created_at BIGINT NOT NULL,
+    KEY idx_xm_me_logs_user_time (username, created_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS release_tickets (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     version VARCHAR(128) NOT NULL,
@@ -644,6 +654,131 @@ async function dropSession(sid) {
   await query("DELETE FROM xm_sessions WHERE sid = ?", [sid]);
 }
 
+const LOG_TABLE_SQL = SCHEMA_SQL.find((sql) => sql.includes("xm_me_logs"));
+const profileLogs = [];
+let logTableReady = false;
+
+export function isLogAdmin(user) {
+  const name = String(user && user.username ? user.username : "").trim();
+  return name === DEMO_USERNAME || name.toLowerCase() === "luocheng";
+}
+
+function requestIp(req) {
+  const forwarded = String((req && req.headers && req.headers["x-forwarded-for"]) || "")
+    .split(",")[0]
+    .trim();
+  if (forwarded) {
+    return forwarded.slice(0, 64);
+  }
+  const addr = req && req.socket && req.socket.remoteAddress;
+  return String(addr || "").slice(0, 64);
+}
+
+function shanghaiTime(ms) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  })
+    .format(new Date(ms))
+    .replace(/\//g, "-");
+}
+
+function publicLog(entry) {
+  return {
+    id: entry.id,
+    username: entry.username,
+    actor: entry.displayName || entry.username,
+    action: entry.action,
+    detail: entry.detail || "",
+    ip: entry.ip || "",
+    at: entry.createdAt,
+    time: shanghaiTime(entry.createdAt)
+  };
+}
+
+async function ensureLogTable() {
+  if (logTableReady || dbMode() !== "mysql" || !LOG_TABLE_SQL) {
+    return;
+  }
+  await query(LOG_TABLE_SQL);
+  logTableReady = true;
+}
+
+async function persistLogRow(entry) {
+  if (dbMode() !== "mysql") {
+    return;
+  }
+  await ensureLogTable();
+  await query(
+    `INSERT INTO xm_me_logs (id, username, display_name, action, detail, ip, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [entry.id, entry.username, entry.displayName, entry.action, entry.detail, entry.ip, entry.createdAt]
+  );
+}
+
+function recordProfileLog(req, user, action, detail) {
+  if (!user || !action) {
+    return;
+  }
+  const entry = {
+    id: `${Date.now().toString(36)}-${randomBytes(6).toString("hex")}`,
+    username: String(user.username || "").trim(),
+    displayName: String(user.displayName || user.username || "").trim(),
+    action: String(action).slice(0, 128),
+    detail: String(detail || "").slice(0, 500),
+    ip: requestIp(req),
+    createdAt: Date.now()
+  };
+  if (!entry.username) {
+    return;
+  }
+  profileLogs.unshift(entry);
+  if (profileLogs.length > 2000) {
+    profileLogs.length = 2000;
+  }
+  persistLogRow(entry).catch(function (err) {
+    console.error("profile log persist failed", err);
+  });
+}
+
+async function listProfileLogs(viewer, filterUser) {
+  const admin = isLogAdmin(viewer);
+  const want = admin ? String(filterUser || "").trim() : viewer.username;
+  if (dbMode() === "mysql") {
+    try {
+      await ensureLogTable();
+      const sql = want
+        ? "SELECT id, username, display_name, action, detail, ip, created_at FROM xm_me_logs WHERE username = ? ORDER BY created_at DESC LIMIT 500"
+        : "SELECT id, username, display_name, action, detail, ip, created_at FROM xm_me_logs ORDER BY created_at DESC LIMIT 500";
+      const [rows] = await query(sql, want ? [want] : []);
+      return (rows || []).map((row) =>
+        publicLog({
+          id: row.id,
+          username: row.username,
+          displayName: row.display_name,
+          action: row.action,
+          detail: row.detail,
+          ip: row.ip,
+          createdAt: Number(row.created_at)
+        })
+      );
+    } catch (err) {
+      console.error("profile log list failed", err);
+    }
+  }
+  let items = profileLogs.slice();
+  if (want) {
+    items = items.filter((item) => item.username === want);
+  }
+  return items.slice(0, 500).map(publicLog);
+}
+
 export function resetStoreForTests() {
   setPoolForTests(null);
   setDbMode("memory");
@@ -652,6 +787,8 @@ export function resetStoreForTests() {
   peopleRoster.clear();
   peopleRowCache = { at: 0, rows: null };
   peopleListLoader = null;
+  profileLogs.length = 0;
+  logTableReady = false;
   resetDutyCatalogForTests();
   seed();
 }
@@ -781,16 +918,21 @@ authRouter.post("/login", async (req, res) => {
   persistSession(sid, user.username, createdAt, expiresAt).catch(function (err) {
     console.error("session persist failed", err);
   });
+  recordProfileLog(req, user, "登录", remember ? "勾选保持登录" : "");
   res.json({ ok: true, remember, user: publicProfile(user) });
 });
 
 authRouter.post("/logout", (req, res) => {
+  const actor = currentUser(req);
   const sid = parseCookies(req)[COOKIE_NAME];
   if (sid) {
     sessions.delete(sid);
     dropSession(sid).catch(function (err) {
       console.error("session delete failed", err);
     });
+  }
+  if (actor) {
+    recordProfileLog(req, actor, "退出登录", "");
   }
   clearSessionCookie(res, req);
   res.json({ ok: true });
@@ -831,10 +973,21 @@ profileRouter.put("/", async (req, res) => {
   const displayName = typeof req.body?.displayName === "string" ? req.body.displayName.trim() : "";
   const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
   const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
+  const changed = [];
+  if (displayName !== req.user.displayName) {
+    changed.push("姓名");
+  }
+  if (email !== req.user.email) {
+    changed.push("邮箱");
+  }
+  if (phone !== req.user.phone) {
+    changed.push("联系方式");
+  }
   req.user.displayName = displayName;
   req.user.email = email;
   req.user.phone = phone;
   await persistUser(req.user);
+  recordProfileLog(req, req.user, "修改资料", changed.length ? "更新了" + changed.join("、") : "保存资料");
   sendProfile(res, req.user);
 });
 
@@ -865,5 +1018,35 @@ profileRouter.post("/password", async (req, res) => {
   }
   req.user.passwordHash = await hashPassword(newPassword);
   await persistUser(req.user);
+  recordProfileLog(req, req.user, "修改密码", "已更新登录密码");
   res.json({ ok: true, message: "密码已更新" });
+});
+
+profileRouter.get("/logs", async (req, res) => {
+  const items = await listProfileLogs(req.user, req.query?.username);
+  res.json({
+    ok: true,
+    scope: isLogAdmin(req.user) ? "all" : "self",
+    canDelete: false,
+    items
+  });
+});
+
+profileRouter.post("/logs", (req, res) => {
+  const action = typeof req.body?.action === "string" ? req.body.action.trim() : "";
+  const allowed = action === "上传头像";
+  if (!allowed) {
+    res.status(400).json({ ok: false, error: "不支持的操作记录" });
+    return;
+  }
+  recordProfileLog(req, req.user, action, typeof req.body?.detail === "string" ? req.body.detail : "");
+  res.json({ ok: true, canDelete: false });
+});
+
+profileRouter.delete("/logs", (_req, res) => {
+  res.status(403).json({ ok: false, error: "操作日志不可删除" });
+});
+
+profileRouter.delete("/logs/:id", (_req, res) => {
+  res.status(403).json({ ok: false, error: "操作日志不可删除" });
 });
