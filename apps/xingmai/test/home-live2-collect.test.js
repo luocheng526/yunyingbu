@@ -62,7 +62,7 @@ test("a shop logs in on the server and maps 京麦成交 plus 京准通花费、
   assert.equal(started.records[0].password, undefined);
   await gate;
   const view = await collector.board("cookie");
-  assert.equal(view.runtimeMark, "0.1.1278-live2-login");
+  assert.equal(view.runtimeMark, "0.1.1299-live2-relogin");
   assert.equal(logins, 1);
   assert.equal(view.running, false);
   assert.equal(view.records[0].liveAmount, 3009);
@@ -211,28 +211,46 @@ test("a shop without an account is 待接入, and a slow shop keeps today's last
   assert.equal(bare.liveAmount, null);
 });
 
-test("登录已失效的店不再重试密码，沿用今天的数并标掉线", async () => {
-  let logins = 0;
-  let fetches = 0;
+test("登录已失效或待更新的店用旧会话再登，不带验证码", async () => {
+  let seeded = null;
+  let authCode = "unset";
+  let fetched = "";
   let done;
   const gate = new Promise(function (resolve) {
     done = resolve;
   });
   const collector = createLive2Collector({
     storePath: "",
-    published: [{
-      shop: "过期店",
-      liveAmount: 10,
-      paidAmount: 4,
-      capturedAt: "2026/11/20 01:02:00",
-      online: true,
-      pendingCollect: false
-    }],
+    published: [
+      {
+        shop: "过期店",
+        liveAmount: 10,
+        paidAmount: 4,
+        capturedAt: "2026/11/20 01:02:00",
+        online: true,
+        pendingCollect: false
+      },
+      {
+        shop: "待更新店",
+        liveAmount: 8,
+        paidAmount: 2,
+        capturedAt: "2026/11/20 01:02:00",
+        online: true,
+        pendingUpdate: true,
+        pendingCollect: false
+      }
+    ],
     loadOrg: async function () {
-      return [{ store: "过期店", enabled: true, login: "a", password: "b", shopId: "1" }];
+      return [
+        { store: "过期店", enabled: true, login: "a", password: "b", shopId: "1" },
+        { store: "待更新店", enabled: true, login: "c", password: "d", shopId: "2" }
+      ];
     },
     listSessions: async function () {
-      return [{ store: "过期店", authState: "login_expired", cookies: [{ name: "thor", value: "old" }] }];
+      return [
+        { store: "过期店", authState: "login_expired", cookies: [{ name: "thor", value: "old" }] },
+        { store: "待更新店", authState: "ok", cookies: [{ name: "thor", value: "kept" }] }
+      ];
     },
     now: function () {
       return "2026/11/20 11:40:00";
@@ -241,20 +259,17 @@ test("登录已失效的店不再重试密码，沿用今天的数并标掉线",
       task.then(done, done);
     },
     client: {
-      login: async function () {
-        logins += 1;
+      openPassword: async function (_fetchImpl, seed) {
+        seeded = seed;
+        return { jar: seed || [], init: { useSlideAuthCode: 1, jwt: "captcha" } };
+      },
+      submitPassword: async function (body) {
+        authCode = body.authCode;
+        assert.equal(body.authCode, "");
         return [{ name: "thor", value: "new" }];
       },
-      openPassword: async function () {
-        logins += 1;
-        return { jar: [], init: {} };
-      },
-      submitPassword: async function () {
-        logins += 1;
-        return [{ name: "thor", value: "new" }];
-      },
-      fetchHome: async function () {
-        fetches += 1;
+      fetchHome: async function (jar) {
+        fetched = jar[0].value;
         return { dealAmount: 99, paidAmount: 9, paidRoi: 1, paidDeal: 9 };
       }
     }
@@ -262,16 +277,17 @@ test("登录已失效的店不再重试密码，沿用今天的数并标掉线",
   await collector.start("");
   await gate;
   const view = await collector.board("");
-  const row = view.records.find((item) => item.shop === "过期店");
-  assert.equal(logins, 0);
-  assert.equal(fetches, 0);
-  assert.equal(row.liveAmount, 10);
-  assert.equal(row.paidAmount, 4);
-  assert.equal(row.capturedAt, "2026/11/20 01:02:00");
-  assert.equal(row.loginExpired, true);
-  assert.equal(row.pendingUpdate, false);
-  assert.equal(row.online, false);
-  assert.equal(row.offlineReason, "登录已失效，请重新登录");
+  const expired = view.records.find((item) => item.shop === "过期店");
+  const stale = view.records.find((item) => item.shop === "待更新店");
+  assert.equal(authCode, "");
+  assert.equal(fetched, "new");
+  assert.ok(Array.isArray(seeded) && seeded.length);
+  assert.equal(expired.liveAmount, 99);
+  assert.equal(Boolean(expired.loginExpired), false);
+  assert.equal(expired.online, true);
+  assert.equal(stale.liveAmount, 99);
+  assert.equal(Boolean(stale.pendingUpdate), false);
+  assert.equal(stale.online, true);
 });
 
 test("a second start does not collect the same shops again", async () => {

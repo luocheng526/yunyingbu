@@ -2,13 +2,13 @@
  * 实时（新版）采集。
  * 组织中心提供账号和密码。每家店在服务器登录后：
  * 京麦经营数据接口取成交金额，京准通 custom-report 当天总览取花费、投产比、总订单金额。
- * 不写旧京麦会话表。后台每 5 分钟开一轮；上一轮还在跑时不叠第二轮。
+ * 待更新、掉线的店用已经登录过的会话再登一次，不再要验证码。后台每 5 分钟开一轮；上一轮还在跑时不叠第二轮。
  */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { jingmaiClient } from "./jingmai-client.js";
-import { listSamples, listSessions } from "./jingmai-store.js";
+import { COLLECTOR_OWNER_HOME, listSamples, listSessions, markAuth, updateSessionCookies } from "./jingmai-store.js";
 import { beijingParts, displayStamp } from "./jingmai.js";
 import { blankLive2Record, live2RecordFromMetrics } from "./live2.js";
 
@@ -24,7 +24,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1278-live2-login";
+export const LIVE2_RUNTIME_MARK = "0.1.1299-live2-relogin";
 export const LIVE2_INTERVAL_MS = 5 * 60 * 1000;
 
 function stampNow() {
@@ -210,25 +210,50 @@ export function createLive2Collector(deps = {}) {
     return boardFrom(shops, Date.now() - started);
   }
 
-  async function loginJar(shop) {
+  async function keepLogin(shop, jar) {
+    jars.set(shop.store, jar.slice());
+    try {
+      await updateSessionCookies(shop.store, jar, {
+        writer: COLLECTOR_OWNER_HOME,
+        expectedShopId: shop.shopId || ""
+      });
+      await markAuth(shop.store, "ok", "", { writer: COLLECTOR_OWNER_HOME });
+    } catch {
+      /* 这一轮进程里的会话仍然可用 */
+    }
+  }
+
+  async function loginJar(shop, seed) {
     if (!shop.login || !shop.password) {
       return null;
     }
+    const prior = Array.isArray(seed) ? seed : [];
     let jar = null;
     if (client.openPassword && client.submitPassword) {
-      const opened = await client.openPassword();
-      jar = await client.submitPassword({
-        jar: opened.jar,
-        init: opened.init,
-        loginName: shop.login,
-        password: shop.password,
-        authCode: ""
-      });
+      const opened = await client.openPassword(undefined, prior);
+      const submit = function (session) {
+        return client.submitPassword({
+          jar: session.jar,
+          init: session.init,
+          loginName: shop.login,
+          password: shop.password,
+          authCode: ""
+        });
+      };
+      try {
+        jar = await submit(opened);
+      } catch (error) {
+        if (!prior.length || !/滑动验证/.test(String((error && error.message) || ""))) {
+          throw error;
+        }
+        const trusted = Object.assign({}, opened.init, { useSlideAuthCode: 0, jwt: "", sessionId: "" });
+        jar = await submit({ jar: opened.jar, init: trusted });
+      }
     } else if (client.login) {
-      jar = await client.login(shop.login, shop.password);
+      jar = await client.login(shop.login, shop.password, prior);
     }
     if (jar && jar.length) {
-      jars.set(shop.store, jar.slice());
+      await keepLogin(shop, jar);
     }
     return jar;
   }
@@ -355,7 +380,7 @@ export function createLive2Collector(deps = {}) {
     return patched;
   }
 
-  async function collectShop(shop, known, draft, phase) {
+  async function collectShop(shop, known, draft, phase, reloginNames) {
     const secret = shop.password;
     const base = blankFor(shop);
     const started = Date.now();
@@ -365,22 +390,16 @@ export function createLive2Collector(deps = {}) {
       return base;
     }
     const saved = known.get(shop.store);
-    if (saved && saved.authState === "login_expired") {
-      shop.password = "";
-      base.loginExpired = true;
-      base.pendingCollect = false;
-      base.offlineReason = "登录已失效，请重新登录";
-      return base;
-    }
-    let jar = jars.get(shop.store) || null;
-    if (!jar || !jar.length) {
-      const saved = known.get(shop.store);
-      jar = saved && saved.cookies && saved.cookies.length ? saved.cookies : null;
+    const prior = saved && Array.isArray(saved.cookies) ? saved.cookies : [];
+    const relogin = (saved && saved.authState === "login_expired") || (reloginNames && reloginNames.has(shop.store));
+    let jar = relogin ? null : jars.get(shop.store) || null;
+    if (!relogin && (!jar || !jar.length)) {
+      jar = prior.length ? prior : null;
     }
     let logged = Boolean(jar && jar.length);
     if (!logged) {
       try {
-        jar = await loginJar(shop);
+        jar = await loginJar(shop, prior);
         logged = Boolean(jar && jar.length);
       } catch (error) {
         shop.password = "";
@@ -430,7 +449,7 @@ export function createLive2Collector(deps = {}) {
       if (error && error.code === "login") {
         try {
           shop.password = secret;
-          jar = await loginJar(shop);
+          jar = await loginJar(shop, prior);
           shop.password = "";
           if (jar && jar.length) {
             const metrics = await client.fetchHome(jar, {
@@ -507,6 +526,12 @@ export function createLive2Collector(deps = {}) {
     const targets = (shops || []).filter(function (shop) {
       return shop && shop.store && (!only || shop.store === only);
     });
+    const reloginNames = new Set();
+    published.forEach(function (row, name) {
+      if (row && (row.pendingUpdate === true || row.loginExpired === true || row.offline === true)) {
+        reloginNames.add(name);
+      }
+    });
     const samples = await loadSampleMap();
     adoptSamples(samples);
     const draft = new Map(published);
@@ -520,7 +545,7 @@ export function createLive2Collector(deps = {}) {
       const shopStart = Date.now();
       let timer = 0;
       let late = false;
-      const job = collectShop(shop, known, draft, phase).then(function (row) {
+      const job = collectShop(shop, known, draft, phase, reloginNames).then(function (row) {
         if (late || phase.closed) {
           return row;
         }

@@ -467,8 +467,12 @@ function rsaPassword(publicKey, password) {
   return crypto.publicEncrypt({ key: pem, padding: crypto.constants.RSA_PKCS1_PADDING }, Buffer.from(password)).toString("base64");
 }
 
-export async function openPasswordSession(fetchImpl = fetch) {
-  const jar = [];
+export async function openPasswordSession(fetchImpl = fetch, seedJar) {
+  const jar = Array.isArray(seedJar)
+    ? seedJar.filter(Boolean).map(function (item) {
+        return Object.assign({}, item);
+      })
+    : [];
   const response = await request(fetchImpl, jar, PASSWORD_INIT, {
     method: "POST",
     body: "source=pop_new&channel=pc&nr=1&h5st=none&seqSid=none&eid=NONE&fp=NONE&ssoDomains=sso.jd.com",
