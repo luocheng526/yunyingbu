@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.1125-connect */
+/* xm-module-home 0.1.1315-smslogin */
 (function () {
-  var HOME_JS_STAMP = "0.1.1125-connect";
+  var HOME_JS_STAMP = "0.1.1315-smslogin";
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
@@ -3081,6 +3081,7 @@
       ".xm-hm-desk-row{display:flex;gap:8px;margin-top:8px;align-items:center}" +
       ".xm-hm-desk-row input{flex:1;min-width:0;height:32px;padding:0 8px;border:1px solid #d7e3f5;border-radius:8px}" +
       ".xm-hm-desk-row button{height:32px;padding:0 12px;border:0;border-radius:8px;background:#2f6fed;color:#fff;cursor:pointer}" +
+      ".xm-hm-desk-row.is-code input{height:40px;border-color:#2f6fed;font-size:18px;letter-spacing:6px}" +
       ".xm-hm-desk-shops{list-style:none;margin:8px 0 0;padding:0;max-height:320px;overflow:auto}" +
       ".xm-hm-desk-shops button{display:block;width:100%;margin:0 0 6px;padding:8px 10px;text-align:left;border:1px solid #d7e3f5;border-radius:8px;background:#fff;color:#123;cursor:pointer}" +
       "@media (max-width:1100px){.xm-hm-teams-grid{grid-template-columns:1fr}.xm-hm.is-chief .xm-hm-team{min-width:0}.xm-hm-team-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.xm-hm.is-chief .xm-hm-team-kpis{grid-template-columns:1fr}}" +
@@ -3272,15 +3273,22 @@
     } else if (status === "failed") {
       tools =
         '<div class="xm-hm-desk-row"><button type="button" data-desk-retry>重试本店</button><button type="button" data-desk-switch>换一家店</button><button type="button" data-desk-cancel>关闭</button></div>';
-    } else if (status === "screen" || status === "verify") {
+    } else if (status === "screen" || status === "verify" || status === "code") {
       shot =
         '<img id="xm-hm-desk-shot" alt="服务器登录画面" draggable="false" src="/api/home/live-login/screen?store=' +
         encodeURIComponent(desk.store || "") +
         "&t=" +
         Date.now() +
         '" />';
+      var waitingCode = status === "code" || desk.needCode;
       tools =
-        '<div class="xm-hm-desk-row"><input id="xm-hm-desk-text" placeholder="验证码" /><button type="button" data-desk-type>输入</button><button type="button" data-desk-cancel>取消</button></div>';
+        '<div class="xm-hm-desk-row' +
+        (waitingCode ? " is-code" : "") +
+        '"><input id="xm-hm-desk-text" placeholder="' +
+        (waitingCode ? "请输入短信验证码，回车后自动登录" : "验证码") +
+        '" autocomplete="one-time-code" inputmode="numeric" /><button type="button" data-desk-type>' +
+        (waitingCode ? "登录" : "输入") +
+        '</button><button type="button" data-desk-cancel>取消</button></div>';
     }
     return (
       '<div class="xm-hm-desk-mask" data-desk-mask><div class="xm-hm-desk" role="dialog" aria-modal="true"><button type="button" class="xm-hm-desk-x" data-desk-cancel aria-label="关闭">×</button><h3>' +
@@ -5687,14 +5695,18 @@
       }
       function showDesk(st) {
         state.desk = st || {};
-        if (state.desk.status === "verify" || state.desk.status === "login") {
+        if (state.desk.status === "code" || state.desk.needCode) {
+          state.desk.status = "code";
+          state.desk.needCode = true;
+        } else if (state.desk.status === "verify" || state.desk.status === "login") {
           state.desk.status = "screen";
         }
         if (!dead) {
           paint(root, state);
         }
-        if (state.desk && state.desk.open && state.desk.status === "screen") {
+        if (state.desk && state.desk.open && (state.desk.status === "screen" || state.desk.status === "code")) {
           pollDesk();
+          focusDeskCode();
         }
       }
       function finishDeskLogin(storeName) {
@@ -5703,6 +5715,40 @@
           return;
         }
         pullLive();
+      }
+      function focusDeskCode() {
+        if (!state.desk || (state.desk.status !== "code" && !state.desk.needCode)) {
+          return;
+        }
+        var box = root.querySelector("#xm-hm-desk-text");
+        if (!box) {
+          return;
+        }
+        box.placeholder = "请输入短信验证码，回车后自动登录";
+        if (box.parentElement) {
+          box.parentElement.classList.add("is-code");
+        }
+        window.setTimeout(function () {
+          if (box.isConnected) {
+            box.focus();
+          }
+        }, 0);
+      }
+      function sendDeskCode() {
+        var box = root.querySelector("#xm-hm-desk-text");
+        var text = box ? String(box.value || "").trim() : "";
+        if (!text || !state.desk) {
+          return;
+        }
+        api("/api/home/live-login/input", {
+          store: state.desk.store,
+          text: text
+        }).then(function (st) {
+          if (box) {
+            box.value = "";
+          }
+          applyDesk(st || { status: "code", needCode: true });
+        });
       }
       function applyDesk(st) {
         var prev = state.desk || {};
@@ -5722,19 +5768,29 @@
         if (!next.message) {
           next.message = prev.message;
         }
-        if (next.status === "verify" || next.status === "login" || next.status === "missing" || !next.status) {
+        if (next.status === "code" || next.needCode) {
+          next.status = "code";
+          next.needCode = true;
+        } else if (next.status === "verify" || next.status === "login" || next.status === "missing" || !next.status) {
           next.status = "screen";
         }
         if ((next.status === "opening" || /启动浏览器/.test(String(next.message || ""))) && prev.open && root.querySelector("#xm-hm-desk-shot")) {
           if (/启动浏览器/.test(String(next.message || "")) && prev.message && !/启动浏览器/.test(prev.message)) {
             next.message = prev.message;
           }
-          next.status = "screen";
+          next.status = prev.status === "code" || prev.needCode ? "code" : "screen";
         }
         var keepShot = prev.open && root.querySelector("#xm-hm-desk-shot");
         state.desk = next;
-        if (keepShot && next.status === "screen") {
+        if (keepShot && next.status === "code" && prev.status !== "code") {
+          showDesk(next);
+          return;
+        }
+        if (keepShot && (next.status === "screen" || next.status === "code")) {
           touchDeskShot(next.store, next.message);
+          if (next.status === "code") {
+            focusDeskCode();
+          }
           pollDesk();
           return;
         }
@@ -5770,10 +5826,18 @@
             if (/启动浏览器/.test(String(next.message || "")) && keptMessage && !/启动浏览器/.test(keptMessage)) {
               next.message = keptMessage;
             }
-            next.status = "screen";
+            if (next.status === "code" || next.needCode) {
+              next.status = "code";
+              next.needCode = true;
+            } else {
+              next.status = "screen";
+            }
             state.desk = next;
             if (!touchDeskShot(next.store, next.message)) {
               paint(root, state);
+            }
+            if (next.status === "code") {
+              focusDeskCode();
             }
           });
         }, 4000);
@@ -5918,7 +5982,7 @@
         }
         watchOpeningShot(seq, name);
         var wait = window.setInterval(function () {
-          if (dead || seq !== deskSeq || !state.desk || state.desk.status === "screen" || state.desk.status === "verify" || state.desk.status === "failed") {
+          if (dead || seq !== deskSeq || !state.desk || state.desk.status === "screen" || state.desk.status === "verify" || state.desk.status === "code" || state.desk.status === "failed") {
             window.clearInterval(wait);
             return;
           }
@@ -5932,7 +5996,7 @@
               failDesk(seq, row.store || name, row.step || "打开京麦登录页", row.message || "登录没有打开");
               return;
             }
-            if (row.status === "screen" || row.status === "verify") {
+            if (row.status === "screen" || row.status === "verify" || row.status === "code") {
               window.clearTimeout(timed);
               window.clearInterval(wait);
               row.open = true;
@@ -5962,7 +6026,7 @@
           if (dead || seq !== deskSeq || !state.desk) {
             return;
           }
-          if (state.desk.status === "screen" || state.desk.status === "verify") {
+          if (state.desk.status === "screen" || state.desk.status === "verify" || state.desk.status === "code") {
             return;
           }
           failDesk(seq, name, state.desk.step || "打开京麦登录页", "登录页还没有出来，可以重试本店");
@@ -5988,7 +6052,7 @@
             failDesk(seq, st.store || name, st.step || "打开京麦登录页", st.message || "登录没有打开");
             return;
           }
-          if (st.status === "screen" || st.status === "verify") {
+          if (st.status === "screen" || st.status === "verify" || st.status === "code") {
             window.clearTimeout(timed);
             st.open = true;
             st.store = st.store || name;
@@ -6234,16 +6298,7 @@
           return;
         }
         if (event.target.closest("[data-desk-type]")) {
-          var box = root.querySelector("#xm-hm-desk-text");
-          api("/api/home/live-login/input", {
-            store: state.desk && state.desk.store,
-            text: box ? box.value : ""
-          }).then(function (st) {
-            if (box) {
-              box.value = "";
-            }
-            applyDesk(st || { status: "screen" });
-          });
+          sendDeskCode();
           return;
         }
         if (event.target.closest("[data-desk-cancel]")) {
@@ -7202,6 +7257,11 @@
         }, 0);
       }
       function onFeeKey(event) {
+        if (event.target && event.target.id === "xm-hm-desk-text" && event.key === "Enter") {
+          event.preventDefault();
+          sendDeskCode();
+          return;
+        }
         var el = event.target;
         if (!el || !el.getAttribute || (el.getAttribute("data-fee-lo") == null && el.getAttribute("data-fee-hi") == null)) {
           return;

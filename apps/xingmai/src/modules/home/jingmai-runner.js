@@ -529,6 +529,11 @@ export async function jingmaiLive() {
 }
 
 function publicState(state) {
+  const finished = state.status === "ok" || state.status === "done" || state.status === "failed";
+  if (finished) {
+    loginCursor.needCode = false;
+  }
+  const needCode = !finished && (state.needCode === true || state.status === "code" || loginCursor.needCode === true);
   return {
     ok: true,
     build: "livefix",
@@ -540,7 +545,8 @@ function publicState(state) {
     index: state.index || loginCursor.index,
     total: state.total || loginCursor.total,
     openingMs: openingMark ? Date.now() - openingMark : 0,
-    note: state.note || launchNote() || ""
+    note: state.note || launchNote() || "",
+    needCode: needCode
   };
 }
 
@@ -713,7 +719,7 @@ async function startQueued(shop, epoch) {
             status: "login",
             message: launchNote() || browserStartFailure()
           });
-        }, shop.manual === true ? 30000 : (deps.startLimitMs || 12000));
+        }, shop.manual === true ? 30000 : (deps.startLimitMs || 25000));
       })
     ]);
   } catch {
@@ -744,6 +750,19 @@ async function startQueued(shop, epoch) {
       return publicState({ status: "failed", store: shop.store, step: "核对店铺身份", message: loginCursor.message });
     }
     return publicState({ status: "ok", store: shop.store, message: shop.store + " 登录成功" });
+  }
+  if (opened.status === "code" || opened.needCode) {
+    loginCursor.phase = "screen";
+    loginCursor.needCode = true;
+    loginCursor.step = "验证码";
+    loginCursor.message = opened.message || "验证码已发送，请输入后自动登录";
+    return publicState({
+      status: "code",
+      store: shop.store,
+      step: "验证码",
+      message: loginCursor.message,
+      needCode: true
+    });
   }
   if (opened.status === "verify") {
     loginCursor.phase = "screen";
@@ -1131,7 +1150,7 @@ export async function reloginState(store) {
     } catch {
       peeked = null;
     }
-    if (peeked && (peeked.status === "verify" || peeked.status === "screen" || peeked.status === "ok")) {
+    if (peeked && (peeked.status === "verify" || peeked.status === "screen" || peeked.status === "code" || peeked.status === "ok" || peeked.needCode)) {
       /* 浏览器已经开了，交给下面的正常判断 */
     } else {
       const note = (peeked && peeked.message && peeked.message !== "正在启动浏览器" ? peeked.message : "") || launchNote();
@@ -1151,16 +1170,30 @@ export async function reloginState(store) {
   if (idle && (!state || state.status === "opening" || state.status === "missing")) {
     return publicState({ status: "idle", store: name, message: "" });
   }
+  if (state.status === "code" || state.needCode) {
+    loginCursor.phase = "screen";
+    loginCursor.needCode = true;
+    loginCursor.step = "验证码";
+    loginCursor.message = state.message || "验证码已发送，请输入后自动登录";
+    return publicState({
+      status: "code",
+      store: name,
+      step: "验证码",
+      message: loginCursor.message,
+      needCode: true
+    });
+  }
   if (state.status === "verify" || state.status === "screen") {
     loginCursor.phase = "screen";
     loginCursor.step = "京麦登录页";
-    const kept = /点登录|账号和密码/.test(String(loginCursor.message || "")) ? loginCursor.message : "";
+    const kept = /点登录|账号和密码|验证码/.test(String(loginCursor.message || "")) ? loginCursor.message : "";
     loginCursor.message = kept || state.message || LOGIN_SCREEN_MESSAGE;
     return publicState({
       status: "screen",
       store: name,
       step: "京麦登录页",
-      message: loginCursor.message
+      message: loginCursor.message,
+      needCode: /验证码/.test(String(loginCursor.message || ""))
     });
   }
   if (state.status === "ok") {
@@ -1239,7 +1272,15 @@ export async function reloginInput(body) {
   }
   const started = Date.now();
   let state = await reloginState(name);
-  while (state.status === "screen" && Date.now() - started < 1200) {
+  const typed = Boolean(body && String(body.text || "").trim());
+  const waitMs = typed ? 4000 : 1200;
+  while (Date.now() - started < waitMs) {
+    if (state.status === "ok" || state.status === "done" || state.status === "failed" || state.status === "login") {
+      break;
+    }
+    if (!typed && state.status !== "screen" && state.status !== "opening") {
+      break;
+    }
     await new Promise(function (resolve) {
       setTimeout(resolve, 400);
     });

@@ -2,15 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { accountIdentity, bindDecision, buildLiveView, collectAuthDecision, sameShop } from "../src/modules/home/jingmai.js";
-import { beginRelogin, beginReloginAll, recoverDroppedShops, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/home/jingmai-runner.js";
+import { beginRelogin, beginReloginAll, recoverDroppedShops, reloginInput, reloginState, resetJingmaiDeps, setJingmaiDeps } from "../src/modules/home/jingmai-runner.js";
 import { patchConnectPicker } from "../src/modules/home/connect-patch.js";
 import { listCollectTargets, listSessions, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
 import { packJingmaiShops } from "../src/modules/home/local-paid.js";
-import { assertPageShopIdentity, browserCandidates, browserFailure, browserLaunchOrder, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginTipBlocked, loginScreenState, readDebugTargets, realBrowserBinary, resolveBrowserBinary, sessionReady, unpackDebBuffer, waitForDebugPort } from "../src/modules/home/jingmai-desk.js";
+import { assertPageShopIdentity, browserCandidates, browserFailure, browserLaunchOrder, browserStartFailure, collectFrameIds, deskUsable, hostChromePath, loginNeedsSms, loginOpenReady, loginPageAction, loginPageSettled, loginPageVisible, loginTipBlocked, loginScreenState, readDebugTargets, realBrowserBinary, resolveBrowserBinary, sessionReady, unpackDebBuffer, waitForDebugPort } from "../src/modules/home/jingmai-desk.js";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import zlib from "node:zlib";
-import { patchHomeClientSource } from "../src/modules/home/router.js";
+import { patchDeskCodeLogin, patchHomeClientSource } from "../src/modules/home/router.js";
 
 if (process.env.SHEN_JINGMAI_MEMORY == null) {
   process.env.SHEN_JINGMAI_MEMORY = "1";
@@ -158,6 +158,33 @@ test("a shop that still needs a login stays offline", () => {
 test("captcha text does not count as a wrong password", () => {
   const state = loginScreenState("请完成安全验证 账号或密码", true);
   assert.equal(state.status, "verify");
+});
+
+test("sms verification is a code challenge, not a slider", () => {
+  const state = loginScreenState("请输入验证码", true, { text: "请输入验证码", codeVisible: true });
+  assert.equal(state.status, "code");
+  assert.equal(state.needCode, true);
+  assert.equal(loginNeedsSms({ codeVisible: true, text: "请输入验证码" }), true);
+  assert.equal(
+    loginNeedsSms({
+      accountVisible: true,
+      passwordVisible: true,
+      codeVisible: false,
+      sendVisible: false,
+      text: "密码登录 立即登录"
+    }),
+    false
+  );
+});
+
+test("sendCode aims at 获取验证码", () => {
+  const send = node("BUTTON", { text: "获取验证码", rect: box(220, 160, 80, 28) });
+  const input = node("INPUT", { placeholder: "请输入验证码", rect: box(80, 160, 120, 28) });
+  const doc = node("DIV", { kids: [input, send], rect: box(0, 0, 400, 300) });
+  const aim = loginPageAction(doc, { sendCode: true });
+  assert.equal(aim.kind, "sent");
+  assert.equal(aim.x, 260);
+  assert.equal(aim.y, 174);
 });
 
 test("wrong password is still a login failure", () => {
@@ -1086,6 +1113,117 @@ test("clicking the login picture keeps the dialog open", () => {
   assert.match(homeJs, /next\.open = true/);
   assert.match(homeJs, /applyDesk\(st \|\| \{ status: "screen" \}\)/);
   assert.match(homeJs, /preload\.onload/);
+  assert.match(homeJs, /请输入短信验证码，回车后自动登录/);
+  assert.match(homeJs, /function sendDeskCode\(\)/);
+});
+
+test("old homepage applyDesk source gains the sms code box", () => {
+  const old =
+    "      function applyDesk(st) {\n" +
+    "        if (next.status === \"verify\" || next.status === \"login\" || next.status === \"missing\" || !next.status) {\n" +
+    "          next.status = \"screen\";\n" +
+    "        }\n" +
+    "            next.status = \"screen\";\n" +
+    "            state.desk = next;\n" +
+    "            if (!touchDeskShot(next.store, next.message)) {\n" +
+    "              paint(root, state);\n" +
+    "            }\n" +
+    "        if (event.target.closest(\"[data-desk-type]\")) {\n" +
+    "          var box = root.querySelector(\"#xm-hm-desk-text\");\n" +
+    "          api(\"/api/home/live-login/input\", {\n" +
+    "            store: state.desk && state.desk.store,\n" +
+    "            text: box ? box.value : \"\"\n" +
+    "          }).then(function (st) {\n" +
+    "            if (box) {\n" +
+    "              box.value = \"\";\n" +
+    "            }\n" +
+    "            applyDesk(st || { status: \"screen\" });\n" +
+    "          });\n" +
+    "          return;\n" +
+    "        }\n" +
+    "      function onFeeKey(event) {\n" +
+    "        var el = event.target;\n" +
+    "        if (!el || !el.getAttribute || (el.getAttribute(\"data-fee-lo\") == null && el.getAttribute(\"data-fee-hi\") == null)) {\n" +
+    "          return;\n" +
+    "        }\n";
+  const next = patchDeskCodeLogin(old);
+  assert.match(next, /function sendDeskCode\(\)/);
+  assert.match(next, /请输入短信验证码，回车后自动登录/);
+  assert.match(next, /sendDeskCode\(\);/);
+  assert.match(next, /event\.target\.id === "xm-hm-desk-text"/);
+});
+
+test("desk sms challenge stays open for the code box", async () => {
+  await resetJingmaiStore();
+  let closed = 0;
+  setJingmaiDeps(deskDeps({
+    loadOrg: async () => [
+      { store: "DIKTT潮流生活旗舰店", enabled: true, login: "luwei", password: "secret", shopId: "16107402" }
+    ],
+    desk: {
+      open: async () => ({ status: "code", message: "验证码已发送，请输入后自动登录", needCode: true }),
+      close: async () => {
+        closed += 1;
+      },
+      poll: async () => ({ status: "code", message: "验证码已发送，请输入后自动登录", needCode: true }),
+      type: async () => {}
+    }
+  }));
+  try {
+    const opening = await beginRelogin("DIKTT潮流生活旗舰店", "cookie");
+    assert.equal(opening.status, "opening");
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 50);
+    });
+    const state = await reloginState("DIKTT潮流生活旗舰店");
+    assert.equal(state.status, "code");
+    assert.equal(state.needCode, true);
+    assert.match(state.message, /验证码/);
+    assert.equal(closed, 0);
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
+test("typing the sms code logs in without another click", async () => {
+  await resetJingmaiStore();
+  let typed = "";
+  setJingmaiDeps(deskDeps({
+    loadOrg: async () => [
+      { store: "DIKTT潮流生活旗舰店", enabled: true, login: "luwei", password: "secret", shopId: "16107402" }
+    ],
+    client: {
+      login: async function () {
+        const error = new Error("need desk");
+        error.code = "login";
+        throw error;
+      },
+      fetchAccountIdentity: async () => ({ shopId: "16107402", shopName: "DIKTT潮流生活旗舰店" }),
+      fetchHome: async () => ({ dealAmount: 1 })
+    },
+    desk: {
+      open: async () => ({ status: "code", message: "验证码已发送，请输入后自动登录", needCode: true }),
+      close: async () => {},
+      poll: async () => typed
+        ? { status: "ok", cookies: [{ name: "thor", value: "fresh" }] }
+        : { status: "code", message: "验证码已发送，请输入后自动登录", needCode: true },
+      type: async function (store, text) {
+        typed = String(text || "");
+      }
+    }
+  }));
+  try {
+    await beginRelogin("DIKTT潮流生活旗舰店", "cookie");
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 50);
+    });
+    const state = await reloginInput({ store: "DIKTT潮流生活旗舰店", text: "183473" });
+    assert.equal(typed, "183473");
+    assert.equal(state.status, "ok");
+    assert.match(state.message, /登录成功/);
+  } finally {
+    resetJingmaiDeps();
+  }
 });
 
 test("a dropped shop with a dead cookie logs in again with the password and does not open the desk", async () => {

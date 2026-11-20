@@ -2127,11 +2127,18 @@ const LOGIN_PAGE_EXPR = `(() => {
   const inputs = [...document.querySelectorAll("input")];
   const account = inputs.find((node) => (node.placeholder || "").includes("账号"));
   const password = inputs.find((node) => (node.placeholder || "").includes("密码"));
+  const code = inputs.find((node) => /验证码|短信|校验码/.test(node.placeholder || ""));
+  const send = [...document.querySelectorAll("button, a, [role=button], span")].find((node) => {
+    const text = String(node.innerText || node.textContent || "").replace(/\\s+/g, "");
+    return /获取验证码|发送验证码|获取短信|发送短信/.test(text) && !/秒|重新/.test(text);
+  });
   return {
     readyState: document.readyState,
     href: location.href,
     accountVisible: shown(account),
     passwordVisible: shown(password),
+    codeVisible: shown(code),
+    sendVisible: shown(send),
     text: document.body ? document.body.innerText.slice(0, 300) : ""
   };
 })()`;
@@ -2187,11 +2194,26 @@ export function loginOpenReady(attempt, screen, hasCookie) {
   return "wait";
 }
 
-export function loginScreenState(text, formReady) {
-  const source = String(text || "");
-  if (/滑块|验证码|安全验证|请完成验证|扫码/.test(source)) {
-    return { status: "verify", message: LOGIN_SCREEN_MESSAGE };
+export function loginNeedsSms(page) {
+  if (!page) {
+    return false;
   }
+  if (page.codeVisible) {
+    return true;
+  }
+  const text = String(page.text || "");
+  if (/滑块/.test(text)) {
+    return false;
+  }
+  if (page.passwordVisible && page.accountVisible && !page.sendVisible) {
+    return false;
+  }
+  return /短信验证码|请输入验证码/.test(text);
+}
+
+export function loginScreenState(text, formReady, page) {
+  const source = String(text || "");
+  const view = page || { text: source };
   if (source.includes("不匹配") || source.includes("密码不正确") || source.includes("账号或密码不正确") || source.includes("账号或密码错误")) {
     return { status: "login", message: "账号或密码不正确" };
   }
@@ -2200,6 +2222,12 @@ export function loginScreenState(text, formReady) {
   }
   if (source.includes("账号异常") || /暂无法登录/.test(source)) {
     return { status: "login", message: "当前账号异常，暂无法登录" };
+  }
+  if (loginNeedsSms(view)) {
+    return { status: "code", message: "验证码已发送，请输入后自动登录", needCode: true };
+  }
+  if (/滑块|安全验证|请完成验证|扫码/.test(source)) {
+    return { status: "verify", message: LOGIN_SCREEN_MESSAGE };
   }
   if (!formReady && /登录异常|登录环境异常|暂时无法登录/.test(source)) {
     return { status: "verify", message: "京麦拒绝了这次服务器登录，请过一会儿再试" };
@@ -2211,7 +2239,8 @@ async function readScreenState(ws) {
   const formReady = Boolean(
     await evaluate(ws, "!![...document.querySelectorAll('input')].find((node) => (node.placeholder || '').includes('账号'))")
   );
-  const state = loginScreenState(await pageText(ws), formReady);
+  const page = await readLoginPage(ws);
+  const state = loginScreenState(page && page.text, formReady, page);
   state.formReady = formReady;
   return state;
 }
@@ -2282,6 +2311,33 @@ async function fillAndSubmit(ws, loginName, password) {
     button.click();
     return true;
   })()`);
+}
+
+async function clickSendCode(ws) {
+  const expression = `(${loginPageAction.toString()})(document, ${JSON.stringify({ sendCode: true })})`;
+  const frames = await frameIds(ws);
+  for (let i = 0; i < frames.length; i += 1) {
+    try {
+      let contextId = 0;
+      if (frames[i]) {
+        const world = await send(ws, "Page.createIsolatedWorld", { frameId: frames[i], grantUniveralAccess: true }, undefined, 2500);
+        contextId = world.executionContextId || 0;
+      }
+      const result = contextId
+        ? await send(ws, "Runtime.evaluate", { expression: expression, contextId: contextId, returnByValue: true }, undefined, 2500)
+        : await send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true }, undefined, 2500);
+      const hit = result && result.result ? result.result.value : null;
+      if (hit && (hit.kind === "sent" || hit.kind === "button")) {
+        if (hit.x || hit.y) {
+          await pressLoginButton(ws, hit);
+        }
+        return true;
+      }
+    } catch {
+      /* try the next frame */
+    }
+  }
+  return false;
 }
 
 export function browserReady() {
@@ -2500,6 +2556,7 @@ async function finishOpen(desk, loginName, password, ticket, manual) {
           filled = await fillLoginOnDesk(desk.ws, loginName, password);
         } else {
           await fillAndSubmit(desk.ws, loginName, password);
+          desk.submitted = true;
         }
       } catch {
         /* keep the picture open for manual login */
@@ -2514,9 +2571,12 @@ async function finishOpen(desk, loginName, password, ticket, manual) {
         formReady: true
       };
     }
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
       if (ticket !== openTicket || current !== desk) {
         return { status: "login", message: "登录已取消" };
+      }
+      if (attempt > 0) {
+        await sleep(500);
       }
       let cookies = [];
       let href = "";
@@ -2534,14 +2594,25 @@ async function finishOpen(desk, loginName, password, ticket, manual) {
       if (loginTipBlocked(page)) {
         return { status: "login", message: "京麦拒绝了这次服务器登录，请过一会儿再试" };
       }
-      const screen = loginScreenState(page && page.text, Boolean(page && page.accountVisible));
+      const screen = loginScreenState(page && page.text, Boolean(page && page.accountVisible), page);
       if (screen.status === "login") {
         return screen;
       }
-      if ((page && (page.accountVisible || page.passwordVisible)) || loginPageVisible(page)) {
+      if (loginNeedsSms(page) || screen.status === "code") {
+        if (!desk.smsSent && (desk.submitted || (page && (page.codeVisible || page.sendVisible)))) {
+          desk.smsSent = true;
+          try {
+            await clickSendCode(desk.ws);
+          } catch {
+            /* the input still works if Jingmai already sent the code */
+          }
+        }
+        lastLaunchNote = "验证码已发送，请输入后自动登录";
+        return { status: "code", message: lastLaunchNote, needCode: true, formReady: true };
+      }
+      if (/滑块|请完成验证|安全验证/.test(String(page && page.text || ""))) {
         return { status: "verify", message: LOGIN_SCREEN_MESSAGE, formReady: true };
       }
-      await sleep(400);
     }
     if (!sawPage) {
       return { status: "login", message: "服务器没有打开京麦登录页" };
@@ -2681,6 +2752,23 @@ export async function pollDesk(store) {
       return { status: "ok", cookies: cookies, href: String(href || ""), pageMatch: pageMatch };
     }
     loginVisible = true;
+    const page = await readLoginPage(current.ws);
+    const screen = loginScreenState(page && page.text, Boolean(page && (page.accountVisible || page.codeVisible)), page);
+    if (screen.status === "login") {
+      return screen;
+    }
+    if (loginNeedsSms(page) || screen.status === "code") {
+      if (!current.smsSent && (current.submitted || (page && (page.codeVisible || page.sendVisible)))) {
+        current.smsSent = true;
+        try {
+          await clickSendCode(current.ws);
+        } catch {
+          /* keep the code box open */
+        }
+      }
+      lastLaunchNote = "验证码已发送，请输入后自动登录";
+      return { status: "code", message: lastLaunchNote, needCode: true };
+    }
   } catch {
     const ok = await reconnectDesk(current);
     if (!ok) {
@@ -2688,7 +2776,7 @@ export async function pollDesk(store) {
     }
     loginVisible = true;
   }
-  const note = /点登录|账号和密码/.test(String(lastLaunchNote || "")) ? lastLaunchNote : LOGIN_SCREEN_MESSAGE;
+  const note = /点登录|账号和密码|验证码/.test(String(lastLaunchNote || "")) ? lastLaunchNote : LOGIN_SCREEN_MESSAGE;
   return { status: "verify", message: note };
 }
 
@@ -2988,6 +3076,24 @@ export function loginPageAction(doc, action) {
       return { kind: "none", x: 0, y: 0 };
     }
     return pointOf(button, 0, 0, "button");
+  }
+  if (action && action.sendCode) {
+    let found = null;
+    docsOf(doc).forEach(function (item) {
+      const nodes = item.querySelectorAll ? item.querySelectorAll("button, a, [role=button], span, div") : [];
+      const limit = Math.min(nodes.length, 80);
+      for (let i = 0; i < limit; i += 1) {
+        const text = textOf(nodes[i]);
+        if (!visible(nodes[i]) || !/获取验证码|发送验证码|获取短信|发送短信/.test(text) || /秒|重新/.test(text) || text.length > 12) {
+          continue;
+        }
+        found = nodes[i];
+      }
+    });
+    if (!found) {
+      return { kind: "none", x: 0, y: 0 };
+    }
+    return pointOf(found, 0, 0, "sent");
   }
   if (action && action.text) {
     const value = String(action.text).slice(0, 20);

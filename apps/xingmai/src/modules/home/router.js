@@ -272,7 +272,7 @@ export function patchHomeClientSource(text) {
     .replaceAll("0.1.1039-loginpop", "0.1.1090-paidon")
     .replaceAll("0.1.1043-deskkeep", "0.1.1090-paidon")
     .replaceAll("0.1.1070-liveon", "0.1.1090-paidon");
-  return patchExpiredShopLogin(patchConnectPicker(patched));
+  return patchDeskCodeLogin(patchExpiredShopLogin(patchConnectPicker(patched)));
 }
 
 const EXPIRED_STALE_OLD =
@@ -472,6 +472,72 @@ export function patchLive2OfflineRelogin(text) {
   if (source.includes(LIVE2_LOGIN_CSS_OLD)) {
     source = source.replace(LIVE2_LOGIN_CSS_OLD, LIVE2_LOGIN_CSS_NEW);
   }
+  return source;
+}
+
+const DESK_CODE_MARK = "请输入短信验证码，回车后自动登录";
+const DESK_CODE_PAIRS = [
+  [
+    "\".xm-hm-desk-row button{height:32px;padding:0 12px;border:0;border-radius:8px;background:#2f6fed;color:#fff;cursor:pointer}\" +",
+    "\".xm-hm-desk-row button{height:32px;padding:0 12px;border:0;border-radius:8px;background:#2f6fed;color:#fff;cursor:pointer}\" +\n      \".xm-hm-desk-row.is-code input{height:40px;border-color:#2f6fed;font-size:18px;letter-spacing:6px}\" +"
+  ],
+  [
+    "    } else if (status === \"screen\" || status === \"verify\") {\n      shot =\n        '<img id=\"xm-hm-desk-shot\" alt=\"服务器登录画面\" draggable=\"false\" src=\"/api/home/live-login/screen?store=' +\n        encodeURIComponent(desk.store || \"\") +\n        \"&t=\" +\n        Date.now() +\n        '\" />';\n      tools =\n        '<div class=\"xm-hm-desk-row\"><input id=\"xm-hm-desk-text\" placeholder=\"验证码\" /><button type=\"button\" data-desk-type>输入</button><button type=\"button\" data-desk-cancel>取消</button></div>';\n    }",
+    "    } else if (status === \"screen\" || status === \"verify\" || status === \"code\") {\n      shot =\n        '<img id=\"xm-hm-desk-shot\" alt=\"服务器登录画面\" draggable=\"false\" src=\"/api/home/live-login/screen?store=' +\n        encodeURIComponent(desk.store || \"\") +\n        \"&t=\" +\n        Date.now() +\n        '\" />';\n      var waitingCode = status === \"code\" || desk.needCode;\n      tools =\n        '<div class=\"xm-hm-desk-row' +\n        (waitingCode ? \" is-code\" : \"\") +\n        '\"><input id=\"xm-hm-desk-text\" placeholder=\"' +\n        (waitingCode ? \"请输入短信验证码，回车后自动登录\" : \"验证码\") +\n        '\" autocomplete=\"one-time-code\" inputmode=\"numeric\" /><button type=\"button\" data-desk-type>' +\n        (waitingCode ? \"登录\" : \"输入\") +\n        '</button><button type=\"button\" data-desk-cancel>取消</button></div>';\n    }"
+  ],
+  [
+    "        if (state.desk.status === \"verify\" || state.desk.status === \"login\") {\n          state.desk.status = \"screen\";\n        }\n        if (!dead) {\n          paint(root, state);\n        }\n        if (state.desk && state.desk.open && state.desk.status === \"screen\") {\n          pollDesk();\n        }",
+    "        if (state.desk.status === \"code\" || state.desk.needCode) {\n          state.desk.status = \"code\";\n          state.desk.needCode = true;\n        } else if (state.desk.status === \"verify\" || state.desk.status === \"login\") {\n          state.desk.status = \"screen\";\n        }\n        if (!dead) {\n          paint(root, state);\n        }\n        if (state.desk && state.desk.open && (state.desk.status === \"screen\" || state.desk.status === \"code\")) {\n          pollDesk();\n          focusDeskCode();\n        }"
+  ],
+  [
+    "        if (next.status === \"verify\" || next.status === \"login\" || next.status === \"missing\" || !next.status) {\n          next.status = \"screen\";\n        }",
+    "        if (next.status === \"code\" || next.needCode) {\n          next.status = \"code\";\n          next.needCode = true;\n        } else if (next.status === \"verify\" || next.status === \"login\" || next.status === \"missing\" || !next.status) {\n          next.status = \"screen\";\n        }"
+  ],
+  [
+    "            next.status = \"screen\";\n            state.desk = next;\n            if (!touchDeskShot(next.store, next.message)) {\n              paint(root, state);\n            }",
+    "            if (next.status === \"code\" || next.needCode) {\n              next.status = \"code\";\n              next.needCode = true;\n            } else {\n              next.status = \"screen\";\n            }\n            state.desk = next;\n            if (!touchDeskShot(next.store, next.message)) {\n              paint(root, state);\n            }\n            if (next.status === \"code\") {\n              focusDeskCode();\n            }"
+  ],
+  [
+    "        if (event.target.closest(\"[data-desk-type]\")) {\n          var box = root.querySelector(\"#xm-hm-desk-text\");\n          api(\"/api/home/live-login/input\", {\n            store: state.desk && state.desk.store,\n            text: box ? box.value : \"\"\n          }).then(function (st) {\n            if (box) {\n              box.value = \"\";\n            }\n            applyDesk(st || { status: \"screen\" });\n          });\n          return;\n        }",
+    "        if (event.target.closest(\"[data-desk-type]\")) {\n          sendDeskCode();\n          return;\n        }"
+  ],
+  [
+    "      function onFeeKey(event) {\n        var el = event.target;\n        if (!el || !el.getAttribute || (el.getAttribute(\"data-fee-lo\") == null && el.getAttribute(\"data-fee-hi\") == null)) {\n          return;\n        }",
+    "      function onFeeKey(event) {\n        if (event.target && event.target.id === \"xm-hm-desk-text\" && event.key === \"Enter\") {\n          event.preventDefault();\n          sendDeskCode();\n          return;\n        }\n        var el = event.target;\n        if (!el || !el.getAttribute || (el.getAttribute(\"data-fee-lo\") == null && el.getAttribute(\"data-fee-hi\") == null)) {\n          return;\n        }"
+  ]
+];
+
+export function patchDeskCodeLogin(text) {
+  let source = String(text || "");
+  if (source.includes(DESK_CODE_MARK)) {
+    return source;
+  }
+  if (!source.includes("function applyDesk(st)")) {
+    return source;
+  }
+  if (!source.includes("function focusDeskCode()")) {
+    source = source.replace(
+      "      function applyDesk(st) {",
+      "      function focusDeskCode() {\n        if (!state.desk || (state.desk.status !== \"code\" && !state.desk.needCode)) {\n          return;\n        }\n        var box = root.querySelector(\"#xm-hm-desk-text\");\n        if (!box) {\n          return;\n        }\n        box.placeholder = \"请输入短信验证码，回车后自动登录\";\n        if (box.parentElement) {\n          box.parentElement.classList.add(\"is-code\");\n        }\n        window.setTimeout(function () {\n          if (box.isConnected) {\n            box.focus();\n          }\n        }, 0);\n      }\n      function sendDeskCode() {\n        var box = root.querySelector(\"#xm-hm-desk-text\");\n        var text = box ? String(box.value || \"\").trim() : \"\";\n        if (!text || !state.desk) {\n          return;\n        }\n        api(\"/api/home/live-login/input\", {\n          store: state.desk.store,\n          text: text\n        }).then(function (st) {\n          if (box) {\n            box.value = \"\";\n          }\n          applyDesk(st || { status: \"code\", needCode: true });\n        });\n      }\n      function applyDesk(st) {"
+    );
+  }
+  DESK_CODE_PAIRS.forEach(function (pair) {
+    if (source.includes(pair[0])) {
+      source = source.replace(pair[0], pair[1]);
+    }
+  });
+  source = source.replaceAll(
+    "state.desk.status === \"screen\" || state.desk.status === \"verify\"",
+    "state.desk.status === \"screen\" || state.desk.status === \"verify\" || state.desk.status === \"code\""
+  );
+  source = source.replaceAll(
+    "row.status === \"screen\" || row.status === \"verify\"",
+    "row.status === \"screen\" || row.status === \"verify\" || row.status === \"code\""
+  );
+  source = source.replaceAll(
+    "st.status === \"screen\" || st.status === \"verify\"",
+    "st.status === \"screen\" || st.status === \"verify\" || st.status === \"code\""
+  );
   return source;
 }
 
