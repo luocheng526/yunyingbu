@@ -2,13 +2,13 @@
  * 实时（新版）采集。
  * 组织中心提供账号和密码。每家店在服务器登录后：
  * 京麦经营数据接口取成交金额，京准通 custom-report 当天总览取花费、投产比、总订单金额。
- * 不写旧京麦会话表。后台每 5 分钟开一轮；上一轮还在跑时不叠第二轮。
+ * 每家店都和已经在线的店同一条路：用保存的京麦会话抓数，抓成功后把会话写回去。后台每 5 分钟开一轮；上一轮还在跑时不叠第二轮。
  */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { jingmaiClient } from "./jingmai-client.js";
-import { listSamples, listSessions } from "./jingmai-store.js";
+import { COLLECTOR_OWNER_HOME, listSamples, listSessions, markAuth, updateSessionCookies } from "./jingmai-store.js";
 import { beijingParts, displayStamp } from "./jingmai.js";
 import { blankLive2Record, live2RecordFromMetrics } from "./live2.js";
 
@@ -24,7 +24,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1278-live2-login";
+export const LIVE2_RUNTIME_MARK = "0.1.1309-live2-same";
 export const LIVE2_INTERVAL_MS = 5 * 60 * 1000;
 
 function stampNow() {
@@ -210,25 +210,26 @@ export function createLive2Collector(deps = {}) {
     return boardFrom(shops, Date.now() - started);
   }
 
+  async function keepLogin(shop, jar) {
+    jars.set(shop.store, jar.slice());
+    try {
+      await updateSessionCookies(shop.store, jar, {
+        writer: COLLECTOR_OWNER_HOME,
+        expectedShopId: shop.shopId || ""
+      });
+      await markAuth(shop.store, "ok", "", { writer: COLLECTOR_OWNER_HOME });
+    } catch {
+      /* 这一轮进程里的会话仍然可用 */
+    }
+  }
+
   async function loginJar(shop) {
-    if (!shop.login || !shop.password) {
+    if (!shop.login || !shop.password || !client.login) {
       return null;
     }
-    let jar = null;
-    if (client.openPassword && client.submitPassword) {
-      const opened = await client.openPassword();
-      jar = await client.submitPassword({
-        jar: opened.jar,
-        init: opened.init,
-        loginName: shop.login,
-        password: shop.password,
-        authCode: ""
-      });
-    } else if (client.login) {
-      jar = await client.login(shop.login, shop.password);
-    }
+    const jar = await client.login(shop.login, shop.password);
     if (jar && jar.length) {
-      jars.set(shop.store, jar.slice());
+      await keepLogin(shop, jar);
     }
     return jar;
   }
@@ -341,19 +342,33 @@ export function createLive2Collector(deps = {}) {
     return blank;
   }
 
+  function markLoggedOut(shop, draft, samples, reason) {
+    const kept = closeSlow(shop, draft, samples);
+    const patched = publicRecord(Object.assign({}, kept, {
+      loginExpired: true,
+      online: false,
+      pendingUpdate: false,
+      pendingCollect: false,
+      offline: false,
+      offlineReason: reason || "登录已失效，请重新登录"
+    }));
+    draft.set(shop.store, patched);
+    return patched;
+  }
+
   async function collectShop(shop, known, draft, phase) {
-    const secret = shop.password;
     const base = blankFor(shop);
     const started = Date.now();
-    if (!shop.login || !secret) {
+    if (!shop.login || !shop.password) {
       base.offlineReason = "组织中心还没有填写这家店的账号";
       shop.password = "";
       return base;
     }
+    const saved = known.get(shop.store);
+    const prior = saved && Array.isArray(saved.cookies) ? saved.cookies : [];
     let jar = jars.get(shop.store) || null;
     if (!jar || !jar.length) {
-      const saved = known.get(shop.store);
-      jar = saved && saved.cookies && saved.cookies.length ? saved.cookies : null;
+      jar = prior.length ? prior : null;
     }
     let logged = Boolean(jar && jar.length);
     if (!logged) {
@@ -403,33 +418,11 @@ export function createLive2Collector(deps = {}) {
         row.offline = true;
         row.offlineReason = row.offlineReason || "京麦没有返回成交金额";
       }
+      if (row.online || row.adsFailed) {
+        await keepLogin(shop, jar);
+      }
       return row;
     } catch (error) {
-      if (error && error.code === "login") {
-        try {
-          shop.password = secret;
-          jar = await loginJar(shop);
-          shop.password = "";
-          if (jar && jar.length) {
-            const metrics = await client.fetchHome(jar, {
-              store: shop.store,
-              shopId: shop.shopId,
-              merchantId: shop.merchantId,
-              shopName: shop.store
-            });
-            if (!phase.dealMarked) {
-              phase.dealMs += Date.now() - started;
-            }
-            return live2RecordFromMetrics(shop, metrics, now());
-          }
-        } catch (again) {
-          shop.password = "";
-          base.pendingCollect = false;
-          base.loginExpired = true;
-          base.offlineReason = String((again && again.message) || "登录已失效，请重新登录");
-          return base;
-        }
-      }
       shop.password = "";
       const previous = draft.get(shop.store) || published.get(shop.store);
       const failed = previous ? Object.assign({}, previous) : base;
@@ -500,6 +493,10 @@ export function createLive2Collector(deps = {}) {
       let late = false;
       const job = collectShop(shop, known, draft, phase).then(function (row) {
         if (late || phase.closed) {
+          return row;
+        }
+        if (row && row.loginExpired) {
+          markLoggedOut(shop, draft, samples, row.offlineReason);
           return row;
         }
         if (!hasNumbers(row)) {

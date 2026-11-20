@@ -62,7 +62,7 @@ test("a shop logs in on the server and maps 京麦成交 plus 京准通花费、
   assert.equal(started.records[0].password, undefined);
   await gate;
   const view = await collector.board("cookie");
-  assert.equal(view.runtimeMark, "0.1.1278-live2-login");
+  assert.equal(view.runtimeMark, "0.1.1309-live2-same");
   assert.equal(logins, 1);
   assert.equal(view.running, false);
   assert.equal(view.records[0].liveAmount, 3009);
@@ -209,6 +209,63 @@ test("a shop without an account is 待接入, and a slow shop keeps today's last
   assert.equal(slow.pendingCollect, false);
   assert.equal(bare.pendingCollect, true);
   assert.equal(bare.liveAmount, null);
+});
+
+test("登录失效的店先用原会话抓数，会话还能用就不重新登录", async () => {
+  let logins = 0;
+  const fetched = [];
+  let done;
+  const gate = new Promise(function (resolve) {
+    done = resolve;
+  });
+  const collector = createLive2Collector({
+    storePath: "",
+    published: [{
+      shop: "过期店",
+      liveAmount: 10,
+      paidAmount: 4,
+      capturedAt: "2026/11/20 01:02:00",
+      online: false,
+      loginExpired: true,
+      pendingCollect: false
+    }],
+    loadOrg: async function () {
+      return [{ store: "过期店", enabled: true, login: "a", password: "b", shopId: "1" }];
+    },
+    listSessions: async function () {
+      return [{ store: "过期店", authState: "login_expired", cookies: [{ name: "thor", value: "old" }] }];
+    },
+    now: function () {
+      return "2026/11/20 11:40:00";
+    },
+    track: function (task) {
+      task.then(done, done);
+    },
+    client: {
+      login: async function () {
+        logins += 1;
+        return [{ name: "thor", value: "new" }];
+      },
+      fetchAccountIdentity: async function () {
+        const error = new Error("登录已失效，请重新登录");
+        error.code = "login";
+        throw error;
+      },
+      fetchHome: async function (jar) {
+        fetched.push(jar[0].value);
+        return { dealAmount: 99, paidAmount: 9, paidRoi: 1, paidDeal: 9 };
+      }
+    }
+  });
+  await collector.start("");
+  await gate;
+  const view = await collector.board("");
+  const row = view.records.find((item) => item.shop === "过期店");
+  assert.equal(logins, 0);
+  assert.deepEqual(fetched, ["old"]);
+  assert.equal(row.liveAmount, 99);
+  assert.equal(Boolean(row.loginExpired), false);
+  assert.equal(row.online, true);
 });
 
 test("a second start does not collect the same shops again", async () => {

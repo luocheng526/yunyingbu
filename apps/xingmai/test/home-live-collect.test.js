@@ -1224,7 +1224,7 @@ test("readHomeDealNow aborts by killing its own CDP/browser, not only racing the
   assert.match(chunk, /signal\.removeEventListener\("abort", onAbort\)/);
 });
 
-test("runTick rechecks login_expired shops that still have cookies", async () => {
+test("runTick collects login_expired shops that still have cookies the same way as online shops", async () => {
   const seen = [];
   await runTick({
     inflight: new Set(),
@@ -1266,7 +1266,7 @@ test("runTick rechecks login_expired shops that still have cookies", async () =>
       return { day: "2026-11-19", stamp: "2026-11-19 10:00:00" };
     }
   });
-  assert.deepEqual(seen, ["recheck:误标店", "fetch:误标店", "auth:误标店:ok"]);
+  assert.deepEqual(seen, ["fetch:误标店", "auth:误标店:ok"]);
 });
 
 test("runTick fair schedule: waiting shops do not burn deadline; failures do not block later shops", async () => {
