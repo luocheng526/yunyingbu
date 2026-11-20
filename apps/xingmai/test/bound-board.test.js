@@ -49,14 +49,14 @@ test.beforeEach(() => {
   setBoundClock(() => new Date("2026-11-16T04:00:00Z"));
 });
 
-test("菜单只留渠道和我的", () => {
+test("菜单留渠道、商品和我的", () => {
   const catalog = publicCatalog();
   assert.equal(catalog.erp, false);
-  assert.deepEqual(catalog.modules.map((item) => item.label), ["渠道", "我的"]);
+  assert.deepEqual(catalog.modules.map((item) => item.label), ["渠道", "商品", "我的"]);
   assert.equal(catalog.modules[0].pages.map((page) => page.label).join(","), "渠道总览,渠道详情,关键指标分析");
-  assert.equal(catalog.modules[1].pages.map((page) => page.label).join(","), "我的项目,个人中心");
-  assert.equal(catalog.modules.some((item) => /商品|货品|团队/.test(item.label)), false);
-  assert.equal(catalog.modules.some((item) => item.pages.some((page) => /商品|货品|团队|成员档案/.test(page.label))), false);
+  assert.equal(catalog.modules[1].pages.map((page) => page.label).join(","), "商品总览,商品全景分析,商品运营分析,商品库存分析");
+  assert.equal(catalog.modules[2].pages.map((page) => page.label).join(","), "我的项目,个人中心");
+  assert.equal(catalog.modules.some((item) => item.label === "货品" || item.label === "团队"), false);
 });
 
 test("GET /api/bound 仍标明爬虫且不是 ERP", async () => {
@@ -578,8 +578,12 @@ test("页面只请求边界接口，并画出四个模块", async () => {
   assert.match(root.innerHTML, /渠道详情/);
   assert.match(root.innerHTML, /关键指标分析/);
   assert.match(root.innerHTML, /我的项目/);
-  assert.doesNotMatch(root.innerHTML, /data-page="productOverview"|data-page="teamOverview"|data-page="hpOverview"/);
-  assert.doesNotMatch(root.innerHTML, /商品总览|商品全景分析|团队总览|成员档案|货品总览/);
+  assert.match(root.innerHTML, /data-page="productOverview"/);
+  assert.match(root.innerHTML, /商品总览/);
+  assert.match(root.innerHTML, /商品全景分析/);
+  assert.match(root.innerHTML, /商品运营分析/);
+  assert.match(root.innerHTML, /商品库存分析/);
+  assert.doesNotMatch(root.innerHTML, /data-page="teamOverview"|data-page="hpOverview"|data-page="teamMemberProfile"/);
   assert.match(root.innerHTML, /SPU/);
   assert.match(root.innerHTML, /SKU/);
   assert.match(root.innerHTML, /列表/);

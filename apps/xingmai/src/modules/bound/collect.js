@@ -3,7 +3,7 @@ import { API_ORIGIN, MASTERS, ORIGIN, PAGE_SIZE, accessCodes, reports } from "./
 import { listSheetHeads, readState, replaceMasters, writeMaster, writeSheet, writeState } from "./persist.js";
 import { collectScopes, shanghaiToday } from "./time.js";
 
-const QUIET_MODULES = new Set(["goods", "hp", "team"]);
+const QUIET_MODULES = new Set(["hp", "team"]);
 const QUIET_MASTERS = new Set(["goods", "teams", "members"]);
 
 const KNOWN_ACCESS = new Set(accessCodes());
@@ -601,7 +601,7 @@ export function reportBody(report, dim, scope, page) {
 }
 
 export async function noteWanted(page, report, dim, scope) {
-  if (!page || page.module !== "channel" || !report || page.local) {
+  if (!page || (page.module !== "channel" && page.module !== "goods") || !report || page.local) {
     return;
   }
   const start = String(scope.start || "");
@@ -689,7 +689,7 @@ async function wantedUnit(sheets) {
   const keep = [];
   let chosen = null;
   for (const item of wanted) {
-    const report = reports().find((row) => row.id === item.reportId && row.module === "channel");
+    const report = reports().find((row) => row.id === item.reportId && (row.module === "channel" || row.module === "goods"));
     if (!report) {
       continue;
     }

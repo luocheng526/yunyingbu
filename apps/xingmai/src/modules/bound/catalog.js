@@ -440,8 +440,8 @@ export function publicCatalog() {
     erp: false,
     label: "爬虫，非 ERP",
     startOn: START_ON,
-    note: "版式对齐边界 BI 工作台的渠道和我的。商品、货品、团队不进菜单，也不采集。数字只读本库，不读星脉 ERP。",
-    modules: MODULES.filter((item) => item.id === "channel" || item.id === "mine").map((item) => ({
+    note: "版式对齐边界 BI 工作台的渠道、商品和我的。货品、团队不进菜单，也不采集。数字只读本库，不读星脉 ERP。",
+    modules: MODULES.filter((item) => item.id === "channel" || item.id === "goods" || item.id === "mine").map((item) => ({
       ...item,
       pages: PAGES.filter((page) => page.module === item.id).map((page) => ({
         id: page.id,
