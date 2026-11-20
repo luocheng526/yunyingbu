@@ -49,20 +49,14 @@ test.beforeEach(() => {
   setBoundClock(() => new Date("2026-11-16T04:00:00Z"));
 });
 
-test("功能清单覆盖渠道、商品、团队、我的", () => {
+test("菜单只留渠道和我的", () => {
   const catalog = publicCatalog();
   assert.equal(catalog.erp, false);
-  assert.deepEqual(catalog.modules.map((item) => item.label), ["渠道", "商品", "货品", "团队", "我的"]);
-  const goods = catalog.modules[1].pages.find((page) => page.label === "商品总览");
-  assert.deepEqual(goods.tabs.map((tab) => tab.label), ["商品列表", "品类分析", "地域分析", "销售时段分析"]);
-  assert.equal(goods.ops.includes("dim"), true);
-  assert.equal(goods.ops.includes("views"), true);
-  assert.equal(goods.ops.includes("export"), true);
-  assert.equal(goods.ops.includes("cards"), true);
+  assert.deepEqual(catalog.modules.map((item) => item.label), ["渠道", "我的"]);
   assert.equal(catalog.modules[0].pages.map((page) => page.label).join(","), "渠道总览,渠道详情,关键指标分析");
-  const hp = catalog.modules[2].pages.find((page) => page.label === "货品全景分析");
-  assert.deepEqual(hp.tabs.filter((tab) => tab.group === "hp").map((tab) => tab.label), ["总览数据", "渠道布局分析", "商品布局分析", "SKU全渠道分析", "货品库存数据", "品牌分析", "发货仓库分析"]);
-  assert.deepEqual(hp.tabs.filter((tab) => tab.group === "ks").map((tab) => tab.label), ["总览数据", "货品数据", "渠道布局分析", "商品布局分析", "品牌分析", "发货仓库分析"]);
+  assert.equal(catalog.modules[1].pages.map((page) => page.label).join(","), "我的项目,个人中心");
+  assert.equal(catalog.modules.some((item) => /商品|货品|团队/.test(item.label)), false);
+  assert.equal(catalog.modules.some((item) => item.pages.some((page) => /商品|货品|团队|成员档案/.test(page.label))), false);
 });
 
 test("GET /api/bound 仍标明爬虫且不是 ERP", async () => {
@@ -546,7 +540,7 @@ test("页面只请求边界接口，并画出四个模块", async () => {
         return Promise.resolve({
           ok: true,
           json: async () => ({
-            page: { id: "productOverview", label: "商品总览", ops: ["date", "shop", "cards", "dim", "tabs", "search", "expand", "views", "export", "sums"] },
+            page: { id: "channelOverview", label: "渠道总览", ops: ["date", "shop", "cards", "dim", "tabs", "search", "expand", "views", "export", "sums"] },
             tab: { id: "sp_zl_list", label: "商品列表" },
             tabs: [{ id: "sp_zl_list", label: "商品列表" }, { id: "sp_zl_cate", label: "品类分析" }],
             range: { from: "2026-11-16", to: "2026-11-16" },
@@ -580,10 +574,12 @@ test("页面只请求边界接口，并画出四个模块", async () => {
   const stop = context.window.XmModules["/bound"].mount(root);
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.match(root.innerHTML, /爬虫，非 ERP/);
-  assert.match(root.innerHTML, /渠道/);
-  assert.match(root.innerHTML, /商品总览/);
-  assert.match(root.innerHTML, /团队/);
-  assert.match(root.innerHTML, /我的/);
+  assert.match(root.innerHTML, /渠道总览/);
+  assert.match(root.innerHTML, /渠道详情/);
+  assert.match(root.innerHTML, /关键指标分析/);
+  assert.match(root.innerHTML, /我的项目/);
+  assert.doesNotMatch(root.innerHTML, /data-page="productOverview"|data-page="teamOverview"|data-page="hpOverview"/);
+  assert.doesNotMatch(root.innerHTML, /商品总览|商品全景分析|团队总览|成员档案|货品总览/);
   assert.match(root.innerHTML, /SPU/);
   assert.match(root.innerHTML, /SKU/);
   assert.match(root.innerHTML, /列表/);
