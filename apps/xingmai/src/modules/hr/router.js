@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createDingClient, readDingEnv } from "./dingtalk.js";
+import { createDingClient, dingCallsEnabled, readDingEnv } from "./dingtalk.js";
 import { startDingStream } from "./stream.js";
 import {
   archiveYesterday,
@@ -60,6 +60,21 @@ function actorName(req) {
   return String(req.user?.displayName || req.user?.username || "").trim();
 }
 
+async function usageNow() {
+  const paused = !dingCallsEnabled();
+  try {
+    const mod = await import("./store.js");
+    if (typeof mod.readApiUsage === "function") {
+      const usage = await mod.readApiUsage();
+      usage.paused = paused;
+      return usage;
+    }
+  } catch {
+    /* 用量表还没接上时，仍然告诉页面调用已暂停 */
+  }
+  return { cap: 10000, stopAt: 9000, month: "", total: 0, months: [], paused };
+}
+
 function sendErr(res, err) {
   const status = Number(err?.statusCode) || 500;
   const detail = String(err?.code || err?.sqlMessage || err?.message || "").replace(/\s+/g, " ").slice(0, 180);
@@ -118,11 +133,15 @@ hrRouter.get("/", (_req, res) => {
 hrRouter.get("/status", async (_req, res) => {
   try {
     const links = await listLinks();
+    const usage = await usageNow();
+    const paused = usage.paused;
     res.json({
       ok: true,
       configured: readDingEnv().configured,
+      paused,
       linked: links.length,
-      lastSync: await latestSync()
+      lastSync: await latestSync(),
+      usage
     });
   } catch (err) {
     sendErr(res, err);
@@ -231,6 +250,11 @@ hrRouter.get("/timeoff", async (_req, res) => {
 
 hrRouter.post("/sync", async (req, res) => {
   try {
+    if (readDingEnv().configured && !dingCallsEnabled()) {
+      const usage = await usageNow();
+      res.json({ ok: true, configured: true, paused: true, usage });
+      return;
+    }
     const rawDate = String((req.body && req.body.date) || "");
     if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
       const refreshed = await refreshBoardDay(rawDate, createDingClient());

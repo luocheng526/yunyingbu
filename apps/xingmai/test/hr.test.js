@@ -7,10 +7,12 @@ import express from "express";
 import test from "node:test";
 import { createDingClient } from "../src/modules/hr/dingtalk.js";
 import { hrRouter, shouldStartHrJobs } from "../src/modules/hr/router.js";
-import { ackFor, interestingEvent } from "../src/modules/hr/stream.js";
+import { ackFor, interestingEvent, startDingStream } from "../src/modules/hr/stream.js";
 import {
   HR_SCHEMA,
+  addApiCalls,
   latestSync,
+  readApiUsage,
   listLeaves,
   listLinks,
   listRecruits,
@@ -40,6 +42,7 @@ import {
   pullLeaves,
   pullLate,
   refreshBoardDay,
+  refreshDirectory,
   readStoredBoard,
   readStoredEffort,
   saveBoardSnapshot,
@@ -159,7 +162,7 @@ test("home counts active staff, today's punches, and birthdays this month", () =
 });
 
 test("hr schema stays in hr_ tables", () => {
-  assert.equal(HR_SCHEMA.length, 14);
+  assert.equal(HR_SCHEMA.length, 15);
   for (const sql of HR_SCHEMA) {
     assert.match(sql, /CREATE TABLE IF NOT EXISTS hr_/);
     assert.doesNotMatch(sql, /people|han_|shen_/i);
@@ -206,6 +209,9 @@ test("client mounts one page and five in-page tabs", () => {
   assert.match(client, /state\.home/);
   assert.match(client, /刷新数据/);
   assert.match(client, /data-updated/);
+  assert.match(client, /data-usage/);
+  assert.match(client, /本月用量/);
+  assert.match(client, /调用已暂停/);
   assert.match(client, /data-act="refresh-board"/);
   assert.match(client, /状态/);
   assert.match(client, /hr-recruit-kpis/);
@@ -892,6 +898,7 @@ test("a successful pull keeps the same person and day, and an error keeps the ol
 });
 
 test("ding client asks the official attendance api with isI18n false", async () => {
+  resetHrStore();
   const calls = [];
   const fetchImpl = async (url, init) => {
     calls.push({ url: String(url), body: JSON.parse(init.body) });
@@ -904,7 +911,7 @@ test("ding client asks the official attendance api with isI18n false", async () 
     return jsonResponse({ errcode: 0, result: {} });
   };
   const ding = createDingClient({
-    env: { DINGTALK_CORP_ID: "corp", DINGTALK_CLIENT_ID: "app", DINGTALK_CLIENT_SECRET: "secret" },
+    env: { DINGTALK_CORP_ID: "corp", DINGTALK_CLIENT_ID: "app", DINGTALK_CLIENT_SECRET: "secret", DINGTALK_CALLS: "on" },
     fetchImpl
   });
   const users = await ding.listUsers();
@@ -1158,6 +1165,115 @@ test("http keeps attendance read-only and interviews in this module", async () =
     const gone = await request(server, `/api/hr/talents/${talent.data.talent.id}`, { method: "DELETE" });
     assert.equal(gone.status, 200);
   } finally {
+    await close(server);
+  }
+});
+
+test("ding calls stay paused until turned on and stop before the monthly cap", async () => {
+  resetHrStore();
+  delete process.env.DINGTALK_CALLS;
+  const when = new Date("2026-11-20T02:00:00Z");
+  const usage = await readApiUsage(when);
+  assert.equal(usage.month, "2026-11");
+  assert.equal(usage.total, 7507);
+  assert.equal(usage.cap, 10000);
+  assert.equal(usage.stopAt, 9000);
+  const calls = [];
+  const ding = createDingClient({
+    env: { DINGTALK_CORP_ID: "corp", DINGTALK_CLIENT_ID: "app", DINGTALK_CLIENT_SECRET: "secret" },
+    fetchImpl: async (url) => {
+      calls.push(String(url));
+      return jsonResponse({ accessToken: "token", expireIn: 7200, errcode: 0, result: [] });
+    }
+  });
+  await assert.rejects(() => ding.listAttendance(["u"], "2026-11-20"), /暂停/);
+  assert.equal(calls.length, 0);
+  const enabled = createDingClient({
+    env: { DINGTALK_CORP_ID: "corp", DINGTALK_CLIENT_ID: "app", DINGTALK_CLIENT_SECRET: "secret", DINGTALK_CALLS: "on" },
+    fetchImpl: async (url, init) => {
+      calls.push(String(url));
+      if (String(url).includes("/oauth2/")) return jsonResponse({ accessToken: "token", expireIn: 7200 });
+      if (String(url).includes("getattcolumns")) {
+        return jsonResponse({ errcode: 0, result: { columns: [{ id: "9", name: "加班时长" }] } });
+      }
+      return jsonResponse({ errcode: 0, result: { column_vals: [] }, recordresult: [], hasMore: false });
+    }
+  });
+  await enabled.listOvertimeHours("u1", "2026-11-20");
+  await enabled.listOvertimeHours("u2", "2026-11-20");
+  assert.equal(calls.filter((url) => url.includes("getattcolumns")).length, 1);
+  await addApiCalls(9000 - 7507 - 2, when);
+  await assert.rejects(() => enabled.listAttendance(["u"], "2026-11-20"), /上限/);
+});
+
+test("directory refresh and late detail skip calls that are already known", async () => {
+  resetHrStore();
+  let listed = 0;
+  const directory = {
+    configured: () => true,
+    async listUsers() {
+      listed += 1;
+      return [{ userId: "u1", name: "甲", jobNumber: "A1", department: "运营一组" }];
+    }
+  };
+  await refreshDirectory(directory);
+  await refreshDirectory(directory);
+  assert.equal(listed, 1);
+  await saveDingUsers([
+    { userId: "u1", userName: "甲", department: "运营一组" },
+    { userId: "u2", userName: "乙", department: "运营一组" }
+  ]);
+  await replaceDayPunches("2020-11-15", ["u1", "u2"], [
+    { dingtalkUserId: "u1", userName: "甲", department: "运营一组", workDate: "2020-11-15", checkType: "OnDuty", timeResult: "Normal", checkAt: "2020-11-15 09:00", recordId: "1" },
+    { dingtalkUserId: "u2", userName: "乙", department: "运营一组", workDate: "2020-11-15", checkType: "OnDuty", timeResult: "Late", checkAt: "2020-11-15 09:20", recordId: "2" }
+  ]);
+  const asked = [];
+  await pullLate("2020-11-15", {
+    configured: () => true,
+    async listDayDetail(userId) {
+      asked.push(userId);
+      return { results: [], approves: [] };
+    }
+  }, { onlyOpen: true });
+  assert.deepEqual(asked, ["u2"]);
+  const recent = new Date().toISOString();
+  assert.equal(shouldPullYesterday({ hour: 12 }, { ok: false, workDate: "2026-11-15", createdAt: recent }, "2026-11-15"), false);
+  assert.equal(shouldPullYesterday({ hour: 12 }, { ok: false, workDate: "2026-11-15", createdAt: "2020-01-01T00:00:00.000Z" }, "2026-11-15"), true);
+});
+
+test("paused sync reads the stored month and does not call dingtalk", async () => {
+  resetHrStore();
+  process.env.DINGTALK_CORP_ID = "corp";
+  process.env.DINGTALK_CLIENT_ID = "app";
+  process.env.DINGTALK_CLIENT_SECRET = "secret";
+  delete process.env.DINGTALK_CALLS;
+  const server = await listen(appWithUser());
+  try {
+    const status = await request(server, "/api/hr/status");
+    assert.equal(status.data.configured, true);
+    assert.equal(status.data.paused, true);
+    assert.equal(status.data.usage.paused, true);
+    assert.equal(status.data.usage.cap, 10000);
+    assert.equal(status.data.usage.stopAt, 9000);
+    assert.equal(status.data.usage.months.find((row) => row.month === "2026-11").total, 7507);
+    assert.equal(JSON.stringify(status.data).includes("secret"), false);
+    const synced = await request(server, "/api/hr/sync", { method: "POST", body: { date: "2026-11-20" } });
+    assert.equal(synced.data.ok, true);
+    assert.equal(synced.data.paused, true);
+    assert.equal(synced.data.configured, true);
+    assert.equal(await latestSync("refresh"), null);
+    const stream = startDingStream({
+      client: { configured: () => true },
+      fetchImpl: async () => {
+        throw new Error("paused stream should not open");
+      }
+    });
+    assert.equal(stream.started, false);
+  } finally {
+    delete process.env.DINGTALK_CORP_ID;
+    delete process.env.DINGTALK_CLIENT_ID;
+    delete process.env.DINGTALK_CLIENT_SECRET;
+    delete process.env.DINGTALK_CALLS;
     await close(server);
   }
 });
