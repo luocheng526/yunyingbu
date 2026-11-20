@@ -301,7 +301,7 @@ export async function loginShop(username, password, fetchImpl = fetch) {
     throw jingmaiError("login", "登录已失效，请重新登录");
   }
   return jar.map(function (item) {
-    return { name: item.name, value: item.value };
+    return Object.assign({}, item);
   });
 }
 
@@ -351,14 +351,14 @@ export async function startQrLogin(fetchImpl = fetch) {
     uuid: uuid,
     image: bytes.toString("base64"),
     jar: jar.map(function (item) {
-      return { name: item.name, value: item.value };
+      return Object.assign({}, item);
     })
   };
 }
 
 export async function pollQrLogin({ uuid, jar, fetchImpl = fetch }) {
   const next = (jar || []).map(function (item) {
-    return { name: item.name, value: item.value };
+    return Object.assign({}, item);
   });
   const checked = await request(
     fetchImpl,
@@ -382,7 +382,7 @@ export async function pollQrLogin({ uuid, jar, fetchImpl = fetch }) {
     return {
       status: status,
       jar: next.map(function (item) {
-        return { name: item.name, value: item.value };
+        return Object.assign({}, item);
       })
     };
   }
@@ -403,7 +403,7 @@ export async function pollQrLogin({ uuid, jar, fetchImpl = fetch }) {
   return {
     status: "ok",
     jar: next.map(function (item) {
-      return { name: item.name, value: item.value };
+      return Object.assign({}, item);
     })
   };
 }
@@ -485,7 +485,7 @@ export async function openPasswordSession(fetchImpl = fetch, seedJar) {
   return {
     sessionId: captcha.graphicCaptchaSessionId || "",
     jar: jar.map(function (item) {
-      return { name: item.name, value: item.value };
+      return Object.assign({}, item);
     }),
     init: {
       uuid: data.uuid,
@@ -502,7 +502,7 @@ export async function openPasswordSession(fetchImpl = fetch, seedJar) {
 
 export async function submitPasswordSession({ jar, init, loginName, password, authCode, fetchImpl = fetch }) {
   const next = (jar || []).map(function (item) {
-    return { name: item.name, value: item.value };
+    return Object.assign({}, item);
   });
   const payload = {
     source: "pop_new",
@@ -599,7 +599,7 @@ function readJson(status, text, location) {
 }
 
 async function postJson(fetchImpl, jar, url, body, headers, signal) {
-  const response = await request(fetchImpl, jar.slice(), url, {
+  const response = await request(fetchImpl, jar, url, {
     method: "POST",
     body: JSON.stringify(body || {}),
     signal: signal,
@@ -615,7 +615,7 @@ async function postJson(fetchImpl, jar, url, body, headers, signal) {
 }
 
 async function getJson(fetchImpl, jar, url, headers, signal) {
-  const response = await request(fetchImpl, jar.slice(), url, { headers: headers || {}, signal: signal });
+  const response = await request(fetchImpl, jar, url, { headers: headers || {}, signal: signal });
   return readJson(response.status, await response.text(), response.headers.get("location"));
 }
 

@@ -27,13 +27,16 @@ import {
   updateSessionCookies
 } from "./jingmai-store.js";
 
-const INTERVAL_MS = 5 * 60 * 1000;
+const INTERVAL_MS = 10 * 60 * 1000;
 let requestOrigin = "";
 
 export function setJingmaiRequestOrigin(origin) {
   requestOrigin = String(origin || "").replace(/\/$/, "");
 }
 const inflight = new Set();
+export function homeCollectionGate() {
+  return { inflight, humanProtectsShop };
+}
 const qrPending = new Map();
 const passwordPending = new Map();
 let loginQueue = [];

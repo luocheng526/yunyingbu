@@ -683,14 +683,14 @@ test("shen store exports match live runner import surface; han has no jingmai wr
 test("router smoke skip is MENKAI_SMOKE_LIVE only; production still starts collector", () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const source = readFileSync(join(here, "../src/modules/home/router.js"), "utf8");
-  assert.match(source, /startJingmaiCollector\(/);
+  assert.doesNotMatch(source, /startJingmaiCollector\(/);
   assert.match(source, /MENGKAI_SMOKE_LIVE/);
   assert.match(source, /if \(!process\.env\.MENGKAI_SMOKE_LIVE\)/);
   // Unguarded production would end with bare startJingmaiCollector(); guarded form ends with }.
   assert.equal(source.trim().endsWith("startJingmaiCollector();"), false);
   assert.match(
     source,
-    /if \(!process\.env\.MENGKAI_SMOKE_LIVE\) \{\s*startJingmaiCollector\(\);\s*startLive2Collector\(\);\s*\}/
+    /if \(!process\.env\.MENGKAI_SMOKE_LIVE\) \{\s*startLive2Collector\(\);\s*\}/
   );
 });
 

@@ -413,6 +413,25 @@ export async function getSession(store) {
   return mapDbSession(rows[0]);
 }
 
+// Bootstrap only. Never change an existing (possibly newer human) session.
+export async function ensureCollectSession(store, shopId = "") {
+  await ensure();
+  if (memoryForced()) {
+    if (!memory.sessions.has(store)) {
+      memory.sessions.set(store, { ...memorySession(store), shopId });
+    }
+    return getSession(store);
+  }
+  const stamp = stampNow();
+  await query(
+    `INSERT INTO shen_jingmai_session
+      (store, cookie_jar, shop_id, linked_at, updated_at)
+     VALUES (?, '[]', ?, ?, ?) ON DUPLICATE KEY UPDATE store = store`,
+    [store, shopId, stamp, stamp]
+  );
+  return getSession(store);
+}
+
 export async function saveSession(store, fields) {
   await ensure();
   const human = isHumanSessionWrite(fields);

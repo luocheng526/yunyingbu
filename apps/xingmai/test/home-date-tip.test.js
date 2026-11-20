@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const homeJs = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "../public/shared/modules/home.js"),
   "utf8"
-);
+).replace(/\r\n/g, "\n");
 
 function withinDays(from, to, maxInclusive) {
   const parseYmd = (ymd) => {

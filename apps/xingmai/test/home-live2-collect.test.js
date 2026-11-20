@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import "./_memory-env.js";
 import { live2FeeRate } from "../src/modules/home/live2.js";
-import { armLive2Schedule, createLive2Collector, LIVE2_INTERVAL_MS, LIVE2_STALE_MS, noteLive2Cookie } from "../src/modules/home/live2-collect.js";
+import { armLive2Schedule, createLive2Collector, LIVE2_INTERVAL_MS, LIVE2_STALE_MS } from "../src/modules/home/live2-collect.js";
 
 test("实时费比 is 付费金额 divided by 成交金额", () => {
   assert.equal(Math.round(live2FeeRate(1841.39, 3009) * 100), 61);
@@ -21,6 +21,9 @@ test("a shop logs in on the server and maps 京麦成交 plus 京准通花费、
     done = resolve;
   });
   const collector = createLive2Collector({
+    ensureSession: async () => null,
+    claimOwner: async () => ({ ok: true }),
+    saveSample: async () => ({ saved: true }),
     loadOrg: async function () {
       return [
         {
@@ -62,7 +65,7 @@ test("a shop logs in on the server and maps 京麦成交 plus 京准通花费、
   assert.equal(started.records[0].password, undefined);
   await gate;
   const view = await collector.board("cookie");
-  assert.equal(view.runtimeMark, "0.1.1315-smslogin");
+  assert.equal(view.runtimeMark, "0.1.1317-home-collect-stability");
   assert.equal(logins, 1);
   assert.equal(view.running, false);
   assert.equal(view.records[0].liveAmount, 3009);
@@ -81,6 +84,9 @@ test("an existing server session is read and not written back", async () => {
     done = resolve;
   });
   const collector = createLive2Collector({
+    ensureSession: async () => null,
+    claimOwner: async () => ({ ok: true }),
+    saveSample: async () => ({ saved: true }),
     loadOrg: async function () {
       return [{ store: "A店", enabled: true, login: "a", password: "b", shopId: "9" }];
     },
@@ -125,6 +131,9 @@ test("opening the board keeps the last published round until the new round finis
     done = resolve;
   });
   const collector = createLive2Collector({
+    ensureSession: async () => null,
+    claimOwner: async () => ({ ok: true }),
+    saveSample: async () => ({ saved: true }),
     storePath: "",
     published: [{ shop: "A店", liveAmount: 80, paidAmount: 20, capturedAt: "2026/11/19 09:00:00", online: true, pendingCollect: false }],
     loadOrg: async function () {
@@ -169,6 +178,9 @@ test("a shop without an account is 待接入, and a slow shop older than 15 minu
     done = resolve;
   });
   const collector = createLive2Collector({
+    ensureSession: async () => null,
+    claimOwner: async () => ({ ok: true }),
+    saveSample: async () => ({ saved: true }),
     storePath: "",
     shopBudgetMs: 30,
     published: [{ shop: "慢店", liveAmount: 10, paidAmount: 4, capturedAt: "2026/11/19 10:00:00", online: true, pendingCollect: false }],
@@ -221,6 +233,9 @@ test("登录失效的店跳过旧会话，有账号时静默再登一次就能�
     done = resolve;
   });
   const collector = createLive2Collector({
+    ensureSession: async () => null,
+    claimOwner: async () => ({ ok: true }),
+    saveSample: async () => ({ saved: true }),
     storePath: "",
     published: [{
       shop: "过期店",
@@ -273,6 +288,9 @@ test("静默登录遇到验证码就停在失效，不打开窗口也不抓数",
     done = resolve;
   });
   const collector = createLive2Collector({
+    ensureSession: async () => null,
+    claimOwner: async () => ({ ok: true }),
+    saveSample: async () => ({ saved: true }),
     storePath: "",
     published: [{
       shop: "验证店",
@@ -327,6 +345,9 @@ test("京麦超时保留会话并标掉线，最近一次有效数据超过 15 �
     done = resolve;
   });
   const collector = createLive2Collector({
+    ensureSession: async () => null,
+    claimOwner: async () => ({ ok: true }),
+    saveSample: async () => ({ saved: true }),
     storePath: "",
     shopBudgetMs: 30,
     published: [{
@@ -374,6 +395,9 @@ test("成交金额是空的且报错没有成交字段时不按掉线算", async
     done = resolve;
   });
   const collector = createLive2Collector({
+    ensureSession: async () => null,
+    claimOwner: async () => ({ ok: true }),
+    saveSample: async () => ({ saved: true }),
     storePath: "",
     published: [{
       shop: "空成交店",
@@ -423,6 +447,9 @@ test("a second start does not collect the same shops again", async () => {
     done = resolve;
   });
   const collector = createLive2Collector({
+    ensureSession: async () => null,
+    claimOwner: async () => ({ ok: true }),
+    saveSample: async () => ({ saved: true }),
     storePath: "",
     loadOrg: async function () {
       return [{ store: "A店", enabled: true, login: "a", password: "b", shopId: "1" }];
@@ -463,6 +490,9 @@ test("成交金额先入库，广告超过截止时间后仍保留这笔成交�
     releaseAds = resolve;
   });
   const collector = createLive2Collector({
+    ensureSession: async () => null,
+    claimOwner: async () => ({ ok: true }),
+    saveSample: async () => ({ saved: true }),
     storePath: "",
     shopBudgetMs: 200,
     loadOrg: async function () {
@@ -481,7 +511,7 @@ test("成交金额先入库，广告超过截止时间后仍保留这笔成交�
       login: async function () {
         return [{ name: "thor", value: "1" }];
       },
-      fetchHome: async function (_jar, expected) {
+      fetchHome: async function (_jar, _signal, expected) {
         await expected.onDeal({ dealAmount: 88 });
         await adsHold;
         await new Promise(function (resolve) {
@@ -509,6 +539,9 @@ test("a shop that times out keeps today's saved server reading instead of a blan
     done = resolve;
   });
   const collector = createLive2Collector({
+    ensureSession: async () => null,
+    claimOwner: async () => ({ ok: true }),
+    saveSample: async () => ({ saved: true }),
     storePath: "",
     shopBudgetMs: 40,
     loadOrg: async function () {
@@ -557,6 +590,9 @@ test("a new process reads the last published round in one board", async () => {
     done = resolve;
   });
   const first = createLive2Collector({
+    ensureSession: async () => null,
+    claimOwner: async () => ({ ok: true }),
+    saveSample: async () => ({ saved: true }),
     storePath: file,
     loadOrg: async function () {
       return [{ store: "A店", enabled: true, login: "a", password: "b", shopId: "1", team: "甲组" }];
@@ -582,6 +618,9 @@ test("a new process reads the last published round in one board", async () => {
   await first.start("");
   await gate;
   const second = createLive2Collector({
+    ensureSession: async () => null,
+    claimOwner: async () => ({ ok: true }),
+    saveSample: async () => ({ saved: true }),
     storePath: file,
     loadOrg: async function () {
       return [{ store: "A店", enabled: true, login: "a", password: "b", shopId: "1", team: "甲组" }];
@@ -602,7 +641,7 @@ test("a new process reads the last published round in one board", async () => {
   fs.rmSync(file, { force: true });
 });
 
-test("live2 schedule waits 5 minutes when no login is saved", () => {
+test("live2 schedule starts without a saved browser login", () => {
   const waits = [];
   let starts = 0;
   const armed = armLive2Schedule({
@@ -628,9 +667,9 @@ test("live2 schedule waits 5 minutes when no login is saved", () => {
     }
   });
   assert.equal(armed.started, true);
-  assert.equal(starts, 0);
-  assert.equal(LIVE2_INTERVAL_MS, 5 * 60 * 1000);
-  assert.deepEqual(waits, [0, LIVE2_INTERVAL_MS]);
+  assert.equal(starts, 1);
+  assert.equal(LIVE2_INTERVAL_MS, 10 * 60 * 1000);
+  assert.deepEqual(waits, [0]);
 });
 
 test("live2 schedule starts one round and does not stack a second while it runs", async () => {
@@ -687,21 +726,4 @@ test("live2 schedule starts one round and does not stack a second while it runs"
   await done;
   assert.equal(rounds, 1);
   assert.ok(waits.filter(function (ms) { return ms === 0; }).length >= 2);
-});
-
-test("a live2 request keeps the login for the next scheduled round", () => {
-  const file = path.join(os.tmpdir(), "xingmai-live2-cookie-" + Date.now() + ".json");
-  const previous = process.env.HOME_LIVE2_STORE;
-  process.env.HOME_LIVE2_STORE = file;
-  try {
-    noteLive2Cookie("xm=abc");
-    assert.equal(fs.readFileSync(file + ".cookie", "utf8"), "xm=abc");
-  } finally {
-    fs.rmSync(file + ".cookie", { force: true });
-    if (previous == null) {
-      delete process.env.HOME_LIVE2_STORE;
-    } else {
-      process.env.HOME_LIVE2_STORE = previous;
-    }
-  }
 });

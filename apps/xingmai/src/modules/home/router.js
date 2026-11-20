@@ -18,10 +18,9 @@ import {
   jingmaiCollectStatus,
   reloginInput,
   reloginScreen,
-  reloginState,
-  startJingmaiCollector
+  reloginState
 } from "./jingmai-runner.js";
-import { getLive2Board, noteLive2Cookie, startLive2Collector, startLive2Round } from "./live2-collect.js";
+import { getLive2Board, startLive2Collector, startLive2Round } from "./live2-collect.js";
 import { readFeeGoals, saveFeeGoal } from "./fee-goals.js";
 import {
   buildWeekPack,
@@ -545,8 +544,10 @@ function homeClientSource() {
   return patchHomeClientSource(fs.readFileSync(homeJsPath, "utf8"));
 }
 
-export function homeRouter() {
+export function homeRouter(deps = {}) {
   const router = Router();
+  const liveBoard = deps.getLive2Board || getLive2Board;
+  const liveStart = deps.startLive2Round || startLive2Round;
 
   router.get("/client.js", (_req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
@@ -571,9 +572,8 @@ export function homeRouter() {
 
   router.get("/live2", async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
-    noteLive2Cookie(req.headers.cookie || "");
     try {
-      return res.json(await getLive2Board(req.headers.cookie || ""));
+      return res.json(await liveBoard(req.headers.cookie || ""));
     } catch (err) {
       return res.status(Number(err.statusCode) || 502).json({
         ok: false,
@@ -586,10 +586,9 @@ export function homeRouter() {
 
   router.post("/live2", async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
-    noteLive2Cookie(req.headers.cookie || "");
     try {
       const store = req.body && req.body.store;
-      return res.json(await startLive2Round(req.headers.cookie || "", store));
+      return res.json(await liveStart(req.headers.cookie || "", store));
     } catch (err) {
       return res.status(Number(err.statusCode) || 502).json({
         ok: false,
@@ -801,6 +800,5 @@ export function homeRouter() {
 
 // Gate smoke imports set MENKAI_SMOKE_LIVE and must not start the real collector.
 if (!process.env.MENGKAI_SMOKE_LIVE) {
-  startJingmaiCollector();
   startLive2Collector();
 }

@@ -24,22 +24,26 @@ test("ensureFrameworkDirs creates missing folders including src/db", () => {
   }
 });
 
-test("ensureFrameworkDirs records EACCES instead of crashing", () => {
-  if (typeof process.getuid === "function" && process.getuid() === 0) {
-    return;
-  }
+test("ensureFrameworkDirs records EACCES instead of crashing", (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "xm-dirs-ro-"));
   try {
     const blocked = path.join(root, "src");
     fs.mkdirSync(blocked);
-    fs.chmodSync(blocked, 0o555);
+    // chmod does not deny writes on Windows (or to root on Linux).
+    const mkdir = fs.mkdirSync.bind(fs);
+    t.mock.method(fs, "mkdirSync", (dest, options) => {
+      if (dest === path.join(blocked, "db")) {
+        throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+      }
+      return mkdir(dest, options);
+    });
     const result = ensureFrameworkDirs(root, ["src/db"]);
     assert.equal(result.created.length, 0);
     assert.equal(result.skipped.length, 1);
     assert.equal(result.skipped[0].rel, "src/db");
     assert.match(String(result.skipped[0].error), /EACCES|permission|denied/i);
   } finally {
-    fs.chmodSync(path.join(root, "src"), 0o755);
+    t.mock.restoreAll();
     fs.rmSync(root, { recursive: true, force: true });
   }
 });

@@ -3,15 +3,17 @@
  * 组织中心提供账号和密码。每家店在服务器登录后：
  * 京麦经营数据接口取成交金额，京准通 custom-report 当天总览取花费、投产比、总订单金额。
  * 采集失败但登录还在（超时、网络）：会话记 offline，cookie 留下，下一轮继续抓。
- * 登录失效：cookie 清掉，本轮跳过，有账号时静默再登一次；需要验证码就停在失效等人工点。
- * 后台每 5 分钟开一轮；上一轮还在跑时不叠第二轮。
+ * 登录失效：保留原会话供核验，有账号时静默再登一次；需要验证码就停在失效等人工点。
+ * 后台每 10 分钟开一轮；上一轮还在跑时不叠第二轮。
  */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { jingmaiClient } from "./jingmai-client.js";
-import { COLLECTOR_OWNER_HOME, listSamples, listSessions, markAuth, updateSessionCookies } from "./jingmai-store.js";
-import { beijingParts, collectAuthDecision, displayStamp, isMissingDealFieldError } from "./jingmai.js";
+import { COLLECTOR_OWNER_HOME, claimCollectorOwner, ensureCollectSession, getSession, listSamples, listSessions, markAuth, saveSample, sessionVersionOf, updateSessionCookies } from "./jingmai-store.js";
+import { beijingParts, collectAuthDecision, displayStamp, isMissingDealFieldError, matchCollectIdentity, sampleFields } from "./jingmai.js";
+import { homeCollectionGate } from "./jingmai-runner.js";
+import { normalizeOrgShops, readServerOrgShops } from "./org-roster.js";
 import { blankLive2Record, live2RecordFromMetrics } from "./live2.js";
 
 function workerCount() {
@@ -26,8 +28,8 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1315-smslogin";
-export const LIVE2_INTERVAL_MS = 5 * 60 * 1000;
+export const LIVE2_RUNTIME_MARK = "0.1.1317-home-collect-stability";
+export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
 function stampNow() {
@@ -53,22 +55,7 @@ async function readOrgShops(cookie, fetchImpl = fetch) {
     throw error;
   }
   const data = await response.json();
-  return (data.stores || [])
-    .map(function (store) {
-      return {
-        store: String(store.storeName || "").trim(),
-        team: String((store && store.team) || ""),
-        manager: String((store && store.manager) || ""),
-        enabled: store.statusKey === "operating" || (store.statusKey == null && store.remark === "运营中"),
-        login: String(store.login || ""),
-        password: String(store.password || ""),
-        shopId: String(store.shopId || store.storeId || "").trim(),
-        merchantId: String(store.merchantId || "").trim()
-      };
-    })
-    .filter(function (store) {
-      return store.store && store.enabled !== false;
-    });
+  return normalizeOrgShops(data.stores || []);
 }
 
 function publicRecord(row) {
@@ -161,13 +148,25 @@ function writeStore(file, payload) {
 
 export function createLive2Collector(deps = {}) {
   const jars = new Map();
+  const loginRetries = new Map();
+  const clock = deps.clock || Date.now;
   const published = new Map();
   let publishedAt = "";
   let updatedAt = "";
   let timings = emptyTimings();
   let running = false;
+  let lastError = "";
   const loadOrg = deps.loadOrg || readOrgShops;
+  const loadBackgroundOrg = deps.loadBackgroundOrg || readServerOrgShops;
+  const ensureSession = deps.ensureSession || ensureCollectSession;
+  const claimOwner = deps.claimOwner || claimCollectorOwner;
+  const persistSample = deps.saveSample || saveSample;
+  const inflight = deps.inflight || new Set();
+  const humanBlocks = deps.humanProtectsShop || function () { return false; };
   const sessionsOf = deps.listSessions || listSessions;
+  const sessionOf = deps.getSession || (deps.listSessions
+    ? async function (store) { return (await sessionsOf()).find(function (row) { return row.store === store; }); }
+    : getSession);
   const samplesOf = deps.listSamples || listSamples;
   const client = deps.client || jingmaiClient;
   const now = deps.now || stampNow;
@@ -232,7 +231,7 @@ export function createLive2Collector(deps = {}) {
       copy.online = false;
       copy.offline = true;
       copy.pendingUpdate = false;
-      copy.offlineReason = "采集已停止";
+      copy.offlineReason = copy.offlineReason || "采集已停止";
       return copy;
     }
     return copy;
@@ -259,6 +258,7 @@ export function createLive2Collector(deps = {}) {
       source: "live2",
       runtimeMark: LIVE2_RUNTIME_MARK,
       running: running,
+      lastError: lastError,
       updatedAt: updatedAt,
       publishedAt: publishedAt,
       loginExpiredShops: loginExpiredShops,
@@ -276,43 +276,96 @@ export function createLive2Collector(deps = {}) {
     return boardFrom(shops, Date.now() - started);
   }
 
-  async function keepLogin(shop, jar) {
-    jars.set(shop.store, jar.slice());
+  function writeOptions(shop, phase) {
+    return {
+      writer: COLLECTOR_OWNER_HOME,
+      expectedShopId: shop.shopId || "",
+      sessionVersion: phase.sessionVersion
+    };
+  }
+
+  function rejectedWrite(result, phase) {
+    if (result && result.updated === false && result.reason !== "missing") {
+      phase.superseded = true;
+      return true;
+    }
+    return false;
+  }
+
+  function inactive(shop, phase) {
+    if (humanBlocks(shop.store)) phase.superseded = true;
+    return phase.closed || phase.superseded;
+  }
+
+  async function persistMetrics(shop, metrics, phase) {
+    if (inactive(shop, phase)) return false;
+    if (metrics.dealAmount == null && metrics.paidAmount == null) return true;
+    const capturedAt = phase.capturedAt || (phase.capturedAt = now());
+    let result;
     try {
-      await updateSessionCookies(shop.store, jar, {
-        writer: COLLECTOR_OWNER_HOME,
-        expectedShopId: shop.shopId || ""
-      });
-      await markAuth(shop.store, "ok", "", { writer: COLLECTOR_OWNER_HOME });
+      result = await persistSample({
+        store: shop.store, day: dayOf(capturedAt).replace(/\//g, "-"),
+        capturedAt: capturedAt.replace(/\//g, "-"), ok: true, ...sampleFields(metrics)
+      }, writeOptions(shop, phase));
     } catch {
-      /* 这一轮进程里的会话仍然可用 */
+      phase.storageError = new Error("采集数据保存失败，等待下一轮重试");
+      throw phase.storageError;
+    }
+    if (result && result.saved === false) {
+      phase.superseded = true;
+      return false;
+    }
+    return !inactive(shop, phase);
+  }
+
+  async function verifyIdentity(shop, jar, phase) {
+    if (!client.fetchAccountIdentity) return;
+    const identity = await client.fetchAccountIdentity(jar, undefined, phase.controller.signal);
+    const result = matchCollectIdentity({ ...shop, shopName: shop.store }, identity);
+    if (!result.ok) {
+      throw Object.assign(new Error(result.reason === "identity_missing" ? "未能核验店铺身份" : "登录店铺与组织中心不一致"), { code: result.reason });
     }
   }
 
-  async function markCollectFail(shop, reason) {
+  async function keepLogin(shop, jar, phase) {
+    if (inactive(shop, phase)) return;
     try {
-      await markAuth(shop.store, "offline", String(reason || "采集超时").slice(0, 200), {
-        writer: COLLECTOR_OWNER_HOME
-      });
+      const updated = await updateSessionCookies(shop.store, jar, writeOptions(shop, phase));
+      if (rejectedWrite(updated, phase) || inactive(shop, phase)) return;
+      const marked = await markAuth(shop.store, "ok", "", writeOptions(shop, phase));
+      if (rejectedWrite(marked, phase) || inactive(shop, phase)) return;
+    } catch {
+      /* 这一轮进程里的会话仍然可用 */
+    }
+    if (!phase.closed && !phase.superseded) {
+      jars.set(shop.store, { cookies: jar.slice(), version: phase.sessionVersion });
+      loginRetries.delete(shop.store);
+    }
+  }
+
+  async function markCollectFail(shop, reason, phase, terminal = false) {
+    if (humanBlocks(shop.store)) phase.superseded = true;
+    if (phase.sessionVersion == null || (phase.closed && !terminal) || phase.superseded) return;
+    try {
+      const marked = await markAuth(shop.store, "offline", String(reason || "采集超时").slice(0, 200), writeOptions(shop, phase));
+      rejectedWrite(marked, phase);
     } catch {
       /* cookie stays; next round still collects */
     }
   }
 
-  async function dropExpiredLogin(shop, reason) {
+  async function markExpiredLogin(shop, reason, phase) {
+    if (inactive(shop, phase)) return;
     jars.delete(shop.store);
+    const previous = loginRetries.get(shop.store);
+    const attempts = previous && previous.version === phase.sessionVersion ? previous.attempts + 1 : 1;
+    loginRetries.set(shop.store, {
+      version: phase.sessionVersion, attempts, reason,
+      until: clock() + Math.min(60, 15 * 2 ** (attempts - 1)) * 60 * 1000
+    });
     try {
-      await updateSessionCookies(shop.store, [], {
-        writer: COLLECTOR_OWNER_HOME,
-        expectedShopId: shop.shopId || ""
-      });
-    } catch {
-      /* mark login_expired even if the jar write misses */
-    }
-    try {
-      await markAuth(shop.store, "login_expired", reason || "登录已失效，请重新登录", {
-        writer: COLLECTOR_OWNER_HOME
-      });
+      const marked = await markAuth(shop.store, "login_expired", reason || "登录已失效，请重新登录", writeOptions(shop, phase));
+      rejectedWrite(marked, phase);
     } catch {
       /* board still shows loginExpired from this round */
     }
@@ -320,18 +373,14 @@ export function createLive2Collector(deps = {}) {
 
   function silentLoginFailed(error) {
     const message = String((error && error.message) || "");
-    return Boolean(error && (error.code === "login" || /验证码|滑块|安全验证|登录/.test(message)));
+    return Boolean(error && (error.code === "login" || /验证码|滑块|安全验证|账号异常|密码不正确/.test(message)));
   }
 
   async function loginJar(shop) {
     if (!shop.login || !shop.password || !client.login) {
       return null;
     }
-    const jar = await client.login(shop.login, shop.password);
-    if (jar && jar.length) {
-      await keepLogin(shop, jar);
-    }
-    return jar;
+    return client.login(shop.login, shop.password);
   }
 
   function stampOf(value) {
@@ -433,7 +482,8 @@ export function createLive2Collector(deps = {}) {
     return null;
   }
 
-  function closeSlow(shop, draft, samples) {
+  async function closeSlow(shop, draft, samples, phase) {
+    if (phase.superseded) return;
     const stamp = now();
     const kept = keepNumbers(shop, draft, samples);
     if (kept && kept.liveAmount != null && !kept.loginExpired && isFreshStamp(kept.capturedAt, stamp)) {
@@ -457,8 +507,8 @@ export function createLive2Collector(deps = {}) {
       offline: true,
       offlineReason: reason
     }));
-    draft.set(shop.store, row);
-    markCollectFail(shop, reason);
+    await markCollectFail(shop, reason, phase, true);
+    if (!phase.superseded) draft.set(shop.store, row);
     return row;
   }
 
@@ -476,35 +526,64 @@ export function createLive2Collector(deps = {}) {
     return patched;
   }
 
-  async function collectShop(shop, known, draft, phase) {
+  async function collectShop(shop, draft, phase) {
     const base = blankFor(shop);
     const started = Date.now();
-    if (!shop.login || !shop.password) {
-      base.offlineReason = "组织中心还没有填写这家店的账号";
-      shop.password = "";
-      return base;
-    }
-    const saved = known.get(shop.store);
+    // Read after obtaining a worker slot: a queued shop may have been re-logged in.
+    // A failed read must never be treated as an empty jar and trigger password login.
+    const saved = await sessionOf(shop.store) || await ensureSession(shop.store, shop.shopId || "");
+    if (phase.closed || (saved && saved.enabled === false)) return null;
+    phase.sessionVersion = sessionVersionOf(saved) || "g:0";
+    const claimed = await claimOwner(shop.store, COLLECTOR_OWNER_HOME);
+    if (!claimed || !claimed.ok || inactive(shop, phase)) return null;
     const expired = isLoginExpiredSession(saved);
     const prior = saved && Array.isArray(saved.cookies) ? saved.cookies : [];
-    let jar = jars.get(shop.store) || null;
-    if (!jar || !jar.length) {
-      jar = !expired && prior.length ? prior : null;
+    const cached = jars.get(shop.store);
+    if (expired || (cached && cached.version !== phase.sessionVersion)) {
+      jars.delete(shop.store);
     }
+    // Durable state wins over a process cache, including after an external re-login.
+    let jar = prior.length && (!expired || client.fetchAccountIdentity) ? prior : (!expired && jars.get(shop.store)?.cookies) || null;
+    let verified = false;
+    if (jar && client.fetchAccountIdentity) {
+      try {
+        await verifyIdentity(shop, jar, phase);
+        verified = true;
+      } catch (error) {
+        if (inactive(shop, phase)) return null;
+        if (error.code === "login") jar = null;
+        else {
+          await markCollectFail(shop, error.message, phase);
+          return { ...base, pendingCollect: false, offline: true, online: false, offlineReason: error.message };
+        }
+      }
+    }
+    if (inactive(shop, phase)) return null;
     let logged = Boolean(jar && jar.length);
     if (!logged) {
+      const retry = loginRetries.get(shop.store);
+      if (retry && retry.version === phase.sessionVersion && retry.until > clock()) {
+        return { ...base, pendingCollect: false, loginExpired: true, online: false, offlineReason: retry.reason };
+      }
+      if (!shop.login || !shop.password) {
+        base.offlineReason = "组织中心还没有填写这家店的账号";
+        shop.password = "";
+        return base;
+      }
       try {
         jar = await loginJar(shop);
+        if (phase.closed || phase.superseded) return null;
         logged = Boolean(jar && jar.length);
       } catch (error) {
         shop.password = "";
-        const reason = silentLoginFailed(error)
-          ? "登录已失效，请重新登录"
-          : String((error && error.message) || "登录没有完成");
-        await dropExpiredLogin(shop, reason);
+        if (phase.closed || phase.superseded) return null;
+        const authFailed = silentLoginFailed(error);
+        const reason = String((error && error.message) || "登录没有完成").slice(0, 200);
+        if (authFailed) await markExpiredLogin(shop, reason, phase);
+        else await markCollectFail(shop, reason, phase);
         base.pendingCollect = false;
-        base.loginExpired = true;
-        base.offline = false;
+        base.loginExpired = authFailed;
+        base.offline = !authFailed;
         base.online = false;
         base.offlineReason = reason;
         return base;
@@ -512,7 +591,7 @@ export function createLive2Collector(deps = {}) {
     }
     shop.password = "";
     if (!logged) {
-      await dropExpiredLogin(shop, "登录没有完成");
+      await markExpiredLogin(shop, "登录没有完成", phase);
       base.pendingCollect = false;
       base.loginExpired = true;
       base.offline = false;
@@ -521,29 +600,35 @@ export function createLive2Collector(deps = {}) {
       return base;
     }
     try {
-      const metrics = await client.fetchHome(jar, {
+      if (!verified) await verifyIdentity(shop, jar, phase);
+      if (inactive(shop, phase)) return null;
+      const metrics = await client.fetchHome(jar, phase.controller.signal, {
         store: shop.store,
         shopId: shop.shopId,
         merchantId: shop.merchantId,
         shopName: shop.store,
-        onDeal: function (deal) {
-          if (phase.closed) {
+        onDeal: async function (deal) {
+          if (phase.closed || phase.superseded) {
             return;
           }
           phase.dealMs += Date.now() - started;
           phase.dealMarked = true;
-          const partial = live2RecordFromMetrics(shop, Object.assign({}, deal), now());
+          if (!await persistMetrics(shop, deal, phase)) return;
+          const partial = live2RecordFromMetrics(shop, Object.assign({}, deal), phase.capturedAt);
           partial.pendingCollect = false;
           draft.set(shop.store, publicRecord(partial));
           phase.saveMs += writeStore(file ? file + ".draft" : "", { records: Array.from(draft.values()) });
         }
       });
+      if (inactive(shop, phase)) return null;
+      if (phase.storageError) throw phase.storageError;
+      if (!await persistMetrics(shop, metrics, phase)) return null;
       if (!phase.dealMarked) {
         phase.dealMs += Date.now() - started;
       } else {
         phase.adsMs += Date.now() - started - phase.dealMs;
       }
-      const row = live2RecordFromMetrics(shop, metrics, now());
+      const row = live2RecordFromMetrics(shop, metrics, phase.capturedAt);
       if (!row.online && !row.adsFailed) {
         row.offline = true;
         row.offlineReason = row.offlineReason || "京麦没有返回成交金额";
@@ -552,13 +637,14 @@ export function createLive2Collector(deps = {}) {
         row.loginExpired = false;
         row.offline = false;
         row.offlineReason = "";
-        await keepLogin(shop, jar);
+        await keepLogin(shop, jar, phase);
       } else {
-        await markCollectFail(shop, row.offlineReason);
+        await markCollectFail(shop, row.offlineReason, phase);
       }
       return row;
     } catch (error) {
       shop.password = "";
+      if (phase.closed || phase.superseded) return null;
       const previous = draft.get(shop.store) || published.get(shop.store);
       if (isMissingDealFieldError(error)) {
         const kept = previous ? Object.assign({}, previous) : base;
@@ -566,24 +652,25 @@ export function createLive2Collector(deps = {}) {
         kept.loginExpired = false;
         kept.offline = false;
         kept.offlineReason = "";
-        kept.online = true;
-        await keepLogin(shop, jar);
+        kept.online = hasNumbers(kept);
+        await keepLogin(shop, jar, phase);
         return kept;
       }
       const decision = collectAuthDecision(error);
       if (decision.authState === "login_expired") {
-        await dropExpiredLogin(shop, decision.authMessage);
+        const reason = String(error.message || decision.authMessage).slice(0, 200);
+        await markExpiredLogin(shop, reason, phase);
         const failed = previous ? Object.assign({}, previous) : base;
         failed.pendingCollect = false;
         failed.loginExpired = true;
         failed.offline = false;
         failed.online = false;
         failed.pendingUpdate = false;
-        failed.offlineReason = decision.authMessage;
+        failed.offlineReason = reason;
         return failed;
       }
-      const reason = decision.authMessage || String((error && error.message) || "采集超时");
-      await markCollectFail(shop, reason);
+      const reason = phase.storageError ? phase.storageError.message : decision.authMessage || String((error && error.message) || "采集超时");
+      await markCollectFail(shop, reason, phase);
       const failed = previous ? Object.assign({}, previous) : base;
       failed.pendingCollect = false;
       failed.loginExpired = false;
@@ -634,7 +721,7 @@ export function createLive2Collector(deps = {}) {
     return parts[0][0];
   }
 
-  async function run(shops, only, known) {
+  async function run(shops, only) {
     const targets = (shops || []).filter(function (shop) {
       return shop && shop.store && (!only || shop.store === only);
     });
@@ -647,12 +734,16 @@ export function createLive2Collector(deps = {}) {
     let cursor = 0;
     let lastPicked = roundStart;
     async function one(shop) {
-      const phase = { dealMs: 0, adsMs: 0, saveMs: 0, dealMarked: false, closed: false };
+      if (inflight.has(shop.store) || humanBlocks(shop.store)) return;
+      inflight.add(shop.store);
+      const phase = {
+        dealMs: 0, adsMs: 0, saveMs: 0, dealMarked: false, closed: false,
+        superseded: false, sessionVersion: null, controller: new globalThis.AbortController()
+      };
       const shopStart = Date.now();
       let timer = 0;
-      let late = false;
-      const job = collectShop(shop, known, draft, phase).then(function (row) {
-        if (late || phase.closed) {
+      const job = collectShop(shop, draft, phase).then(async function (row) {
+        if (!row || phase.closed || phase.superseded) {
           return row;
         }
         if (row && row.pendingCollect) {
@@ -663,36 +754,46 @@ export function createLive2Collector(deps = {}) {
           markLoggedOut(shop, draft, samples, row.offlineReason);
           return row;
         }
-        if (!hasNumbers(row)) {
-          closeSlow(shop, draft, samples);
+        if (!hasNumbers(row) && !row.offline) {
+          await closeSlow(shop, draft, samples, phase);
           return row;
         }
         draft.set(shop.store, publicRecord(row));
         return row;
       });
-      const timed = await Promise.race([
-        job.then(function (row) {
-          return { row: row };
-        }),
-        new Promise(function (resolve) {
-          timer = setTimeout(function () {
-            resolve({ timeout: true });
-          }, budget);
-        })
-      ]);
-      clearTimeout(timer);
-      shop.password = "";
-      if (timed.timeout) {
-        late = true;
-        phase.closed = true;
-        const elapsed = Date.now() - shopStart;
-        if (!phase.dealMarked) {
-          phase.dealMs += elapsed;
-        } else {
-          phase.adsMs += Math.max(0, elapsed - phase.dealMs);
+      // Keep the shared lock until even a cancellation-ignoring client settles.
+      job.then(() => inflight.delete(shop.store), () => inflight.delete(shop.store));
+      try {
+        const timed = await Promise.race([
+          job.then(function (row) {
+            return { row: row };
+          }),
+          new Promise(function (resolve) {
+            timer = setTimeout(function () {
+              // Close writeback before aborting: an abort handler may reject immediately.
+              phase.closed = true;
+              phase.controller.abort();
+              resolve({ timeout: true });
+            }, budget);
+          })
+        ]);
+        if (timed.timeout) {
+          const elapsed = Date.now() - shopStart;
+          if (!phase.dealMarked) {
+            phase.dealMs += elapsed;
+          } else {
+            phase.adsMs += Math.max(0, elapsed - phase.dealMs);
+          }
+          await closeSlow(shop, draft, samples, phase);
+          job.catch(function () {});
         }
-        closeSlow(shop, draft, samples);
-        job.catch(function () {});
+      } catch {
+        await closeSlow(shop, draft, samples, phase);
+      } finally {
+        clearTimeout(timer);
+        phase.closed = true;
+        phase.controller.abort();
+        shop.password = "";
       }
       totals.dealMs += phase.dealMs;
       totals.adsMs += phase.adsMs;
@@ -704,11 +805,7 @@ export function createLive2Collector(deps = {}) {
         cursor += 1;
         const shop = targets[index];
         lastPicked = Date.now();
-        try {
-          await one(shop);
-        } catch {
-          closeSlow(shop, draft, samples);
-        }
+        await one(shop);
       }
     }
     const width = Math.max(1, Math.min(widthOf(), targets.length || 1));
@@ -720,34 +817,26 @@ export function createLive2Collector(deps = {}) {
     publish(draft, totals);
   }
 
-  async function start(cookie, only) {
+  async function start(cookie, only, background = false) {
     if (running) {
-      const current = await board(cookie);
+      const current = background ? { running: true } : await board(cookie);
       return Object.assign(current, { started: false });
     }
     running = true;
+    lastError = "";
     let shops = [];
     try {
-      shops = await loadOrg(cookie);
+      shops = await (background ? loadBackgroundOrg() : loadOrg(cookie));
     } catch (error) {
       running = false;
       throw error;
     }
     const began = Date.now();
     const task = (async function () {
-      let known = new Map();
-      try {
-        const sessions = await sessionsOf();
-        (sessions || []).forEach(function (session) {
-          if (session && session.store) {
-            known.set(session.store, session);
-          }
-        });
-      } catch {
-        known = new Map();
-      }
-      await run(shops, only, known);
-    })().finally(function () {
+      await run(shops, only);
+    })().catch(function () {
+      lastError = "采集结果保存失败，等待下一轮重试";
+    }).finally(function () {
       shops.forEach(function (shop) {
         shop.password = "";
       });
@@ -770,56 +859,13 @@ export function createLive2Collector(deps = {}) {
 
 const live2Hooks = { onRoundDone: null };
 const collector = createLive2Collector({
+  ...homeCollectionGate(),
   onRoundDone: function (began) {
     if (typeof live2Hooks.onRoundDone === "function") {
       live2Hooks.onRoundDone(began);
     }
   }
 });
-
-let scheduleCookie = "";
-
-function cookiePath() {
-  const store = defaultStorePath();
-  if (!store) {
-    return "";
-  }
-  return store + ".cookie";
-}
-
-export function noteLive2Cookie(cookie) {
-  const value = String(cookie || "").trim();
-  if (!value) {
-    return;
-  }
-  scheduleCookie = value;
-  const file = cookiePath();
-  if (!file) {
-    return;
-  }
-  try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, value, { mode: 0o600 });
-  } catch {
-    /* 内存里的登录态仍可供这一轮进程使用 */
-  }
-}
-
-function loadScheduleCookie() {
-  if (scheduleCookie) {
-    return scheduleCookie;
-  }
-  const file = cookiePath();
-  if (!file) {
-    return "";
-  }
-  try {
-    scheduleCookie = String(fs.readFileSync(file, "utf8") || "").trim();
-  } catch {
-    scheduleCookie = "";
-  }
-  return scheduleCookie;
-}
 
 export function armLive2Schedule(deps = {}) {
   const env = deps.env || process.env;
@@ -832,10 +878,10 @@ export function armLive2Schedule(deps = {}) {
     return { started: false };
   }
   gate.__homeLive2Started = true;
-  const startRound = deps.startRound || function (cookie) {
-    return collector.start(cookie);
+  const startRound = deps.startRound || function () {
+    return collector.start("", "", true);
   };
-  const readCookie = deps.readCookie || loadScheduleCookie;
+  const readCookie = deps.readCookie || function () { return ""; };
   const setTimer = deps.setTimeout || setTimeout;
   const clearTimer = deps.clearTimeout || clearTimeout;
   const hooks = deps.hooks || live2Hooks;
@@ -856,10 +902,6 @@ export function armLive2Schedule(deps = {}) {
   async function run() {
     const begun = Date.now();
     const cookie = readCookie();
-    if (!cookie) {
-      plan(begun);
-      return;
-    }
     try {
       const view = await startRound(cookie);
       if (view && view.started === true) {
