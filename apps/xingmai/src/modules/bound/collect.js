@@ -3,6 +3,9 @@ import { API_ORIGIN, MASTERS, ORIGIN, PAGE_SIZE, accessCodes, reports } from "./
 import { listSheetHeads, readState, replaceMasters, writeMaster, writeSheet, writeState } from "./persist.js";
 import { collectScopes, shanghaiToday } from "./time.js";
 
+const QUIET_MODULES = new Set(["goods", "hp", "team"]);
+const QUIET_MASTERS = new Set(["goods", "teams", "members"]);
+
 const KNOWN_ACCESS = new Set(accessCodes());
 let fetchImpl = globalThis.fetch;
 let timer = null;
@@ -258,7 +261,7 @@ export async function qrBytes() {
 async function finishLogin(current, data) {
   current.userName = String((data && (data.nickName || data.userName || data.name)) || current.userName || "");
   current.phase = "collecting";
-  current.message = "已登录。从 2026-09-01 按北京时间补采，页面查询不会再打旧站。";
+  current.message = "已登录。按筛选时间整段补采，最近两天不取。页面查询不会再打旧站。";
   current.accounts = [];
   await saveSession(current);
 }
@@ -441,19 +444,13 @@ function compareYears(scope) {
   return { prevYear: current - 1, year: current };
 }
 
-function datedQuery(scope, extra = {}) {
-  return {
+export function reportBody(report, dim, scope, page) {
+  const daysType = String(scope.daysType);
+  const dated = {
     startDate: scope.start,
     endDate: scope.end,
-    daysType: scope.daysType,
-    queryType: 1,
-    platform: "all",
-    shopId: "",
-    ...extra
+    daysType
   };
-}
-
-export function reportBody(report, dim, scope, page) {
   if (report.id === "qdzl_yj") {
     return { ...compareYears(scope), compareType: 0, lstChannel: null };
   }
@@ -462,29 +459,35 @@ export function reportBody(report, dim, scope, page) {
     return { ...years, compareType: 0, lstChannel: null, queryType: 1, platform: "all", shopId: "" };
   }
   if (report.id === "qdzl_rx" || report.id === "qdfx_rx") {
-    const body = datedQuery(scope, { pageNum: Math.max(page, 1), pageSize: PAGE_SIZE });
+    const body = { ...dated, queryType: 1, platform: "all", shopId: "", pageNum: Math.max(page, 1), pageSize: PAGE_SIZE };
     if (dim === "spu") {
       body.isSpu = true;
     }
     return body;
   }
-  if (report.id === "qdfx_jy") {
-    return datedQuery(scope);
+  if (report.id === "qdfx_jy" || report.id === "qdzl_jy") {
+    return { ...dated, queryType: 1, platform: "all", shopId: "", exportMode: "" };
   }
-  return {
-    startDate: scope.start,
-    endDate: scope.end,
-    daysType: scope.daysType,
-    queryType: 1,
-    pageNum: Math.max(page, 1),
-    pageSize: PAGE_SIZE,
-    shopList: [],
-    shopId: "",
-    filterCondition: [],
-    isSpu: dim === "spu",
-    isCategory: /cate|品类/.test(report.id),
-    platform: ""
-  };
+  return { ...dated, exportMode: "", showTrendView: false };
+}
+
+export async function noteWanted(page, report, dim, scope) {
+  if (!page || page.module !== "channel" || !report || page.local) {
+    return;
+  }
+  const start = String(scope.start || "");
+  const end = String(scope.end || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) {
+    return;
+  }
+  const item = { reportId: report.id, dim: dim || "all", start, end, daysType: String(scope.daysType || "custom") };
+  const saved = await readState("wanted", []);
+  const wanted = Array.isArray(saved) ? saved : [];
+  if (wanted.some((row) => row.reportId === item.reportId && row.dim === item.dim && row.start === item.start && row.end === item.end)) {
+    return;
+  }
+  wanted.push(item);
+  await writeState("wanted", wanted.slice(-30));
 }
 
 function sheetHole(report, dim, scope, sheets) {
@@ -548,9 +551,46 @@ function sheetHole(report, dim, scope, sheets) {
   return null;
 }
 
+async function wantedUnit(sheets) {
+  const saved = await readState("wanted", []);
+  const wanted = Array.isArray(saved) ? saved : [];
+  if (!wanted.length) {
+    return null;
+  }
+  const keep = [];
+  let chosen = null;
+  for (const item of wanted) {
+    const report = reports().find((row) => row.id === item.reportId && row.module === "channel");
+    if (!report) {
+      continue;
+    }
+    const scope = { start: item.start, end: item.end, daysType: item.daysType || "custom" };
+    const hole = sheetHole(report, item.dim || "all", scope, sheets);
+    if (!hole) {
+      continue;
+    }
+    if (!chosen) {
+      chosen = { type: "report", report, dim: item.dim || "all", scope, ...hole };
+    }
+    keep.push(item);
+  }
+  if (keep.length !== wanted.length) {
+    await writeState("wanted", keep);
+  }
+  return chosen;
+}
+
 async function nextUnit(current) {
+  const sheets = await listSheetHeads();
+  const queued = await wantedUnit(sheets);
+  if (queued) {
+    return queued;
+  }
   const masters = await masterState();
   for (const master of MASTERS) {
+    if (QUIET_MASTERS.has(master.id)) {
+      continue;
+    }
     const state = masters[master.id] || { status: "missing", page: 1, attempts: 0 };
     if (state.status === "done" || state.status === "failed") {
       continue;
@@ -558,10 +598,12 @@ async function nextUnit(current) {
     return { type: "master", master, page: state.page || 1, attempts: state.attempts || 0 };
   }
   const allowed = Array.isArray(current.allowed) ? new Set(current.allowed) : null;
-  const sheets = await listSheetHeads();
   const scopes = collectScopes(shanghaiToday());
   for (const cause of ["retry", "empty", "page", "new"]) {
     for (const report of reports()) {
+      if (QUIET_MODULES.has(report.module)) {
+        continue;
+      }
       if (allowed && report.access && !allowed.has(report.access)) {
         continue;
       }

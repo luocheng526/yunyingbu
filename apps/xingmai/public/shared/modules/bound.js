@@ -314,10 +314,17 @@
     return iso(new Date(date.getFullYear(), date.getMonth() + 1, 0));
   }
 
+  function reliableDay() {
+    return iso(addDays(parseIso(shanghaiToday()), -2));
+  }
+
   function clampRange(from, to) {
-    var today = shanghaiToday();
-    if (to > today) {
-      to = today;
+    var cap = reliableDay();
+    if (to > cap) {
+      to = cap;
+    }
+    if (from > cap) {
+      from = cap;
     }
     if (from < DATA_START) {
       from = DATA_START;
@@ -356,20 +363,29 @@
   }
 
   function rollingRange(days) {
-    var today = parseIso(shanghaiToday());
-    var range = clampRange(iso(addDays(today, -days)), iso(addDays(today, -1)));
+    var end = parseIso(reliableDay());
+    var range = clampRange(iso(addDays(end, -(days - 1))), iso(end));
     return { from: range.from, to: range.to, daysType: String(days) };
+  }
+
+  function latestWeek() {
+    var cap = reliableDay();
+    var monday = weekStart(cap);
+    var sunday = iso(addDays(parseIso(monday), 6));
+    if (sunday > cap) {
+      monday = iso(addDays(parseIso(monday), -7));
+    }
+    return clampRange(monday, iso(addDays(parseIso(monday), 6)));
   }
 
   function defaultCalendarRange(preset) {
     var today = shanghaiToday();
     if (preset === "date") {
-      var day = clampRange(iso(addDays(parseIso(today), -1)), iso(addDays(parseIso(today), -1)));
+      var day = clampRange(reliableDay(), reliableDay());
       return { from: day.from, to: day.to, daysType: "1" };
     }
     if (preset === "week") {
-      var monday = iso(addDays(parseIso(weekStart(today)), -7));
-      var range = clampRange(monday, iso(addDays(parseIso(monday), 6)));
+      var range = latestWeek();
       return { from: range.from, to: range.to, daysType: "week" };
     }
     if (preset === "month") {
@@ -385,14 +401,14 @@
   }
 
   function shiftRange(delta) {
-    var today = shanghaiToday();
+    var cap = reliableDay();
     var type = state.daysType;
     if (!state.from || (type !== "1" && type !== "week" && type !== "month" && type !== "year")) {
       return null;
     }
     if (type === "1") {
       var day = iso(addDays(parseIso(state.from), delta));
-      if (day < DATA_START || day > today) {
+      if (day < DATA_START || day > cap) {
         return null;
       }
       return { from: day, to: day, daysType: "1" };
@@ -400,17 +416,16 @@
     if (type === "week") {
       var start = iso(addDays(parseIso(weekStart(state.from)), delta * 7));
       var end = iso(addDays(parseIso(start), 6));
-      if (end < DATA_START || start > today || weekContains(start, today)) {
+      if (end < DATA_START || start > cap || end > cap) {
         return null;
       }
-      var range = clampRange(start, end);
-      return { from: range.from, to: range.to, daysType: "week" };
+      return { from: start, to: end, daysType: "week" };
     }
     if (type === "month") {
       var cursor = parseIso(state.from.slice(0, 7) + "-01");
       cursor.setMonth(cursor.getMonth() + delta);
       var start = iso(new Date(cursor.getFullYear(), cursor.getMonth(), 1));
-      if (start < DATA_START || start > today) {
+      if (start < DATA_START || start > cap) {
         return null;
       }
       var range = clampRange(start, monthEndIso(start));
@@ -418,7 +433,7 @@
     }
     var year = Number(state.from.slice(0, 4)) + delta;
     var start = year + "-01-01";
-    if (year < 2026 || start > today) {
+    if (year < 2026 || start > cap) {
       return null;
     }
     var range = clampRange(start, year + "-12-31");
@@ -472,8 +487,8 @@
       return "<span>" + name + "</span>";
     }).join("");
     var days = monthCells(ym).map(function (cell) {
-      var off = cell.iso < DATA_START || cell.iso > today;
-      if (state.calAnchor && !off && Math.abs(daySpan(state.calAnchor, cell.iso) - 1) > 30) {
+      var off = cell.iso < DATA_START || cell.iso > reliableDay();
+      if (state.calAnchor && !off && Math.abs(daySpan(state.calAnchor, cell.iso) - 1) > 59) {
         off = true;
       }
       var edge = !off && (cell.iso === from || cell.iso === to);
@@ -496,7 +511,7 @@
     var left = state.calMonth || (state.from || shanghaiToday()).slice(0, 7);
     if (left < "2026-09") left = "2026-09";
     var right = addMonth(left, 1);
-    return '<div class="bd-cal"><div class="bd-cal-months">' + renderMonth(left, "left") + renderMonth(right, "right") + '</div><p class="bd-cal-foot">*最少选择 1 天，最多选择 31 天</p></div>';
+    return '<div class="bd-cal"><div class="bd-cal-months">' + renderMonth(left, "left") + renderMonth(right, "right") + '</div><p class="bd-cal-foot">*最少选择 1 天，最多选择 60 天</p></div>';
   }
 
   function activePreset() {
@@ -552,8 +567,8 @@
       return '<button type="button" data-act="preset" data-preset="' + item[0] + '" class="' + (preset === item[0] ? "is-on" : "") + '">' + item[1] + "</button>";
     }).join("");
     var today = shanghaiToday();
-    var yesterday = iso(addDays(parseIso(today), -1));
-    var dayValue = daysType === "1" && data.range.from ? data.range.from : yesterday;
+    var cap = reliableDay();
+    var dayValue = daysType === "1" && data.range.from ? data.range.from : cap;
     var monday = daysType === "week" && data.range.from ? weekStart(data.range.from) : iso(addDays(parseIso(weekStart(today)), -7));
     var monthValue = (daysType === "month" && data.range.from ? data.range.from : today).slice(0, 7);
     var years = yearChoices().map(function (year) {
@@ -562,8 +577,8 @@
     }).join("");
     return '<div class="bd-datepick"><span class="bd-stat-time">' + esc(statText(data.range.from, data.range.to, daysType)) + '</span><div class="bd-presets">' + buttons +
       '<i class="bd-split"></i><button type="button" class="bd-arrow" data-act="shift" data-delta="-1" aria-label="上一期"' + (shiftRange(-1) ? "" : " disabled") + '>‹</button><button type="button" class="bd-arrow" data-act="shift" data-delta="1" aria-label="下一期"' + (shiftRange(1) ? "" : " disabled") + '>›</button><i class="bd-split"></i>' +
-      '<button type="button" data-act="preset" data-preset="custom" class="bd-custom' + (preset === "custom" ? " is-on" : "") + '">自定义<span class="bd-tip">自定义支持在可选时间范围内，对任意连续最多 31 天的数据进行分析。访客相关的指标默认将单日的数据直接累加计算。</span></button></div>' +
-      '<input class="bd-picker" data-act="pick-date" type="date" min="' + DATA_START + '" max="' + esc(today) + '" value="' + esc(dayValue) + '">' +
+      '<button type="button" data-act="preset" data-preset="custom" class="bd-custom' + (preset === "custom" ? " is-on" : "") + '">自定义<span class="bd-tip">自定义最多连续 60 天。每个时间段只向边界 BI 查一次，不把单日相加。最近两天不取。</span></button></div>' +
+      '<input class="bd-picker" data-act="pick-date" type="date" min="' + DATA_START + '" max="' + esc(cap) + '" value="' + esc(dayValue) + '">' +
       '<input class="bd-picker" data-act="pick-week" type="week" max="' + esc(isoWeekValue(iso(addDays(parseIso(weekStart(today)), -7)))) + '" value="' + esc(isoWeekValue(monday)) + '">' +
       '<input class="bd-picker" data-act="pick-month" type="month" min="2026-09" max="' + esc(today.slice(0, 7)) + '" value="' + esc(monthValue) + '">' +
       (state.datePop === "year" ? '<div class="bd-pop">' + years + "</div>" : "") +
@@ -824,7 +839,7 @@
         var text = !ready ? "未采完" : (value == null || value === "" ? "—" : value);
         return '<article class="bd-stat"><span>' + label + "</span><b>" + esc(text) + "</b></article>";
       }
-      return '<div class="bd-stats">' + stat("管理店铺数", picked(["shopCount", "manageShopCount"], (data.shops || []).length)) + stat("自己责权的店铺数", picked(["ownShopCount", "dutyShopCount"], null)) + stat("管理链接数", picked(["linkCount", "manageLinkCount"], data.total)) + stat("管理人数", picked(["memberCount", "manageUserCount"], null)) + "</div>" + chips([["sku", "按SKU统计"], ["spu", "按SPU统计"]], "dim") + '<p class="bd-status">表格为自定义时间时，只显示有销量的数据。访客相关指标按单日累加。</p><h2 class="bd-block-title">岗位工作明细</h2>';
+      return '<div class="bd-stats">' + stat("管理店铺数", picked(["shopCount", "manageShopCount"], (data.shops || []).length)) + stat("自己责权的店铺数", picked(["ownShopCount", "dutyShopCount"], null)) + stat("管理链接数", picked(["linkCount", "manageLinkCount"], data.total)) + stat("管理人数", picked(["memberCount", "manageUserCount"], null)) + "</div>" + chips([["sku", "按SKU统计"], ["spu", "按SPU统计"]], "dim") + '<p class="bd-status">表格按所选时间段整段显示，不把单日相加。</p><h2 class="bd-block-title">岗位工作明细</h2>';
     }
     return "";
   }
@@ -1491,7 +1506,7 @@
         }
         var start = state.calAnchor < picked ? state.calAnchor : picked;
         var end = state.calAnchor < picked ? picked : state.calAnchor;
-        if (daySpan(start, end) > 31) {
+        if (daySpan(start, end) > 60) {
           return;
         }
         var chosen = clampRange(start, end);

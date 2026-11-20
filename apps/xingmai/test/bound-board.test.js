@@ -139,18 +139,18 @@ test("没采完的范围汇总留空，采完的整月和当前页分开算", as
     const partialBody = await partial.json();
     assert.equal(partialBody.coverage.status, "missing");
     assert.equal(partialBody.allSum, null);
-    assert.equal(partialBody.pageSum.payAmount, 5);
+    assert.equal(partialBody.pageSum, null);
+    assert.equal(partialBody.rows.length, 0);
     assert.match(partialBody.sumNote, /不会显示成 0/);
     const exported = await fetch(`${base}/api/bound/export?page=productOverview&tab=sp_zl_list&dim=sku&from=2026-11-01&to=2026-11-02`);
     const csv = await exported.text();
     assert.match(csv, /status=missing/);
-    assert.match(csv, /十一月/);
-    assert.equal(csv.split("十一月").length, 2);
+    assert.doesNotMatch(csv, /十一月/);
     const opened = await fetch(`${base}/api/bound/view?page=productOverview&tab=sp_zl_list&dim=sku`);
     const openedBody = await opened.json();
-    assert.equal(openedBody.daysType, "1");
-    assert.equal(openedBody.range.from, "2026-11-15");
-    assert.equal(openedBody.range.to, "2026-11-15");
+    assert.equal(openedBody.daysType, "7");
+    assert.equal(openedBody.range.from, "2026-11-08");
+    assert.equal(openedBody.range.to, "2026-11-14");
     assert.equal(openedBody.coverage.status, "missing");
     assert.equal(openedBody.allSum, null);
     await writeSheet({
@@ -280,21 +280,58 @@ test("没采完的范围汇总留空，采完的整月和当前页分开算", as
     });
     const stacked = await fetch(`${base}/api/bound/view?page=channelOverview&tab=qdzl_lb&from=2026-11-05&to=2026-11-06&daysType=custom`);
     const stackedBody = await stacked.json();
-    assert.equal(stackedBody.total, 2);
-    assert.equal(stackedBody.rows.map((row) => row.name).join(","), "全部,京东");
-    assert.equal(stackedBody.allSum.payAmount, 15);
-    assert.equal(stackedBody.channelCount, 1);
-    assert.equal(stackedBody.rows[1].metrics.payAmount, 11);
-    assert.equal(stackedBody.shopCount, 1);
-    assert.equal(stackedBody.shopRows.find((row) => row.shop === "甲店").metrics.payAmount, 9);
-    assert.equal(stackedBody.cards.find((card) => card.key === "realTimeGmv").label, "实时销售指数");
-    assert.equal(stackedBody.cards.find((card) => card.key === "realTimeGmv").value, 4);
+    assert.equal(stackedBody.coverage.status, "missing");
+    assert.equal(stackedBody.total, 0);
+    assert.equal(stackedBody.allSum, null);
+    await writeSheet({
+      reportId: "qdzl_lb",
+      dim: "all",
+      startOn: "2026-11-05",
+      endOn: "2026-11-06",
+      pageNo: 1,
+      status: "done",
+      kind: "list",
+      totalRows: 2,
+      pageSize: 2,
+      rowCount: 2,
+      payload: {
+        rows: [
+          { platform: "ALL", payAmount: 15, refund: 3, profit: 4, ssxse: 13 },
+          { platform: "JD", payAmount: 11, refund: 2, profit: 3, ssxse: 9 }
+        ]
+      }
+    });
+    await writeSheet({
+      reportId: "qdfx_dplb",
+      dim: "all",
+      startOn: "2026-11-05",
+      endOn: "2026-11-06",
+      pageNo: 1,
+      status: "done",
+      kind: "list",
+      totalRows: 2,
+      pageSize: 2,
+      rowCount: 2,
+      payload: {
+        rows: [
+          { shopName: "合计", platform: "ALL", sumLine: true, payAmount: 9 },
+          { shopId: 7, shopName: "甲店", platform: "JD", payAmount: 9, profit: 2 }
+        ]
+      }
+    });
+    const whole = await fetch(`${base}/api/bound/view?page=channelOverview&tab=qdzl_lb&from=2026-11-05&to=2026-11-06&daysType=custom`);
+    const wholeBody = await whole.json();
+    assert.equal(wholeBody.coverage.status, "ready");
+    assert.equal(wholeBody.total, 2);
+    assert.equal(wholeBody.rows.map((row) => row.name).join(","), "全部,京东");
+    assert.equal(wholeBody.allSum.payAmount, 15);
+    assert.equal(wholeBody.rows[1].metrics.payAmount, 11);
+    assert.equal(wholeBody.shopRows.find((row) => row.shop === "甲店").metrics.payAmount, 9);
     const shopScoped = await fetch(`${base}/api/bound/view?page=channelOverview&tab=qdzl_lb&from=2026-11-05&to=2026-11-06&daysType=custom&shop=${encodeURIComponent("甲店")}`);
     const scopedShop = await shopScoped.json();
     assert.equal(scopedShop.rows.map((row) => row.name).join(","), "甲店");
     assert.equal(scopedShop.rows[0].shop, "甲店");
     assert.equal(scopedShop.allSum.payAmount, 9);
-    assert.equal(scopedShop.shopRows.length, 1);
   } finally {
     await close();
   }
@@ -304,8 +341,8 @@ test("指标、字段、跟进和目标重新打开仍然在", async () => {
   await writeSheet({
     reportId: "sp_zl_list",
     dim: "sku",
-    startOn: "2026-11-16",
-    endOn: "2026-11-16",
+    startOn: "2026-11-14",
+    endOn: "2026-11-14",
     pageNo: 1,
     status: "done",
     kind: "list",
@@ -328,7 +365,7 @@ test("指标、字段、跟进和目标重新打开仍然在", async () => {
       body: JSON.stringify({ rowKey: "a", follow: "已跟进", tag: "重点", target: "200" })
     });
     assert.equal((await marked.json()).ok, true);
-    const again = await fetch(`${base}/api/bound/view?page=productOverview&tab=sp_zl_list&dim=sku&from=2026-11-16&to=2026-11-16`);
+    const again = await fetch(`${base}/api/bound/view?page=productOverview&tab=sp_zl_list&dim=sku&from=2026-11-14&to=2026-11-14`);
     const body = await again.json();
     assert.deepEqual(body.cards.filter((card) => card.on).map((card) => card.key), ["payAmount"]);
     assert.deepEqual(body.columns.filter((column) => column.on).map((column) => column.key), ["name", "payAmount"]);
@@ -463,8 +500,8 @@ test("页面只请求边界接口，并画出四个模块", async () => {
   const routerSrc = readFileSync(routerPath, "utf8");
   const storeSrc = readFileSync(storePath, "utf8");
   assert.match(js, /爬虫，非 ERP/);
-  assert.match(js, /最少选择 1 天，最多选择 31 天/);
-  assert.match(js, /访客相关的指标默认将单日的数据直接累加计算/);
+  assert.match(js, /最少选择 1 天，最多选择 60 天/);
+  assert.match(js, /不把单日相加/);
   assert.match(js, /XmModules\["\/bound"\]/);
   assert.doesNotMatch(js, /\/api\/data|\/api\/home|jingmai|hejun\.ecbis|biprodapi/);
   assert.doesNotMatch(routerSrc, /modules\/data|jingmai/);
@@ -580,17 +617,20 @@ test("业绩对比按年份请求，品类分析走渠道类目接口", () => {
   assert.equal(shopYear.year, 2026);
   assert.equal(shopYear.queryType, 1);
   assert.equal(shopYear.platform, "all");
-  const hot = reportBody(byId.qdzl_rx, "all", { start: "2026-11-11", end: "2026-11-11", daysType: 1 }, 1);
+  const hot = reportBody(byId.qdzl_rx, "all", { start: "2026-11-11", end: "2026-11-11", daysType: "1" }, 1);
   assert.equal(hot.queryType, 1);
   assert.equal(hot.platform, "all");
   assert.equal(hot.shopId, "");
+  assert.equal(hot.daysType, "1");
   assert.equal("shopList" in hot, false);
-  const shopOperate = reportBody(byId.qdfx_jy, "all", { start: "2026-11-16", end: "2026-11-16", daysType: 1 }, 1);
-  assert.deepEqual(shopOperate, { startDate: "2026-11-16", endDate: "2026-11-16", daysType: 1, queryType: 1, platform: "all", shopId: "" });
-  const cate = reportBody(byId.qdzl_pl, "all", { start: "2026-11-07", end: "2026-11-07", daysType: 1 }, 1);
+  const shopOperate = reportBody(byId.qdfx_jy, "all", { start: "2026-11-16", end: "2026-11-16", daysType: "1" }, 1);
+  assert.deepEqual(shopOperate, { startDate: "2026-11-16", endDate: "2026-11-16", daysType: "1", queryType: 1, platform: "all", shopId: "", exportMode: "" });
+  const cate = reportBody(byId.qdzl_pl, "all", { start: "2026-11-07", end: "2026-11-07", daysType: "1" }, 1);
   assert.equal(cate.startDate, "2026-11-07");
-  assert.equal(cate.daysType, 1);
-  assert.equal(cate.queryType, 1);
+  assert.equal(cate.daysType, "1");
+  assert.equal(cate.exportMode, "");
+  assert.equal("shopList" in cate, false);
+  assert.equal("pageSize" in cate, false);
 });
 
 test("采集进度只数表头，扫码页标出正在采集的表", async () => {
@@ -875,16 +915,16 @@ test("日期条的 7 天、30 天截止到昨天，周从周一开始并且不�
   await new Promise((resolve) => setTimeout(resolve, 30));
   const seven = calls.filter((href) => href.includes("daysType=7")).pop();
   const sevenQuery = new URL(seven, "http://local").searchParams;
-  assert.equal(sevenQuery.get("from"), addDays(today, -7));
-  assert.equal(sevenQuery.get("to"), addDays(today, -1));
+  assert.equal(sevenQuery.get("from"), addDays(today, -8));
+  assert.equal(sevenQuery.get("to"), addDays(today, -2));
   assert.match(root.innerHTML, /data-preset="day7"[^>]*class="is-on"|class="is-on"[^>]*data-preset="day7"/);
   assert.match(root.innerHTML, /data-delta="1"[^>]*disabled|disabled[^>]*data-delta="1"/);
   click("preset", { "data-preset": "day30" });
   await new Promise((resolve) => setTimeout(resolve, 30));
   const thirty = calls.filter((href) => href.includes("daysType=30")).pop();
   const thirtyQuery = new URL(thirty, "http://local").searchParams;
-  assert.equal(thirtyQuery.get("from"), addDays(today, -30));
-  assert.equal(thirtyQuery.get("to"), addDays(today, -1));
+  assert.equal(thirtyQuery.get("from"), addDays(today, -31));
+  assert.equal(thirtyQuery.get("to"), addDays(today, -2));
   click("preset", { "data-preset": "week" });
   await new Promise((resolve) => setTimeout(resolve, 30));
   const week = calls.filter((href) => href.includes("daysType=week")).pop();
@@ -899,7 +939,7 @@ test("日期条的 7 天、30 天截止到昨天，周从周一开始并且不�
   const month = calls.filter((href) => href.includes("daysType=month")).pop();
   const monthQuery = new URL(month, "http://local").searchParams;
   assert.equal(monthQuery.get("from"), `${today.slice(0, 7)}-01`);
-  assert.equal(monthQuery.get("to"), today);
+  assert.equal(monthQuery.get("to"), addDays(today, -2));
   click("shift", { "data-delta": "-1" });
   await new Promise((resolve) => setTimeout(resolve, 30));
   const previous = calls.filter((href) => href.includes("daysType=month")).pop();
@@ -910,7 +950,7 @@ test("日期条的 7 天、30 天截止到昨天，周从周一开始并且不�
   click("preset", { "data-preset": "custom" });
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.match(root.innerHTML, /bd-cal-months/);
-  assert.match(root.innerHTML, /最少选择 1 天，最多选择 31 天/);
+  assert.match(root.innerHTML, /最少选择 1 天，最多选择 60 天/);
   assert.match(root.innerHTML, /is-from/);
   assert.match(root.innerHTML, /is-to/);
   click("cal-day", { "data-day": "2026-11-01" });
@@ -925,7 +965,7 @@ test("日期条的 7 天、30 天截止到昨天，周从周一开始并且不�
   await new Promise((resolve) => setTimeout(resolve, 20));
   const beforeOver = calls.length;
   click("cal-day", { "data-day": "2026-11-01" });
-  click("cal-day", { "data-day": "2026-12-20" });
+  click("cal-day", { "data-day": "2027-02-15" });
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(calls.length, beforeOver);
   click("cal-day", { "data-day": "2026-11-01" });

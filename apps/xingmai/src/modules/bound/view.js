@@ -17,8 +17,9 @@ import {
   publicCatalog,
   tabById
 } from "./catalog.js";
+import { noteWanted } from "./collect.js";
 import { listMasters, listSheetHeads, listSheets, readMarks, readPref, readState, writeMark, writePref } from "./persist.js";
-import { shanghaiToday } from "./time.js";
+import { presetRange, reliableEnd, shanghaiToday } from "./time.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const RATE_RE = /率|占比|rate|ratio/i;
@@ -29,14 +30,17 @@ function text(value, max) {
 }
 
 export function normalizeRange(query) {
-  const today = shanghaiToday();
-  let from = DATE_RE.test(String(query.from || "")) ? String(query.from) : today;
+  const cap = reliableEnd();
+  let from = DATE_RE.test(String(query.from || "")) ? String(query.from) : cap;
   let to = DATE_RE.test(String(query.to || "")) ? String(query.to) : from;
   if (from < START_ON) {
     from = START_ON;
   }
-  if (to > today) {
-    to = today;
+  if (to > cap) {
+    to = cap;
+  }
+  if (from > cap) {
+    from = cap;
   }
   if (from > to) {
     const swap = from;
@@ -262,37 +266,6 @@ function rawIdentity(raw) {
   const name = raw.channelName || raw.platformName || raw.cateName || raw.goodsName || raw.name || "";
   const sum = raw.sumLine ? "sum" : "";
   return [shopId, goodsId, shop, platform, name, sum].join("|");
-}
-
-function rawPay(raw) {
-  const value = Number(raw && raw.payAmount);
-  return Number.isFinite(value) ? value : 0;
-}
-
-function rawTotal(raw) {
-  const name = String((raw && (raw.shopName || raw.channelName || raw.platformName || raw.name)) || "");
-  return Boolean(raw && (raw.sumLine || name === "合计" || name === "全渠道" || name === "全部" || raw.platform === "ALL"));
-}
-
-function daySheetPay(pages, day) {
-  const page = pages.find((row) => row.pageNo === 1 && row.status === "done" && row.startOn === day && row.endOn === day);
-  const rows = page && page.payload && Array.isArray(page.payload.rows) ? page.payload.rows : null;
-  if (!rows) {
-    return null;
-  }
-  const total = rows.find((row) => rawTotal(row));
-  if (total) {
-    return rawPay(total);
-  }
-  return rows.reduce((sum, row) => sum + rawPay(row), 0);
-}
-
-function shopGapDays(shopPages, channelPages, from, to) {
-  return eachDay(from, to).filter((day) => {
-    const channel = daySheetPay(channelPages, day);
-    const shop = daySheetPay(shopPages, day);
-    return channel > 0 && (shop == null || shop === 0);
-  });
 }
 
 function rowsOf(pages) {
@@ -587,41 +560,21 @@ function metricCards(defs, source, ready) {
   });
 }
 
-async function loadScope(all, report, dim, from, to, daysType) {
-  if (isFullMonth(from, to) && from.slice(0, 7) < shanghaiToday().slice(0, 7) && daysType !== "1") {
-    const monthPages = sheetsFor(all, report.id, dim, from, to);
-    const month = scopeStatus(monthPages);
-    if (month.status === "ready" || month.status === "failed" || month.status === "denied") {
-      return { mode: "month", status: month, pages: monthPages, missing: [], failed: month.status === "failed" ? [`${from}~${to}`] : [] };
-    }
+async function loadScope(all, report, dim, from, to) {
+  const pages = sheetsFor(all, report.id, dim, from, to);
+  const status = scopeStatus(pages);
+  const mode = from === to ? "day" : isFullMonth(from, to) ? "month" : "range";
+  const label = from === to ? from : `${from}~${to}`;
+  if (status.status === "ready") {
+    return { mode, status, pages, missing: [], failed: [], denied: [] };
   }
-  const days = eachDay(from, to);
-  const missing = [];
-  const failed = [];
-  const denied = [];
-  const pages = [];
-  days.forEach((day) => {
-    const found = sheetsFor(all, report.id, dim, day, day);
-    const state = scopeStatus(found);
-    if (state.status === "ready") {
-      pages.push(...found);
-    } else if (state.status === "failed") {
-      failed.push(day);
-    } else if (state.status === "denied") {
-      denied.push(day);
-    } else {
-      missing.push(day);
-    }
-  });
-  let status = "ready";
-  if (denied.length && denied.length === days.length) {
-    status = "denied";
-  } else if (failed.length) {
-    status = "failed";
-  } else if (missing.length) {
-    status = "missing";
+  if (status.status === "failed") {
+    return { mode, status, pages: [], missing: [], failed: [label], denied: [] };
   }
-  return { mode: "day", status: { status, error: failed[0] ? "有日期采集失败" : "" }, pages, missing, failed, denied };
+  if (status.status === "denied") {
+    return { mode, status, pages: [], missing: [], failed: [], denied: [label] };
+  }
+  return { mode, status, pages: [], missing: [label], failed: [], denied: [] };
 }
 
 function shopOptions(rows, masters) {
@@ -653,10 +606,9 @@ export async function readView(query) {
   const pageSize = Math.min(100, Math.max(10, Number(query.pageSize) || 20));
   const pref = await readPref(`page:${page.id}`);
   if (!page.local && !explicitFrom) {
-    const yesterday = addDays(shanghaiToday(), -1);
-    const day = yesterday < START_ON ? START_ON : yesterday;
-    range = { from: day, to: day };
-    daysType = "1";
+    const preset = presetRange("7", shanghaiToday());
+    range = { from: preset.start, to: preset.end };
+    daysType = preset.daysType;
   }
   const reportIds = new Set();
   if (tab) {
@@ -681,7 +633,7 @@ export async function readView(query) {
     rawRows = masters.map((item) => item.payload);
     coverage = { status: masters.length ? "ready" : "missing", mode: "local", missing: [], failed: [], denied: [], error: "" };
   } else if (tab) {
-    const loaded = await loadScope(all, trend || tab, dim, range.from, range.to, daysType);
+    const loaded = await loadScope(all, trend || tab, dim, range.from, range.to);
     coverage = { ...loaded.status, mode: loaded.mode, missing: loaded.missing, failed: loaded.failed, denied: loaded.denied || [] };
     rawRows = rowsOf(loaded.pages);
     const sumPage = loaded.pages.find((item) => item.pageNo === 0 && item.status === "done");
@@ -701,10 +653,10 @@ export async function readView(query) {
   let shopGaps = [];
   if (page.id === "channelOverview" && tab && tab.id === "qdzl_lb") {
     const shopReport = tabById(pageById("channelAnalysis"), "qdfx_dplb");
-    const shopLoaded = await loadScope(all, shopReport, "all", range.from, range.to, daysType);
+    const shopLoaded = await loadScope(all, shopReport, "all", range.from, range.to);
     shopStatus = shopLoaded.status.status;
-    shopGaps = shopGapDays(shopLoaded.pages, all.filter((row) => row.reportId === "qdzl_lb"), range.from, range.to);
-    const shopPages = shopLoaded.pages.filter((row) => !shopGaps.includes(row.startOn));
+    shopGaps = [];
+    const shopPages = shopLoaded.pages;
     let shopNormalized = rowsOf(shopPages).map((row, index) => normalizeRow(row, index));
     if (shopLoaded.mode === "day" && range.from !== range.to) {
       shopNormalized = collapseSnapshots(shopNormalized);
@@ -746,8 +698,13 @@ export async function readView(query) {
     allSum = pickedShop ? pickedShop.metrics : totalRow ? totalRow.metrics : fromSum || sumRows(filtered) || {};
   }
   const cardSheet = page.cards ? sheetsFor(all, page.cards.id, "all", range.from, range.to) : [];
-  const cardDay = page.cards && !cardSheet.length ? sheetsFor(all, page.cards.id, "all", range.to, range.to) : [];
-  const cardPage = (cardSheet[0] && cardSheet[0].status === "done" && cardSheet[0]) || (cardDay[0] && cardDay[0].status === "done" && cardDay[0]) || null;
+  const cardPage = (cardSheet[0] && cardSheet[0].status === "done" && cardSheet[0]) || null;
+  if (!page.local && coverage.status === "missing") {
+    await noteWanted(page, trend || tab, dim, { start: range.from, end: range.to, daysType });
+    if (page.id === "channelOverview" && tab && tab.id === "qdzl_lb" && shopStatus === "missing") {
+      await noteWanted(page, tabById(pageById("channelAnalysis"), "qdfx_dplb"), "all", { start: range.from, end: range.to, daysType });
+    }
+  }
   const shops = shopOptions(normalized, await listMasters("shops"));
   return {
     ok: true,
@@ -807,9 +764,7 @@ export async function readView(query) {
     pageSum: complete || slice.length ? pageSum : null,
     allSum,
     sumNote: complete
-      ? coverage.mode === "day"
-        ? "全部汇总按已入库日明细相加。人数和比率不是旧站整段去重口径；整月查询优先用整月快照。"
-        : "全部汇总来自这一整段已入库的快照。"
+      ? "全部汇总来自这一整段的一次查询，不把单日相加。"
       : "这段还没采完或采集失败，汇总留空，不会显示成 0。"
   };
 }
