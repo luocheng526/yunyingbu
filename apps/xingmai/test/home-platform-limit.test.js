@@ -8,6 +8,26 @@ import vm from "node:vm";
 import { jingmaiAccessLimit } from "../src/modules/home/jingmai.js";
 import { fetchHome } from "../src/modules/home/jingmai-client.js";
 import { createLive2Collector } from "../src/modules/home/live2-collect.js";
+import { patchHomeClientSource } from "../src/modules/home/router.js";
+
+test("the served homepage labels a deferred store as platform-limited without a relogin button", () => {
+  const page = patchHomeClientSource(fs.readFileSync(new URL("../public/shared/modules/home.js", import.meta.url), "utf8"));
+  function pick(name) {
+    const start = page.indexOf("  function " + name + "(");
+    assert.ok(start >= 0);
+    return page.slice(start, page.indexOf("\n  function ", start + 1));
+  }
+  const context = vm.createContext({
+    liveScope: "live2", fmtMoney: String, fmtRate: String, asNum: Number,
+    feeMonitorOf: () => ({}), escapeHtml: String,
+    pack: { records: [{ shop: "A", platformLimited: true, offline: true, offlineReason: "京东提示操作频繁；暂停重试20分钟", dealReason: "旧的成交错误" }] }
+  });
+  const html = vm.runInContext(pick("applyLive2Pack") + pick("liveLinkOf") + pick("liveShopCellHtml") +
+    '\nconst row=applyLive2Pack([{shop:"A"}],pack)[0];liveShopCellHtml({key:"liveOn"},row,0);', context);
+  assert.match(html, /平台限制/); assert.match(html, /暂停重试20分钟/);
+  assert.doesNotMatch(html, /data-live-login|重新登录|掉线|旧的成交错误/);
+  assert.equal(vm.runInContext('liveLinkOf({...row,loginExpired:true}).kind', context), "off");
+});
 
 test("only explicit platform limits are classified, never generic 601 or missing data", () => {
   for (const msg of ["非法请求拦截", "操作频繁，请稍后重试"]) assert.ok(jingmaiAccessLimit({ code: 601, msg }));

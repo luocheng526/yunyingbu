@@ -2594,6 +2594,9 @@
   }
   function liveLinkOf(row) {
     if (typeof liveScope !== "undefined" && liveScope === "live2") {
+      if (row && row.platformLimited === true && !row.loginExpired) {
+        return { label: "平台限制", kind: "warn" };
+      }
       if (row && row.pendingCollect) {
         return { label: "待接入", kind: "wait" };
       }
@@ -2731,7 +2734,7 @@
         return '<td class="xm-hm-num" title="采集功能待接入">待接入</td>';
       }
       if (link.kind === "ads" || link.kind === "warn") {
-        var tip = (row && (row.dataUnavailable ? row.offlineReason : row.dealReason || row.adsReason || row.offlineReason)) || link.label;
+        var tip = (row && (row.dataUnavailable || row.platformLimited ? row.offlineReason : row.dealReason || row.adsReason || row.offlineReason)) || link.label;
         return (
           '<td class="xm-hm-num is-fee-warm" title="' +
           escapeHtml(tip) +
@@ -3365,6 +3368,7 @@
         online: hit.online === true,
         partialData: hit.partialData === true,
         dataUnavailable: hit.dataUnavailable === true,
+        platformLimited: hit.platformLimited === true,
         checkedAt: hit.checkedAt || "",
         dealFailed: hit.dealFailed === true,
         dealReason: hit.dealReason || "",
