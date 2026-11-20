@@ -21,7 +21,7 @@ import {
   reloginState,
   startJingmaiCollector
 } from "./jingmai-runner.js";
-import { getLive2Board, startLive2Round } from "./live2-collect.js";
+import { getLive2Board, noteLive2Cookie, startLive2Collector, startLive2Round } from "./live2-collect.js";
 import { readFeeGoals, saveFeeGoal } from "./fee-goals.js";
 import {
   buildWeekPack,
@@ -305,6 +305,7 @@ export function homeRouter() {
 
   router.get("/live2", async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
+    noteLive2Cookie(req.headers.cookie || "");
     try {
       return res.json(await getLive2Board(req.headers.cookie || ""));
     } catch (err) {
@@ -319,6 +320,7 @@ export function homeRouter() {
 
   router.post("/live2", async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
+    noteLive2Cookie(req.headers.cookie || "");
     try {
       const store = req.body && req.body.store;
       return res.json(await startLive2Round(req.headers.cookie || "", store));
@@ -534,4 +536,5 @@ export function homeRouter() {
 // Gate smoke imports set MENKAI_SMOKE_LIVE and must not start the real collector.
 if (!process.env.MENGKAI_SMOKE_LIVE) {
   startJingmaiCollector();
+  startLive2Collector();
 }

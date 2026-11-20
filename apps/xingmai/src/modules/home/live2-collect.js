@@ -2,7 +2,7 @@
  * 实时（新版）采集。
  * 组织中心提供账号和密码。每家店在服务器登录后：
  * 京麦经营数据接口取成交金额，京准通 custom-report 当天总览取花费、投产比、总订单金额。
- * 不写旧京麦会话表，不启动旧采集循环。
+ * 不写旧京麦会话表。后台每 5 分钟开一轮；上一轮还在跑时不叠第二轮。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -25,6 +25,7 @@ function shopBudgetMs() {
 }
 
 export const LIVE2_RUNTIME_MARK = "0.1.1278-live2-login";
+export const LIVE2_INTERVAL_MS = 5 * 60 * 1000;
 
 function stampNow() {
   return displayStamp(beijingParts().stamp);
@@ -571,6 +572,7 @@ export function createLive2Collector(deps = {}) {
       running = false;
       throw error;
     }
+    const began = Date.now();
     const task = (async function () {
       let known = new Map();
       try {
@@ -589,6 +591,9 @@ export function createLive2Collector(deps = {}) {
         shop.password = "";
       });
       running = false;
+      if (typeof deps.onRoundDone === "function") {
+        deps.onRoundDone(began);
+      }
     });
     if (deps.track) {
       deps.track(task);
@@ -602,7 +607,123 @@ export function createLive2Collector(deps = {}) {
   return { board, start, published };
 }
 
-const collector = createLive2Collector();
+const live2Hooks = { onRoundDone: null };
+const collector = createLive2Collector({
+  onRoundDone: function (began) {
+    if (typeof live2Hooks.onRoundDone === "function") {
+      live2Hooks.onRoundDone(began);
+    }
+  }
+});
+
+let scheduleCookie = "";
+
+function cookiePath() {
+  const store = defaultStorePath();
+  if (!store) {
+    return "";
+  }
+  return store + ".cookie";
+}
+
+export function noteLive2Cookie(cookie) {
+  const value = String(cookie || "").trim();
+  if (!value) {
+    return;
+  }
+  scheduleCookie = value;
+  const file = cookiePath();
+  if (!file) {
+    return;
+  }
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, value, { mode: 0o600 });
+  } catch {
+    /* 内存里的登录态仍可供这一轮进程使用 */
+  }
+}
+
+function loadScheduleCookie() {
+  if (scheduleCookie) {
+    return scheduleCookie;
+  }
+  const file = cookiePath();
+  if (!file) {
+    return "";
+  }
+  try {
+    scheduleCookie = String(fs.readFileSync(file, "utf8") || "").trim();
+  } catch {
+    scheduleCookie = "";
+  }
+  return scheduleCookie;
+}
+
+export function armLive2Schedule(deps = {}) {
+  const env = deps.env || process.env;
+  const argv = deps.argv || process.argv;
+  if (argv.includes("--test") || env.NODE_TEST_CONTEXT || env.MENGKAI_SMOKE_LIVE) {
+    return { started: false };
+  }
+  const gate = deps.gate || globalThis;
+  if (gate.__homeLive2Started) {
+    return { started: false };
+  }
+  gate.__homeLive2Started = true;
+  const startRound = deps.startRound || function (cookie) {
+    return collector.start(cookie);
+  };
+  const readCookie = deps.readCookie || loadScheduleCookie;
+  const setTimer = deps.setTimeout || setTimeout;
+  const clearTimer = deps.clearTimeout || clearTimeout;
+  const hooks = deps.hooks || live2Hooks;
+  let timer = 0;
+
+  function plan(began) {
+    if (timer) {
+      clearTimer(timer);
+    }
+    const origin = Number(began) || Date.now();
+    const wait = Math.max(0, LIVE2_INTERVAL_MS - (Date.now() - origin));
+    timer = setTimer(run, wait);
+    if (timer && typeof timer.unref === "function") {
+      timer.unref();
+    }
+  }
+
+  async function run() {
+    const begun = Date.now();
+    const cookie = readCookie();
+    if (!cookie) {
+      plan(begun);
+      return;
+    }
+    try {
+      const view = await startRound(cookie);
+      if (view && view.started === true) {
+        return;
+      }
+      if (view && view.started === false) {
+        return;
+      }
+      plan(begun);
+    } catch (error) {
+      console.error("live2 tick", error && error.statusCode ? error.statusCode : "failed");
+      plan(begun);
+    }
+  }
+
+  hooks.onRoundDone = function (began) {
+    plan(began || Date.now());
+  };
+  const bootMs = deps.bootMs == null ? 8000 : deps.bootMs;
+  const boot = setTimer(run, bootMs);
+  if (boot && typeof boot.unref === "function") {
+    boot.unref();
+  }
+  return { started: true };
+}
 
 export function getLive2Board(cookie) {
   return collector.board(cookie);
@@ -610,4 +731,8 @@ export function getLive2Board(cookie) {
 
 export function startLive2Round(cookie, store) {
   return collector.start(cookie, store ? String(store).trim() : "");
+}
+
+export function startLive2Collector() {
+  return armLive2Schedule();
 }
