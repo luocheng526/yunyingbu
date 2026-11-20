@@ -62,7 +62,7 @@ test("a shop logs in on the server and maps 京麦成交 plus 京准通花费、
   assert.equal(started.records[0].password, undefined);
   await gate;
   const view = await collector.board("cookie");
-  assert.equal(view.runtimeMark, "0.1.1302-live2-session");
+  assert.equal(view.runtimeMark, "0.1.1308-live2-same");
   assert.equal(logins, 1);
   assert.equal(view.running, false);
   assert.equal(view.records[0].liveAmount, 3009);
@@ -247,7 +247,9 @@ test("登录失效的店先用原会话抓数，会话还能用就不重新登�
         return [{ name: "thor", value: "new" }];
       },
       fetchAccountIdentity: async function () {
-        return { shopId: "1", shopName: "过期店" };
+        const error = new Error("登录已失效，请重新登录");
+        error.code = "login";
+        throw error;
       },
       fetchHome: async function (jar) {
         fetched.push(jar[0].value);

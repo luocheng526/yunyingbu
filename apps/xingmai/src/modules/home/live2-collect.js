@@ -2,7 +2,7 @@
  * 实时（新版）采集。
  * 组织中心提供账号和密码。每家店在服务器登录后：
  * 京麦经营数据接口取成交金额，京准通 custom-report 当天总览取花费、投产比、总订单金额。
- * 和付费中心一样先用已经保存的京麦会话抓数。会话确实失效时，才用组织中心账号再登一次。后台每 5 分钟开一轮；上一轮还在跑时不叠第二轮。
+ * 每家店都先用已经保存的京麦会话抓数，和已经在线的店同一条路。会话标记失效时也不先丢掉会话。抓数本身返回登录失效时，才用组织中心账号再登一次。后台每 5 分钟开一轮；上一轮还在跑时不叠第二轮。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -24,7 +24,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1302-live2-session";
+export const LIVE2_RUNTIME_MARK = "0.1.1308-live2-same";
 export const LIVE2_INTERVAL_MS = 5 * 60 * 1000;
 
 function stampNow() {
@@ -234,21 +234,6 @@ export function createLive2Collector(deps = {}) {
     return jar;
   }
 
-  async function sessionAlive(jar) {
-    if (!jar || !jar.length || !client.fetchAccountIdentity) {
-      return true;
-    }
-    try {
-      await client.fetchAccountIdentity(jar, undefined, undefined);
-      return true;
-    } catch (error) {
-      if (error && error.code === "login") {
-        return false;
-      }
-      return false;
-    }
-  }
-
   function stampOf(value) {
     if (!value) {
       return "";
@@ -385,12 +370,6 @@ export function createLive2Collector(deps = {}) {
     let jar = jars.get(shop.store) || null;
     if (!jar || !jar.length) {
       jar = prior.length ? prior : null;
-    }
-    if (jar && jar.length && saved && saved.authState === "login_expired") {
-      const alive = await sessionAlive(jar);
-      if (!alive) {
-        jar = null;
-      }
     }
     let logged = Boolean(jar && jar.length);
     if (!logged) {
