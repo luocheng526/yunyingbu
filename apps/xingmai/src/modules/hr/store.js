@@ -165,6 +165,12 @@ export const HR_SCHEMA = [
     report_json MEDIUMTEXT NOT NULL,
     saved_at VARCHAR(40) NOT NULL,
     PRIMARY KEY (\`year_month\`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS hr_api_usage (
+    usage_month VARCHAR(7) NOT NULL PRIMARY KEY,
+    baseline_calls INT NOT NULL DEFAULT 0,
+    made_calls INT NOT NULL DEFAULT 0,
+    updated_at VARCHAR(40) NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 ];
 
@@ -187,7 +193,8 @@ function emptyMemory() {
     talents: [],
     runs: [],
     boards: [],
-    effort: []
+    effort: [],
+    usage: []
   };
 }
 
@@ -206,6 +213,7 @@ export function resetHrStore() {
   Object.assign(memory, fresh);
   seq = 1;
   ready = null;
+  apiCallChain = Promise.resolve();
 }
 
 export function ensureHrSchema() {
@@ -983,6 +991,117 @@ export async function latestSync(kind = "") {
   }
   const rows = picked ? memory.runs.filter((row) => row.kind === picked) : memory.runs;
   return rows.length ? { ...rows[rows.length - 1] } : null;
+}
+
+export const HR_API_CAP = 10000;
+export const HR_API_STOP = 9000;
+const HR_API_BASELINE = { "2026-11": 7507 };
+let apiCallChain = Promise.resolve();
+
+export function hrUsageMonth(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(now);
+  const pick = (type) => parts.find((part) => part.type === type)?.value || "";
+  return `${pick("year")}-${pick("month")}`;
+}
+
+function usageView(row) {
+  const baseline = Number(row.baseline) || 0;
+  const calls = Number(row.calls) || 0;
+  return {
+    month: row.month,
+    baseline,
+    calls,
+    total: baseline + calls,
+    cap: HR_API_CAP,
+    stopAt: HR_API_STOP
+  };
+}
+
+async function loadUsage(month) {
+  await ensureHrSchema();
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf(
+      "SELECT usage_month, baseline_calls, made_calls FROM hr_api_usage WHERE usage_month = ?",
+      [month]
+    );
+    if (!rows.length) {
+      const baseline = HR_API_BASELINE[month] || 0;
+      if (baseline) {
+        await query(
+          "INSERT INTO hr_api_usage (usage_month, baseline_calls, made_calls, updated_at) VALUES (?, ?, 0, ?)",
+          [month, baseline, new Date().toISOString()]
+        );
+      }
+      return { month, baseline, calls: 0 };
+    }
+    return {
+      month,
+      baseline: Number(rows[0].baseline_calls) || 0,
+      calls: Number(rows[0].made_calls) || 0
+    };
+  }
+  let row = memory.usage.find((item) => item.month === month);
+  if (!row) {
+    row = { month, baseline: HR_API_BASELINE[month] || 0, calls: 0 };
+    memory.usage.push(row);
+  }
+  return row;
+}
+
+export async function readApiUsage(now = new Date()) {
+  const month = hrUsageMonth(now);
+  const current = usageView(await loadUsage(month));
+  let months = [];
+  if (dbMode() === "mysql") {
+    const rows = await rowsOf("SELECT usage_month, baseline_calls, made_calls FROM hr_api_usage ORDER BY usage_month");
+    months = rows.map((row) => usageView({
+      month: row.usage_month,
+      baseline: Number(row.baseline_calls) || 0,
+      calls: Number(row.made_calls) || 0
+    }));
+  } else {
+    months = memory.usage.map((row) => usageView(row)).sort((a, b) => a.month.localeCompare(b.month));
+  }
+  if (!months.some((row) => row.month === month)) months.push(current);
+  return { cap: HR_API_CAP, stopAt: HR_API_STOP, month, total: current.total, months };
+}
+
+export async function addApiCalls(count, now = new Date()) {
+  const amount = Math.max(0, Math.floor(Number(count) || 0));
+  const month = hrUsageMonth(now);
+  if (!amount) return readApiUsage(now);
+  const row = await loadUsage(month);
+  row.calls += amount;
+  if (dbMode() === "mysql") {
+    await query(
+      `INSERT INTO hr_api_usage (usage_month, baseline_calls, made_calls, updated_at) VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE made_calls = made_calls + ?, updated_at = VALUES(updated_at)`,
+      [month, row.baseline, amount, new Date().toISOString(), amount]
+    );
+  }
+  return readApiUsage(now);
+}
+
+async function reserveApiCallBody(now = new Date()) {
+  const row = await loadUsage(hrUsageMonth(now));
+  if (row.baseline + row.calls >= HR_API_STOP) {
+    const err = new Error("本月钉钉调用已到上限，先停下来");
+    err.statusCode = 429;
+    err.capped = true;
+    throw err;
+  }
+  await addApiCalls(1, now);
+}
+
+export function reserveApiCall(now = new Date()) {
+  const run = apiCallChain.then(() => reserveApiCallBody(now));
+  apiCallChain = run.then(() => {}, () => {});
+  return run;
 }
 
 function mapPunch(row) {

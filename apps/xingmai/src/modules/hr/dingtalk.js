@@ -1,5 +1,12 @@
+import { reserveApiCall } from "./store.js";
+
 const TOKEN_URL = "https://api.dingtalk.com/v1.0/oauth2/accessToken";
 const OAPI = "https://oapi.dingtalk.com";
+
+export function dingCallsEnabled(env = process.env) {
+  const raw = String(env.DINGTALK_CALLS ?? "").trim().toLowerCase();
+  return raw === "on" || raw === "1" || raw === "true";
+}
 
 export function readDingEnv(env = process.env) {
   const corpId = String(env.DINGTALK_CORP_ID || "").trim();
@@ -46,7 +53,13 @@ export function createDingClient({ env = process.env, fetchImpl = globalThis.fet
     return token;
   }
 
+  let overtimeColumns = null;
+
   async function postOapi(path, body) {
+    if (!dingCallsEnabled(env)) {
+      throw Object.assign(new Error("钉钉调用已暂停"), { statusCode: 503, paused: true });
+    }
+    await reserveApiCall();
     const access = await accessToken();
     const res = await fetchImpl(`${OAPI}${path}?access_token=${encodeURIComponent(access)}`, {
       method: "POST",
@@ -208,10 +221,16 @@ export function createDingClient({ env = process.env, fetchImpl = globalThis.fet
     return rows;
   }
 
-  async function listOvertimeHours(userId, workDate) {
+  async function overtimeColumnIds() {
+    if (overtimeColumns) return overtimeColumns;
     const columns = await postOapi("/topapi/attendance/getattcolumns", {});
     const list = (columns.result && columns.result.columns) || [];
-    const overtime = list.filter((column) => String(column.name || "").includes("加班"));
+    overtimeColumns = list.filter((column) => String(column.name || "").includes("加班"));
+    return overtimeColumns;
+  }
+
+  async function listOvertimeHours(userId, workDate) {
+    const overtime = await overtimeColumnIds();
     if (!overtime.length) return [];
     const data = await postOapi("/topapi/attendance/getcolumnval", {
       userid: userId,

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createDingClient, readDingEnv } from "./dingtalk.js";
+import { createDingClient, dingCallsEnabled, readDingEnv } from "./dingtalk.js";
 import { startDingStream } from "./stream.js";
 import {
   archiveYesterday,
@@ -28,6 +28,7 @@ import {
   deleteTalent,
   latestSync,
   listDingUsers,
+  readApiUsage,
   listInterviews,
   listLinks,
   importStaff,
@@ -118,11 +119,16 @@ hrRouter.get("/", (_req, res) => {
 hrRouter.get("/status", async (_req, res) => {
   try {
     const links = await listLinks();
+    const usage = await readApiUsage();
+    const paused = !dingCallsEnabled();
+    usage.paused = paused;
     res.json({
       ok: true,
       configured: readDingEnv().configured,
+      paused,
       linked: links.length,
-      lastSync: await latestSync()
+      lastSync: await latestSync(),
+      usage
     });
   } catch (err) {
     sendErr(res, err);
@@ -231,6 +237,12 @@ hrRouter.get("/timeoff", async (_req, res) => {
 
 hrRouter.post("/sync", async (req, res) => {
   try {
+    if (readDingEnv().configured && !dingCallsEnabled()) {
+      const usage = await readApiUsage();
+      usage.paused = true;
+      res.json({ ok: true, configured: true, paused: true, usage });
+      return;
+    }
     const rawDate = String((req.body && req.body.date) || "");
     if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
       const refreshed = await refreshBoardDay(rawDate, createDingClient());

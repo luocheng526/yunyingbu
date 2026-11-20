@@ -1,4 +1,4 @@
-import { createDingClient, readDingEnv } from "./dingtalk.js";
+import { createDingClient, dingCallsEnabled, readDingEnv } from "./dingtalk.js";
 import {
   latestSync,
   listBoardMetrics,
@@ -632,9 +632,13 @@ export function boardPack({ date, users = [], punches = [], leaves = [], dates =
   });
 }
 
-export function shouldPullYesterday(parts, latest, yesterday) {
+export function shouldPullYesterday(parts, latest, yesterday, now = Date.now()) {
   if (!parts || Number(parts.hour) < 10) return false;
   if (latest && latest.ok && latest.workDate === yesterday) return false;
+  if (latest && latest.ok === false && latest.workDate === yesterday && latest.createdAt) {
+    const at = Date.parse(latest.createdAt);
+    if (Number.isFinite(at) && now - at < 6 * 60 * 60 * 1000) return false;
+  }
   return true;
 }
 
@@ -887,8 +891,13 @@ export async function refreshDirectory(client = createDingClient()) {
   if (!client.configured()) {
     return [];
   }
+  const today = shanghaiToday();
+  const latest = await latestSync("directory");
+  if (latest && latest.ok && latest.workDate === today) return listDingUsers();
   const users = await client.listUsers();
-  return saveDingUsers(users);
+  const saved = await saveDingUsers(users);
+  await recordSync("directory", today, true, `通讯录 ${saved.length} 人`);
+  return saved;
 }
 
 export async function pullDay(workDate, { client = createDingClient(), userIds = null } = {}) {
@@ -1066,12 +1075,27 @@ function unpackTeam(raw) {
   return { punches: raw.punches || [], roster: raw.roster || [] };
 }
 
-export async function pullLate(workDate, client = createDingClient()) {
+export async function pullLate(workDate, client = createDingClient(), options = {}) {
   if (!client.configured()) return [];
   if (typeof client.listDayDetail !== "function" && typeof client.listUpdatedata !== "function") return [];
   const directory = await listDingUsers();
   const byUser = new Map(directory.map((user) => [user.userId, user]));
-  const ids = directory.map((user) => user.userId).filter(Boolean);
+  let ids = directory.map((user) => user.userId).filter(Boolean);
+  if (options.onlyOpen) {
+    const open = new Set();
+    const punches = await listPunches({ date: workDate });
+    for (const row of punches) {
+      if (row.timeResult === "Late" || row.timeResult === "SeriousLate" || row.timeResult === "Absenteeism" || row.timeResult === "NotSigned") {
+        open.add(row.dingtalkUserId);
+      }
+    }
+    const leaves = await listLeaves();
+    for (const leave of leaves) {
+      const name = String(leave.leaveName || "");
+      if ((name === "" || name === "请假") && leaveCovers(leave, workDate) && leave.dingtalkUserId) open.add(leave.dingtalkUserId);
+    }
+    ids = ids.filter((id) => open.has(id));
+  }
   const found = [];
   const names = [];
   const queue = ids.slice();
@@ -1163,7 +1187,7 @@ export async function refreshBoardDay(workDate, client = createDingClient()) {
   await refreshDirectory(client);
   const pulled = await pullDay(day, { client });
   const leaves = await pullLeaves(day, day, client);
-  const late = await pullLate(day, client);
+  const late = await pullLate(day, client, { onlyOpen: true });
   await saveBoardSnapshot(day);
   const updatedAt = shanghaiClock(await readBoardStamp(day));
   await recordSync("refresh", day, true, `已刷新 ${day}，打卡 ${pulled.punches?.length || 0} 条，请假 ${leaves.leaves?.length || 0} 条，迟到 ${late.length} 人`);
@@ -1192,7 +1216,7 @@ export async function archiveDay(workDate, kind = "daily", client = createDingCl
   } catch (err) {
     await recordSync(kind, day, false, String(err.message || "这一天的请假没有抓下来").slice(0, 180));
   }
-  const late = await pullLate(day, client);
+  const late = await pullLate(day, client, { onlyOpen: true });
   await saveBoardSnapshot(day);
   await recordSync(kind, day, true, `已留档 ${day}，打卡 ${pulled.punches?.length || 0} 条，请假 ${leaveCount} 条，迟到 ${late.length} 人`);
   return { configured: true, workDate: day, users: pulled.users, punches: pulled.punches, leaveCount, lateCount: late.length };
@@ -1299,7 +1323,7 @@ let timer = null;
 export function startScheduler(client = createDingClient()) {
   if (timer) return;
   const tick = async () => {
-    if (!client.configured()) return;
+    if (!dingCallsEnabled() || !client.configured()) return;
     const parts = shanghaiParts();
     const today = shanghaiToday();
     const yesterday = addDays(today, -1);

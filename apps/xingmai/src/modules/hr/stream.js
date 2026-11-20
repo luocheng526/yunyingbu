@@ -1,5 +1,5 @@
-import { readDingEnv } from "./dingtalk.js";
-import { pullDay, pullLeaveAndOvertime, saveBoardSnapshot, shanghaiToday } from "./sync.js";
+import { dingCallsEnabled, readDingEnv } from "./dingtalk.js";
+import { pullDay, pullLeaves, saveBoardSnapshot, shanghaiToday } from "./sync.js";
 
 const OPEN_URL = "https://api.dingtalk.com/v1.0/gateway/connections/open";
 
@@ -55,22 +55,43 @@ export function interestingEvent(message, corpId) {
   return null;
 }
 
-async function refreshUsers(userIds, client) {
+async function refreshUsers(userIds, client, leave) {
+  if (!userIds.length) return;
   const day = shanghaiToday();
   await pullDay(day, { client, userIds });
-  try {
-    await pullLeaveAndOvertime(day, client);
-  } catch {
-    /* 请假没跟上也不挡住当天留档 */
+  if (leave) {
+    try {
+      await pullLeaves(day, day, client);
+    } catch {
+      /* 请假没跟上也不挡住当天留档 */
+    }
   }
   await saveBoardSnapshot(day);
 }
 
 export function startDingStream({ client, fetchImpl = globalThis.fetch, WebSocketImpl = globalThis.WebSocket } = {}) {
   const env = readDingEnv();
-  if (!env.configured || !client || !client.configured()) return { started: false };
+  if (!dingCallsEnabled() || !env.configured || !client || !client.configured()) return { started: false };
   let stopped = false;
   let socket = null;
+  const pending = new Set();
+  let wantLeave = false;
+  let flushTimer = null;
+
+  function schedule(hit) {
+    for (const id of hit.userIds || []) pending.add(id);
+    if (hit.kind === "approval") wantLeave = true;
+    if (flushTimer) return;
+    flushTimer = setTimeout(() => {
+      const ids = [...pending];
+      const leave = wantLeave;
+      pending.clear();
+      wantLeave = false;
+      flushTimer = null;
+      refreshUsers(ids, client, leave).catch(() => {});
+    }, 20000);
+    if (typeof flushTimer.unref === "function") flushTimer.unref();
+  }
 
   async function connectOnce() {
     const res = await fetchImpl(OPEN_URL, {
@@ -102,9 +123,7 @@ export function startDingStream({ client, fetchImpl = globalThis.fetch, WebSocke
         const ack = ackFor(message);
         if (ack) ws.send(JSON.stringify(ack));
         const hit = interestingEvent(message, env.corpId);
-        if (hit) {
-          refreshUsers(hit.userIds, client).catch(() => {});
-        }
+        if (hit) schedule(hit);
       });
       ws.addEventListener("close", () => resolve());
       ws.addEventListener("error", () => reject(new Error("钉钉长连接中断")));
@@ -128,6 +147,9 @@ export function startDingStream({ client, fetchImpl = globalThis.fetch, WebSocke
     started: true,
     stop() {
       stopped = true;
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = null;
+      pending.clear();
       if (socket && socket.close) socket.close();
     }
   };
