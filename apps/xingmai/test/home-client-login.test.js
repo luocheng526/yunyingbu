@@ -151,7 +151,12 @@ test("QR initialization, polling and confirmation preserve cookie scope", async 
   assert.equal(confirmed.jar.find(function (item) { return item.name === "thor"; }).httpOnly, true);
 });
 
-test("silent shop login stops on 账号异常 instead of opening a waiting desk", async () => {
+for (const failure of [
+  { message: "当前账号异常，暂无法登录", code: "login", expected: "当前账号异常，暂无法登录" },
+  { message: "参数为空或不合法", code: "network", expected: "京麦自动登录请求被拒绝（参数为空或不合法），请使用服务器登录窗口" },
+  { message: "invalid parameter", code: "network", expected: "京麦自动登录请求被拒绝（invalid parameter），请使用服务器登录窗口" }
+]) {
+test(`silent shop login classifies ${failure.message}`, async () => {
   const publicKey = pemPublic();
   const fetchImpl = async function (url) {
     const href = String(url);
@@ -179,7 +184,7 @@ test("silent shop login stops on 账号异常 instead of opening a waiting desk"
       };
     }
     if (href.includes("/login/component/v1/loginSubmit")) {
-      return jsonResponse({ code: 0, msg: "当前账号异常，暂无法登录" });
+      return jsonResponse({ code: 0, msg: failure.message });
     }
     throw new Error("unexpected " + href);
   };
@@ -188,9 +193,10 @@ test("silent shop login stops on 账号异常 instead of opening a waiting desk"
       return loginShop("dikttjj", "secret", fetchImpl);
     },
     function (error) {
-      assert.equal(error.code, "login");
-      assert.equal(error.message, "当前账号异常，暂无法登录");
+      assert.equal(error.code, failure.code);
+      assert.equal(error.message, failure.expected);
       return true;
     }
   );
 });
+}

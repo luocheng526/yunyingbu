@@ -299,3 +299,100 @@ test("session bootstrap preserves an existing human login and a manual pause", a
   await ensureCollectSession(store, "wrong-id");
   assert.deepEqual(await getSession(store), saved);
 });
+
+for (const savedId of ["1", ""]) {
+test(`DSM 601 on identity lookup still collects a store-bound saved session (shop ID ${savedId || "legacy missing"})`, async () => {
+  await resetJingmaiStore();
+  await saveSession(store, { cookies: cookies("bound"), shopId: savedId, enabled: true, authState: "ok" });
+  let fetches = 0;
+  const run = harness({
+    fetchAccountIdentity: async () => { throw Object.assign(new Error("京麦首页 601 非法请求拦截"), { code: "network" }); },
+    login: async () => assert.fail("an intercepted identity endpoint is not a logout"),
+    fetchHome: async (jar, _signal, expected) => {
+      fetches += 1;
+      assert.equal(jar[0].value, "bound");
+      assert.equal(expected.store, store);
+      assert.equal(expected.shopId, "1");
+      return metrics;
+    }
+  });
+  await run.round();
+  assert.equal(fetches, 1);
+  assert.equal((await run.collector.board("")).records[0].liveAmount, 100);
+  assert.equal((await getSession(store)).authState, "ok");
+});
+}
+
+test("DSM 601 cannot reuse a saved binding to a different shop ID", async () => {
+  await resetJingmaiStore();
+  await saveSession(store, { cookies: cookies("wrong-shop"), shopId: "other", enabled: true, authState: "ok" });
+  const run = harness({
+    fetchAccountIdentity: async () => { throw Object.assign(new Error("京麦首页 601 非法请求拦截"), { code: "network" }); },
+    login: async () => assert.fail("do not replace the existing login"),
+    fetchHome: async () => assert.fail("conflicting shop binding cannot save data")
+  });
+  await run.round();
+  assert.equal((await run.collector.board("")).records[0].online, false);
+  assert.deepEqual(await listSamples("2026-11-20", "2026-11-20"), []);
+});
+
+test("a rejected automatic login request preserves previous numbers and the saved session", async () => {
+  await resetJingmaiStore();
+  await seed("saved");
+  let failed = false;
+  const run = harness({
+    fetchAccountIdentity: async () => {
+      if (failed) throw Object.assign(new Error("session expired"), { code: "login" });
+      return { shopId: "1", shopName: store };
+    },
+    login: async () => { throw Object.assign(new Error("京麦自动登录请求被拒绝（参数为空或不合法），请使用服务器登录窗口"), { code: "network" }); },
+    fetchHome: async () => metrics
+  });
+  await run.round();
+  const before = (await run.collector.board("")).records[0];
+  failed = true;
+  await run.round();
+  const after = (await run.collector.board("")).records[0];
+  assert.equal(after.liveAmount, before.liveAmount);
+  assert.equal(after.capturedAt, before.capturedAt);
+  assert.equal(after.loginExpired, false);
+  assert.equal(after.offline, true);
+  assert.match(after.offlineReason, /请求被拒绝/);
+  assert.equal((await getSession(store)).cookies[0].value, "saved");
+});
+
+test("DSM 601 never permits an unverified new password login to save data", async () => {
+  await resetJingmaiStore();
+  const run = harness({
+    login: async () => cookies("new-unverified"),
+    fetchAccountIdentity: async () => { throw Object.assign(new Error("京麦首页 601 非法请求拦截"), { code: "network" }); },
+    fetchHome: async () => assert.fail("a new login has no trusted shop binding")
+  });
+  await run.round();
+  assert.equal((await run.collector.board("")).records[0].online, false);
+  assert.deepEqual((await getSession(store)).cookies, []);
+  assert.deepEqual(await listSamples("2026-11-20", "2026-11-20"), []);
+});
+
+test("identity service failure preserves the previous numbers and original capture time", async () => {
+  await resetJingmaiStore();
+  await seed("saved");
+  let failed = false;
+  const run = harness({
+    fetchAccountIdentity: async () => {
+      if (failed) throw Object.assign(new Error("身份服务网络故障"), { code: "network" });
+      return { shopId: "1", shopName: store };
+    },
+    fetchHome: async () => metrics
+  });
+  await run.round();
+  const before = (await run.collector.board("")).records[0];
+  failed = true;
+  await run.round();
+  const after = (await run.collector.board("")).records[0];
+  assert.equal(after.liveAmount, before.liveAmount);
+  assert.equal(after.paidAmount, before.paidAmount);
+  assert.equal(after.capturedAt, before.capturedAt);
+  assert.equal(after.online, false);
+  assert.match(after.offlineReason, /身份服务网络故障/);
+});

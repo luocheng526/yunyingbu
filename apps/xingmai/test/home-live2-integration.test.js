@@ -21,13 +21,19 @@ async function listen(app, t) {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-test("46 simulated shops: local HTTP → real JD parsers → shared samples → home API and homepage totals, repeated after 10 minutes", async (t) => {
+test("46 simulated shops: full collection and next round survive DSM 601 using the existing browser fallback", async (t) => {
   await resetJingmaiStore();
+  const retryMs = process.env.SHEN_DEAL_RETRY_MS;
+  process.env.SHEN_DEAL_RETRY_MS = "0";
+  t.after(() => {
+    if (retryMs == null) delete process.env.SHEN_DEAL_RETRY_MS;
+    else process.env.SHEN_DEAL_RETRY_MS = retryMs;
+  });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "yunyingbu-live2-e2e-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const rosterFile = path.join(dir, "org-stores.json");
   const storeFile = path.join(dir, "live2.json");
-  let clock = Date.now(), round = 1, adsFail = false;
+  let clock = Date.now(), round = 1, adsFail = false, identityBlocked = false, browserReads = 0;
   let active = 0, maximum = 0, fetches = 0, logins = 0, task;
   const rows = Array.from({ length: 46 }, (_, i) => ({
     storeName: `本地测试店${i + 1}`, shopId: String(i + 1), statusKey: "operating",
@@ -47,13 +53,16 @@ test("46 simulated shops: local HTTP → real JD parsers → shared samples → 
     assert.ok(id >= 1 && id <= 46, "the real cookie filter sends the scoped session");
     const href = decodeURIComponent(req.originalUrl);
     if (href.includes("findAccountInfo")) {
+      if (identityBlocked) return res.json({ code: 601, msg: "非法请求拦截" });
       res.setHeader("Set-Cookie", "refreshed=valid; Domain=.jd.com; Path=/; Secure; HttpOnly");
       return res.json({ code: 200, data: { belongVos: [{ belongType: "200", belongBizId: String(id), shopName: `本地测试店${id}` }] } });
     }
     assert.match(req.headers.cookie || "", /refreshed=valid/, "HTTP response cookies survive into subsequent requests");
     if (href.includes("findShopDataByChannel")) {
+      if (identityBlocked) return res.json({ code: 601, msg: "非法请求拦截" });
       return res.json({ code: 200, data: { indicatorList: [{ code: "3009", todayNum: id * 100 * round }] } });
     }
+    if (href.includes("realtimeSummary")) return res.json({ code: 601, msg: "非法请求拦截" });
     if (href.includes("pinlist")) {
       return res.json(adsFail ? { code: -100 } : { code: 1, data: { own: [{ userId: id, shopId: String(id), shopName: `本地测试店${id}` }] } });
     }
@@ -91,7 +100,12 @@ test("46 simulated shops: local HTTP → real JD parsers → shared samples → 
         active += 1; maximum = Math.max(maximum, active); fetches += 1;
         try {
           await new Promise((resolve) => setTimeout(resolve, 15));
-          return await fetchHome(jar, transport, undefined, signal, expected);
+          return await fetchHome(jar, transport, async (_cookies, _signal, bound) => {
+            assert.equal(identityBlocked, true);
+            assert.equal(bound.store, `本地测试店${bound.shopId}`);
+            browserReads += 1;
+            return { dealAmount: Number(bound.shopId) * 100 * round };
+          }, signal, expected);
         } finally { active -= 1; }
       }
     }
@@ -141,7 +155,7 @@ test("46 simulated shops: local HTTP → real JD parsers → shared samples → 
   assert.deepEqual((await restarted.board("fixture=authorized")).records, board.records);
 
   // Advance the test clock; a background round needs no browser cookie.
-  clock += LIVE2_INTERVAL_MS; round = 2;
+  clock += LIVE2_INTERVAL_MS; round = 2; identityBlocked = true;
   assert.equal((await restarted.start("", "", true)).started, true);
   await task;
   board = await restarted.board("fixture=authorized");
@@ -149,6 +163,8 @@ test("46 simulated shops: local HTTP → real JD parsers → shared samples → 
   samples = await listSamples(today, beijingParts(new Date(clock)).day);
   assert.equal(samples.length, 92);
   assert.equal(fetches, 92);
+  assert.equal(browserReads, 46, "DSM 601 must not block the existing browser data path");
+  assert.equal(board.records.filter((row) => row.online).length, 46);
 
   clock += LIVE2_INTERVAL_MS; adsFail = true;
   await restarted.start("fixture=authorized", "本地测试店1");

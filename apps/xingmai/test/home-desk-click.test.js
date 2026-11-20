@@ -38,6 +38,17 @@ function deskDeps(extra) {
   );
 }
 
+test("server login restrictions are shown even while the password form remains visible", () => {
+  for (const formReady of [false, true]) {
+    const state = loginScreenState("密码登录 短信登录 登录异常，请联系客服解除，第三方商家拨打客服", formReady, {
+      text: "登录异常，请联系客服解除", accountVisible: formReady, passwordVisible: formReady
+    });
+    assert.equal(state.status, "login");
+    assert.match(state.message, /登录异常，请联系客服解除/);
+    assert.equal(state.needCode, undefined);
+  }
+});
+
 test("a shop that just logged in shows a fresh time before the first deal arrives", () => {
   const view = buildLiveView({
     now: { day: "2026-11-17", stamp: "2026-11-17 09:56:00" },

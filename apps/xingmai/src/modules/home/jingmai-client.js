@@ -541,7 +541,13 @@ export async function submitPasswordSession({ jar, init, loginName, password, au
   });
   const body = JSON.parse(await response.text());
   if (body.code !== 1) {
-    throw jingmaiError("login", passwordFailureMessage(body));
+    const message = passwordFailureMessage(body);
+    // A rejected request is not evidence that the saved session or password is
+    // invalid. Preserve the session so the browser route can still recover it.
+    if (/参数.*(?:为空|不合法|无效|错误|缺失)|(?:invalid|missing)\s+(?:parameter|param|argument)/i.test(message)) {
+      throw jingmaiError("network", "京麦自动登录请求被拒绝（" + message + "），请使用服务器登录窗口");
+    }
+    throw jingmaiError("login", message);
   }
   let location = (body.data && (body.data.returnUrl || body.data.redirectUrl)) || "https://shop.jd.com/";
   let hops = 0;

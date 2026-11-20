@@ -28,7 +28,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1317-home-collect-stability";
+export const LIVE2_RUNTIME_MARK = "0.1.1318-home-session-recovery";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
@@ -318,9 +318,25 @@ export function createLive2Collector(deps = {}) {
     return !inactive(shop, phase);
   }
 
-  async function verifyIdentity(shop, jar, phase) {
+  async function verifyIdentity(shop, jar, phase, saved) {
     if (!client.fetchAccountIdentity) return;
-    const identity = await client.fetchAccountIdentity(jar, undefined, phase.controller.signal);
+    let identity;
+    try {
+      identity = await client.fetchAccountIdentity(jar, undefined, phase.controller.signal);
+    } catch (error) {
+      // DSM 601 can block the account endpoint while the existing data/browser
+      // routes still work. Reuse only an already bound saved session in that case;
+      // a new password login must still prove its identity before any write.
+      const savedId = String((saved && saved.shopId) || "").trim();
+      // Legacy browser-verified sessions can lack shop_id. Their exact full
+      // store name is still the durable binding; never accept a conflicting ID.
+      const bound = saved && saved.store === shop.store && saved.cookies && saved.cookies.length &&
+        (!savedId || [String(shop.shopId || "").trim(), String(shop.merchantId || "").trim()].includes(savedId));
+      if (bound && error.code === "network" && /(?:^|\D)601(?:\D|$)/.test(String(error.message || ""))) {
+        return;
+      }
+      throw error;
+    }
     const result = matchCollectIdentity({ ...shop, shopName: shop.store }, identity);
     if (!result.ok) {
       throw Object.assign(new Error(result.reason === "identity_missing" ? "未能核验店铺身份" : "登录店铺与组织中心不一致"), { code: result.reason });
@@ -527,7 +543,8 @@ export function createLive2Collector(deps = {}) {
   }
 
   async function collectShop(shop, draft, phase) {
-    const base = blankFor(shop);
+    const base = { ...(draft.get(shop.store) || published.get(shop.store) || blankFor(shop)),
+      online: false, pendingCollect: false, pendingUpdate: false, loginExpired: false, offline: false };
     const started = Date.now();
     // Read after obtaining a worker slot: a queued shop may have been re-logged in.
     // A failed read must never be treated as an empty jar and trigger password login.
@@ -547,14 +564,16 @@ export function createLive2Collector(deps = {}) {
     let verified = false;
     if (jar && client.fetchAccountIdentity) {
       try {
-        await verifyIdentity(shop, jar, phase);
+        await verifyIdentity(shop, jar, phase, saved);
         verified = true;
       } catch (error) {
         if (inactive(shop, phase)) return null;
         if (error.code === "login") jar = null;
         else {
           await markCollectFail(shop, error.message, phase);
-          return { ...base, pendingCollect: false, offline: true, online: false, offlineReason: error.message };
+          const kept = draft.get(shop.store) || published.get(shop.store) || base;
+          return { ...kept, pendingCollect: false, pendingUpdate: false, loginExpired: false,
+            offline: true, online: false, offlineReason: error.message };
         }
       }
     }
@@ -566,6 +585,7 @@ export function createLive2Collector(deps = {}) {
         return { ...base, pendingCollect: false, loginExpired: true, online: false, offlineReason: retry.reason };
       }
       if (!shop.login || !shop.password) {
+        base.pendingCollect = true;
         base.offlineReason = "组织中心还没有填写这家店的账号";
         shop.password = "";
         return base;

@@ -2214,6 +2214,9 @@ export function loginNeedsSms(page) {
 export function loginScreenState(text, formReady, page) {
   const source = String(text || "");
   const view = page || { text: source };
+  if (/登录异常[，,、\s]*请联系客服解除/.test(source)) {
+    return { status: "login", message: "京东提示：登录异常，请联系客服解除；请先恢复服务器登录后再试" };
+  }
   if (source.includes("不匹配") || source.includes("密码不正确") || source.includes("账号或密码不正确") || source.includes("账号或密码错误")) {
     return { status: "login", message: "账号或密码不正确" };
   }
@@ -2468,7 +2471,8 @@ export async function closeDesk() {
   desk.store = "";
   desk.password = "";
   try {
-    await send(desk.ws, "Network.clearBrowserCookies", {}, undefined, 2000);
+    // Closing a login panel must not log the shop out. The persistent profile is
+    // also the recovery source when the collector's saved session is unavailable.
     await send(desk.ws, "Page.navigate", { url: "about:blank" }, undefined, 2000);
   } catch {
     stopCurrent();
