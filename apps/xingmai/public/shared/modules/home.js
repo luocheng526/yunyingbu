@@ -2683,6 +2683,7 @@
     if (key === "liveAt") {
       if (typeof liveScope !== "undefined" && liveScope === "live2") {
         var times = "成交更新：" + (row.dealCapturedAt || "未成功") + "；广告更新：" + (row.adsCapturedAt || "未成功");
+        if (row.checkedAt) times += "；最近检查：" + row.checkedAt;
         return '<td class="xm-hm-num" title="' + escapeHtml(times) + '">' + escapeHtml(row && row.capturedAt ? row.capturedAt : "—") + "</td>";
       }
       var ownAt = row && (row.capturedAt || row.ingestedAt || row.liveAt);
@@ -2730,7 +2731,7 @@
         return '<td class="xm-hm-num" title="采集功能待接入">待接入</td>';
       }
       if (link.kind === "ads" || link.kind === "warn") {
-        var tip = (row && (row.dealReason || row.adsReason || row.offlineReason)) || link.label;
+        var tip = (row && (row.dataUnavailable ? row.offlineReason : row.dealReason || row.adsReason || row.offlineReason)) || link.label;
         return (
           '<td class="xm-hm-num is-fee-warm" title="' +
           escapeHtml(tip) +
@@ -3363,6 +3364,8 @@
         capturedAt: hit.capturedAt || "",
         online: hit.online === true,
         partialData: hit.partialData === true,
+        dataUnavailable: hit.dataUnavailable === true,
+        checkedAt: hit.checkedAt || "",
         dealFailed: hit.dealFailed === true,
         dealReason: hit.dealReason || "",
         dealCapturedAt: hit.dealCapturedAt || "",

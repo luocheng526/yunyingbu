@@ -383,6 +383,7 @@ test("the same shop name matches even when Jingmai returns the merchant id", () 
 });
 
 test("a page showing this shop is saved even when the account api rejects the old session", async () => {
+  let released = false;
   await resetJingmaiStore();
   await saveSession("RASW家居旗舰店", {
     cookies: [{ name: "thor", value: "old" }],
@@ -392,7 +393,7 @@ test("a page showing this shop is saved even when the account api rejects the ol
   setJingmaiDeps(deskDeps({
     desk: {
       poll: async () => ({ status: "ok", cookies: [{ name: "thor", value: "fresh" }], pageMatch: true }),
-      close: async () => {}
+      close: async () => { released = true; }
     },
     client: {
       fetchAccountIdentity: async () => {
@@ -400,7 +401,7 @@ test("a page showing this shop is saved even when the account api rejects the ol
         error.code = "login";
         throw error;
       },
-      fetchHome: async () => ({ dealAmount: 3009, paidAmount: 1841.39 })
+      fetchHome: async () => { assert.equal(released, true, "release the login profile before collecting"); return { dealAmount: 3009, paidAmount: 1841.39 }; }
     }
   }));
   try {
@@ -481,7 +482,8 @@ test("a mismatched login with no saved session is not written as this shop", asy
   }));
   try {
     const state = await reloginState("UUMILO个人洗护旗舰店");
-    assert.equal(state.status, "screen");
+    assert.equal(state.status, "login");
+    assert.match(state.message, /重新打开/);
     const row = (await listSessions()).find((item) => item.store === "UUMILO个人洗护旗舰店");
     assert.equal(row.authState, "login_expired");
     assert.equal(row.cookies.length, 0);

@@ -236,6 +236,15 @@ export function parseHomeCard(text) {
   };
 }
 
+export function homeDealUnavailable(text) {
+  const source = String(text || "");
+  const start = source.indexOf("经营数据");
+  if (start < 0) return false;
+  const lines = source.slice(start, start + 900).split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const hits = lines.map((line, index) => line === "成交金额" ? index : -1).filter(index => index >= 0);
+  return hits.length === 1 && ["-", "--", "—", "–"].includes(lines[hits[0] + 1]);
+}
+
 function readCardCompare(section) {
   const match = String(section || "").match(/成交金额[\s\S]{0,160}?较昨日(同时段)?\s*([+-]?\d+(?:\.\d+)?)\s*%/);
   if (!match) {

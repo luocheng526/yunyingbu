@@ -740,7 +740,8 @@ async function startQueued(shop, epoch) {
     const kept = await rememberLogin(shop.store, opened.cookies || [], {
       shopId: shop.shopId || "",
       merchantId: shop.merchantId || "",
-      store: shop.store
+      store: shop.store,
+      pageMatch: opened.pageMatch === true
     });
     if (kept === "kept") {
       return publicState({ status: "done", store: shop.store, message: "这次登录到的不是这家店，原来的会话还在" });
@@ -1202,6 +1203,7 @@ export async function reloginState(store) {
   if (state.status === "ok") {
     const cookies = state.cookies || [];
     const cached = orgCache.get(name);
+    if (deps.desk && deps.desk.close) await deps.desk.close();
     const kept = await rememberLogin(name, cookies, {
       store: name,
       shopId: (cached && cached.shopId) || "",
@@ -1212,15 +1214,11 @@ export async function reloginState(store) {
       return publicState({ status: "login", store: name, message: "这次登录到的不是这家店，原来的会话还在" });
     }
     if (kept !== "saved") {
-      const inside = /shop\.jd\.com/i.test(String(state.href || ""));
       return publicState({
-        status: "screen",
+        status: "login",
         store: name,
-        message: inside ? "已经进到商家后台，请看画面确认是不是这家店" : "登录没有通过，请再试一次"
+        message: "登录身份未通过核验，请重新打开该店登录"
       });
-    }
-    if (deps.desk && deps.desk.close) {
-      await deps.desk.close();
     }
     return advanceAfterSuccess(name);
   }

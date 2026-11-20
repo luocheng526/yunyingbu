@@ -857,7 +857,7 @@ async function fetchDeal(jar, fetchImpl, readCard, signal, shopKeyOrExpected) {
   if (reader && jar && jar.length) {
     try {
       const card = await reader(jar, signal, shopKeyOrExpected || "");
-      if (card && (card.dealAmount != null || card.orderCount != null || card.customerCount != null)) {
+      if (card && (card.dealAmount != null || card.orderCount != null || card.customerCount != null || card.dealUnavailable === true)) {
         return card;
       }
     } catch (error) {
@@ -1224,6 +1224,9 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
   // Old-site rule: ads failure must not wipe a successful Jingmai deal snapshot.
   if (hasCollected(metrics)) {
     return metrics;
+  }
+  if (deal && deal.dealUnavailable) {
+    throw jingmaiError("data_unavailable", [deal.dealNote, paidError && paidError.message].filter(Boolean).join("；"));
   }
   // Never join Jingmai-login and JZT/ads failures into one message — that made Han shops
   // look "login expired" and triggered endless password recover while ads was the only gap.

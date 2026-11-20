@@ -97,6 +97,32 @@ test("shared merchant accounts require browser shop-ID verification even with a 
   assert.equal((await run.collector.board("")).records[0].online, true);
 });
 
+for (const hadData of [true, false]) {
+  test(`verified platform data gaps preserve login and last actual values (history ${hadData})`, async () => {
+    await resetJingmaiStore();
+    await seed("saved");
+    let missing = !hadData, checked = stamp;
+    const run = harness({ fetchHome: async jar => {
+      if (missing) { jar[0].value = "renewed"; throw Object.assign(new Error("京麦已登录，平台暂未提供数据"), { code: "data_unavailable" }); }
+      return metrics;
+    } }, { now: () => checked });
+    if (hadData) await run.round();
+    missing = true; checked = "2026/11/20 18:10:00";
+    await run.round();
+    const row = (await run.collector.board("")).records[0];
+    assert.equal(row.online, false);
+    assert.equal(row.offline, false);
+    assert.equal(row.loginExpired, false);
+    assert.equal(row.dataUnavailable, true);
+    assert.equal(row.checkedAt, checked);
+    assert.equal(row.liveAmount, hadData ? 100 : null);
+    assert.equal(row.capturedAt, hadData ? stamp : "");
+    assert.equal((await getSession(store)).authState, "ok");
+    assert.equal((await getSession(store)).cookies[0].value, "renewed");
+    assert.equal((await listSamples("2026-11-20", "2026-11-20")).length, hadData ? 1 : 0);
+  });
+}
+
 test("live2 reuses the latest saved session instead of overwriting it with a cached cookie", async () => {
   await resetJingmaiStore();
   await seed("old");

@@ -278,6 +278,7 @@ export function patchCollectionHealth(source) {
   if (source.includes("/* home channel health */")) return source;
   return source.replace("  function liveLinkOf(row) {", `  function liveLinkOf(row) {
     /* home channel health */
+    if (row && row.dataUnavailable && !row.loginExpired && !row.offline) return { label: "平台缺数", kind: "warn" };
     if (row && row.partialData && !row.loginExpired && !row.offline) {
       if (row.dealFailed) return { label: "成交异常", kind: "warn" };
       if (row.adsFailed) return { label: "广告异常", kind: "ads" };

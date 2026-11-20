@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { EventEmitter } from "node:events";
 
 const source = readFileSync(new URL("../src/modules/home/jingmai-desk.js", import.meta.url), "utf8");
 const start = source.indexOf("export async function closeDesk()");
@@ -14,12 +15,15 @@ for (const navigationFails of [false, true]) {
     const cookies = [{ name: "thor", value: "synthetic-session", domain: ".jd.com" }];
     const commands = [];
     let stopped = 0;
-    const desk = { store: "测试店", password: "synthetic-password", profileKey: "p_test", ws: {}, chrome: { exitCode: null } };
+    const chrome = new EventEmitter();
+    chrome.exitCode = null;
+    const desk = { store: "测试店", password: "synthetic-password", profileKey: "p_test", ws: {}, chrome };
     const context = vm.createContext({
-      current: desk, openTicket: 0,
+      current: desk, openTicket: 0, readerDesk: null, loginVisible: true, shotCache: {}, setTimeout, clearTimeout,
       deskUsable: () => true,
       reconnectDesk: async () => {},
-      stopCurrent: () => { stopped += 1; },
+      stopCurrent: () => { stopped += 1; context.current = null; },
+      discard: () => { chrome.exitCode = 0; chrome.emit("exit"); },
       send: async (_ws, method) => {
         commands.push(method);
         if (method === "Network.clearBrowserCookies") cookies.length = 0;
@@ -32,5 +36,6 @@ for (const navigationFails of [false, true]) {
     assert.equal(desk.password, "");
     assert.equal(desk.store, "");
     assert.equal(stopped, navigationFails ? 1 : 0);
+    assert.equal(context.current, null);
   });
 }

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
-import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
+import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, homeDealUnavailable, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
 
 const LOGIN_URL =
   "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
@@ -2489,6 +2489,20 @@ export async function closeDesk() {
   } catch {
     stopCurrent();
   }
+  if (current !== desk) return;
+  // Release the profile before the collector opens it again. Keep its cookies
+  // on disk and allow Chromium to flush them during graceful shutdown.
+  const closed = new Promise(resolve => {
+    if (!desk.chrome || desk.chrome.exitCode != null) { resolve(); return; }
+    const timer = setTimeout(resolve, 3500);
+    desk.chrome.once("exit", () => { clearTimeout(timer); resolve(); });
+  });
+  current = null;
+  loginVisible = false;
+  shotCache = { at: 0, store: "", image: null, ready: false };
+  if (readerDesk === desk) readerDesk = null;
+  discard(desk);
+  await closed;
 }
 
 async function readLoginPage(ws) {
@@ -2526,6 +2540,20 @@ async function fillLoginOnDesk(ws, loginName, password) {
   return account && secret;
 }
 
+async function verifiedDeskSession(desk, cookies, href) {
+  if (!sessionReady(href, cookies)) return null;
+  const identity = await readShopBaseIdentity(desk.ws);
+  if ((desk.shopId && !identity.shopId) || (!identity.shopId && !identity.shopName)) {
+    return { status: "verify", message: "已进入京麦，正在等待店铺身份信息", href: String(href || "") };
+  }
+  try {
+    assertPageShopIdentity({ store: desk.store, shopId: desk.shopId, requireIdentity: true }, identity.shopName, identity);
+  } catch (error) {
+    return { status: "login", message: String(error.message || "登录店铺不一致") };
+  }
+  return { status: "ok", cookies, href: String(href || ""), pageMatch: true };
+}
+
 async function finishOpen(desk, loginName, password, ticket, manual) {
   try {
     loginVisible = true;
@@ -2541,6 +2569,10 @@ async function finishOpen(desk, loginName, password, ticket, manual) {
         await sleep(500);
       }
       const page = await readLoginPage(desk.ws);
+      if (page && /shop\.jd\.com/i.test(String(page.href || "")) && !/passport\.|\/login/i.test(String(page.href || ""))) {
+        const ready = await verifiedDeskSession(desk, await readCookies(desk.ws), page.href);
+        if (ready) return ready;
+      }
       if (loginTipBlocked(page) && !retried) {
         retried = true;
         try {
@@ -2604,7 +2636,7 @@ async function finishOpen(desk, loginName, password, ticket, manual) {
         href = "";
       }
       if (sessionReady(href, cookies)) {
-        return { status: "ok", cookies: cookies };
+        return await verifiedDeskSession(desk, cookies, href);
       }
       const page = await readLoginPage(desk.ws);
       if (loginTipBlocked(page)) {
@@ -2745,27 +2777,8 @@ export async function pollDesk(store) {
   try {
     const cookies = await readCookies(current.ws);
     const href = await evaluate(current.ws, "location.href");
-    let pageMatch = false;
-    const storeName = String(store || current.store || "").replace(/\s+/g, "");
-    if (storeName) {
-      try {
-        pageMatch = Boolean(await evaluate(current.ws, `(() => {
-          const want = ${JSON.stringify(storeName)};
-          const nodes = document.querySelectorAll("a, span, div, h1, h2, p");
-          for (let i = 0; i < nodes.length && i < 400; i += 1) {
-            const text = String(nodes[i].innerText || "").replace(/\\s+/g, "");
-            if (text !== want && text.indexOf(want) !== 0) continue;
-            const rect = nodes[i].getBoundingClientRect();
-            if (rect.width > 2 && rect.height > 2 && rect.top >= 0 && rect.top < 180) return true;
-          }
-          return false;
-        })()`));
-      } catch {
-        pageMatch = false;
-      }
-    }
     if (sessionReady(href, cookies)) {
-      return { status: "ok", cookies: cookies, href: String(href || ""), pageMatch: pageMatch };
+      return await verifiedDeskSession(current, cookies, href);
     }
     loginVisible = true;
     const page = await readLoginPage(current.ws);
@@ -3720,12 +3733,20 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
         throw error;
       }
     }
+    async function assertSessionPage() {
+      const href = String(await evaluate(ws, "location.href") || "");
+      if (/passport\.|\/login/i.test(href)) {
+        throw Object.assign(new Error("服务器浏览器已返回京东登录页，请重新登录或完成验证"), { code: "login" });
+      }
+    }
     async function finishMetrics(metrics) {
+      await assertSessionPage();
       let identity = await readShopBaseIdentity(ws);
       for (let attempt = 0; expected.shopId && !identity.shopId && attempt < 6; attempt++) {
         await sleepSignal(500, signal);
         identity = await readShopBaseIdentity(ws);
       }
+      await assertSessionPage();
       assertPageShopIdentity({ ...expected, requireIdentity: true }, identity.shopName, { ...vaneWatch.read(), ...identity });
       const renewed = await readCookies(ws);
       if (hasSession(renewed) && Array.isArray(cookies)) {
@@ -3756,15 +3777,21 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
           return await finishMetrics(metrics);
         }
       } catch (error) {
-        if (error && error.code === "identity") {
+        if (error && ["identity", "login"].includes(error.code)) {
           throw error;
         }
         /* fall through to the rendered card */
       }
     }
-    card = parseHomeCard(await homeCardText(ws));
+    const cardText = await homeCardText(ws);
+    card = parseHomeCard(cardText);
     if (card) {
       return await finishMetrics(card);
+    }
+    await assertSessionPage();
+    if (homeDealUnavailable(cardText)) {
+      return await finishMetrics({ dealAmount: null, orderCount: null, customerCount: null,
+        dealUnavailable: true, dealNote: "京麦已登录，但页面成交金额显示“—”，暂未提供数据" });
     }
     const error = new Error("京麦首页卡片没有成交金额");
     error.code = "network";

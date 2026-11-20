@@ -4,8 +4,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { EventEmitter } from "node:events";
-import { assertPageShopIdentity, cookieParams, pageShopIdentity } from "../src/modules/home/jingmai-desk.js";
+import { assertPageShopIdentity, cookieParams, pageShopIdentity, sessionReady } from "../src/modules/home/jingmai-desk.js";
 import { fetchHome } from "../src/modules/home/jingmai-client.js";
+import { homeDealUnavailable, parseHomeCard } from "../src/modules/home/jingmai.js";
 import { live2RecordFromMetrics } from "../src/modules/home/live2.js";
 import { normalizeOrgShops } from "../src/modules/home/org-roster.js";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
@@ -18,15 +19,16 @@ const readBrowser = extract("async function readHomeDealNow", "export async func
 const readCookies = extract("async function readCookies", "function hasSession");
 const jar = value => [{ name: "thor", value, domain: ".jd.com", path: "/", secure: true }];
 
-async function browserCase({ resident = "resident-new", saved = "database-old", name = "本店旗舰店", pageId = "", merchantId = "" } = {}) {
+async function browserCase({ resident = "resident-new", saved = "database-old", name = "本店旗舰店", pageId = "", merchantId = "", unavailable = false, lateRedirect = false } = {}) {
   const input = saved ? jar(saved) : [];
   let browserJar = resident ? jar(resident) : [], href = "about:blank";
   const commands = [], cookieReads = [];
+  let locationReads = 0;
   const context = vm.createContext({
     input, signal: new AbortController().signal, expected: { store: "本店旗舰店", shopId: "1", requireIdentity: true },
     normalizeDealExpected: x => x, profileIdentity: () => ({ key: "p_1", ephemeral: false }),
     isForbiddenLegacyProfileKey: () => false, launchChrome: async () => ({ ws: {} }), discard: () => {},
-    watchVaneIdentity: () => ({ read: () => ({}), stop: () => {} }), watchShopData: () => new Promise(() => {}),
+    watchVaneIdentity: () => ({ read: () => ({}), stop: () => {} }), watchShopData: () => unavailable ? Promise.resolve("") : new Promise(() => {}),
     send: async (_ws, method, params) => {
       commands.push(method);
       if (method === "Network.setCookies") browserJar = params.cookies;
@@ -40,11 +42,15 @@ async function browserCase({ resident = "resident-new", saved = "database-old", 
       }
       return {};
     },
-    sleepSignal: async () => {}, waitDomContentLoaded: async () => {}, evaluate: async () => href,
+    sleepSignal: async () => {}, waitDomContentLoaded: async () => {}, evaluate: async () => {
+      locationReads++;
+      return lateRedirect && locationReads > 1 ? "https://passport.shop.jd.com/login/index.action/jdm" : href;
+    },
     readShopBaseName: async () => name,
     readShopBaseIdentity: async () => ({ shopName: name, shopId: pageId, merchantId }), assertPageShopIdentity, cookieParams,
     normalizeCookie: x => x, hasSession: x => x.some(c => c.name === "thor"),
-    parseHomeCard: () => ({ dealAmount: 100 }), homeCardText: async () => "成交金额 100", extractShopDeal: () => null
+    parseHomeCard, homeDealUnavailable,
+    homeCardText: async () => "经营数据\n成交金额\n" + (unavailable ? "—" : "100") + "\n成交单量\n1\n成交客户数\n1", extractShopDeal: () => null
   });
   const outcome = vm.runInContext(readCookies + "\n" + readBrowser + "\nreadHomeDealNow(input, signal, expected)", context);
   return { outcome, input, commands, cookieReads };
@@ -65,6 +71,68 @@ test("an expired browser profile falls back once to a saved human session", asyn
   await run.outcome;
   assert.equal(run.commands.filter(x => x === "Network.setCookies").length, 1);
   assert.equal(run.input[0].value, "browser-renewed");
+});
+
+test("a late login-page redirect is an authentication failure, not missing sales", async () => {
+  const run = await browserCase({ lateRedirect: true });
+  await assert.rejects(run.outcome, e => e.code === "login" && /登录页/.test(e.message));
+  assert.equal(run.input[0].value, "database-old");
+});
+
+test("a verified unavailable sales card renews the session without inventing zero sales", async () => {
+  const run = await browserCase({ unavailable: true, pageId: "1" });
+  const metrics = await run.outcome;
+  assert.equal(metrics.dealAmount, null);
+  assert.equal(metrics.dealUnavailable, true);
+  assert.match(metrics.dealNote, /暂未提供/);
+  assert.equal(run.input[0].value, "browser-renewed");
+  assert.equal(homeDealUnavailable("经营数据\n成交金额\n0"), false);
+  assert.equal(homeDealUnavailable("登录\n成交金额\n—"), false);
+  assert.equal(homeDealUnavailable("经营数据\n成交金额\n—\n成交金额\n100"), false);
+});
+
+test("unavailable sales still allow advertising collection", async () => {
+  const metrics = await fetchHome(jar("verified"), async url => {
+    if (String(url).includes("pinlist")) return new Response(JSON.stringify({ code: 1, data: { own: [{ userId: 1, shopId: "1", shopName: "本店" }] } }));
+    if (String(url).includes("summary/overview")) return new Response(JSON.stringify({ code: 1, data: { summary: [{ index: "cost", value: 0 }] } }));
+    return new Response("<html></html>");
+  }, null, new AbortController().signal, { store: "本店", shopId: "1", browserDeal: { dealAmount: null, dealUnavailable: true, dealNote: "平台暂未提供成交" } });
+  assert.equal(metrics.dealAmount, null);
+  assert.equal(metrics.paidAmount, 0);
+  assert.equal(metrics.dealNote, "平台暂未提供成交");
+});
+
+test("a verified session with neither metric reports missing platform data, not logout", async () => {
+  await assert.rejects(fetchHome(jar("verified"), async () => new Response(JSON.stringify({ code: -100 })), null,
+    new AbortController().signal, { store: "本店", shopId: "1", browserDeal: { dealAmount: null, dealUnavailable: true, dealNote: "平台暂未提供成交" } }),
+  e => e.code === "data_unavailable" && /平台暂未提供成交/.test(e.message));
+});
+
+test("an already logged-in browser returns verified identity without waiting on the password form", async () => {
+  const desk = { store: "旧店名", shopId: "1", ws: {} };
+  let reads = 0;
+  const context = { desk, ticket: 1, current: desk, openTicket: 1, loginVisible: false, lastLaunchNote: "", LOGIN_SCREEN_MESSAGE: "验证",
+    sessionReady, assertPageShopIdentity, readShopBaseIdentity: async () => ({ shopName: "新店名", shopId: "1" }),
+    readLoginPage: async () => { reads++; return { href: "https://shop.jd.com/jdm/home" }; }, readCookies: async () => jar("session"),
+    sleep: async () => assert.fail("an authenticated home page should not wait for a password form") };
+  const result = await vm.runInNewContext(extract("async function verifiedDeskSession", "export async function openDesk") + "\nfinishOpen(desk, 'fixture', 'fixture', ticket, false)", context);
+  assert.equal(result.status, "ok");
+  assert.equal(result.pageMatch, true);
+  assert.equal(reads, 1);
+});
+
+test("closing a login panel releases its persistent profile before resolving and never clears cookies", async () => {
+  const chrome = new EventEmitter(), commands = [], signals = [];
+  chrome.exitCode = null;
+  chrome.kill = signal => { signals.push(signal); setTimeout(() => { chrome.exitCode = 0; chrome.emit("exit"); }, 1); };
+  const context = vm.createContext({ current: { chrome, persistProfile: true, ws: {}, store: "本店" }, openTicket: 0, readerDesk: null,
+    loginVisible: true, shotCache: {}, setTimeout, clearTimeout, deskUsable: () => true,
+    send: async (_ws, method) => { commands.push(method); }, removeDeskDir: () => {}, stopCurrent: () => assert.fail("must use graceful close") });
+  await vm.runInContext(extract("function discard(desk)", "function closeReader()") + "\n" + extract("export async function closeDesk()", "async function readLoginPage") + "\ncloseDesk()", context);
+  assert.equal(context.current, null);
+  assert.equal(chrome.exitCode, 0);
+  assert.deepEqual(signals, ["SIGTERM"]);
+  assert.deepEqual(commands, ["Page.navigate"]);
 });
 
 for (const name of ["另一店旗舰店", "本店旗舰店二店", ""]) {
@@ -202,4 +270,6 @@ test("a paid-only result is visibly incomplete, with an independent timestamp", 
   const start = page.indexOf("  function liveLinkOf(row) {");
   const fn = page.slice(start, page.indexOf("  function liveShopCellHtml", start));
   assert.equal(vm.runInNewContext(fn + "\nliveLinkOf(row).label", { row, liveScope: "live2" }), "成交异常");
+  const unavailable = { ...row, dataUnavailable: true, partialData: false, offline: false, offlineReason: "平台暂未提供数据" };
+  assert.equal(vm.runInNewContext(fn + "\nliveLinkOf(row).label", { row: unavailable, liveScope: "live2" }), "平台缺数");
 });

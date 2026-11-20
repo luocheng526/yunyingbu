@@ -28,7 +28,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1320-home-shop-id";
+export const LIVE2_RUNTIME_MARK = "0.1.1321-home-data-status";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
@@ -226,6 +226,13 @@ export function createLive2Collector(deps = {}) {
       copy.offline = false;
       copy.pendingUpdate = false;
       copy.offlineReason = copy.offlineReason || "登录已失效，请重新登录";
+      return copy;
+    }
+    if (copy.dataUnavailable && !copy.offline && isFreshStamp(copy.checkedAt, nowStamp)) {
+      copy.online = false;
+      copy.offline = false;
+      copy.partialData = false;
+      copy.pendingUpdate = false;
       return copy;
     }
     if (!isFreshStamp(copy.capturedAt, nowStamp)) {
@@ -692,6 +699,12 @@ export function createLive2Collector(deps = {}) {
       shop.password = "";
       if (phase.closed || phase.superseded) return null;
       const previous = draft.get(shop.store) || published.get(shop.store);
+      if (error.code === "data_unavailable") {
+        await keepLogin(shop, jar, phase);
+        return { ...(previous || base), online: false, offline: false, loginExpired: false,
+          pendingCollect: false, pendingUpdate: false, partialData: false, dataUnavailable: true,
+          checkedAt: now(), offlineReason: String(error.message || "平台暂未提供数据").slice(0, 200) };
+      }
       if (isMissingDealFieldError(error)) {
         const kept = previous ? Object.assign({}, previous) : base;
         kept.pendingCollect = false;
@@ -800,7 +813,7 @@ export function createLive2Collector(deps = {}) {
           markLoggedOut(shop, draft, samples, row.offlineReason);
           return row;
         }
-        if (!hasNumbers(row) && !row.offline) {
+        if (!hasNumbers(row) && !row.offline && !row.dataUnavailable) {
           await closeSlow(shop, draft, samples, phase);
           return row;
         }
