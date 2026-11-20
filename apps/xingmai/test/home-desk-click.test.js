@@ -166,6 +166,14 @@ test("wrong password is still a login failure", () => {
   assert.equal(state.message, "账号或密码不正确");
 });
 
+test("京麦账号异常 is a login failure, not a waiting screen", () => {
+  const blocked = loginScreenState("当前账号异常，暂无法登录", true);
+  assert.equal(blocked.status, "login");
+  assert.equal(blocked.message, "当前账号异常，暂无法登录");
+  assert.equal(loginTipBlocked({ text: "当前账号异常，暂无法登录", accountVisible: false }), true);
+  assert.equal(loginPageVisible({ readyState: "complete", href: "https://passport.shop.jd.com/login", text: "当前账号异常，暂无法登录" }), false);
+});
+
 test("old homepage client keeps the login dialog open after a click", () => {
   const old = "/* xm-module-home 0.1.1039-loginpop */\n      function showDesk(st) {\n        state.desk = st || {};\n";
   const next = patchHomeClientSource(old);
@@ -1179,6 +1187,137 @@ test("dropped shops recover themselves with the saved password", async () => {
     const row = (await listSessions()).find((item) => item.store === "DIKTT环境电器旗舰店");
     assert.equal(row.authState, "ok");
     assert.equal(row.cookies[0].value, "fresh");
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
+test("live2 manual relogin still tries the password before opening the desk", async () => {
+  await resetJingmaiStore();
+  await saveSession("ZYUO旗舰店", {
+    cookies: [],
+    authState: "login_expired",
+    authMessage: "登录已失效，请重新登录",
+    shopId: "2001"
+  });
+  let deskCalls = 0;
+  let logins = 0;
+  setJingmaiDeps(deskDeps({
+    loadOrg: async () => [
+      { store: "ZYUO旗舰店", enabled: true, login: "zyuo", password: "secret", shopId: "2001" }
+    ],
+    client: {
+      login: async function (username, password) {
+        logins += 1;
+        assert.equal(username, "zyuo");
+        assert.equal(password, "secret");
+        return [{ name: "thor", value: "fresh" }];
+      },
+      fetchHome: async function () {
+        return { dealAmount: 1 };
+      }
+    },
+    desk: {
+      open: async function () {
+        deskCalls += 1;
+        return { status: "verify", message: "should not open" };
+      },
+      close: async function () {},
+      poll: async function () {
+        return { status: "opening", message: "正在启动浏览器" };
+      }
+    }
+  }));
+  try {
+    const done = await beginRelogin("ZYUO旗舰店", "cookie", { manual: true });
+    assert.equal(done.status, "done");
+    assert.match(done.message, /已重新登录/);
+    assert.equal(deskCalls, 0);
+    assert.equal(logins, 1);
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
+test("live2 relogin auto-clicks 立即登录 when the desk has to open", async () => {
+  await resetJingmaiStore();
+  let openedManual = "unset";
+  setJingmaiDeps(deskDeps({
+    loadOrg: async () => [
+      { store: "DIKTT潮流生活旗舰店", enabled: true, login: "luwei", password: "secret", shopId: "16107402" }
+    ],
+    client: {
+      login: async function () {
+        const error = new Error("need desk");
+        error.code = "login";
+        throw error;
+      },
+      fetchHome: async function () {
+        return { dealAmount: 1 };
+      }
+    },
+    desk: {
+      open: async function (options) {
+        openedManual = options && options.manual;
+        return { status: "ok", cookies: [{ name: "thor", value: "fresh" }] };
+      },
+      close: async function () {},
+      poll: async function () {
+        return { status: "ok", cookies: [{ name: "thor", value: "fresh" }] };
+      }
+    }
+  }));
+  try {
+    const opening = await beginRelogin("DIKTT潮流生活旗舰店", "cookie", { manual: true });
+    assert.equal(opening.status, "opening");
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 40);
+    });
+    assert.equal(openedManual, false);
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
+test("dropped shops recover every expired shop in one pass", async () => {
+  await resetJingmaiStore();
+  const names = ["ZYUO洗护旗舰店", "飒望日用旗舰店", "RASW旗舰店", "羽悦优选家居店"];
+  for (const store of names) {
+    await saveSession(store, {
+      cookies: [],
+      authState: "login_expired",
+      authMessage: "登录已失效，请重新登录",
+      shopId: store
+    });
+  }
+  let logins = 0;
+  setJingmaiDeps(deskDeps({
+    loadOrg: async () => names.map(function (store) {
+      return { store: store, enabled: true, login: store, password: "secret", shopId: store };
+    }),
+    client: {
+      login: async function () {
+        logins += 1;
+        return [{ name: "thor", value: "fresh" }];
+      },
+      fetchHome: async function () {
+        return { dealAmount: 1 };
+      }
+    },
+    desk: {
+      open: async function () {
+        return { status: "verify" };
+      },
+      close: async function () {},
+      poll: async function () {
+        return { status: "idle" };
+      }
+    }
+  }));
+  try {
+    const result = await recoverDroppedShops("cookie");
+    assert.equal(result.recovered, 4);
+    assert.equal(logins, 4);
   } finally {
     resetJingmaiDeps();
   }

@@ -182,7 +182,8 @@ test("recoverDroppedShops skips ads-only sessions and caps attempts", async () =
   try {
     const result = await recoverDroppedShops("cookie");
     assert.equal(logins, 1);
-    assert.ok(result.attempted <= 3);
+    assert.equal(result.attempted, 1);
+    assert.equal(result.recovered, 1);
     const ads = (await listSessions()).find((row) => row.store === "广告店");
     assert.equal(ads.cookies[0].value, "x");
   } finally {

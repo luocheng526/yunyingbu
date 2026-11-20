@@ -1908,6 +1908,9 @@ async function startChromeProcess(chromePath, signal, budgetMs, extraFlags, opti
     "--disable-blink-features=AutomationControlled",
     "--no-first-run",
     "--no-default-browser-check",
+    "--password-store=basic",
+    "--disable-save-password-bubble",
+    "--disable-features=PasswordManagerOnboarding,PasswordImport",
     "--lang=zh-CN",
     "--window-size=1100,720",
     "--user-data-dir=" + dir,
@@ -2141,7 +2144,7 @@ export function loginTipBlocked(page) {
     return false;
   }
   const text = String(page.text || "");
-  return /访问出错|暂时无法访问|人数过多|网络繁忙|环境异常|登录异常|拒绝访问|系统繁忙/.test(text);
+  return /访问出错|暂时无法访问|人数过多|网络繁忙|环境异常|登录异常|拒绝访问|系统繁忙|账号异常|暂无法登录/.test(text);
 }
 
 export function loginPageVisible(page) {
@@ -2195,6 +2198,9 @@ export function loginScreenState(text, formReady) {
   if (source.includes("冻结") || source.includes("停用")) {
     return { status: "login", message: "这个账号现在不能登录" };
   }
+  if (source.includes("账号异常") || /暂无法登录/.test(source)) {
+    return { status: "login", message: "当前账号异常，暂无法登录" };
+  }
   if (!formReady && /登录异常|登录环境异常|暂时无法登录/.test(source)) {
     return { status: "verify", message: "京麦拒绝了这次服务器登录，请过一会儿再试" };
   }
@@ -2224,28 +2230,54 @@ async function loginSurfaceReady(ws) {
 }
 
 async function fillAndSubmit(ws, loginName, password) {
-  const accountReady = await evaluate(ws, `(() => {
-    const el = [...document.querySelectorAll("input")].find((node) => (node.placeholder || "").includes("账号"));
-    if (!el) return false;
-    el.focus();
-    return true;
-  })()`);
-  if (!accountReady) {
+  const filled = await fillLoginOnDesk(ws, loginName, password);
+  if (!filled) {
     return false;
   }
-  await send(ws, "Input.insertText", { text: loginName });
-  const passwordReady = await evaluate(ws, `(() => {
-    const el = [...document.querySelectorAll("input")].find((node) => (node.placeholder || "").includes("密码"));
-    if (!el) return false;
-    el.focus();
-    return true;
-  })()`);
-  if (!passwordReady) {
-    return false;
+  const expression = `(${loginPageAction.toString()})(document, ${JSON.stringify({ submit: true })})`;
+  const frames = await frameIds(ws);
+  let clicked = false;
+  for (let i = 0; i < frames.length; i += 1) {
+    try {
+      let contextId = 0;
+      if (frames[i]) {
+        const world = await send(ws, "Page.createIsolatedWorld", { frameId: frames[i], grantUniveralAccess: true }, undefined, 2500);
+        contextId = world.executionContextId || 0;
+      }
+      const result = contextId
+        ? await send(ws, "Runtime.evaluate", { expression: expression, contextId: contextId, returnByValue: true }, undefined, 2500)
+        : await send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true }, undefined, 2500);
+      const hit = result && result.result ? result.result.value : null;
+      if (hit && hit.kind === "button") {
+        await send(ws, "Input.dispatchMouseEvent", {
+          type: "mousePressed",
+          x: hit.x,
+          y: hit.y,
+          button: "left",
+          clickCount: 1
+        }, undefined, 2000);
+        await send(ws, "Input.dispatchMouseEvent", {
+          type: "mouseReleased",
+          x: hit.x,
+          y: hit.y,
+          button: "left",
+          clickCount: 1
+        }, undefined, 2000);
+        clicked = true;
+        break;
+      }
+    } catch {
+      /* try the next frame */
+    }
   }
-  await send(ws, "Input.insertText", { text: password });
+  if (clicked) {
+    return true;
+  }
   return evaluate(ws, `(() => {
-    const button = [...document.querySelectorAll("button")].find((node) => (node.innerText || "").includes("立即登录"));
+    const button = [...document.querySelectorAll("button, [role=button], input[type=submit]")].find((node) => {
+      const text = String(node.innerText || node.value || "").replace(/\\s+/g, "");
+      return text === "立即登录" || text === "登录";
+    });
     if (!button) return false;
     button.click();
     return true;

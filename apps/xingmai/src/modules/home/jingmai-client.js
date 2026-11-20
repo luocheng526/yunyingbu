@@ -289,34 +289,15 @@ async function request(fetchImpl, jar, url, options) {
 }
 
 export async function loginShop(username, password, fetchImpl = fetch) {
-  const jar = [];
-  const page = await request(fetchImpl, jar, LOGIN_PAGE, {});
-  await page.text();
-  const posted = await request(fetchImpl, jar, LOGIN_POST, {
-    method: "POST",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded",
-      origin: "https://passport.shop.jd.com",
-      referer: "https://passport.shop.jd.com/login/index.action"
-    },
-    body: new URLSearchParams({
-      loginName: username,
-      password: password,
-      ReturnUrl: "https://sz.jd.com/"
-    })
+  const opened = await openPasswordSession(fetchImpl);
+  const jar = await submitPasswordSession({
+    jar: opened.jar,
+    init: opened.init,
+    loginName: username,
+    password: password,
+    fetchImpl: fetchImpl
   });
-  let status = posted.status;
-  let location = posted.headers.get("location") || "";
-  let text = await posted.text();
-  let hops = 0;
-  while (status >= 300 && status < 400 && location && hops < 5) {
-    const next = await request(fetchImpl, jar, new URL(location, "https://passport.shop.jd.com/").toString(), {});
-    status = next.status;
-    location = next.headers.get("location") || "";
-    text = await next.text();
-    hops += 1;
-  }
-  if (/验证码|滑块|安全验证|密码错误|账号或密码/.test(text) || !hasSession(jar)) {
+  if (!hasSession(jar)) {
     throw jingmaiError("login", "登录已失效，请重新登录");
   }
   return jar.map(function (item) {
@@ -429,8 +410,19 @@ export async function pollQrLogin({ uuid, jar, fetchImpl = fetch }) {
 
 export function passwordFailureMessage(body) {
   const data = body && body.data ? body.data : {};
-  if (data.emptyAuthcode) {
+  const msg = String(
+    (body && (body.msg || body.message || body.errorMsg)) ||
+      (data && (data.msg || data.message || data.tip || data.errorMsg)) ||
+      ""
+  );
+  if (data.emptyAuthcode || /验证码|滑块|安全验证/.test(msg)) {
     return "请先完成滑动验证";
+  }
+  if (/账号异常|暂无法登录|冻结|停用|环境异常/.test(msg)) {
+    return "当前账号异常，暂无法登录";
+  }
+  if (msg) {
+    return msg.slice(0, 80);
   }
   return "账号或密码不正确";
 }
