@@ -934,7 +934,8 @@ export async function beginRelogin(store, cookie, options) {
     password: shop.password,
     shopId: shop.shopId || "",
     merchantId: shop.merchantId || "",
-    manual: manual
+    // live2 点重新登录也会自动点立即登录；需要滑块时画面留着等人拖。
+    manual: false
   };
   shop.login = "";
   shop.password = "";

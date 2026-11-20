@@ -1239,6 +1239,46 @@ test("live2 manual relogin still tries the password before opening the desk", as
   }
 });
 
+test("live2 relogin auto-clicks 立即登录 when the desk has to open", async () => {
+  await resetJingmaiStore();
+  let openedManual = "unset";
+  setJingmaiDeps(deskDeps({
+    loadOrg: async () => [
+      { store: "DIKTT潮流生活旗舰店", enabled: true, login: "luwei", password: "secret", shopId: "16107402" }
+    ],
+    client: {
+      login: async function () {
+        const error = new Error("need desk");
+        error.code = "login";
+        throw error;
+      },
+      fetchHome: async function () {
+        return { dealAmount: 1 };
+      }
+    },
+    desk: {
+      open: async function (options) {
+        openedManual = options && options.manual;
+        return { status: "ok", cookies: [{ name: "thor", value: "fresh" }] };
+      },
+      close: async function () {},
+      poll: async function () {
+        return { status: "ok", cookies: [{ name: "thor", value: "fresh" }] };
+      }
+    }
+  }));
+  try {
+    const opening = await beginRelogin("DIKTT潮流生活旗舰店", "cookie", { manual: true });
+    assert.equal(opening.status, "opening");
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 40);
+    });
+    assert.equal(openedManual, false);
+  } finally {
+    resetJingmaiDeps();
+  }
+});
+
 test("dropped shops recover every expired shop in one pass", async () => {
   await resetJingmaiStore();
   const names = ["ZYUO洗护旗舰店", "飒望日用旗舰店", "RASW旗舰店", "羽悦优选家居店"];
