@@ -78,6 +78,25 @@ test("server browser verification waits for the user and never falls through to 
   assert.equal((await run.collector.board("")).records[0].loginExpired, true);
 });
 
+test("shared merchant accounts require browser shop-ID verification even with a saved session", async () => {
+  await resetJingmaiStore();
+  await seed("saved");
+  let checked = 0;
+  const run = harness({
+    fetchAccountIdentity: async () => assert.fail("a shared merchant ID cannot establish the shop"),
+    recoverBrowserSession: async (_jar, _signal, expected) => {
+      checked++;
+      assert.equal(expected.shopId, "1");
+      assert.equal(expected.ambiguousMerchant, true);
+      return { cookies: cookies("verified"), deal: { dealAmount: 100 } };
+    },
+    fetchHome: async () => metrics
+  }, { loadOrg: async () => [{ store, shopId: "1", merchantId: "9", ambiguousMerchant: true, enabled: true }] });
+  await run.round();
+  assert.equal(checked, 1);
+  assert.equal((await run.collector.board("")).records[0].online, true);
+});
+
 test("live2 reuses the latest saved session instead of overwriting it with a cached cookie", async () => {
   await resetJingmaiStore();
   await seed("old");

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { EventEmitter } from "node:events";
-import { assertPageShopIdentity, cookieParams } from "../src/modules/home/jingmai-desk.js";
+import { assertPageShopIdentity, cookieParams, pageShopIdentity } from "../src/modules/home/jingmai-desk.js";
 import { fetchHome } from "../src/modules/home/jingmai-client.js";
 import { live2RecordFromMetrics } from "../src/modules/home/live2.js";
 import { normalizeOrgShops } from "../src/modules/home/org-roster.js";
@@ -18,7 +18,7 @@ const readBrowser = extract("async function readHomeDealNow", "export async func
 const readCookies = extract("async function readCookies", "function hasSession");
 const jar = value => [{ name: "thor", value, domain: ".jd.com", path: "/", secure: true }];
 
-async function browserCase({ resident = "resident-new", saved = "database-old", name = "本店旗舰店" } = {}) {
+async function browserCase({ resident = "resident-new", saved = "database-old", name = "本店旗舰店", pageId = "", merchantId = "" } = {}) {
   const input = saved ? jar(saved) : [];
   let browserJar = resident ? jar(resident) : [], href = "about:blank";
   const commands = [], cookieReads = [];
@@ -41,7 +41,8 @@ async function browserCase({ resident = "resident-new", saved = "database-old", 
       return {};
     },
     sleepSignal: async () => {}, waitDomContentLoaded: async () => {}, evaluate: async () => href,
-    readShopBaseName: async () => name, assertPageShopIdentity, cookieParams,
+    readShopBaseName: async () => name,
+    readShopBaseIdentity: async () => ({ shopName: name, shopId: pageId, merchantId }), assertPageShopIdentity, cookieParams,
     normalizeCookie: x => x, hasSession: x => x.some(c => c.name === "thor"),
     parseHomeCard: () => ({ dealAmount: 100 }), homeCardText: async () => "成交金额 100", extractShopDeal: () => null
   });
@@ -109,6 +110,38 @@ test("duplicate merchant IDs require shop-specific evidence without changing org
   assert.ok(shops.every(x => x.ambiguousMerchant));
   assert.throws(() => assertPageShopIdentity({ ...shops[0], requireIdentity: true }, "", { venderId: "9" }), e => e.code === "identity");
   assert.throws(() => assertPageShopIdentity({ ...shops[0], shopId: "9", requireIdentity: true }, "", { venderId: "9" }), e => e.code === "identity");
+});
+
+test("the observed JD shop ID validates an internal label despite the changed official name", () => {
+  const actual = pageShopIdentity("ZYUO洗护瑞思拓专卖店", "店铺信息\n商家ID：\n150078094\n店铺ID：\n150078094\n店铺层级：\nL2");
+  assert.deepEqual(actual, { shopName: "ZYUO洗护瑞思拓专卖店", shopId: "150078094", merchantId: "150078094" });
+  assert.doesNotThrow(() => assertPageShopIdentity({ store: "ZYUO洗护旗舰店", shopId: "150078094", requireIdentity: true }, actual.shopName, actual));
+});
+
+test("a browser with the same immutable shop ID can renew a renamed shop", async () => {
+  const run = await browserCase({ name: "本店新名称专卖店", pageId: "1" });
+  assert.equal((await run.outcome).dealAmount, 100);
+  assert.equal(run.input[0].value, "browser-renewed");
+});
+
+test("a matching shop name cannot override a conflicting labeled shop ID", async () => {
+  const run = await browserCase({ pageId: "2", merchantId: "1" });
+  await assert.rejects(run.outcome, e => e.code === "identity");
+  assert.equal(run.input[0].value, "database-old");
+});
+
+test("shared merchants require the actual shop ID, not the shared merchant number", () => {
+  const expected = { store: "旧名称", shopId: "1", merchantId: "9", ambiguousMerchant: true, requireIdentity: true };
+  assert.doesNotThrow(() => assertPageShopIdentity(expected, "新名称", pageShopIdentity("新名称", "商家ID：9\n店铺ID：1")));
+  assert.throws(() => assertPageShopIdentity(expected, "旧名称", pageShopIdentity("旧名称", "商家ID：9\n店铺ID：2")), e => e.code === "identity");
+  assert.throws(() => assertPageShopIdentity(expected, "新名称", pageShopIdentity("新名称", "商家ID：9")), e => e.code === "identity");
+});
+
+test("multiple labeled shop IDs are ambiguous and never selected arbitrarily", () => {
+  assert.equal(pageShopIdentity("本店", "店铺ID：1\n店铺ID：2").shopId, "");
+  assert.throws(() => assertPageShopIdentity({ store: "本店", shopId: "1", requireIdentity: true }, "本店", pageShopIdentity("本店", "店铺ID：1\n店铺ID：2")), e => e.code === "identity");
+  assert.equal(pageShopIdentity("本店", "商家ID：1").shopId, "");
+  assert.equal(pageShopIdentity("本店", "店铺ID：1\n店铺ID：1").shopId, "1");
 });
 
 test("browser recovery reuses its verified deal and sends renewed cookies to ads", async () => {

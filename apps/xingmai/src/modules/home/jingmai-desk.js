@@ -3543,19 +3543,24 @@ function watchVaneIdentity(ws) {
   };
 }
 
-async function readShopBaseName(ws) {
-  try {
-    const value = await evaluate(
-      ws,
-      `(() => {
-        const el = document.querySelector("#shop-base-name");
-        return el ? String(el.innerText || el.textContent || "").trim() : "";
-      })()`
-    );
-    return String(value || "").trim();
-  } catch {
-    return "";
-  }
+export function pageShopIdentity(name, text) {
+  const readId = label => {
+    const pattern = new RegExp("(?:^|\\n)\\s*" + label + "\\s*ID\\s*[：:]?\\s*(\\d+)(?=\\s|$)", "gi");
+    const ids = [...new Set(Array.from(String(text || "").matchAll(pattern), hit => hit[1]))];
+    return { id: ids.length === 1 ? ids[0] : "", ambiguous: ids.length > 1 };
+  };
+  const shop = readId("店铺"), merchant = readId("商家");
+  return { shopName: String(name || "").trim(), shopId: shop.id, merchantId: merchant.id,
+    ...(shop.ambiguous ? { ambiguousShopId: true } : {}) };
+}
+
+async function readShopBaseIdentity(ws) {
+  const page = await evaluate(ws, `(() => {
+    const el = document.querySelector("#shop-base-name");
+    return { name: el ? String(el.innerText || el.textContent || "").trim() : "",
+      text: document.body ? document.body.innerText : "" };
+  })()`);
+  return pageShopIdentity(page && page.name, page && page.text);
 }
 
 function shopTitleMatch(want, got) {
@@ -3573,6 +3578,16 @@ export function assertPageShopIdentity(expected, pageName, vane) {
   const merchantId = String((expected && expected.merchantId) || "").trim();
   const gotName = String(pageName || (vane && vane.shopName) || "").trim();
   const gotId = String((vane && vane.venderId) || "").trim();
+  // The org label can be an internal/old name. A labeled JD shop ID is primary;
+  // the merchant/vender ID is deliberately not treated as a labeled shop ID.
+  const pageId = String((vane && vane.shopId) || "").trim();
+  if (vane && vane.ambiguousShopId) {
+    throw Object.assign(new Error("京麦页面出现多个店铺ID，未保存数据"), { code: "identity" });
+  }
+  if (wantId && pageId) {
+    if (wantId === pageId) return;
+    throw Object.assign(new Error("京麦店铺ID不符，未保存数据"), { code: "identity" });
+  }
   if (!gotName && !gotId) {
     if (expected && expected.requireIdentity) {
       throw Object.assign(new Error("未能核验服务器浏览器中的店铺身份"), { code: "identity" });
@@ -3706,8 +3721,12 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
       }
     }
     async function finishMetrics(metrics) {
-      const pageName = await readShopBaseName(ws);
-      assertPageShopIdentity({ ...expected, requireIdentity: true }, pageName, vaneWatch.read());
+      let identity = await readShopBaseIdentity(ws);
+      for (let attempt = 0; expected.shopId && !identity.shopId && attempt < 6; attempt++) {
+        await sleepSignal(500, signal);
+        identity = await readShopBaseIdentity(ws);
+      }
+      assertPageShopIdentity({ ...expected, requireIdentity: true }, identity.shopName, { ...vaneWatch.read(), ...identity });
       const renewed = await readCookies(ws);
       if (hasSession(renewed) && Array.isArray(cookies)) {
         cookies.splice(0, cookies.length, ...renewed);
@@ -3721,13 +3740,9 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
         throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
       }
       await sleepSignal(1000, signal);
-      const pageName = await readShopBaseName(ws);
-      assertPageShopIdentity(expected, pageName, vaneWatch.read());
       card = parseHomeCard(await homeCardText(ws));
     }
     if (card) {
-      const pageName = await readShopBaseName(ws);
-      assertPageShopIdentity(expected, pageName, vaneWatch.read());
       return await finishMetrics(card);
     }
     const body = lateBody || (await pending);
@@ -3738,8 +3753,6 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
       try {
         const metrics = extractShopDeal(JSON.parse(body));
         if (metrics) {
-          const pageName = await readShopBaseName(ws);
-          assertPageShopIdentity(expected, pageName, vaneWatch.read());
           return await finishMetrics(metrics);
         }
       } catch (error) {
@@ -3751,8 +3764,6 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
     }
     card = parseHomeCard(await homeCardText(ws));
     if (card) {
-      const pageName = await readShopBaseName(ws);
-      assertPageShopIdentity(expected, pageName, vaneWatch.read());
       return await finishMetrics(card);
     }
     const error = new Error("京麦首页卡片没有成交金额");

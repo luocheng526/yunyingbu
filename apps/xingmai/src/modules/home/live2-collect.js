@@ -28,7 +28,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1319-home-browser-session";
+export const LIVE2_RUNTIME_MARK = "0.1.1320-home-shop-id";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
@@ -330,6 +330,9 @@ export function createLive2Collector(deps = {}) {
 
   async function verifyIdentity(shop, jar, phase, saved) {
     if (!client.fetchAccountIdentity) return;
+    if (shop.ambiguousMerchant) {
+      throw Object.assign(new Error("商家ID对应多个店铺，需要浏览器核验真实店铺ID"), { code: "identity_missing" });
+    }
     let identity;
     try {
       identity = await client.fetchAccountIdentity(jar, undefined, phase.controller.signal);
@@ -347,14 +350,7 @@ export function createLive2Collector(deps = {}) {
       }
       throw error;
     }
-    if (shop.ambiguousMerchant && String(identity.shopId || "") === shop.merchantId && !identity.shopName) {
-      throw Object.assign(new Error("商家ID对应多个店铺，需要浏览器核验"), { code: "identity_missing" });
-    }
-    const result = matchCollectIdentity({ ...shop, merchantId: shop.ambiguousMerchant ? "" : shop.merchantId, shopName: shop.store }, identity);
-    if (shop.ambiguousMerchant && identity.shopName && String(identity.shopName).replace(/\s+/g, "") !== shop.store.replace(/\s+/g, "")) {
-      result.ok = false;
-      result.reason = "identity_mismatch";
-    }
+    const result = matchCollectIdentity({ ...shop, shopName: shop.store }, identity);
     if (!result.ok) {
       throw Object.assign(new Error(result.reason === "identity_missing" ? "未能核验店铺身份" : "登录店铺与组织中心不一致"), { code: result.reason });
     }
