@@ -281,13 +281,8 @@ function sessionNeedsLogin(session) {
   if (!session.cookies || !session.cookies.length) {
     return true;
   }
-  if (session.authState === "login_expired") {
-    return true;
-  }
-  if (session.authState === "offline" && /采集超时|采集已停止/.test(message)) {
-    return false;
-  }
-  return /登录已失效，请重新登录|未登录京麦/.test(message);
+  // A saved session is collected the same way as an online shop. Do not send it through password re-login.
+  return false;
 }
 
 export async function loadOrgShops(cookie, fetchImpl = fetch) {

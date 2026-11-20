@@ -1480,15 +1480,6 @@ async function collectOne(shop, deps) {
   try {
     await withDeadline(
       async function (signal) {
-        if (shop.authState === "login_expired" && typeof deps.recheckJingmai === "function") {
-          const alive = await deps.recheckJingmai(
-            Object.assign({}, shop, { cookies: jar }),
-            signal
-          );
-          if (!alive) {
-            throw jingmaiError("login", "登录已失效，请重新登录");
-          }
-        }
         const verified = await verifyCollectIdentity(deps, shop, jar, signal);
         if (!verified.ok) {
           const err = jingmaiError(

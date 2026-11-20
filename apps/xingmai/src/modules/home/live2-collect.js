@@ -2,7 +2,7 @@
  * 实时（新版）采集。
  * 组织中心提供账号和密码。每家店在服务器登录后：
  * 京麦经营数据接口取成交金额，京准通 custom-report 当天总览取花费、投产比、总订单金额。
- * 每家店都先用已经保存的京麦会话抓数，和已经在线的店同一条路。会话标记失效时也不先丢掉会话。抓数本身返回登录失效时，才用组织中心账号再登一次。后台每 5 分钟开一轮；上一轮还在跑时不叠第二轮。
+ * 每家店都和已经在线的店同一条路：用保存的京麦会话抓数，抓成功后把会话写回去。后台每 5 分钟开一轮；上一轮还在跑时不叠第二轮。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -24,7 +24,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1308-live2-same";
+export const LIVE2_RUNTIME_MARK = "0.1.1309-live2-same";
 export const LIVE2_INTERVAL_MS = 5 * 60 * 1000;
 
 function stampNow() {
@@ -357,10 +357,9 @@ export function createLive2Collector(deps = {}) {
   }
 
   async function collectShop(shop, known, draft, phase) {
-    const secret = shop.password;
     const base = blankFor(shop);
     const started = Date.now();
-    if (!shop.login || !secret) {
+    if (!shop.login || !shop.password) {
       base.offlineReason = "组织中心还没有填写这家店的账号";
       shop.password = "";
       return base;
@@ -424,31 +423,6 @@ export function createLive2Collector(deps = {}) {
       }
       return row;
     } catch (error) {
-      if (error && error.code === "login") {
-        try {
-          shop.password = secret;
-          jar = await loginJar(shop);
-          shop.password = "";
-          if (jar && jar.length) {
-            const metrics = await client.fetchHome(jar, {
-              store: shop.store,
-              shopId: shop.shopId,
-              merchantId: shop.merchantId,
-              shopName: shop.store
-            });
-            if (!phase.dealMarked) {
-              phase.dealMs += Date.now() - started;
-            }
-            return live2RecordFromMetrics(shop, metrics, now());
-          }
-        } catch (again) {
-          shop.password = "";
-          base.pendingCollect = false;
-          base.loginExpired = true;
-          base.offlineReason = String((again && again.message) || "登录已失效，请重新登录");
-          return base;
-        }
-      }
       shop.password = "";
       const previous = draft.get(shop.store) || published.get(shop.store);
       const failed = previous ? Object.assign({}, previous) : base;
