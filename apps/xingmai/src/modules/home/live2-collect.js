@@ -341,6 +341,20 @@ export function createLive2Collector(deps = {}) {
     return blank;
   }
 
+  function markLoggedOut(shop, draft, samples, reason) {
+    const kept = closeSlow(shop, draft, samples);
+    const patched = publicRecord(Object.assign({}, kept, {
+      loginExpired: true,
+      online: false,
+      pendingUpdate: false,
+      pendingCollect: false,
+      offline: false,
+      offlineReason: reason || "登录已失效，请重新登录"
+    }));
+    draft.set(shop.store, patched);
+    return patched;
+  }
+
   async function collectShop(shop, known, draft, phase) {
     const secret = shop.password;
     const base = blankFor(shop);
@@ -348,6 +362,14 @@ export function createLive2Collector(deps = {}) {
     if (!shop.login || !secret) {
       base.offlineReason = "组织中心还没有填写这家店的账号";
       shop.password = "";
+      return base;
+    }
+    const saved = known.get(shop.store);
+    if (saved && saved.authState === "login_expired") {
+      shop.password = "";
+      base.loginExpired = true;
+      base.pendingCollect = false;
+      base.offlineReason = "登录已失效，请重新登录";
       return base;
     }
     let jar = jars.get(shop.store) || null;
@@ -500,6 +522,10 @@ export function createLive2Collector(deps = {}) {
       let late = false;
       const job = collectShop(shop, known, draft, phase).then(function (row) {
         if (late || phase.closed) {
+          return row;
+        }
+        if (row && row.loginExpired) {
+          markLoggedOut(shop, draft, samples, row.offlineReason);
           return row;
         }
         if (!hasNumbers(row)) {

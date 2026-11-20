@@ -2661,6 +2661,13 @@
         );
       }
       if (link.kind === "stale") {
+        if (typeof liveScope !== "undefined" && liveScope === "live2") {
+          return (
+            '<td class="xm-hm-num is-fee-warm"><button type="button" class="xm-hm-login-link" data-live-login="' +
+            escapeHtml(shop) +
+            '" title="登录已失效，或这一轮没采完。点开后账号和密码会填好，登录由你来点">待更新</button></td>'
+          );
+        }
         return '<td class="xm-hm-num is-fee-warm" title="这一轮到截止时间还没采完，沿用今天最近一次成功的数据">' + escapeHtml(link.label) + "</td>";
       }
       if (link.kind === "wait") {
@@ -5765,10 +5772,13 @@
         var limited = state.shops && state.shops.length;
         (state.shops || []).forEach(function (row) {
           var name = String((row && (row.shop || row.shopName)) || "").trim();
-          if (!name || row.online === true) {
+          if (!name) {
             return;
           }
-          if (row.offline === true || row.loginExpired === true || !row.capturedAt) {
+          if (row.online === true && row.pendingUpdate !== true && row.loginExpired !== true) {
+            return;
+          }
+          if (row.pendingUpdate === true || row.offline === true || row.loginExpired === true || !row.capturedAt) {
             allowed[name] = true;
           }
         });

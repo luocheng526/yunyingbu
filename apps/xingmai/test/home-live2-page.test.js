@@ -17,6 +17,7 @@ test("实时（新版） sits after 近七天业绩汇总 and stays independent 
   assert.match(homeJs, /pendingCollect/);
   assert.match(homeJs, /待接入/);
   assert.match(homeJs, /待更新/);
+  assert.match(homeJs, /data-live-login="'\s*\+\s*escapeHtml\(shop\)\s*\+\s*'" title="登录已失效，或这一轮没采完。点开后账号和密码会填好，登录由你来点">待更新<\/button>/);
   assert.match(homeJs, /publishedAt === pack\.publishedAt/);
   assert.match(homeJs, /xm-hm-login-link is-wait[\s\S]{0,180}待接入<\/button>/);
   assert.match(homeJs, /manual: state\.view === "live2"/);

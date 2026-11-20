@@ -211,6 +211,69 @@ test("a shop without an account is 待接入, and a slow shop keeps today's last
   assert.equal(bare.liveAmount, null);
 });
 
+test("登录已失效的店不再重试密码，沿用今天的数并标掉线", async () => {
+  let logins = 0;
+  let fetches = 0;
+  let done;
+  const gate = new Promise(function (resolve) {
+    done = resolve;
+  });
+  const collector = createLive2Collector({
+    storePath: "",
+    published: [{
+      shop: "过期店",
+      liveAmount: 10,
+      paidAmount: 4,
+      capturedAt: "2026/11/20 01:02:00",
+      online: true,
+      pendingCollect: false
+    }],
+    loadOrg: async function () {
+      return [{ store: "过期店", enabled: true, login: "a", password: "b", shopId: "1" }];
+    },
+    listSessions: async function () {
+      return [{ store: "过期店", authState: "login_expired", cookies: [{ name: "thor", value: "old" }] }];
+    },
+    now: function () {
+      return "2026/11/20 11:40:00";
+    },
+    track: function (task) {
+      task.then(done, done);
+    },
+    client: {
+      login: async function () {
+        logins += 1;
+        return [{ name: "thor", value: "new" }];
+      },
+      openPassword: async function () {
+        logins += 1;
+        return { jar: [], init: {} };
+      },
+      submitPassword: async function () {
+        logins += 1;
+        return [{ name: "thor", value: "new" }];
+      },
+      fetchHome: async function () {
+        fetches += 1;
+        return { dealAmount: 99, paidAmount: 9, paidRoi: 1, paidDeal: 9 };
+      }
+    }
+  });
+  await collector.start("");
+  await gate;
+  const view = await collector.board("");
+  const row = view.records.find((item) => item.shop === "过期店");
+  assert.equal(logins, 0);
+  assert.equal(fetches, 0);
+  assert.equal(row.liveAmount, 10);
+  assert.equal(row.paidAmount, 4);
+  assert.equal(row.capturedAt, "2026/11/20 01:02:00");
+  assert.equal(row.loginExpired, true);
+  assert.equal(row.pendingUpdate, false);
+  assert.equal(row.online, false);
+  assert.equal(row.offlineReason, "登录已失效，请重新登录");
+});
+
 test("a second start does not collect the same shops again", async () => {
   let logins = 0;
   let done;
