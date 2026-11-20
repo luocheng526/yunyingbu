@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import "./_memory-env.js";
 import { live2FeeRate } from "../src/modules/home/live2.js";
-import { createLive2Collector } from "../src/modules/home/live2-collect.js";
+import { armLive2Schedule, createLive2Collector, LIVE2_INTERVAL_MS, noteLive2Cookie } from "../src/modules/home/live2-collect.js";
 
 test("实时费比 is 付费金额 divided by 成交金额", () => {
   assert.equal(Math.round(live2FeeRate(1841.39, 3009) * 100), 61);
@@ -393,4 +393,108 @@ test("a new process reads the last published round in one board", async () => {
   assert.equal(view.records[0].paidAmount, 30);
   assert.equal(view.publishedAt, "2026/11/19 19:20:00");
   fs.rmSync(file, { force: true });
+});
+
+test("live2 schedule waits 5 minutes when no login is saved", () => {
+  const waits = [];
+  let starts = 0;
+  const armed = armLive2Schedule({
+    env: {},
+    argv: [],
+    gate: {},
+    hooks: {},
+    bootMs: 0,
+    readCookie: function () {
+      return "";
+    },
+    setTimeout: function (fn, ms) {
+      waits.push(ms);
+      if (waits.length === 1) {
+        fn();
+      }
+      return waits.length;
+    },
+    clearTimeout: function () {},
+    startRound: function () {
+      starts += 1;
+      return Promise.resolve({ started: true });
+    }
+  });
+  assert.equal(armed.started, true);
+  assert.equal(starts, 0);
+  assert.equal(LIVE2_INTERVAL_MS, 5 * 60 * 1000);
+  assert.deepEqual(waits, [0, LIVE2_INTERVAL_MS]);
+});
+
+test("live2 schedule starts one round and does not stack a second while it runs", async () => {
+  const waits = [];
+  const cookies = [];
+  let release;
+  const hold = new Promise(function (resolve) {
+    release = resolve;
+  });
+  let running = false;
+  let rounds = 0;
+  const hooks = {};
+  let booted = false;
+  let markDone;
+  const done = new Promise(function (resolve) {
+    markDone = resolve;
+  });
+  const armed = armLive2Schedule({
+    env: {},
+    argv: [],
+    gate: {},
+    hooks,
+    bootMs: 0,
+    readCookie: function () {
+      return "xm=kept";
+    },
+    setTimeout: function (fn, ms) {
+      waits.push(ms);
+      if (!booted && ms === 0) {
+        booted = true;
+        fn();
+      }
+      return waits.length;
+    },
+    clearTimeout: function () {},
+    startRound: async function (cookie) {
+      cookies.push(cookie);
+      if (running) {
+        return { started: false, running: true };
+      }
+      running = true;
+      rounds += 1;
+      await hold;
+      running = false;
+      hooks.onRoundDone(Date.now() - 12 * 60 * 1000);
+      markDone();
+      return { started: true, running: true };
+    }
+  });
+  assert.equal(armed.started, true);
+  assert.equal(rounds, 1);
+  assert.deepEqual(cookies, ["xm=kept"]);
+  release();
+  await done;
+  assert.equal(rounds, 1);
+  assert.ok(waits.filter(function (ms) { return ms === 0; }).length >= 2);
+});
+
+test("a live2 request keeps the login for the next scheduled round", () => {
+  const file = path.join(os.tmpdir(), "xingmai-live2-cookie-" + Date.now() + ".json");
+  const previous = process.env.HOME_LIVE2_STORE;
+  process.env.HOME_LIVE2_STORE = file;
+  try {
+    noteLive2Cookie("xm=abc");
+    assert.equal(fs.readFileSync(file + ".cookie", "utf8"), "xm=abc");
+  } finally {
+    fs.rmSync(file + ".cookie", { force: true });
+    if (previous == null) {
+      delete process.env.HOME_LIVE2_STORE;
+    } else {
+      process.env.HOME_LIVE2_STORE = previous;
+    }
+  }
 });

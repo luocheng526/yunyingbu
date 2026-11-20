@@ -684,7 +684,7 @@ test("router smoke skip is MENKAI_SMOKE_LIVE only; production still starts colle
   assert.equal(source.trim().endsWith("startJingmaiCollector();"), false);
   assert.match(
     source,
-    /if \(!process\.env\.MENGKAI_SMOKE_LIVE\) \{\s*startJingmaiCollector\(\);\s*\}/
+    /if \(!process\.env\.MENGKAI_SMOKE_LIVE\) \{\s*startJingmaiCollector\(\);\s*startLive2Collector\(\);\s*\}/
   );
 });
 

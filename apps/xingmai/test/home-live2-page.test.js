@@ -42,6 +42,8 @@ test("opening 实时（新版） does not call old collect or login endpoints", 
   const mount = homeJs.slice(homeJs.lastIndexOf("pullBoard();"));
   assert.match(mount, /state\.view === "live2"[\s\S]*refreshLive2\(\)[\s\S]*pullLive\(\)/);
   assert.match(homeJs, /if \(state\.view === "live" \|\| state\.view === "company"\) \{\s*pullLive\(\);\s*\}/);
+  assert.match(homeJs, /if \(state\.view === "live2"\) \{\s*watchLive2\(\);\s*\}/);
+  assert.match(homeJs, /function watchLive2\(\) \{\s*api\("\/api\/home\/live2\?_=" \+ Date\.now\(\)\)\.then\(takeLive2\);\s*\}/);
   const boot = homeJs.slice(homeJs.lastIndexOf("pullBoard();"), homeJs.lastIndexOf("poll = window.setInterval"));
   assert.match(boot, /state\.view === "live2"/);
   assert.match(boot, /refreshLive2\(\)/);

@@ -6011,27 +6011,31 @@
           paint(root, state);
         }
       }
+      function takeLive2(pack) {
+        if (dead || state.view !== "live2" || !pack) {
+          return;
+        }
+        var prev = state.live2Pack;
+        var same = prev && prev.publishedAt === pack.publishedAt && prev.running === pack.running;
+        if (!same) {
+          state.live2Hint = pack.running ? "正在读取新一轮。页面仍显示上一轮的金额、排名和登录状态。" : "";
+          paintLive2(pack);
+        }
+        if (pack.running) {
+          pollLive2();
+        }
+      }
       function pollLive2() {
         window.clearTimeout(live2Poll);
         live2Poll = window.setTimeout(function () {
           if (dead || state.view !== "live2") {
             return;
           }
-          api("/api/home/live2?_=" + Date.now()).then(function (pack) {
-            if (dead || state.view !== "live2" || !pack) {
-              return;
-            }
-            var prev = state.live2Pack;
-            var same = prev && prev.publishedAt === pack.publishedAt && prev.running === pack.running;
-            if (!same) {
-              state.live2Hint = pack.running ? "正在读取新一轮。页面仍显示上一轮的金额、排名和登录状态。" : "";
-              paintLive2(pack);
-            }
-            if (pack.running) {
-              pollLive2();
-            }
-          });
+          api("/api/home/live2?_=" + Date.now()).then(takeLive2);
         }, 4000);
+      }
+      function watchLive2() {
+        api("/api/home/live2?_=" + Date.now()).then(takeLive2);
       }
       function refreshLive2(storeName) {
         useLiveScope("live2");
@@ -7189,6 +7193,9 @@
       poll = window.setInterval(function () {
         if (state.view === "live" || state.view === "company") {
           pullLive();
+        }
+        if (state.view === "live2") {
+          watchLive2();
         }
       }, LIVE_REFRESH_MS);
       if (!state.user || !state.user.username) {
