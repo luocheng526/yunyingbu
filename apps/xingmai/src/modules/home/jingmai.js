@@ -135,7 +135,7 @@ function layerValue(node) {
 function shopRoot(body) {
   let current = body;
   for (let depth = 0; depth < 4 && current && typeof current === "object"; depth += 1) {
-    if (current.channelData || current.indicatorList || current.indicators) {
+    if (current.channelData || current.indicatorList || current.indicators || current.modules) {
       return current;
     }
     const next = layerValue(current);
@@ -147,13 +147,34 @@ function shopRoot(body) {
   return current && typeof current === "object" ? current : {};
 }
 
+function homeDealIndicators(body) {
+  if (!body || Number(body.code) !== 200) return null;
+  const data = shopRoot(body);
+  const modules = Array.isArray(data.modules) ? data.modules.filter(item => item && item.moduleCode === "deal") : [];
+  if (modules.length !== 1 || !Array.isArray(modules[0].indicators)) return null;
+  const rows = modules[0].indicators;
+  if (["OrdAmt", "OrdNum", "OrdCustNum"].some(code => rows.filter(item => item && item.code === code).length !== 1)) return null;
+  return rows;
+}
+
+// Current Jingmai responses explicitly use dashes for unavailable trade metrics.
+// Only a completed, successful trade response can end the browser wait early.
+export function shopDealUnavailable(body) {
+  const rows = homeDealIndicators(body);
+  return Boolean(rows && ["OrdAmt", "OrdNum", "OrdCustNum"].every(code => {
+    const row = rows.find(item => item.code === code);
+    return /^(?:-|--|—|–)$/.test(String(row.value == null ? "" : row.value).trim());
+  }));
+}
+
 export function extractShopDeal(body) {
   const data = shopRoot(body);
   const channel = data && data.channelData ? data.channelData : data;
-  const list = channel && (channel.indicatorList || channel.indicators);
-  const deal = pickIndicator(list, ["成交金额", "成交总金额"], ["3009"]);
-  const order = pickIndicator(list, ["成交单量", "成交总单量"], ["3001"]);
-  const customer = pickIndicator(list, ["成交客户数"], ["3008"]);
+  const currentRows = homeDealIndicators(body);
+  const list = (channel && (channel.indicatorList || channel.indicators)) || currentRows;
+  const deal = pickIndicator(list, ["成交金额", "成交总金额"], ["3009", "OrdAmt"]);
+  const order = pickIndicator(list, ["成交单量", "成交总单量"], ["3001", "OrdNum"]);
+  const customer = pickIndicator(list, ["成交客户数"], ["3008", "OrdCustNum"]);
   const dealAmount = indicatorValue(deal);
   const orderCount = indicatorValue(order);
   const customerCount = indicatorValue(customer);
@@ -168,7 +189,7 @@ export function extractShopDeal(body) {
     customerCount,
     yesterdayAmount,
     dealRate: readDealRate(deal, yesterdayAmount),
-    dealRateLabel: readDealLabel(deal),
+    dealRateLabel: readDealLabel(deal) || (currentRows ? "较昨日" : ""),
     platformUpdatedAt: readUpdatedAt(deal) || channelUpdated
   };
 }
@@ -279,7 +300,7 @@ function readDealRate(item, platformYesterday) {
     if (number == null) {
       return null;
     }
-    if (String(unit).includes("%") || Math.abs(number) > 1) {
+    if (String(unit).includes("%") || String(item[key]).includes("%") || Math.abs(number) > 1) {
       return number;
     }
     if (platformYesterday != null) {

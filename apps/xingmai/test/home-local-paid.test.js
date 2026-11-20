@@ -66,7 +66,9 @@ test("homepage local-paid route is mounted", async () => {
   }
 });
 
-test("live page uses Han+Shen paid totals and leaves paid for local return", () => {
+test("live page uses Han+Shen paid totals and leaves paid for local return", (t) => {
+  // The fixture contains several elapsed hours; do not truncate it at real midnight.
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-11-20T12:00:00+08:00") });
   assert.match(homeJs, /function fillLocalPaid/);
   assert.match(homeJs, /function pullLocalPaid/);
   assert.match(homeJs, /api\("\/api\/home\/local-paid"\)/);
@@ -776,7 +778,9 @@ test("live day snap rolls today's hours into yesterday for 环比", () => {
   setLocalPaidSnapPath(prev);
 });
 
-test("local-paid POST keeps today hours without wiping yesterday", async () => {
+test("local-paid POST keeps today hours without wiping yesterday", async (t) => {
+  // Keep the fixture's first three hours in the past, regardless of the run time.
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-11-20T12:00:00+08:00") });
   const file = join(snapDir, "post-yday.json");
   const prev = join(snapDir, "days.json");
   setLocalPaidSnapPath(file);

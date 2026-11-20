@@ -6,7 +6,7 @@ import vm from "node:vm";
 import { EventEmitter } from "node:events";
 import { assertPageShopIdentity, cookieParams, pageShopIdentity, sessionReady } from "../src/modules/home/jingmai-desk.js";
 import { fetchHome } from "../src/modules/home/jingmai-client.js";
-import { homeDealUnavailable, parseHomeCard } from "../src/modules/home/jingmai.js";
+import { extractShopDeal, homeDealUnavailable, shopDealUnavailable, parseHomeCard } from "../src/modules/home/jingmai.js";
 import { live2RecordFromMetrics } from "../src/modules/home/live2.js";
 import { normalizeOrgShops } from "../src/modules/home/org-roster.js";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
@@ -19,7 +19,7 @@ const readBrowser = extract("async function readHomeDealNow", "export async func
 const readCookies = extract("async function readCookies", "function hasSession");
 const jar = value => [{ name: "thor", value, domain: ".jd.com", path: "/", secure: true }];
 
-async function browserCase({ resident = "resident-new", saved = "database-old", name = "本店旗舰店", pageId = "", merchantId = "", unavailable = false, lateRedirect = false } = {}) {
+async function browserCase({ resident = "resident-new", saved = "database-old", name = "本店旗舰店", pageId = "", merchantId = "", unavailable = false, lateRedirect = false, response = null } = {}) {
   const input = saved ? jar(saved) : [];
   let browserJar = resident ? jar(resident) : [], href = "about:blank";
   const commands = [], cookieReads = [];
@@ -28,7 +28,7 @@ async function browserCase({ resident = "resident-new", saved = "database-old", 
     input, signal: new AbortController().signal, expected: { store: "本店旗舰店", shopId: "1", requireIdentity: true },
     normalizeDealExpected: x => x, profileIdentity: () => ({ key: "p_1", ephemeral: false }),
     isForbiddenLegacyProfileKey: () => false, launchChrome: async () => ({ ws: {} }), discard: () => {},
-    watchVaneIdentity: () => ({ read: () => ({}), stop: () => {} }), watchShopData: () => unavailable ? Promise.resolve("") : new Promise(() => {}),
+    watchVaneIdentity: () => ({ read: () => ({}), stop: () => {} }), watchShopData: () => response ? Promise.resolve(JSON.stringify(response)) : unavailable ? Promise.resolve("") : new Promise(() => {}),
     send: async (_ws, method, params) => {
       commands.push(method);
       if (method === "Network.setCookies") browserJar = params.cookies;
@@ -49,12 +49,66 @@ async function browserCase({ resident = "resident-new", saved = "database-old", 
     readShopBaseName: async () => name,
     readShopBaseIdentity: async () => ({ shopName: name, shopId: pageId, merchantId }), assertPageShopIdentity, cookieParams,
     normalizeCookie: x => x, hasSession: x => x.some(c => c.name === "thor"),
-    parseHomeCard, homeDealUnavailable,
-    homeCardText: async () => "经营数据\n成交金额\n" + (unavailable ? "—" : "100") + "\n成交单量\n1\n成交客户数\n1", extractShopDeal: () => null
+    parseHomeCard, homeDealUnavailable, shopDealUnavailable, extractShopDeal,
+    homeCardText: async () => response ? "正在加载中..." : "经营数据\n成交金额\n" + (unavailable ? "—" : "100") + "\n成交单量\n1\n成交客户数\n1"
   });
   const outcome = vm.runInContext(readCookies + "\n" + readBrowser + "\nreadHomeDealNow(input, signal, expected)", context);
   return { outcome, input, commands, cookieReads };
 }
+
+const tradeResponse = value => ({ code: 200, data: { refreshTime: "2026-11-21 00:02:00", modules: [{
+  moduleCode: "deal", indicators: ["OrdAmt", "OrdNum", "OrdCustNum"].map(code => ({ code, value }))
+}] } });
+
+for (const value of ["-", "0", "12"]) {
+  test(`current trade response ${value} completes without waiting for the 25-second fallback`, { timeout: 1000 }, async () => {
+    const ws = new EventTarget(); let cleared = false;
+    const body = JSON.stringify(tradeResponse(value));
+    const result = vm.runInNewContext(extract("function watchShopData", "let dealQueue") + "\nwatchShopData(ws)", {
+      ws, extractShopDeal, shopDealUnavailable, Buffer,
+      setTimeout: () => 1, clearTimeout: () => { cleared = true; }, send: async () => ({ body })
+    });
+    ws.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ method: "Network.responseReceived", params: {
+      requestId: "trade", response: { url: "https://sff.jd.com/api?api=dsm.jm.data.operationData.findShopData" }
+    } }) }));
+    ws.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ method: "Network.loadingFinished", params: { requestId: "trade" } }) }));
+    assert.equal(await result, body);
+    assert.equal(cleared, true);
+  });
+}
+
+test("a completed unavailable API response verifies shop identity even while the card is loading", async () => {
+  const run = await browserCase({ response: tradeResponse("-"), pageId: "1" });
+  const result = await run.outcome;
+  assert.equal(result.dealUnavailable, true);
+  assert.equal(result.dealAmount, null);
+  assert.equal(run.input[0].value, "browser-renewed");
+  const wrong = await browserCase({ response: tradeResponse("-"), pageId: "2" });
+  await assert.rejects(wrong.outcome, e => e.code === "identity");
+  assert.equal(wrong.input[0].value, "database-old");
+});
+
+test("non-trade responses cannot end the trade wait even with similar metric fields", async () => {
+  const ws = new EventTarget(); let expire, reads = 0;
+  const result = vm.runInNewContext(extract("function watchShopData", "let dealQueue") + "\nwatchShopData(ws)", {
+    ws, extractShopDeal, shopDealUnavailable, Buffer,
+    setTimeout: callback => { expire = callback; return 1; }, clearTimeout: () => {},
+    send: async () => { reads++; return { body: JSON.stringify(tradeResponse("-")) }; }
+  });
+  ws.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ method: "Network.responseReceived", params: {
+    requestId: "ads", response: { url: "https://sff.jd.com/api?api=dsm.jm.data.operationData.findPromoteData" }
+  } }) }));
+  ws.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ method: "Network.loadingFinished", params: { requestId: "ads" } }) }));
+  expire();
+  assert.equal(await result, "");
+  assert.equal(reads, 0);
+});
+
+test("a numeric current API response can be used before the home card renders", async () => {
+  const run = await browserCase({ response: tradeResponse("0"), pageId: "1" });
+  assert.equal((await run.outcome).dealAmount, 0);
+  assert.equal(run.input[0].value, "browser-renewed");
+});
 
 for (const saved of ["database-old", ""]) {
   test(`the persistent browser wins and its renewed scoped session is returned (DB ${saved || "empty"})`, async () => {

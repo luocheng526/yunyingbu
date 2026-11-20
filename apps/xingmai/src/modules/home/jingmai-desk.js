@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
-import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, homeDealUnavailable, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
+import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, homeDealUnavailable, shopDealUnavailable, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
 
 const LOGIN_URL =
   "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
@@ -3366,8 +3366,9 @@ function watchShopData(ws) {
         return;
       }
       if (message.method === "Network.responseReceived") {
-        const url = message.params && message.params.response ? String(message.params.response.url || "") : "";
-        if (url.includes("findShopDataByChannel") || url.includes("sff.jd.com") || url.includes("getSummary")) {
+        let url = message.params && message.params.response ? String(message.params.response.url || "") : "";
+        try { url = decodeURIComponent(url); } catch { /* retain the original URL */ }
+        if (/findShopDataByChannel|operationData\.findShopData|getSummary/.test(url)) {
           ws.__shopRequests = ws.__shopRequests || new Map();
           ws.__shopRequests.set(message.params.requestId, message.sessionId || "");
         }
@@ -3380,7 +3381,8 @@ function watchShopData(ws) {
       send(ws, "Network.getResponseBody", { requestId: message.params.requestId }, sessionId).then(function (result) {
         const text = result.base64Encoded ? Buffer.from(result.body || "", "base64").toString("utf8") : String(result.body || "");
         try {
-          if (extractShopDeal(JSON.parse(text))) {
+          const payload = JSON.parse(text);
+          if (extractShopDeal(payload) || shopDealUnavailable(payload)) {
             finish(text);
           }
         } catch {
@@ -3772,9 +3774,14 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
     }
     if (body) {
       try {
-        const metrics = extractShopDeal(JSON.parse(body));
+        const payload = JSON.parse(body);
+        const metrics = extractShopDeal(payload);
         if (metrics) {
           return await finishMetrics(metrics);
+        }
+        if (shopDealUnavailable(payload)) {
+          return await finishMetrics({ dealAmount: null, orderCount: null, customerCount: null,
+            dealUnavailable: true, dealNote: "京麦已登录，但成交接口返回“—”，暂未提供数据" });
         }
       } catch (error) {
         if (error && ["identity", "login"].includes(error.code)) {
