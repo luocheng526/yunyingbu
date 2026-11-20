@@ -882,50 +882,48 @@ export async function beginRelogin(store, cookie, options) {
       message: !shop || shop.enabled === false ? "这家店已停用" : "组织中心还没有填写这家店的账号"
     };
   }
-  if (!manual) {
-    const sessions = await listSessions();
-    const existing = sessions.find(function (item) {
-      return item.store === name;
+  const sessions = await listSessions();
+  const existing = sessions.find(function (item) {
+    return item.store === name;
+  });
+  if (sessionStillValid(existing)) {
+    const alive = await cookiesAlive(existing.cookies || [], withMerchant({
+      store: name,
+      shopId: (existing && existing.shopId) || (shop && shop.shopId) || "",
+      merchantId: shop && shop.merchantId
+    }));
+    if (epoch !== loginEpoch) {
+      return currentLoginState(name);
+    }
+    if (alive) {
+      clearOpening();
+      loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
+      shop.login = "";
+      shop.password = "";
+      return { ok: true, status: "done", store: name, message: "「" + name + "」已连接" };
+    }
+    await markAuth(name, "login_expired", "登录已失效，请重新登录", { writer: COLLECTOR_OWNER_HOME });
+  }
+  try {
+    const renewed = await passwordRelogin({
+      store: shop.store,
+      login: shop.login,
+      password: shop.password,
+      shopId: shop.shopId || "",
+      merchantId: shop.merchantId || ""
     });
-    if (sessionStillValid(existing)) {
-      const alive = await cookiesAlive(existing.cookies || [], withMerchant({
-        store: name,
-        shopId: (existing && existing.shopId) || (shop && shop.shopId) || "",
-        merchantId: shop && shop.merchantId
-      }));
-      if (epoch !== loginEpoch) {
-        return currentLoginState(name);
-      }
-      if (alive) {
-        clearOpening();
-        loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
-        shop.login = "";
-        shop.password = "";
-        return { ok: true, status: "done", store: name, message: "「" + name + "」已连接" };
-      }
-      await markAuth(name, "login_expired", "登录已失效，请重新登录", { writer: COLLECTOR_OWNER_HOME });
+    if (epoch !== loginEpoch) {
+      return currentLoginState(name);
     }
-    try {
-      const renewed = await passwordRelogin({
-        store: shop.store,
-        login: shop.login,
-        password: shop.password,
-        shopId: shop.shopId || "",
-        merchantId: shop.merchantId || ""
-      });
-      if (epoch !== loginEpoch) {
-        return currentLoginState(name);
-      }
-      if (renewed) {
-        clearOpening();
-        loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
-        shop.login = "";
-        shop.password = "";
-        return { ok: true, status: "done", store: name, message: "「" + name + "」已重新登录" };
-      }
-    } catch {
-      /* 掉线店先走账号密码；需要验证码时再打开服务器画面 */
+    if (renewed) {
+      clearOpening();
+      loginCursor = { index: 0, total: 0, store: "", step: "", message: "", failed: false, phase: "idle" };
+      shop.login = "";
+      shop.password = "";
+      return { ok: true, status: "done", store: name, message: "「" + name + "」已重新登录" };
     }
+  } catch {
+    /* 点重新登录也先走账号密码；需要验证码时再打开服务器画面 */
   }
   if (epoch !== loginEpoch) {
     return currentLoginState(name);
@@ -1061,8 +1059,8 @@ export async function recoverDroppedShops(cookie) {
       shop.password = "";
     });
     const results = [];
-    // Cap auto-recover per tick so abnormal shops cannot monopolize the desk.
-    const maxRecover = 3;
+    // Password recover is HTTP only and does not open the desk. Try every expired shop.
+    const maxRecover = targets.length;
     for (let i = 0; i < targets.length && results.length < maxRecover; i += 1) {
       const shop = targets[i];
       if (humanProtectsShop(shop.store) || inflight.has(shop.store)) {
