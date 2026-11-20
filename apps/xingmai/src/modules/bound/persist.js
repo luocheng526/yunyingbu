@@ -198,32 +198,77 @@ export async function listSheetHeads() {
   return found.map((row) => mapSheet({ ...row, payload: "{}" }));
 }
 
+function sheetWhere(filter) {
+  const where = [];
+  const params = [];
+  const ids = Array.isArray(filter.reportIds) ? filter.reportIds.filter(Boolean) : [];
+  if (ids.length) {
+    where.push(`report_id IN (${ids.map(() => "?").join(",")})`);
+    params.push(...ids);
+  } else if (filter.reportId) {
+    where.push("report_id = ?");
+    params.push(filter.reportId);
+  }
+  if (filter.dim) {
+    where.push("dim = ?");
+    params.push(filter.dim);
+  }
+  if (filter.from) {
+    where.push("end_on >= ?");
+    params.push(filter.from);
+  }
+  if (filter.to) {
+    where.push("start_on <= ?");
+    params.push(filter.to);
+  }
+  if (filter.startOn) {
+    where.push("start_on = ?");
+    params.push(filter.startOn);
+  }
+  if (filter.endOn) {
+    where.push("end_on = ?");
+    params.push(filter.endOn);
+  }
+  return { where, params };
+}
+
+function sheetMatches(row, filter) {
+  const ids = Array.isArray(filter.reportIds) ? filter.reportIds.filter(Boolean) : [];
+  if (ids.length && !ids.includes(row.reportId)) {
+    return false;
+  }
+  if (filter.reportId && row.reportId !== filter.reportId) {
+    return false;
+  }
+  if (filter.dim && row.dim !== filter.dim) {
+    return false;
+  }
+  if (filter.from && row.endOn < filter.from) {
+    return false;
+  }
+  if (filter.to && row.startOn > filter.to) {
+    return false;
+  }
+  if (filter.startOn && row.startOn !== filter.startOn) {
+    return false;
+  }
+  if (filter.endOn && row.endOn !== filter.endOn) {
+    return false;
+  }
+  return true;
+}
+
 export async function listSheets(filter = {}) {
   await ensure();
-  let rows;
   if (dbMode() !== "mysql") {
-    rows = [...memory.sheets.values()];
-  } else {
-    const [found] = await query(
-      "SELECT report_id, dim, start_on, end_on, page_no, status, kind, total_rows, page_size, attempts, row_count, error_text, payload, updated_at FROM bound_sheet"
-    );
-    rows = found.map(mapSheet);
+    return [...memory.sheets.values()].filter((row) => sheetMatches(row, filter));
   }
-  return rows.filter((row) => {
-    if (filter.reportId && row.reportId !== filter.reportId) {
-      return false;
-    }
-    if (filter.dim && row.dim !== filter.dim) {
-      return false;
-    }
-    if (filter.startOn && row.startOn !== filter.startOn) {
-      return false;
-    }
-    if (filter.endOn && row.endOn !== filter.endOn) {
-      return false;
-    }
-    return true;
-  });
+  const { where, params } = sheetWhere(filter);
+  const [found] = await query(
+    `SELECT report_id, dim, start_on, end_on, page_no, status, kind, total_rows, page_size, attempts, row_count, error_text, payload, updated_at FROM bound_sheet${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`,
+    params
+  );
+  return found.map(mapSheet);
 }
 
 export async function readPref(key) {
