@@ -281,8 +281,7 @@ function sessionNeedsLogin(session) {
   if (!session.cookies || !session.cookies.length) {
     return true;
   }
-  // A saved session is collected the same way as an online shop. Do not send it through password re-login.
-  return false;
+  return session.authState === "login_expired";
 }
 
 export async function loadOrgShops(cookie, fetchImpl = fetch) {
@@ -1392,6 +1391,11 @@ export function humanProtectsShop(store) {
 }
 
 export async function jingmaiTick() {
+  try {
+    await recoverDroppedShops("");
+  } catch (error) {
+    console.error("jingmai recover", error && error.code ? error.code : "failed");
+  }
   await runTick({
     inflight: inflight,
     tickLock: tickLock,
@@ -1449,11 +1453,6 @@ export async function jingmaiTick() {
     markAuth: markAuth,
     now: beijingParts
   });
-  try {
-    await recoverDroppedShops("");
-  } catch (error) {
-    console.error("jingmai recover", error && error.code ? error.code : "failed");
-  }
 }
 
 export function startJingmaiCollector() {

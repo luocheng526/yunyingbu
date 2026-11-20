@@ -318,6 +318,160 @@ export function patchExpiredShopLogin(text) {
   if (source.includes(EXPIRED_PICK_OLD)) {
     source = source.replace(EXPIRED_PICK_OLD, EXPIRED_PICK_NEW);
   }
+  return patchLive2OfflineRelogin(source);
+}
+
+const LIVE2_LINK_OLD =
+  "  function liveLinkOf(row) {\n" +
+  "    if (row && row.pendingUpdate) {\n" +
+  "      return { label: \"待更新\", kind: \"stale\" };\n" +
+  "    }\n" +
+  "    if (row && row.pendingCollect) {\n" +
+  "      return { label: \"待接入\", kind: \"wait\" };\n" +
+  "    }\n" +
+  "    if (row && row.online === true) {\n" +
+  "      if (row.adsFailed === true) {\n" +
+  "        return { label: \"在线·广告异常\", kind: \"ads\" };\n" +
+  "      }\n" +
+  "      return { label: \"在线\", kind: \"on\" };\n" +
+  "    }\n" +
+  "    if (row && row.loginExpired === true) {\n" +
+  "      return { label: \"掉线\", kind: \"off\" };\n" +
+  "    }\n" +
+  "    if (row && row.adsFailed === true) {\n" +
+  "      return { label: \"广告异常\", kind: \"ads\" };\n" +
+  "    }\n" +
+  "    if (row && row.offline === true) {\n" +
+  "      return { label: \"采集异常\", kind: \"warn\" };\n" +
+  "    }\n" +
+  "    return { label: \"\", kind: \"\" };\n" +
+  "  }";
+const LIVE2_LINK_NEW =
+  "  function liveLinkOf(row) {\n" +
+  "    if (typeof liveScope !== \"undefined\" && liveScope === \"live2\") {\n" +
+  "      if (row && row.pendingCollect) {\n" +
+  "        return { label: \"待接入\", kind: \"wait\" };\n" +
+  "      }\n" +
+  "      if (row && row.loginExpired === true) {\n" +
+  "        return { label: \"掉线\", kind: \"off\" };\n" +
+  "      }\n" +
+  "      if (row && row.offline === true) {\n" +
+  "        return { label: \"掉线\", kind: \"off\" };\n" +
+  "      }\n" +
+  "      if (row && row.online === true) {\n" +
+  "        if (row.adsFailed === true) {\n" +
+  "          return { label: \"在线·广告异常\", kind: \"ads\" };\n" +
+  "        }\n" +
+  "        return { label: \"在线\", kind: \"on\" };\n" +
+  "      }\n" +
+  "      if (row && row.pendingUpdate) {\n" +
+  "        return { label: \"待更新\", kind: \"stale\" };\n" +
+  "      }\n" +
+  "      return { label: \"\", kind: \"\" };\n" +
+  "    }\n" +
+  "    if (row && row.pendingUpdate) {\n" +
+  "      return { label: \"待更新\", kind: \"stale\" };\n" +
+  "    }\n" +
+  "    if (row && row.pendingCollect) {\n" +
+  "      return { label: \"待接入\", kind: \"wait\" };\n" +
+  "    }\n" +
+  "    if (row && row.online === true) {\n" +
+  "      if (row.adsFailed === true) {\n" +
+  "        return { label: \"在线·广告异常\", kind: \"ads\" };\n" +
+  "      }\n" +
+  "      return { label: \"在线\", kind: \"on\" };\n" +
+  "    }\n" +
+  "    if (row && row.loginExpired === true) {\n" +
+  "      return { label: \"掉线\", kind: \"off\" };\n" +
+  "    }\n" +
+  "    if (row && row.adsFailed === true) {\n" +
+  "      return { label: \"广告异常\", kind: \"ads\" };\n" +
+  "    }\n" +
+  "    if (row && row.offline === true) {\n" +
+  "      return { label: \"采集异常\", kind: \"warn\" };\n" +
+  "    }\n" +
+  "    return { label: \"\", kind: \"\" };\n" +
+  "  }";
+const LIVE2_OFF_CELL_OLD =
+  "      if (link.kind === \"off\") {\n" +
+  "        return (\n" +
+  "          '<td class=\"xm-hm-num is-fee-hot\"><button type=\"button\" class=\"xm-hm-login-link\" data-live-login=\"' +\n" +
+  "          escapeHtml(shop) +\n" +
+  "          '\"' +\n" +
+  "          (row && row.offlineReason ? ' title=\"' + escapeHtml(row.offlineReason) + '\"' : \"\") +\n" +
+  "          \">掉线</button></td>\"\n" +
+  "        );\n" +
+  "      }";
+const LIVE2_OFF_CELL_NEW =
+  "      if (link.kind === \"off\") {\n" +
+  "        var reason = row && row.offlineReason ? String(row.offlineReason) : \"\";\n" +
+  "        if (typeof liveScope !== \"undefined\" && liveScope === \"live2\" && row && row.loginExpired === true) {\n" +
+  "          return (\n" +
+  "            '<td class=\"xm-hm-num is-fee-hot\"><span class=\"xm-hm-login-cell\"><button type=\"button\" class=\"xm-hm-login-link\" title=\"' +\n" +
+  "            escapeHtml(reason || \"登录已失效，请重新登录\") +\n" +
+  "            '\">掉线</button><button type=\"button\" class=\"xm-hm-login-link is-relogin\" data-live-login=\"' +\n" +
+  "            escapeHtml(shop) +\n" +
+  "            '\" title=\"账号和密码会填好，登录由你来点\">重新登录</button></span></td>'\n" +
+  "          );\n" +
+  "        }\n" +
+  "        return (\n" +
+  "          '<td class=\"xm-hm-num is-fee-hot\"><button type=\"button\" class=\"xm-hm-login-link\" data-live-login=\"' +\n" +
+  "          escapeHtml(shop) +\n" +
+  "          '\"' +\n" +
+  "          (reason ? ' title=\"' + escapeHtml(reason) + '\"' : \"\") +\n" +
+  "          \">掉线</button></td>\"\n" +
+  "        );\n" +
+  "      }";
+const LIVE2_NEED_FN =
+  "  function live2NeedHtml(allShops, state) {\n" +
+  "    var count = 0;\n" +
+  "    if (state && state.live2Pack && state.live2Pack.loginExpiredShops != null) {\n" +
+  "      count = Number(state.live2Pack.loginExpiredShops) || 0;\n" +
+  "    } else {\n" +
+  "      (allShops || []).forEach(function (row) {\n" +
+  "        if (row && row.loginExpired) {\n" +
+  "          count += 1;\n" +
+  "        }\n" +
+  "      });\n" +
+  "    }\n" +
+  "    if (!count) {\n" +
+  "      return \"\";\n" +
+  "    }\n" +
+  "    return '<span class=\"xm-hm-live-need\">' + count + \" 家需要重新登录</span>\";\n" +
+  "  }\n";
+const LIVE2_FILTER_AT_OLD =
+  "'<span class=\"xm-hm-live-at\">更新时间 ' + escapeHtml(updatedAt || \"—\") + \"</span>\" +\n" +
+  "      '<button type=\"button\" class=\"xm-hm-live-heads\" data-live-heads>表头设置</button>' +";
+const LIVE2_FILTER_AT_NEW =
+  "'<span class=\"xm-hm-live-at\">更新时间 ' + escapeHtml(updatedAt || \"—\") + \"</span>\" +\n" +
+  "      live2NeedHtml(allShops, state) +\n" +
+  "      '<button type=\"button\" class=\"xm-hm-live-heads\" data-live-heads>表头设置</button>' +";
+const LIVE2_LOGIN_CSS_OLD =
+  "\".xm-hm-login-link{border:0;background:transparent;padding:0;color:#e23b3b;font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}\" +\n" +
+  "      \".xm-hm-login-link.is-wait{color:#2f6fed}\" +";
+const LIVE2_LOGIN_CSS_NEW =
+  "\".xm-hm-login-link{border:0;background:transparent;padding:0;color:#e23b3b;font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}\" +\n" +
+  "      \".xm-hm-login-cell{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end}\" +\n" +
+  "      \".xm-hm-login-link.is-wait,.xm-hm-login-link.is-relogin{color:#2f6fed}\" +\n" +
+  "      \".xm-hm-live-need{color:#e23b3b;font-size:13px;font-weight:600;white-space:nowrap}\" +";
+
+export function patchLive2OfflineRelogin(text) {
+  let source = String(text || "");
+  if (source.includes(LIVE2_LINK_OLD)) {
+    source = source.replace(LIVE2_LINK_OLD, LIVE2_LINK_NEW);
+  }
+  if (source.includes(LIVE2_OFF_CELL_OLD)) {
+    source = source.replace(LIVE2_OFF_CELL_OLD, LIVE2_OFF_CELL_NEW);
+  }
+  if (!source.includes("function live2NeedHtml") && source.includes("function live2FilterHtml")) {
+    source = source.replace("  function live2FilterHtml(allShops, state) {", LIVE2_NEED_FN + "  function live2FilterHtml(allShops, state) {");
+  }
+  if (source.includes(LIVE2_FILTER_AT_OLD)) {
+    source = source.replace(LIVE2_FILTER_AT_OLD, LIVE2_FILTER_AT_NEW);
+  }
+  if (source.includes(LIVE2_LOGIN_CSS_OLD)) {
+    source = source.replace(LIVE2_LOGIN_CSS_OLD, LIVE2_LOGIN_CSS_NEW);
+  }
   return source;
 }
 

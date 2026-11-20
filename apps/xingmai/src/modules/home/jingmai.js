@@ -1217,7 +1217,7 @@ export function buildLiveView({ shops, samples, now }) {
           offlineReason = authMessage;
         }
       } else if (!fresh) {
-        offlineReason = "采集异常（保留上次成功时间）";
+        offlineReason = "采集已停止";
       } else {
         offlineReason = "采集超时";
       }
@@ -1274,12 +1274,16 @@ export function buildLiveView({ shops, samples, now }) {
   };
 }
 
-/** login_expired shops with cookies get one controlled Jingmai recheck; empty jars stay skipped. */
+/** login_expired shops are skipped until a silent or human login restores cookies. */
 export function shouldCollectShop(shop) {
   if (!shop || shop.enabled === false) {
     return false;
   }
   if (!shop.cookies || !shop.cookies.length) {
+    return false;
+  }
+  const adsOnly = /京准通|JZT|-100|广告采集|广告账号|待核验/i.test(String(shop.authMessage || ""));
+  if (shop.authState === "login_expired" && !adsOnly) {
     return false;
   }
   return true;
@@ -1457,6 +1461,24 @@ async function refreshCookiesSafe(deps, shop, jar, identity, sessionVersion) {
   }
 }
 
+async function dropExpiredCookies(deps, shop, sessionVersion) {
+  if (typeof deps.updateSessionCookies !== "function") {
+    return;
+  }
+  try {
+    await deps.updateSessionCookies(
+      shop.store,
+      [],
+      Object.assign(
+        { writer: "home", expectedShopId: shop.shopId || "" },
+        sessionVersion ? { sessionVersion: sessionVersion } : {}
+      )
+    );
+  } catch {
+    /* cookie drop must not hide the login_expired mark */
+  }
+}
+
 async function collectOne(shop, deps) {
   const now = deps.now();
   const expected = { store: shop.store, shopId: shop.shopId || "", merchantId: shop.merchantId || "" };
@@ -1546,6 +1568,7 @@ async function collectOne(shop, deps) {
       await refreshCookiesSafe(deps, shop, jar, verifiedIdentity, sessionVersion);
       const decision = collectAuthDecision(error);
       if (decision.authState === "login_expired") {
+        await dropExpiredCookies(deps, shop, sessionVersion);
         await deps.markAuth(shop.store, "login_expired", decision.authMessage, authOpts);
         return { bucketed: true, ok: false, failKind: "login" };
       }
@@ -1560,6 +1583,7 @@ async function collectOne(shop, deps) {
     }
     const decision = collectAuthDecision(error);
     if (decision.authState === "login_expired") {
+      await dropExpiredCookies(deps, shop, sessionVersion);
       await deps.markAuth(shop.store, "login_expired", decision.authMessage, authOpts);
       return { bucketed: true, ok: false, failKind: "login" };
     }
@@ -1568,12 +1592,24 @@ async function collectOne(shop, deps) {
       const kind = /超时|网络/.test(decision.authMessage || "") ? "timeout" : "ads";
       return { bucketed: true, ok: false, failKind: kind };
     }
+    if (decision.authState === "ok") {
+      await refreshCookiesSafe(deps, shop, jar, verifiedIdentity, sessionVersion);
+      await deps.markAuth(shop.store, "ok", "", authOpts);
+      return { bucketed: true, ok: true, failKind: "" };
+    }
     return { bucketed: false, ok: false, failKind: "timeout" };
   }
 }
 
+export function isMissingDealFieldError(error) {
+  return /没有成交字段/.test(String((error && error.message) || ""));
+}
+
 export function collectAuthDecision(error) {
   const classified = classifyTransportError(error);
+  if (isMissingDealFieldError(classified) || isMissingDealFieldError(error)) {
+    return { authState: "ok", authMessage: "" };
+  }
   if (classified.code === "login") {
     return { authState: "login_expired", authMessage: "登录已失效，请重新登录" };
   }

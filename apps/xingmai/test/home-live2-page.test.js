@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { patchExpiredShopLogin } from "../src/modules/home/router.js";
+import { patchExpiredShopLogin, patchLive2OfflineRelogin } from "../src/modules/home/router.js";
 
 const homeJs = readFileSync(new URL("../public/shared/modules/home.js", import.meta.url), "utf8");
 
@@ -18,6 +18,8 @@ test("实时（新版） sits after 近七天业绩汇总 and stays independent 
   assert.match(homeJs, /pendingCollect/);
   assert.match(homeJs, /待接入/);
   assert.match(homeJs, /待更新/);
+  assert.match(homeJs, /家需要重新登录/);
+  assert.match(homeJs, /重新登录<\/button>/);
   const oldClient =
     "      if (link.kind === \"stale\") {\n" +
     "        return '<td class=\"xm-hm-num is-fee-warm\" title=\"这一轮到截止时间还没采完，沿用今天最近一次成功的数据\">' + escapeHtml(link.label) + \"</td>\";\n" +
@@ -33,6 +35,51 @@ test("实时（新版） sits after 近七天业绩汇总 and stays independent 
   assert.match(patched, /待更新<\/button>/);
   assert.match(patched, /row\.pendingUpdate === true/);
   assert.equal(patchExpiredShopLogin(homeJs), homeJs);
+  assert.equal(patchLive2OfflineRelogin(homeJs), homeJs);
+  const oldLive2 = [
+    "  function liveLinkOf(row) {",
+    "    if (row && row.pendingUpdate) {",
+    "      return { label: \"待更新\", kind: \"stale\" };",
+    "    }",
+    "    if (row && row.pendingCollect) {",
+    "      return { label: \"待接入\", kind: \"wait\" };",
+    "    }",
+    "    if (row && row.online === true) {",
+    "      if (row.adsFailed === true) {",
+    "        return { label: \"在线·广告异常\", kind: \"ads\" };",
+    "      }",
+    "      return { label: \"在线\", kind: \"on\" };",
+    "    }",
+    "    if (row && row.loginExpired === true) {",
+    "      return { label: \"掉线\", kind: \"off\" };",
+    "    }",
+    "    if (row && row.adsFailed === true) {",
+    "      return { label: \"广告异常\", kind: \"ads\" };",
+    "    }",
+    "    if (row && row.offline === true) {",
+    "      return { label: \"采集异常\", kind: \"warn\" };",
+    "    }",
+    "    return { label: \"\", kind: \"\" };",
+    "  }",
+    "      if (link.kind === \"off\") {",
+    "        return (",
+    "          '<td class=\"xm-hm-num is-fee-hot\"><button type=\"button\" class=\"xm-hm-login-link\" data-live-login=\"' +",
+    "          escapeHtml(shop) +",
+    "          '\"' +",
+    "          (row && row.offlineReason ? ' title=\"' + escapeHtml(row.offlineReason) + '\"' : \"\") +",
+    "          \">掉线</button></td>\"",
+    "        );",
+    "      }",
+    "  function live2FilterHtml(allShops, state) {",
+    "'<span class=\"xm-hm-live-at\">更新时间 ' + escapeHtml(updatedAt || \"—\") + \"</span>\" +",
+    "      '<button type=\"button\" class=\"xm-hm-live-heads\" data-live-heads>表头设置</button>' +",
+    "\".xm-hm-login-link{border:0;background:transparent;padding:0;color:#e23b3b;font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}\" +",
+    "      \".xm-hm-login-link.is-wait{color:#2f6fed}\" +"
+  ].join("\n");
+  const live2Patched = patchLive2OfflineRelogin(oldLive2);
+  assert.match(live2Patched, /重新登录<\/button>/);
+  assert.match(live2Patched, /家需要重新登录/);
+  assert.match(live2Patched, /function live2NeedHtml/);
   assert.match(homeJs, /data-live-login="'\s*\+\s*escapeHtml\(shop\)\s*\+\s*'" title="登录已失效，或这一轮没采完。点开后账号和密码会填好，登录由你来点">待更新<\/button>/);
   assert.match(homeJs, /publishedAt === pack\.publishedAt/);
   assert.match(homeJs, /xm-hm-login-link is-wait[\s\S]{0,180}待接入<\/button>/);

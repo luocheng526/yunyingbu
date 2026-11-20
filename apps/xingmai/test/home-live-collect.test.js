@@ -87,6 +87,12 @@ test("true login failures still expire the session", () => {
   assert.equal(row.authMessage, "登录已失效，请重新登录");
 });
 
+test("empty deal with 没有成交字段 stays logged in", () => {
+  const row = collectAuthDecision({ code: "network", message: "京麦首页没有成交字段" });
+  assert.equal(row.authState, "ok");
+  assert.equal(row.authMessage, "");
+});
+
 test("a deal sample stays even when paid note is attached", () => {
   const fields = sampleFields({
     dealAmount: 12,
@@ -1161,12 +1167,22 @@ test("runTick/withDeadline persists deal when ads hang past outer deadline; no o
   assert.equal(orphan, 0);
 });
 
-test("login_expired shops with cookies are still collected; manual pause is not", () => {
+test("login_expired shops are skipped until a new login; ads-only and paused stay as before", () => {
   assert.equal(
     shouldCollectShop({
       store: "A",
       enabled: true,
       authState: "login_expired",
+      cookies: [{ name: "thor", value: "1" }]
+    }),
+    false
+  );
+  assert.equal(
+    shouldCollectShop({
+      store: "广告店",
+      enabled: true,
+      authState: "login_expired",
+      authMessage: "京准通没有可用账号 -100",
       cookies: [{ name: "thor", value: "1" }]
     }),
     true
