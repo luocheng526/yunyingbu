@@ -1499,6 +1499,7 @@ export async function jingmaiTick() {
 }
 
 export function startJingmaiCollector() {
+  if (globalThis.__homeLive2Started) return;
   if (process.argv.includes("--test") || process.env.NODE_TEST_CONTEXT) {
     return;
   }

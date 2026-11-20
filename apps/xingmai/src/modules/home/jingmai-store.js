@@ -38,6 +38,9 @@ export function isHumanSessionWrite(fields) {
   if (fields.purpose === WRITE_PURPOSE_HUMAN || fields.human === true) {
     return true;
   }
+  // Legacy Shen automatic recovery calls saveSession without a purpose. It is
+  // not an interactive home login and must respect collector ownership.
+  if (fields.writer && fields.writer !== COLLECTOR_OWNER_HOME) return false;
   // Default saveSession is human/roster/login; collect uses saveSample/markAuth/updateSessionCookies.
   return true;
 }
@@ -251,6 +254,9 @@ export function collectorLeaseExpired(session, nowStamp) {
  */
 export async function assertCollectorWrite(store, writer, options) {
   const opts = options || {};
+  if (globalThis.__homeLive2Started && writer && writer !== COLLECTOR_OWNER_HOME) {
+    return { ok: false, reason: "home_live2_active" };
+  }
   const name = String(store || "").trim();
   if (!name) {
     return { ok: false, reason: "missing_store" };
@@ -566,6 +572,7 @@ export async function saveSession(store, fields) {
  */
 export async function updateSessionCookies(store, cookies, options) {
   const opts = options || {};
+  if (globalThis.__homeLive2Started && opts.writer && opts.writer !== COLLECTOR_OWNER_HOME) return { updated: false, reason: "home_live2_active" };
   await ensure();
   if (!Array.isArray(cookies)) {
     return { updated: false, reason: "invalid_jar" };
@@ -667,6 +674,7 @@ export async function updateSessionCookies(store, cookies, options) {
 
 export async function markAuth(store, authState, authMessage, options) {
   const opts = options || {};
+  if (globalThis.__homeLive2Started && opts.writer && opts.writer !== COLLECTOR_OWNER_HOME) return { updated: false, reason: "home_live2_active" };
   await ensure();
   const writer = opts.writer != null ? opts.writer : COLLECTOR_OWNER_HOME;
   const who = String(writer || "").trim() || COLLECTOR_OWNER_HOME;
@@ -796,6 +804,7 @@ export async function listSessions() {
  * Empty owner, same owner, or expired lease can be claimed (failure recovery).
  */
 export async function claimCollectorOwner(store, owner = COLLECTOR_OWNER_HOME, options) {
+  if (globalThis.__homeLive2Started && owner !== COLLECTOR_OWNER_HOME) return { ok: false, reason: "home_live2_active" };
   const name = String(store || "").trim();
   const who = String(owner || COLLECTOR_OWNER_HOME).trim() || COLLECTOR_OWNER_HOME;
   const leaseSec = options && options.leaseSec != null ? Number(options.leaseSec) : COLLECTOR_LEASE_SEC;
@@ -879,6 +888,7 @@ export async function claimCollectorOwner(store, owner = COLLECTOR_OWNER_HOME, o
 
 export async function listCollectTargets(options) {
   const opts = options && typeof options === "object" ? options : {};
+  if (globalThis.__homeLive2Started && opts.writer && opts.writer !== COLLECTOR_OWNER_HOME) return [];
   const requireOwner = opts.requireOwner != null ? String(opts.requireOwner) : "";
   const writer = opts.writer != null ? String(opts.writer) : requireOwner;
   const now = stampNow();
@@ -1058,6 +1068,7 @@ export function classifySessionRecovery(sessions, profileKeys) {
 
 export async function saveSample(sample, options) {
   const opts = options || {};
+  if (globalThis.__homeLive2Started && opts.writer && opts.writer !== COLLECTOR_OWNER_HOME) return { saved: false, reason: "home_live2_active" };
   await ensure();
   const writer = opts.writer != null ? opts.writer : COLLECTOR_OWNER_HOME;
   const who = String(writer || "").trim() || COLLECTOR_OWNER_HOME;

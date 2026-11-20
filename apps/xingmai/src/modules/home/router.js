@@ -271,7 +271,17 @@ export function patchHomeClientSource(text) {
     .replaceAll("0.1.1039-loginpop", "0.1.1090-paidon")
     .replaceAll("0.1.1043-deskkeep", "0.1.1090-paidon")
     .replaceAll("0.1.1070-liveon", "0.1.1090-paidon");
-  return patchDeskCodeLogin(patchExpiredShopLogin(patchConnectPicker(patched)));
+  return patchCollectionHealth(patchDeskCodeLogin(patchExpiredShopLogin(patchConnectPicker(patched))));
+}
+
+export function patchCollectionHealth(source) {
+  if (source.includes("/* home channel health */")) return source;
+  return source.replace("  function liveLinkOf(row) {", `  function liveLinkOf(row) {
+    /* home channel health */
+    if (row && row.partialData && !row.loginExpired && !row.offline) {
+      if (row.dealFailed) return { label: "成交异常", kind: "warn" };
+      if (row.adsFailed) return { label: "广告异常", kind: "ads" };
+    }`);
 }
 
 const EXPIRED_STALE_OLD =

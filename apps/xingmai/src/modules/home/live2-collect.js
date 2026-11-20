@@ -28,7 +28,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1318-home-session-recovery";
+export const LIVE2_RUNTIME_MARK = "0.1.1319-home-browser-session";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
@@ -221,6 +221,7 @@ export function createLive2Collector(deps = {}) {
       return copy;
     }
     if (copy.loginExpired) {
+      copy.partialData = false;
       copy.online = false;
       copy.offline = false;
       copy.pendingUpdate = false;
@@ -228,11 +229,20 @@ export function createLive2Collector(deps = {}) {
       return copy;
     }
     if (!isFreshStamp(copy.capturedAt, nowStamp)) {
+      copy.partialData = false;
       copy.online = false;
       copy.offline = true;
       copy.pendingUpdate = false;
       copy.offlineReason = copy.offlineReason || "采集已停止";
       return copy;
+    }
+    if (!copy.offline && (copy.liveAmount == null || copy.paidAmount == null)) {
+      copy.online = false;
+      copy.partialData = hasNumbers(copy);
+      copy.dealFailed = copy.liveAmount == null && copy.paidAmount != null;
+      copy.dealReason = copy.dealFailed ? copy.dealReason || "京麦没有返回成交金额" : "";
+      copy.adsFailed = copy.liveAmount != null && copy.paidAmount == null;
+      copy.adsReason = copy.adsFailed ? copy.adsReason || "京准通没有返回广告金额" : "";
     }
     return copy;
   }
@@ -337,7 +347,14 @@ export function createLive2Collector(deps = {}) {
       }
       throw error;
     }
-    const result = matchCollectIdentity({ ...shop, shopName: shop.store }, identity);
+    if (shop.ambiguousMerchant && String(identity.shopId || "") === shop.merchantId && !identity.shopName) {
+      throw Object.assign(new Error("商家ID对应多个店铺，需要浏览器核验"), { code: "identity_missing" });
+    }
+    const result = matchCollectIdentity({ ...shop, merchantId: shop.ambiguousMerchant ? "" : shop.merchantId, shopName: shop.store }, identity);
+    if (shop.ambiguousMerchant && identity.shopName && String(identity.shopName).replace(/\s+/g, "") !== shop.store.replace(/\s+/g, "")) {
+      result.ok = false;
+      result.reason = "identity_mismatch";
+    }
     if (!result.ok) {
       throw Object.assign(new Error(result.reason === "identity_missing" ? "未能核验店铺身份" : "登录店铺与组织中心不一致"), { code: result.reason });
     }
@@ -568,7 +585,7 @@ export function createLive2Collector(deps = {}) {
         verified = true;
       } catch (error) {
         if (inactive(shop, phase)) return null;
-        if (error.code === "login") jar = null;
+        if (error.code === "login" || (error.code === "identity_missing" && client.recoverBrowserSession)) jar = null;
         else {
           await markCollectFail(shop, error.message, phase);
           const kept = draft.get(shop.store) || published.get(shop.store) || base;
@@ -584,14 +601,24 @@ export function createLive2Collector(deps = {}) {
       if (retry && retry.version === phase.sessionVersion && retry.until > clock()) {
         return { ...base, pendingCollect: false, loginExpired: true, online: false, offlineReason: retry.reason };
       }
-      if (!shop.login || !shop.password) {
+      if (!client.recoverBrowserSession && (!shop.login || !shop.password)) {
         base.pendingCollect = true;
         base.offlineReason = "组织中心还没有填写这家店的账号";
         shop.password = "";
         return base;
       }
       try {
-        jar = await loginJar(shop);
+        if (client.recoverBrowserSession) {
+          const recovered = await client.recoverBrowserSession(prior, phase.controller.signal, {
+            store: shop.store, shopId: shop.shopId, merchantId: shop.merchantId,
+            ambiguousMerchant: shop.ambiguousMerchant, requireIdentity: true
+          });
+          jar = recovered.cookies;
+          phase.browserDeal = recovered.deal;
+          verified = true;
+        } else {
+          jar = await loginJar(shop);
+        }
         if (phase.closed || phase.superseded) return null;
         logged = Boolean(jar && jar.length);
       } catch (error) {
@@ -626,6 +653,9 @@ export function createLive2Collector(deps = {}) {
         store: shop.store,
         shopId: shop.shopId,
         merchantId: shop.merchantId,
+        ambiguousMerchant: shop.ambiguousMerchant,
+        requireIdentity: true,
+        browserDeal: phase.browserDeal,
         shopName: shop.store,
         onDeal: async function (deal) {
           if (phase.closed || phase.superseded) {
@@ -653,7 +683,7 @@ export function createLive2Collector(deps = {}) {
         row.offline = true;
         row.offlineReason = row.offlineReason || "京麦没有返回成交金额";
       }
-      if (row.online || row.adsFailed) {
+      if (row.online || row.adsFailed || row.dealFailed) {
         row.loginExpired = false;
         row.offline = false;
         row.offlineReason = "";

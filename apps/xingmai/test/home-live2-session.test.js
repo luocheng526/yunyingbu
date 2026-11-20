@@ -34,6 +34,50 @@ function harness(client, extra = {}) {
   return { collector, done: () => task, round: async () => { await collector.start(""); await task; } };
 }
 
+for (const state of ["empty", "endpoint-expired"]) {
+  test(`collection recovers the verified server browser before password login (${state})`, async () => {
+    await resetJingmaiStore();
+    if (state === "endpoint-expired") await seed("old-database-session");
+    let recovered = 0;
+    const run = harness({
+      login: async () => assert.fail("background collection must not keep submitting a rejected password request"),
+      fetchAccountIdentity: async () => { throw Object.assign(new Error("account endpoint says login"), { code: "login" }); },
+      recoverBrowserSession: async (oldJar, signal, expected) => {
+        recovered++;
+        assert.equal(expected.requireIdentity, true);
+        assert.equal(expected.store, store);
+        assert.equal(signal.aborted, false);
+        assert.equal(oldJar.length, state === "empty" ? 0 : 1);
+        return { cookies: cookies("verified-browser-new"), deal: { dealAmount: 100 } };
+      },
+      fetchHome: async (jar, _signal, expected) => {
+        assert.equal(jar[0].value, "verified-browser-new");
+        assert.equal(expected.browserDeal.dealAmount, 100);
+        return metrics;
+      }
+    });
+    await run.round();
+    assert.equal(recovered, 1);
+    assert.equal((await getSession(store)).cookies[0].value, "verified-browser-new");
+    assert.equal((await run.collector.board("")).records[0].online, true);
+  });
+}
+
+test("server browser verification waits for the user and never falls through to password retries", async () => {
+  await resetJingmaiStore();
+  let attempts = 0, time = 0;
+  const run = harness({
+    login: async () => assert.fail("verification cannot be replaced with password retries"),
+    recoverBrowserSession: async () => { attempts++; throw Object.assign(new Error("服务器登录需要验证"), { code: "login" }); },
+    fetchHome: async () => assert.fail("no verified login")
+  }, { clock: () => time });
+  await run.round();
+  time += 10 * 60 * 1000;
+  await run.round();
+  assert.equal(attempts, 1);
+  assert.equal((await run.collector.board("")).records[0].loginExpired, true);
+});
+
 test("live2 reuses the latest saved session instead of overwriting it with a cached cookie", async () => {
   await resetJingmaiStore();
   await seed("old");

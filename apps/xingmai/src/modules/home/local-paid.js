@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { jingmaiLive, loadOrgShops, setJingmaiRequestOrigin, startJingmaiCollector } from "./jingmai-runner.js";
+import { jingmaiLive, loadOrgShops, setJingmaiRequestOrigin } from "./jingmai-runner.js";
 
 function pad2(n) {
   return String(n).padStart(2, "0");
@@ -842,9 +842,6 @@ export function packJingmaiShops(view, org) {
 }
 
 export async function pullJingmaiPaid(req) {
-  if (!process.env.NODE_TEST_CONTEXT && !process.argv.includes("--test")) {
-    startJingmaiCollector();
-  }
   const cookie = (req && req.headers && req.headers.cookie) || "";
   if (req && typeof req.get === "function") {
     const host = req.get("host");

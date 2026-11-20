@@ -219,7 +219,9 @@ test("old homepage client keeps the login dialog open after a click", () => {
   assert.match(next, /0\.1\.1090-paidon/);
   const withClick = patchHomeClientSource(old + "\n            y: Math.round((event.clientY - rect.top) * scaleY)\n          }).then(function (st) {");
   assert.match(withClick, /imageWidth: deskShot.naturalWidth/);
-  assert.equal(patchHomeClientSource(homeJs), homeJs);
+  const current = patchHomeClientSource(homeJs);
+  assert.match(current, /home channel health/);
+  assert.equal(patchHomeClientSource(current), current);
 });
 
 function box(left, top, width, height) {

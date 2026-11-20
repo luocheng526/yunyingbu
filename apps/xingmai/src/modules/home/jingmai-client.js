@@ -861,7 +861,8 @@ async function fetchDeal(jar, fetchImpl, readCard, signal, shopKeyOrExpected) {
         return card;
       }
     } catch (error) {
-      shopError = shopError || classifyTransportError(error);
+      const browserError = classifyTransportError(error);
+      if (["identity", "login"].includes(browserError.code) || !shopError) shopError = browserError;
     }
   }
   throw shopError || jingmaiError("network", "京麦首页没有成交字段");
@@ -1139,11 +1140,13 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
   // Old-site order: parse_home / store deal first, then collect_ads (never wipe deal on ad fail).
   let dealResult;
   try {
-    const value = await fetchDeal(jar, fetchImpl, readCard, signal, dealHint);
+    const value = (expected && expected.browserDeal) || await fetchDeal(jar, fetchImpl, readCard, signal, dealHint);
     dealResult = { deal: value, dealError: null };
   } catch (error) {
     dealResult = { deal: null, dealError: classifyTransportError(error) };
   }
+  // A mismatched browser identity invalidates the whole shop result, including ads.
+  if (dealResult.dealError && dealResult.dealError.code === "identity") throw dealResult.dealError;
   if (dealResult.deal && hasDealFields(dealResult.deal) && onDeal) {
     try {
       await onDeal(dealResult.deal);
@@ -1244,6 +1247,12 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
 
 export const jingmaiClient = {
   login: loginShop,
+  recoverBrowserSession: async function (cookies, signal, expected) {
+    const jar = (cookies || []).map(cookie => ({ ...cookie }));
+    const deal = await readHomeDeal(jar, signal, { ...expected, requireIdentity: true });
+    if (!deal || !jar.length) throw jingmaiError("login", "服务器登录需要验证，请打开这家店的登录窗口");
+    return { cookies: jar, deal };
+  },
   fetchHome: fetchHome,
   fetchAccountIdentity: fetchAccountIdentity,
   startQr: startQrLogin,

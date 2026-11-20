@@ -70,10 +70,15 @@ export function live2RecordFromMetrics(shop, metrics, capturedAt) {
   row.feeRate = numbers.feeRate;
   row.capturedAt = capturedAt || "";
   row.pendingCollect = false;
-  row.online = numbers.liveAmount != null || numbers.paidAmount != null;
-  row.adsFailed = numbers.liveAmount != null && numbers.paidAmount == null && Boolean(metrics && metrics.paidNote);
-  row.adsReason = row.adsFailed ? String(metrics.paidNote || "") : "";
-  row.offline = !row.online && !row.adsFailed && Boolean(metrics && (metrics.dealNote || metrics.paidNote));
+  row.online = numbers.liveAmount != null && numbers.paidAmount != null;
+  row.partialData = !row.online && (numbers.liveAmount != null || numbers.paidAmount != null);
+  row.dealFailed = numbers.liveAmount == null && numbers.paidAmount != null;
+  row.dealReason = row.dealFailed ? String(metrics.dealNote || "京麦没有返回成交金额") : "";
+  row.adsFailed = numbers.liveAmount != null && numbers.paidAmount == null;
+  row.adsReason = row.adsFailed ? String(metrics.paidNote || "京准通没有返回广告金额") : "";
+  row.dealCapturedAt = numbers.liveAmount != null ? row.capturedAt : "";
+  row.adsCapturedAt = numbers.paidAmount != null ? row.capturedAt : "";
+  row.offline = !row.online && !row.partialData && Boolean(metrics && (metrics.dealNote || metrics.paidNote));
   row.offlineReason = row.offline ? String((metrics && (metrics.dealNote || metrics.paidNote)) || "") : "";
   return row;
 }

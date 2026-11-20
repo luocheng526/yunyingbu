@@ -65,7 +65,7 @@ test("a shop logs in on the server and maps 京麦成交 plus 京准通花费、
   assert.equal(started.records[0].password, undefined);
   await gate;
   const view = await collector.board("cookie");
-  assert.equal(view.runtimeMark, "0.1.1318-home-session-recovery");
+  assert.equal(view.runtimeMark, "0.1.1319-home-browser-session");
   assert.equal(logins, 1);
   assert.equal(view.running, false);
   assert.equal(view.records[0].liveAmount, 3009);
@@ -434,7 +434,9 @@ test("成交金额是空的且报错没有成交字段时不按掉线算", async
   await gate;
   const view = await collector.board("");
   const row = view.records[0];
-  assert.equal(row.online, true);
+  assert.equal(row.online, false);
+  assert.equal(row.dealFailed, true);
+  assert.equal(row.partialData, true);
   assert.equal(row.offline, false);
   assert.equal(row.loginExpired, false);
   assert.equal(row.offlineReason, "");

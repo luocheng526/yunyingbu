@@ -171,7 +171,8 @@ test("46 simulated shops: full collection and next round survive DSM 601 using t
   await task;
   const partial = (await restarted.board("fixture=authorized")).records.find((row) => row.shop === "本地测试店1");
   assert.equal(partial.liveAmount, 200);
-  assert.equal(partial.online, true);
+  assert.equal(partial.online, false);
+  assert.equal(partial.partialData, true);
   assert.equal(partial.adsFailed, true);
   assert.equal(partial.loginExpired, false);
   assert.equal((await getSession("本地测试店1")).authState, "ok");

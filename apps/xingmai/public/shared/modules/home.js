@@ -2682,7 +2682,8 @@
     }
     if (key === "liveAt") {
       if (typeof liveScope !== "undefined" && liveScope === "live2") {
-        return '<td class="xm-hm-num">' + escapeHtml(row && row.capturedAt ? row.capturedAt : "—") + "</td>";
+        var times = "成交更新：" + (row.dealCapturedAt || "未成功") + "；广告更新：" + (row.adsCapturedAt || "未成功");
+        return '<td class="xm-hm-num" title="' + escapeHtml(times) + '">' + escapeHtml(row && row.capturedAt ? row.capturedAt : "—") + "</td>";
       }
       var ownAt = row && (row.capturedAt || row.ingestedAt || row.liveAt);
       return '<td class="xm-hm-num">' + escapeHtml(ownAt && liveBoardSlot ? liveBoardSlot : "—") + "</td>";
@@ -2729,7 +2730,7 @@
         return '<td class="xm-hm-num" title="采集功能待接入">待接入</td>';
       }
       if (link.kind === "ads" || link.kind === "warn") {
-        var tip = (row && (row.adsReason || row.offlineReason)) || link.label;
+        var tip = (row && (row.dealReason || row.adsReason || row.offlineReason)) || link.label;
         return (
           '<td class="xm-hm-num is-fee-warm" title="' +
           escapeHtml(tip) +
@@ -3361,6 +3362,11 @@
         feeRate: fee,
         capturedAt: hit.capturedAt || "",
         online: hit.online === true,
+        partialData: hit.partialData === true,
+        dealFailed: hit.dealFailed === true,
+        dealReason: hit.dealReason || "",
+        dealCapturedAt: hit.dealCapturedAt || "",
+        adsCapturedAt: hit.adsCapturedAt || "",
         offline: hit.offline === true,
         loginExpired: hit.loginExpired === true,
         adsFailed: hit.adsFailed === true,

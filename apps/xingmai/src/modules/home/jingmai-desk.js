@@ -1451,7 +1451,16 @@ function discard(desk) {
   try {
     if (desk.chrome && desk.chrome.exitCode == null) {
       desk.chrome.once("exit", removeDir);
-      desk.chrome.kill("SIGKILL");
+      desk.chrome.kill(desk.persistProfile ? "SIGTERM" : "SIGKILL");
+      if (desk.persistProfile) {
+        const timer = setTimeout(function () {
+          try {
+            if (desk.chrome.exitCode == null) desk.chrome.kill("SIGKILL");
+          } catch { /* process already exited */ }
+        }, 3000);
+        if (timer.unref) timer.unref();
+        desk.chrome.once("exit", function () { clearTimeout(timer); });
+      }
     } else {
       removeDir();
     }
@@ -2049,7 +2058,10 @@ async function startChromeProcess(chromePath, signal, budgetMs, extraFlags, opti
 }
 
 async function readCookies(ws) {
-  const result = await send(ws, "Network.getCookies", {});
+  const result = await send(ws, "Network.getCookies", { urls: [
+    "https://shop.jd.com/", "https://shop.jd.com/jdm/home", "https://passport.jd.com/",
+    "https://passport.shop.jd.com/", "https://jzt.jd.com/", "https://jzt-api.jd.com/", "https://sz.jd.com/"
+  ] });
   return (result.cookies || [])
     .filter(function (cookie) {
       return String(cookie.domain || "").includes("jd.com") && cookie.name && cookie.value;
@@ -3420,7 +3432,9 @@ function normalizeDealExpected(shopKeyOrExpected) {
     return {
       store: String(shopKeyOrExpected.store || shopKeyOrExpected.shopName || "").trim(),
       shopId: String(shopKeyOrExpected.shopId || "").trim(),
-      merchantId: String(shopKeyOrExpected.merchantId || "").trim()
+      merchantId: String(shopKeyOrExpected.merchantId || "").trim(),
+      requireIdentity: shopKeyOrExpected.requireIdentity === true,
+      ambiguousMerchant: shopKeyOrExpected.ambiguousMerchant === true
     };
   }
   const key = String(shopKeyOrExpected || "").trim();
@@ -3560,12 +3574,22 @@ export function assertPageShopIdentity(expected, pageName, vane) {
   const gotName = String(pageName || (vane && vane.shopName) || "").trim();
   const gotId = String((vane && vane.venderId) || "").trim();
   if (!gotName && !gotId) {
+    if (expected && expected.requireIdentity) {
+      throw Object.assign(new Error("未能核验服务器浏览器中的店铺身份"), { code: "identity" });
+    }
     return;
+  }
+  const exactName = (name) => String(name || "").replace(/\s+/g, "").replace(/旗舰店$/, "旗舰");
+  if (expected && expected.ambiguousMerchant && (!wantName || !gotName || exactName(wantName) !== exactName(gotName))) {
+    throw Object.assign(new Error("商家ID对应多个店铺，需要核验具体店铺名称"), { code: "identity" });
+  }
+  if (expected && expected.requireIdentity && wantName && gotName && exactName(wantName) !== exactName(gotName)) {
+    throw Object.assign(new Error("服务器浏览器店铺与当前店铺不一致，未保存数据"), { code: "identity" });
   }
   if (shopTitleMatch(wantName, gotName)) {
     return;
   }
-  if (gotId && (gotId === wantId || (merchantId && gotId === merchantId))) {
+  if (gotId && (gotId === wantId || (merchantId && !expected.ambiguousMerchant && gotId === merchantId))) {
     return;
   }
   if (wantName && gotName) {
@@ -3577,6 +3601,9 @@ export function assertPageShopIdentity(expected, pageName, vane) {
     const err = new Error("京麦店铺ID不符，未保存数据");
     err.code = "identity";
     throw err;
+  }
+  if (expected && expected.requireIdentity) {
+    throw Object.assign(new Error("未能核验服务器浏览器中的店铺身份"), { code: "identity" });
   }
 }
 
@@ -3647,7 +3674,10 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
     });
     vaneWatch = watchVaneIdentity(ws);
     const jar = cookieParams(cookies);
-    if (jar.length) {
+    // The persistent browser can have a newer session than the database.
+    const resident = usePersist ? await readCookies(ws) : [];
+    let usedResident = hasSession(resident);
+    if (!usedResident && jar.length) {
       await send(ws, "Network.setCookies", { cookies: jar });
     }
     // Old-site: wait_until=domcontentloaded — never networkidle.
@@ -3655,7 +3685,16 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
     await waitDomContentLoaded(ws, signal, 30000);
     // Detect explicit login-domain redirect only.
     try {
-      const href = await evaluate(ws, "location.href");
+      let href = await evaluate(ws, "location.href");
+      if (/passport\.|\/login/i.test(String(href || "")) && usedResident && jar.length) {
+        // The browser may be older than a freshly saved human login. Try that
+        // session once, only after the resident session explicitly redirects.
+        usedResident = false;
+        await send(ws, "Network.setCookies", { cookies: jar });
+        await send(ws, "Page.navigate", { url: "https://shop.jd.com/jdm/home" });
+        await waitDomContentLoaded(ws, signal, 30000);
+        href = await evaluate(ws, "location.href");
+      }
       if (/passport\.|\/login/i.test(String(href || ""))) {
         const err = new Error("登录已失效，请重新登录");
         err.code = "login";
@@ -3665,6 +3704,16 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
       if (error && error.code === "login") {
         throw error;
       }
+    }
+    async function finishMetrics(metrics) {
+      const pageName = await readShopBaseName(ws);
+      assertPageShopIdentity({ ...expected, requireIdentity: true }, pageName, vaneWatch.read());
+      const renewed = await readCookies(ws);
+      if (hasSession(renewed) && Array.isArray(cookies)) {
+        cookies.splice(0, cookies.length, ...renewed);
+      }
+      settled = true;
+      return metrics;
     }
     let card = null;
     for (let attempt = 0; attempt < 12 && !card && !networkDone; attempt += 1) {
@@ -3679,8 +3728,7 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
     if (card) {
       const pageName = await readShopBaseName(ws);
       assertPageShopIdentity(expected, pageName, vaneWatch.read());
-      settled = true;
-      return card;
+      return await finishMetrics(card);
     }
     const body = lateBody || (await pending);
     if (settled) {
@@ -3692,8 +3740,7 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
         if (metrics) {
           const pageName = await readShopBaseName(ws);
           assertPageShopIdentity(expected, pageName, vaneWatch.read());
-          settled = true;
-          return metrics;
+          return await finishMetrics(metrics);
         }
       } catch (error) {
         if (error && error.code === "identity") {
@@ -3706,8 +3753,7 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
     if (card) {
       const pageName = await readShopBaseName(ws);
       assertPageShopIdentity(expected, pageName, vaneWatch.read());
-      settled = true;
-      return card;
+      return await finishMetrics(card);
     }
     const error = new Error("京麦首页卡片没有成交金额");
     error.code = "network";

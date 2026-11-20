@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 export function normalizeOrgShops(rows) {
-  return rows.map((row) => ({
+  const shops = rows.map((row) => ({
     store: String(row.storeName || "").trim(),
     team: String(row.team || ""),
     manager: String(row.manager || ""),
@@ -11,6 +11,11 @@ export function normalizeOrgShops(rows) {
     shopId: String(row.shopId || row.storeId || "").trim(),
     merchantId: String(row.merchantId || "").trim()
   })).filter((row) => row.store && row.enabled);
+  const merchants = new Map();
+  shops.forEach(row => {
+    if (row.merchantId) merchants.set(row.merchantId, (merchants.get(row.merchantId) || 0) + 1);
+  });
+  return shops.map(row => ({ ...row, ambiguousMerchant: (merchants.get(row.merchantId) || 0) > 1 }));
 }
 
 // Background jobs run as the server, independent of a browser user's login.
