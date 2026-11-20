@@ -207,7 +207,10 @@ export async function linkStatus() {
     phase: current.phase,
     provider: current.provider,
     deviceId: current.deviceId,
-    message: current.message,
+    message: qrClient === "old"
+      ? "二维码还在闪。请点浏览器左上角的刷新按钮，重新打开这一页。刷新后请用微信扫这一张，它会停住。"
+      : current.message,
+    qrToken: current.scene || "",
     userName: current.userName,
     accounts: current.accounts || [],
     qrReady: Boolean(current.qrUrl),
@@ -235,9 +238,30 @@ export async function startLink(provider) {
   }
   current.scene = payload.data.scene || "";
   current.qrUrl = payload.data.url || "";
-  current.message = "请用微信扫这一张二维码。扫旧站网页上的码不会登录这里。";
+  current.qrIssuedAt = new Date().toISOString();
+  current.qrCheckedAt = "";
+  current.message = "请用微信扫这一张二维码。这一张会保持约一分半，扫旧站网页上的码不会登录这里。";
   await saveSession(current);
   return linkStatus();
+}
+
+let qrCache = { url: "", type: "", buffer: null };
+let qrClient = "";
+let pollQueue = Promise.resolve();
+
+export function noteQrClient(query) {
+  if (query && Object.prototype.hasOwnProperty.call(query, "ts")) {
+    qrClient = "old";
+    return;
+  }
+  if (query && Object.prototype.hasOwnProperty.call(query, "v")) {
+    qrClient = "new";
+  }
+}
+
+export function resetQrClient() {
+  qrClient = "";
+  pollQueue = Promise.resolve();
 }
 
 export async function qrBytes() {
@@ -248,6 +272,9 @@ export async function qrBytes() {
   if (current.provider !== "WECHAT") {
     return { kind: "url", url: current.qrUrl };
   }
+  if (qrCache.url === current.qrUrl && qrCache.buffer) {
+    return { kind: "image", type: qrCache.type, buffer: qrCache.buffer };
+  }
   const response = await fetchImpl(current.qrUrl, {
     headers: {
       Referer: `${ORIGIN}/login`,
@@ -255,21 +282,101 @@ export async function qrBytes() {
     }
   });
   const type = response.headers.get("content-type") || "image/png";
-  return { kind: "image", type, buffer: Buffer.from(await response.arrayBuffer()) };
+  const buffer = Buffer.from(await response.arrayBuffer());
+  qrCache = { url: current.qrUrl, type, buffer };
+  return { kind: "image", type, buffer };
+}
+
+function cookieNames(current) {
+  return Object.keys(current.cookies || {}).join("、") || "无";
+}
+
+function fieldNames(data) {
+  if (!data || typeof data !== "object") {
+    return "无";
+  }
+  return Object.keys(data).slice(0, 12).join("、") || "无";
 }
 
 async function finishLogin(current, data) {
-  current.userName = String((data && (data.nickName || data.userName || data.name)) || current.userName || "");
+  let info = null;
+  try {
+    info = await callUpstream(current, { method: "get", path: "/auth/info" });
+  } catch (error) {
+    info = null;
+  }
+  if (!info || info.code !== 0) {
+    const detail = String((info && (info.content || info.message)) || "没有返回").slice(0, 40);
+    current.phase = "needs_scan";
+    current.scene = "";
+    current.qrUrl = "";
+    current.loginTicket = "";
+    current.accounts = [];
+    current.message = `手机上已经确认，但旧站资料接口仍说未登录（${detail}）。返回字段：${fieldNames(data)}。凭证：${cookieNames(current)}。请点下面的微信，扫新的一张。`;
+    await saveSession(current);
+    return;
+  }
+  const infoData = info.data || {};
+  const user = infoData.userInfo || infoData;
+  current.userName = String(
+    (user && (user.nickName || user.userName || user.name))
+    || (data && (data.nickName || data.userName || data.name))
+    || current.userName
+    || ""
+  );
   current.phase = "collecting";
+  current.scene = "";
+  current.qrUrl = "";
+  current.loginTicket = "";
   current.message = "已登录。按筛选时间整段补采，最近两天不取。页面查询不会再打旧站。";
   current.accounts = [];
   await saveSession(current);
 }
 
-export async function pollLink() {
+const QR_HOLD_MS = 90 * 1000;
+
+function issuedAge(current) {
+  const issued = Date.parse(current.qrIssuedAt || "");
+  return Number.isFinite(issued) ? Date.now() - issued : 0;
+}
+
+async function sessionAlive(current) {
+  try {
+    const info = await callUpstream(current, { method: "get", path: "/auth/info" });
+    return Boolean(info && info.code === 0);
+  } catch (error) {
+    return true;
+  }
+}
+
+async function dropLogin(current) {
+  current.phase = "needs_scan";
+  current.scene = "";
+  current.qrUrl = "";
+  current.loginTicket = "";
+  current.message = "旧站登录已过期。已保留补采进度。请点下面的微信，扫新的一张。";
+  await saveSession(current);
+}
+
+async function saveUnlessLoggedIn(current) {
+  const latest = await session();
+  if (latest.phase === "collecting" || latest.phase === "logged_in" || latest.phase === "choose_account") {
+    return linkStatus();
+  }
+  if (latest.scene && current.scene && latest.scene !== current.scene) {
+    return linkStatus();
+  }
+  await saveSession(current);
+  return linkStatus();
+}
+
+async function pollLinkOnce() {
   const current = await session();
   if (!current.scene || (current.phase !== "waiting_scan" && current.phase !== "needs_scan")) {
     return linkStatus();
+  }
+  if (!current.qrIssuedAt) {
+    current.qrIssuedAt = new Date().toISOString();
   }
   const payload = await callUpstream(current, {
     method: "get",
@@ -281,20 +388,9 @@ export async function pollLink() {
       ...providerQuery(current.provider)
     }
   });
-  const code = payload && payload.code;
+  const code = Number(payload && payload.code);
   const content = String((payload && payload.content) || "");
-  if (code === 1000102) {
-    current.phase = "waiting_scan";
-    current.message = "未扫码。请扫这一张二维码，扫旧站网页上的码不会登录这里。";
-  } else if (code === 1000103 || code === -1 || code === -7 || /未登录|登录状态已过期|请重新登录/.test(content)) {
-    current.scene = "";
-    current.qrUrl = "";
-    current.message = "刚才那张二维码已经失效，正在换一张。";
-    await saveSession(current);
-    return startLink(current.provider);
-  } else if (code === 1011) {
-    current.message = content || `浏览器标识未加入登录管理：${current.deviceId}`;
-  } else if (code === 0) {
+  if (code === 0) {
     const data = payload.data || {};
     if (data.needBind) {
       current.message = data.message || "这个第三方账号还没绑定，请先在旧站用账号绑定后再扫。";
@@ -311,11 +407,44 @@ export async function pollLink() {
       await finishLogin(current, data);
       return linkStatus();
     }
+    return saveUnlessLoggedIn(current);
+  }
+  const shaky = code === -1 || code === -7 || /未登录|登录状态已过期|请重新登录/.test(content);
+  if (code === 1000102) {
+    const latest = await session();
+    if (latest.phase === "collecting" || latest.phase === "logged_in" || latest.phase === "choose_account") {
+      return linkStatus();
+    }
+    current.phase = "waiting_scan";
+    current.message = "未扫码。请用微信扫这一张，扫完后在手机上点确认登录。扫旧站网页上的码不会登录这里。";
+  } else if (code === 1000104 || code === 1000105 || code === 1000106) {
+    current.phase = "waiting_scan";
+    current.message = content || "已经扫到了。请在手机上点确认登录。";
+  } else if (code === 1000103 || (shaky && issuedAge(current) >= QR_HOLD_MS)) {
+    const latest = await session();
+    if (latest.phase === "collecting" || latest.phase === "logged_in" || latest.phase === "choose_account") {
+      return linkStatus();
+    }
+    current.scene = "";
+    current.qrUrl = "";
+    current.message = "刚才那张二维码已经失效，正在换一张。";
+    await saveSession(current);
+    return startLink(current.provider);
+  } else if (shaky) {
+    current.phase = "waiting_scan";
+    current.message = content || "请用微信扫这一张，扫完后在手机上点确认登录。";
+  } else if (code === 1011) {
+    current.message = content || `浏览器标识未加入登录管理：${current.deviceId}`;
   } else if (content) {
     current.message = content;
   }
-  await saveSession(current);
-  return linkStatus();
+  return saveUnlessLoggedIn(current);
+}
+
+export function pollLink() {
+  const run = pollQueue.then(pollLinkOnce, pollLinkOnce);
+  pollQueue = run.then(() => {}, () => {});
+  return run;
 }
 
 export async function pickAccount(companyId) {
@@ -641,10 +770,8 @@ async function runMaster(current, unit) {
     await rememberMaster(master.id, { status: unit.attempts + 1 >= 3 ? "failed" : "retry", page: unit.page, attempts: unit.attempts + 1, error: String(error.message || error).slice(0, 300) });
     return;
   }
-  if (authExpired(payload)) {
-    current.phase = "needs_scan";
-    current.message = "旧站登录已过期。已保留补采进度，扫码后从中断处继续。";
-    await saveSession(current);
+  if (authExpired(payload) && !(await sessionAlive(current))) {
+    await dropLogin(current);
     return;
   }
   if (!payload || payload.code !== 0) {
@@ -700,10 +827,8 @@ async function runReport(current, unit) {
     });
     return;
   }
-  if (authExpired(payload)) {
-    current.phase = "needs_scan";
-    current.message = "旧站登录已过期。已保留补采进度，扫码后从中断处继续。";
-    await saveSession(current);
+  if (authExpired(payload) && !(await sessionAlive(current))) {
+    await dropLogin(current);
     return;
   }
   if (denied(payload)) {
