@@ -663,35 +663,9 @@ async function postDsm(fetchImpl, jar, appId, api, body, signal) {
   return payload;
 }
 
-function dealRetryMs() {
-  const value = Number(process.env.SHEN_DEAL_RETRY_MS);
-  return Number.isFinite(value) && value >= 0 ? value : 5000;
-}
-
 function dealGapMs() {
   const value = Number(process.env.SHEN_DEAL_RETRY_MS);
   return Number.isFinite(value) && value >= 0 ? Math.min(value, 800) : 800;
-}
-
-function pause(ms, signal) {
-  return new Promise(function (resolve, reject) {
-    if (signal && signal.aborted) {
-      reject(jingmaiError("timeout", "采集超时"));
-      return;
-    }
-    const timer = setTimeout(resolve, ms);
-    if (!signal) {
-      return;
-    }
-    signal.addEventListener(
-      "abort",
-      function () {
-        clearTimeout(timer);
-        reject(jingmaiError("timeout", "采集超时"));
-      },
-      { once: true }
-    );
-  });
 }
 
 function dealBusy(error) {
@@ -806,20 +780,9 @@ async function fetchShopDealOnce(jar, fetchImpl, signal) {
 }
 
 async function fetchShopDeal(jar, fetchImpl, signal) {
-  let last = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      return await fetchShopDealOnce(jar, fetchImpl, signal);
-    } catch (error) {
-      const classified = classifyTransportError(error);
-      if (classified.code === "login" || attempt === 2 || !dealBusy(classified)) {
-        throw classified;
-      }
-      last = classified;
-      await pause(dealRetryMs(), signal);
-    }
-  }
-  throw last || jingmaiError("network", "京麦首页没有成交字段");
+  // Do not repeatedly hit a rejected legacy API. Preserve the existing
+  // authenticated browser path; an explicit browser limit stops the shop.
+  return fetchShopDealOnce(jar, fetchImpl, signal);
 }
 
 async function fetchSzDeal(jar, fetchImpl, signal) {
@@ -862,7 +825,7 @@ async function fetchDeal(jar, fetchImpl, readCard, signal, shopKeyOrExpected) {
       }
     } catch (error) {
       const browserError = classifyTransportError(error);
-      if (["identity", "login"].includes(browserError.code) || !shopError) shopError = browserError;
+      if (["identity", "login", "platform_limited"].includes(browserError.code) || !shopError) shopError = browserError;
     }
   }
   throw shopError || jingmaiError("network", "京麦首页没有成交字段");
@@ -1145,8 +1108,8 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
   } catch (error) {
     dealResult = { deal: null, dealError: classifyTransportError(error) };
   }
-  // A mismatched browser identity invalidates the whole shop result, including ads.
-  if (dealResult.dealError && dealResult.dealError.code === "identity") throw dealResult.dealError;
+  // Stop this shop on an identity mismatch or explicit browser-side limit.
+  if (dealResult.dealError && ["identity", "platform_limited"].includes(dealResult.dealError.code)) throw dealResult.dealError;
   if (dealResult.deal && hasDealFields(dealResult.deal) && onDeal) {
     try {
       await onDeal(dealResult.deal);

@@ -19,7 +19,7 @@ const readBrowser = extract("async function readHomeDealNow", "export async func
 const readCookies = extract("async function readCookies", "function hasSession");
 const jar = value => [{ name: "thor", value, domain: ".jd.com", path: "/", secure: true }];
 
-async function browserCase({ resident = "resident-new", saved = "database-old", name = "本店旗舰店", pageId = "", merchantId = "", unavailable = false, lateRedirect = false, response = null } = {}) {
+async function browserCase({ resident = "resident-new", saved = "database-old", name = "本店旗舰店", pageId = "", merchantId = "", unavailable = false, lateRedirect = false, response = null, limits = {} } = {}) {
   const input = saved ? jar(saved) : [];
   let browserJar = resident ? jar(resident) : [], href = "about:blank";
   const commands = [], cookieReads = [];
@@ -29,6 +29,7 @@ async function browserCase({ resident = "resident-new", saved = "database-old", 
     normalizeDealExpected: x => x, profileIdentity: () => ({ key: "p_1", ephemeral: false }),
     isForbiddenLegacyProfileKey: () => false, launchChrome: async () => ({ ws: {} }), discard: () => {},
     watchVaneIdentity: () => ({ read: () => ({}), stop: () => {} }), watchShopData: () => response ? Promise.resolve(JSON.stringify(response)) : unavailable ? Promise.resolve("") : new Promise(() => {}),
+    watchPlatformLimits: () => ({ read: () => limits, stop: () => {} }),
     send: async (_ws, method, params) => {
       commands.push(method);
       if (method === "Network.setCookies") browserJar = params.cookies;
@@ -59,6 +60,19 @@ async function browserCase({ resident = "resident-new", saved = "database-old", 
 const tradeResponse = value => ({ code: 200, data: { refreshTime: "2026-11-21 00:02:00", modules: [{
   moduleCode: "deal", indicators: ["OrdAmt", "OrdNum", "OrdCustNum"].map(code => ({ code, value }))
 }] } });
+
+test("a browser trade limit preserves the old cookie jar and rejects the reading", async () => {
+  const r = await browserCase({ pageId: "1", limits: { deal: "京东提示操作频繁" } });
+  await assert.rejects(r.outcome, e => e.code === "platform_limited");
+  assert.equal(r.input[0].value, "database-old");
+});
+
+test("blocked identity lookup is reported only when the required native shop ID is missing", async () => {
+  const missing = await browserCase({ limits: { identity: "京东拦截了当前请求" } });
+  await assert.rejects(missing.outcome, e => e.code === "platform_limited");
+  const verified = await browserCase({ pageId: "1", limits: { identity: "京东拦截了当前请求" } });
+  assert.equal((await verified.outcome).dealAmount, 100);
+});
 
 for (const value of ["-", "0", "12"]) {
   test(`current trade response ${value} completes without waiting for the 25-second fallback`, { timeout: 1000 }, async () => {

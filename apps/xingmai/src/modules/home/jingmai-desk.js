@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
-import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, homeDealUnavailable, shopDealUnavailable, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
+import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, homeDealUnavailable, shopDealUnavailable, jingmaiAccessLimit, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
 
 const LOGIN_URL =
   "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
@@ -1433,6 +1433,10 @@ function discard(desk) {
   if (!desk) {
     return;
   }
+  if (desk.accessWatch) {
+    desk.accessWatch.stop();
+    desk.accessWatch = null;
+  }
   if (current === desk) {
     stopCurrent();
     return;
@@ -2544,6 +2548,8 @@ async function verifiedDeskSession(desk, cookies, href) {
   if (!sessionReady(href, cookies)) return null;
   const identity = await readShopBaseIdentity(desk.ws);
   if ((desk.shopId && !identity.shopId) || (!identity.shopId && !identity.shopName)) {
+    const limited = desk.accessWatch && desk.accessWatch.read().identity;
+    if (limited) return { status: "login", message: limited + "；店铺身份尚未核验，保留原登录档案" };
     return { status: "verify", message: "已进入京麦，正在等待店铺身份信息", href: String(href || "") };
   }
   try {
@@ -2720,6 +2726,8 @@ export async function openDesk({ store, loginName, password, reveal, onStep, sig
     }
     step("正在打开登录页");
     lastLaunchNote = "正在打开京麦登录页";
+    if (desk.accessWatch) desk.accessWatch.stop();
+    desk.accessWatch = watchPlatformLimits(desk.ws);
     try {
       await send(desk.ws, "Page.navigate", { url: LOGIN_URL }, undefined, 8000);
     } catch (error) {
@@ -3501,6 +3509,47 @@ function waitDomContentLoaded(ws, signal, ms) {
   });
 }
 
+function watchPlatformLimits(ws) {
+  const limits = { deal: "", identity: "" };
+  const requests = new Map();
+  let stopped = false;
+  function onMessage(event) {
+    let message;
+    try { message = JSON.parse(event.data); } catch { return; }
+    if (message.method === "Network.responseReceived") {
+      const response = message.params && message.params.response;
+      let url;
+      try { url = new URL(response.url); } catch { return; }
+      if (url.hostname !== "sff.jd.com") return;
+      const api = url.searchParams.get("api") || "";
+      const kind = /(?:^|\.)operationData\.findShopData$|findShopDataByChannel$/.test(api) ? "deal"
+        : /NavigationFacade\.findShopInfo$|MyShopInfoProvider\.getShopCardInfo$/.test(api) ? "identity" : "";
+      if (!kind) return;
+      if (response.status === 429) limits[kind] = jingmaiAccessLimit({ code: 429 });
+      requests.set(message.params.requestId, { kind, sessionId: message.sessionId || "" });
+      return;
+    }
+    if (message.method !== "Network.loadingFinished") return;
+    const requestId = message.params && message.params.requestId;
+    const request = requests.get(requestId);
+    if (!request) return;
+    requests.delete(requestId);
+    send(ws, "Network.getResponseBody", { requestId }, request.sessionId).then(result => {
+      if (stopped) return;
+      try {
+        const body = result.base64Encoded ? Buffer.from(result.body || "", "base64").toString("utf8") : String(result.body || "");
+        const reason = jingmaiAccessLimit(JSON.parse(body));
+        if (reason) limits[request.kind] = reason;
+      } catch { /* malformed and unrelated responses do not prove a platform limit */ }
+    }).catch(function () {});
+  }
+  ws.addEventListener("message", onMessage);
+  return {
+    read: () => ({ ...limits }),
+    stop: () => { stopped = true; requests.clear(); ws.removeEventListener("message", onMessage); }
+  };
+}
+
 function watchVaneIdentity(ws) {
   const seen = { shopName: "", venderId: "" };
   function onMessage(event) {
@@ -3646,7 +3695,9 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
   let desk = null;
   let settled = false;
   let vaneWatch = null;
+  let accessWatch = null;
   const killOwn = function () {
+    if (accessWatch) { accessWatch.stop(); accessWatch = null; }
     if (vaneWatch) {
       try {
         vaneWatch.stop();
@@ -3703,6 +3754,7 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
       return body;
     });
     vaneWatch = watchVaneIdentity(ws);
+    accessWatch = watchPlatformLimits(ws);
     const jar = cookieParams(cookies);
     // The persistent browser can have a newer session than the database.
     const resident = usePersist ? await readCookies(ws) : [];
@@ -3736,6 +3788,8 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
       }
     }
     async function assertSessionPage() {
+      const limited = accessWatch && accessWatch.read().deal;
+      if (limited) throw Object.assign(new Error(limited), { code: "platform_limited" });
       const href = String(await evaluate(ws, "location.href") || "");
       if (/passport\.|\/login/i.test(href)) {
         throw Object.assign(new Error("服务器浏览器已返回京东登录页，请重新登录或完成验证"), { code: "login" });
@@ -3745,6 +3799,8 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
       await assertSessionPage();
       let identity = await readShopBaseIdentity(ws);
       for (let attempt = 0; expected.shopId && !identity.shopId && attempt < 6; attempt++) {
+        const limited = accessWatch && accessWatch.read().identity;
+        if (limited) throw Object.assign(new Error(limited), { code: "platform_limited" });
         await sleepSignal(500, signal);
         identity = await readShopBaseIdentity(ws);
       }
@@ -3763,6 +3819,8 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
         throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
       }
       await sleepSignal(1000, signal);
+      const limited = accessWatch && accessWatch.read().deal;
+      if (limited) throw Object.assign(new Error(limited), { code: "platform_limited" });
       card = parseHomeCard(await homeCardText(ws));
     }
     if (card) {
@@ -3784,7 +3842,7 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
             dealUnavailable: true, dealNote: "京麦已登录，但成交接口返回“—”，暂未提供数据" });
         }
       } catch (error) {
-        if (error && ["identity", "login"].includes(error.code)) {
+        if (error && ["identity", "login", "platform_limited"].includes(error.code)) {
           throw error;
         }
         /* fall through to the rendered card */
@@ -3808,7 +3866,7 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
     if (error && (error.code === "timeout" || error.name === "AbortError")) {
       throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
     }
-    if (error && (error.code === "network" || error.code === "login" || error.code === "identity")) {
+    if (error && ["network", "login", "identity", "platform_limited"].includes(error.code)) {
       throw error;
     }
     if (error && error.code === "browser") {

@@ -28,7 +28,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1322-home-fast-metrics";
+export const LIVE2_RUNTIME_MARK = "0.1.1323-home-platform-backoff";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
@@ -407,6 +407,23 @@ export function createLive2Collector(deps = {}) {
     }
   }
 
+  async function holdPlatform(shop, phase, previous, error) {
+    const prior = previous || {};
+    const sameSession = prior.platformSessionVersion === phase.sessionVersion;
+    const attempts = (sameSession ? Number(prior.platformFailures) || 0 : 0) + 1;
+    const minutes = Math.min(60, 20 * 2 ** (attempts - 1));
+    const reason = String(error.message || "京东暂时限制当前请求").slice(0, 120) + "；暂停重试" + minutes + "分钟";
+    await markCollectFail(shop, reason, phase);
+    if (phase.superseded || phase.closed) return null;
+    // Persist the hold with the snapshot so a process restart cannot reset it.
+    // A later verified login changes sessionVersion and releases the old hold.
+    return { ...prior, shop: shop.store, online: false, offline: true, loginExpired: false,
+      pendingCollect: false, pendingUpdate: false, partialData: false, dataUnavailable: false,
+      platformLimited: true, platformRetryAt: clock() + minutes * 60000,
+      platformFailures: attempts, platformSessionVersion: phase.sessionVersion,
+      offlineReason: reason };
+  }
+
   function silentLoginFailed(error) {
     const message = String((error && error.message) || "");
     return Boolean(error && (error.code === "login" || /验证码|滑块|安全验证|账号异常|密码不正确/.test(message)));
@@ -571,6 +588,10 @@ export function createLive2Collector(deps = {}) {
     const saved = await sessionOf(shop.store) || await ensureSession(shop.store, shop.shopId || "");
     if (phase.closed || (saved && saved.enabled === false)) return null;
     phase.sessionVersion = sessionVersionOf(saved) || "g:0";
+    if (inactive(shop, phase)) return null;
+    if (base.platformLimited && base.platformSessionVersion === phase.sessionVersion && Number(base.platformRetryAt) > clock()) {
+      return { ...base, online: false, offline: true, loginExpired: false, partialData: false };
+    }
     const claimed = await claimOwner(shop.store, COLLECTOR_OWNER_HOME);
     if (!claimed || !claimed.ok || inactive(shop, phase)) return null;
     const expired = isLoginExpiredSession(saved);
@@ -588,6 +609,7 @@ export function createLive2Collector(deps = {}) {
         verified = true;
       } catch (error) {
         if (inactive(shop, phase)) return null;
+        if (error.code === "platform_limited") return holdPlatform(shop, phase, base, error);
         if (error.code === "login" || (error.code === "identity_missing" && client.recoverBrowserSession)) jar = null;
         else {
           await markCollectFail(shop, error.message, phase);
@@ -627,6 +649,7 @@ export function createLive2Collector(deps = {}) {
       } catch (error) {
         shop.password = "";
         if (phase.closed || phase.superseded) return null;
+        if (error.code === "platform_limited") return holdPlatform(shop, phase, base, error);
         const authFailed = silentLoginFailed(error);
         const reason = String((error && error.message) || "登录没有完成").slice(0, 200);
         if (authFailed) await markExpiredLogin(shop, reason, phase);
@@ -699,6 +722,7 @@ export function createLive2Collector(deps = {}) {
       shop.password = "";
       if (phase.closed || phase.superseded) return null;
       const previous = draft.get(shop.store) || published.get(shop.store);
+      if (error.code === "platform_limited") return holdPlatform(shop, phase, previous || base, error);
       if (error.code === "data_unavailable") {
         await keepLogin(shop, jar, phase);
         return { ...(previous || base), online: false, offline: false, loginExpired: false,

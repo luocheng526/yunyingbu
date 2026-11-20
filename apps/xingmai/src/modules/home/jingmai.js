@@ -6,6 +6,18 @@ export function jingmaiError(code, message) {
   return error;
 }
 
+export function jingmaiAccessLimit(payload) {
+  const code = Number(payload && payload.code);
+  const message = String(payload && (payload.msg || payload.message) || "");
+  if (code === 429 || (code === 601 && /操作频繁|请求过于频繁|访问频繁|请求频繁/.test(message))) {
+    return "京东提示操作频繁，请稍后重试";
+  }
+  if (code === 601 && /非法请求拦截/.test(message)) {
+    return "京东拦截了当前请求，请稍后重试";
+  }
+  return "";
+}
+
 export function beijingParts(date = new Date()) {
   const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai",
@@ -774,6 +786,7 @@ export function classifyTransportError(error) {
       error.code === "timeout" ||
       error.code === "network" ||
       error.code === "paid" ||
+      error.code === "platform_limited" ||
       error.code === "identity")
   ) {
     return error;
