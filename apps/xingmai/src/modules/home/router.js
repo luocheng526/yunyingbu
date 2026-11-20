@@ -272,7 +272,53 @@ export function patchHomeClientSource(text) {
     .replaceAll("0.1.1039-loginpop", "0.1.1090-paidon")
     .replaceAll("0.1.1043-deskkeep", "0.1.1090-paidon")
     .replaceAll("0.1.1070-liveon", "0.1.1090-paidon");
-  return patchConnectPicker(patched);
+  return patchExpiredShopLogin(patchConnectPicker(patched));
+}
+
+const EXPIRED_STALE_OLD =
+  "      if (link.kind === \"stale\") {\n" +
+  "        return '<td class=\"xm-hm-num is-fee-warm\" title=\"这一轮到截止时间还没采完，沿用今天最近一次成功的数据\">' + escapeHtml(link.label) + \"</td>\";\n" +
+  "      }";
+const EXPIRED_STALE_NEW =
+  "      if (link.kind === \"stale\") {\n" +
+  "        if (typeof liveScope !== \"undefined\" && liveScope === \"live2\") {\n" +
+  "          return (\n" +
+  "            '<td class=\"xm-hm-num is-fee-warm\"><button type=\"button\" class=\"xm-hm-login-link\" data-live-login=\"' +\n" +
+  "            escapeHtml(shop) +\n" +
+  "            '\" title=\"登录已失效，或这一轮没采完。点开后账号和密码会填好，登录由你来点\">待更新</button></td>'\n" +
+  "          );\n" +
+  "        }\n" +
+  "        return '<td class=\"xm-hm-num is-fee-warm\" title=\"这一轮到截止时间还没采完，沿用今天最近一次成功的数据\">' + escapeHtml(link.label) + \"</td>\";\n" +
+  "      }";
+const EXPIRED_PICK_OLD =
+  "          var name = String((row && (row.shop || row.shopName)) || \"\").trim();\n" +
+  "          if (!name || row.online === true) {\n" +
+  "            return;\n" +
+  "          }\n" +
+  "          if (row.offline === true || row.loginExpired === true || !row.capturedAt) {\n" +
+  "            allowed[name] = true;\n" +
+  "          }";
+const EXPIRED_PICK_NEW =
+  "          var name = String((row && (row.shop || row.shopName)) || \"\").trim();\n" +
+  "          if (!name) {\n" +
+  "            return;\n" +
+  "          }\n" +
+  "          if (row.online === true && row.pendingUpdate !== true && row.loginExpired !== true) {\n" +
+  "            return;\n" +
+  "          }\n" +
+  "          if (row.pendingUpdate === true || row.offline === true || row.loginExpired === true || !row.capturedAt) {\n" +
+  "            allowed[name] = true;\n" +
+  "          }";
+
+export function patchExpiredShopLogin(text) {
+  let source = String(text || "");
+  if (source.includes(EXPIRED_STALE_OLD)) {
+    source = source.replace(EXPIRED_STALE_OLD, EXPIRED_STALE_NEW);
+  }
+  if (source.includes(EXPIRED_PICK_OLD)) {
+    source = source.replace(EXPIRED_PICK_OLD, EXPIRED_PICK_NEW);
+  }
+  return source;
 }
 
 function homeClientSource() {
