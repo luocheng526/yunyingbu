@@ -122,7 +122,7 @@ test("a sample older than fifteen minutes is offline the way the paid center is"
   });
   assert.equal(view.shops[0].online, false);
   assert.equal(view.shops[0].offline, true);
-  assert.equal(view.shops[0].offlineReason, "采集异常（保留上次成功时间）");
+  assert.equal(view.shops[0].offlineReason, "采集已停止");
   assert.equal(view.shops[0].capturedAt, "2026/11/17 11:17:57");
   const packed = packJingmaiShops(view, [{ store: "未登录店", enabled: true, login: "a", password: "b" }]);
   assert.equal(packed.records.find((row) => row.shopName === "已登录店").offline, true);
@@ -1135,8 +1135,8 @@ test("a dropped shop with a dead cookie logs in again with the password and does
 test("dropped shops recover themselves with the saved password", async () => {
   await resetJingmaiStore();
   await saveSession("DIKTT环境电器旗舰店", {
-    cookies: [{ name: "thor", value: "stale" }],
-    authState: "offline",
+    cookies: [],
+    authState: "login_expired",
     authMessage: "登录已失效，请重新登录",
     shopId: "1001"
   });

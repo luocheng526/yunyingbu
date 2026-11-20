@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import "./_memory-env.js";
 import { live2FeeRate } from "../src/modules/home/live2.js";
-import { armLive2Schedule, createLive2Collector, LIVE2_INTERVAL_MS, noteLive2Cookie } from "../src/modules/home/live2-collect.js";
+import { armLive2Schedule, createLive2Collector, LIVE2_INTERVAL_MS, LIVE2_STALE_MS, noteLive2Cookie } from "../src/modules/home/live2-collect.js";
 
 test("实时费比 is 付费金额 divided by 成交金额", () => {
   assert.equal(Math.round(live2FeeRate(1841.39, 3009) * 100), 61);
@@ -62,7 +62,7 @@ test("a shop logs in on the server and maps 京麦成交 plus 京准通花费、
   assert.equal(started.records[0].password, undefined);
   await gate;
   const view = await collector.board("cookie");
-  assert.equal(view.runtimeMark, "0.1.1309-live2-same");
+  assert.equal(view.runtimeMark, "0.1.1311-live2-off");
   assert.equal(logins, 1);
   assert.equal(view.running, false);
   assert.equal(view.records[0].liveAmount, 3009);
@@ -163,7 +163,7 @@ test("opening the board keeps the last published round until the new round finis
   assert.equal(doneView.publishedAt, "2026/11/19 19:20:00");
 });
 
-test("a shop without an account is 待接入, and a slow shop keeps today's last success as 待更新", async () => {
+test("a shop without an account is 待接入, and a slow shop older than 15 minutes is 掉线 采集已停止", async () => {
   let done;
   const gate = new Promise(function (resolve) {
     done = resolve;
@@ -198,20 +198,22 @@ test("a shop without an account is 待接入, and a slow shop keeps today's last
   });
   const started = await collector.start("");
   assert.equal(started.records.find((row) => row.shop === "没账号").pendingCollect, true);
-  assert.equal(started.records.find((row) => row.shop === "慢店").pendingUpdate, undefined);
+  assert.equal(Boolean(started.records.find((row) => row.shop === "慢店").pendingUpdate), false);
   await gate;
   const view = await collector.board("");
   const slow = view.records.find((row) => row.shop === "慢店");
   const bare = view.records.find((row) => row.shop === "没账号");
   assert.equal(slow.liveAmount, 10);
   assert.equal(slow.capturedAt, "2026/11/19 10:00:00");
-  assert.equal(slow.pendingUpdate, true);
+  assert.equal(slow.loginExpired, false);
+  assert.equal(slow.offline, true);
+  assert.equal(slow.offlineReason, "采集已停止");
   assert.equal(slow.pendingCollect, false);
   assert.equal(bare.pendingCollect, true);
   assert.equal(bare.liveAmount, null);
 });
 
-test("登录失效的店先用原会话抓数，会话还能用就不重新登录", async () => {
+test("登录失效的店跳过旧会话，有账号时静默再登一次就能继续抓", async () => {
   let logins = 0;
   const fetched = [];
   let done;
@@ -224,7 +226,7 @@ test("登录失效的店先用原会话抓数，会话还能用就不重新登�
       shop: "过期店",
       liveAmount: 10,
       paidAmount: 4,
-      capturedAt: "2026/11/20 01:02:00",
+      capturedAt: "2026/11/20 11:35:00",
       online: false,
       loginExpired: true,
       pendingCollect: false
@@ -246,11 +248,6 @@ test("登录失效的店先用原会话抓数，会话还能用就不重新登�
         logins += 1;
         return [{ name: "thor", value: "new" }];
       },
-      fetchAccountIdentity: async function () {
-        const error = new Error("登录已失效，请重新登录");
-        error.code = "login";
-        throw error;
-      },
       fetchHome: async function (jar) {
         fetched.push(jar[0].value);
         return { dealAmount: 99, paidAmount: 9, paidRoi: 1, paidDeal: 9 };
@@ -261,11 +258,162 @@ test("登录失效的店先用原会话抓数，会话还能用就不重新登�
   await gate;
   const view = await collector.board("");
   const row = view.records.find((item) => item.shop === "过期店");
-  assert.equal(logins, 0);
-  assert.deepEqual(fetched, ["old"]);
+  assert.equal(logins, 1);
+  assert.deepEqual(fetched, ["new"]);
   assert.equal(row.liveAmount, 99);
   assert.equal(Boolean(row.loginExpired), false);
   assert.equal(row.online, true);
+});
+
+test("静默登录遇到验证码就停在失效，不打开窗口也不抓数", async () => {
+  let logins = 0;
+  let fetched = 0;
+  let done;
+  const gate = new Promise(function (resolve) {
+    done = resolve;
+  });
+  const collector = createLive2Collector({
+    storePath: "",
+    published: [{
+      shop: "验证店",
+      liveAmount: 10,
+      paidAmount: 4,
+      capturedAt: "2026/11/20 11:35:00",
+      online: false,
+      loginExpired: true,
+      pendingCollect: false
+    }],
+    loadOrg: async function () {
+      return [{ store: "验证店", enabled: true, login: "a", password: "b", shopId: "1" }];
+    },
+    listSessions: async function () {
+      return [{ store: "验证店", authState: "login_expired", cookies: [] }];
+    },
+    now: function () {
+      return "2026/11/20 11:40:00";
+    },
+    track: function (task) {
+      task.then(done, done);
+    },
+    client: {
+      login: async function () {
+        logins += 1;
+        const error = new Error("登录已失效，请重新登录");
+        error.code = "login";
+        throw error;
+      },
+      fetchHome: async function () {
+        fetched += 1;
+        return { dealAmount: 99 };
+      }
+    }
+  });
+  await collector.start("");
+  await gate;
+  const view = await collector.board("");
+  const row = view.records.find((item) => item.shop === "验证店");
+  assert.equal(logins, 1);
+  assert.equal(fetched, 0);
+  assert.equal(row.loginExpired, true);
+  assert.equal(row.online, false);
+  assert.equal(row.offline, false);
+  assert.equal(view.loginExpiredShops, 1);
+});
+
+test("京麦超时保留会话并标掉线，最近一次有效数据超过 15 分钟则原因是采集已停止", async () => {
+  assert.equal(LIVE2_STALE_MS, 15 * 60 * 1000);
+  let done;
+  const gate = new Promise(function (resolve) {
+    done = resolve;
+  });
+  const collector = createLive2Collector({
+    storePath: "",
+    shopBudgetMs: 30,
+    published: [{
+      shop: "超时店",
+      liveAmount: 20,
+      paidAmount: 4,
+      capturedAt: "2026/11/20 11:20:00",
+      online: true,
+      pendingCollect: false
+    }],
+    loadOrg: async function () {
+      return [{ store: "超时店", enabled: true, login: "a", password: "b", shopId: "1" }];
+    },
+    listSessions: async function () {
+      return [{ store: "超时店", authState: "ok", cookies: [{ name: "thor", value: "keep" }] }];
+    },
+    now: function () {
+      return "2026/11/20 11:40:00";
+    },
+    track: function (task) {
+      task.then(done, done);
+    },
+    client: {
+      login: async function () {
+        throw new Error("should not login");
+      },
+      fetchHome: function () {
+        return new Promise(function () {});
+      }
+    }
+  });
+  await collector.start("");
+  await gate;
+  const view = await collector.board("");
+  const row = view.records[0];
+  assert.equal(row.liveAmount, 20);
+  assert.equal(row.loginExpired, false);
+  assert.equal(row.offline, true);
+  assert.equal(row.offlineReason, "采集已停止");
+});
+
+test("成交金额是空的且报错没有成交字段时不按掉线算", async () => {
+  let done;
+  const gate = new Promise(function (resolve) {
+    done = resolve;
+  });
+  const collector = createLive2Collector({
+    storePath: "",
+    published: [{
+      shop: "空成交店",
+      liveAmount: null,
+      paidAmount: 1,
+      capturedAt: "2026/11/20 11:38:00",
+      online: true,
+      pendingCollect: false
+    }],
+    loadOrg: async function () {
+      return [{ store: "空成交店", enabled: true, login: "a", password: "b", shopId: "1" }];
+    },
+    listSessions: async function () {
+      return [{ store: "空成交店", authState: "ok", cookies: [{ name: "thor", value: "keep" }] }];
+    },
+    now: function () {
+      return "2026/11/20 11:40:00";
+    },
+    track: function (task) {
+      task.then(done, done);
+    },
+    client: {
+      login: async function () {
+        throw new Error("should not login");
+      },
+      fetchHome: async function () {
+        const error = new Error("京麦首页没有成交字段");
+        error.code = "network";
+        throw error;
+      }
+    }
+  });
+  await collector.start("");
+  await gate;
+  const view = await collector.board("");
+  const row = view.records[0];
+  assert.equal(row.online, true);
+  assert.equal(row.offline, false);
+  assert.equal(row.loginExpired, false);
+  assert.equal(row.offlineReason, "");
 });
 
 test("a second start does not collect the same shops again", async () => {
@@ -396,7 +544,9 @@ test("a shop that times out keeps today's saved server reading instead of a blan
   const row = view.records[0];
   assert.equal(row.liveAmount, 5958.55);
   assert.equal(row.capturedAt, "2026/11/19 17:22:59");
-  assert.equal(row.pendingUpdate, true);
+  assert.equal(row.offline, true);
+  assert.equal(row.loginExpired, false);
+  assert.equal(row.offlineReason, "采集已停止");
   assert.equal(row.pendingCollect, false);
 });
 

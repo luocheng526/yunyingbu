@@ -2102,6 +2102,22 @@
       "</button></div></div>"
     );
   }
+  function live2NeedHtml(allShops, state) {
+    var count = 0;
+    if (state && state.live2Pack && state.live2Pack.loginExpiredShops != null) {
+      count = Number(state.live2Pack.loginExpiredShops) || 0;
+    } else {
+      (allShops || []).forEach(function (row) {
+        if (row && row.loginExpired) {
+          count += 1;
+        }
+      });
+    }
+    if (!count) {
+      return "";
+    }
+    return '<span class="xm-hm-live-need">' + count + " 家需要重新登录</span>";
+  }
   function live2FilterHtml(allShops, state) {
     var pick = liveFilter();
     var cur = liveFilterValue(pick);
@@ -2135,6 +2151,7 @@
       "</select></span></div>" +
       '<div class="xm-hm-live-filter-right">' +
       '<span class="xm-hm-live-at">更新时间 ' + escapeHtml(updatedAt || "—") + "</span>" +
+      live2NeedHtml(allShops, state) +
       '<button type="button" class="xm-hm-live-heads" data-live-heads>表头设置</button>' +
       '<button type="button" class="xm-hm-live-refresh" data-connect-live2 title="用组织中心账号登录京麦和京准通">连接京麦</button>' +
       '<button type="button" class="xm-hm-live-refresh" data-refresh-live2>刷新</button></div></div>'
@@ -2576,6 +2593,27 @@
     return fiveMinuteStamp(latest);
   }
   function liveLinkOf(row) {
+    if (typeof liveScope !== "undefined" && liveScope === "live2") {
+      if (row && row.pendingCollect) {
+        return { label: "待接入", kind: "wait" };
+      }
+      if (row && row.loginExpired === true) {
+        return { label: "掉线", kind: "off" };
+      }
+      if (row && row.offline === true) {
+        return { label: "掉线", kind: "off" };
+      }
+      if (row && row.online === true) {
+        if (row.adsFailed === true) {
+          return { label: "在线·广告异常", kind: "ads" };
+        }
+        return { label: "在线", kind: "on" };
+      }
+      if (row && row.pendingUpdate) {
+        return { label: "待更新", kind: "stale" };
+      }
+      return { label: "", kind: "" };
+    }
     if (row && row.pendingUpdate) {
       return { label: "待更新", kind: "stale" };
     }
@@ -2652,11 +2690,21 @@
     if (key === "liveOn") {
       var link = liveLinkOf(row);
       if (link.kind === "off") {
+        var reason = row && row.offlineReason ? String(row.offlineReason) : "";
+        if (typeof liveScope !== "undefined" && liveScope === "live2" && row && row.loginExpired === true) {
+          return (
+            '<td class="xm-hm-num is-fee-hot"><span class="xm-hm-login-cell"><button type="button" class="xm-hm-login-link" title="' +
+            escapeHtml(reason || "登录已失效，请重新登录") +
+            '">掉线</button><button type="button" class="xm-hm-login-link is-relogin" data-live-login="' +
+            escapeHtml(shop) +
+            '" title="账号和密码会填好，登录由你来点">重新登录</button></span></td>'
+          );
+        }
         return (
           '<td class="xm-hm-num is-fee-hot"><button type="button" class="xm-hm-login-link" data-live-login="' +
           escapeHtml(shop) +
           '"' +
-          (row && row.offlineReason ? ' title="' + escapeHtml(row.offlineReason) + '"' : "") +
+          (reason ? ' title="' + escapeHtml(reason) + '"' : "") +
           ">掉线</button></td>"
         );
       }
@@ -3021,7 +3069,9 @@
       ".xm-hm-pop label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;color:var(--xm-ink)}" +
       ".xm-hm-note{color:var(--xm-muted);font-size:12px}" +
       ".xm-hm-login-link{border:0;background:transparent;padding:0;color:#e23b3b;font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}" +
-      ".xm-hm-login-link.is-wait{color:#2f6fed}" +
+      ".xm-hm-login-cell{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end}" +
+      ".xm-hm-login-link.is-wait,.xm-hm-login-link.is-relogin{color:#2f6fed}" +
+      ".xm-hm-live-need{color:#e23b3b;font-size:13px;font-weight:600;white-space:nowrap}" +
       ".xm-hm-desk-mask{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(15,23,42,.45)}" +
       ".xm-hm-desk{position:relative;width:min(780px,100%);max-height:calc(100vh - 48px);overflow:auto;margin:0;padding:16px 16px 14px;border:0;border-radius:12px;background:#fff;box-shadow:0 18px 50px rgba(0,0,0,.22)}" +
       ".xm-hm-desk h3{margin:0 28px 8px 0;font-size:16px}" +
