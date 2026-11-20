@@ -28,7 +28,6 @@ import {
   deleteTalent,
   latestSync,
   listDingUsers,
-  readApiUsage,
   listInterviews,
   listLinks,
   importStaff,
@@ -59,6 +58,21 @@ function requireUser(req, res, next) {
 
 function actorName(req) {
   return String(req.user?.displayName || req.user?.username || "").trim();
+}
+
+async function usageNow() {
+  const paused = !dingCallsEnabled();
+  try {
+    const mod = await import("./store.js");
+    if (typeof mod.readApiUsage === "function") {
+      const usage = await mod.readApiUsage();
+      usage.paused = paused;
+      return usage;
+    }
+  } catch {
+    /* 用量表还没接上时，仍然告诉页面调用已暂停 */
+  }
+  return { cap: 10000, stopAt: 9000, month: "", total: 0, months: [], paused };
 }
 
 function sendErr(res, err) {
@@ -119,9 +133,8 @@ hrRouter.get("/", (_req, res) => {
 hrRouter.get("/status", async (_req, res) => {
   try {
     const links = await listLinks();
-    const usage = await readApiUsage();
-    const paused = !dingCallsEnabled();
-    usage.paused = paused;
+    const usage = await usageNow();
+    const paused = usage.paused;
     res.json({
       ok: true,
       configured: readDingEnv().configured,
@@ -238,8 +251,7 @@ hrRouter.get("/timeoff", async (_req, res) => {
 hrRouter.post("/sync", async (req, res) => {
   try {
     if (readDingEnv().configured && !dingCallsEnabled()) {
-      const usage = await readApiUsage();
-      usage.paused = true;
+      const usage = await usageNow();
       res.json({ ok: true, configured: true, paused: true, usage });
       return;
     }

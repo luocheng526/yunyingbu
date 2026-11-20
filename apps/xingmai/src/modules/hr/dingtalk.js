@@ -1,5 +1,3 @@
-import { reserveApiCall } from "./store.js";
-
 const TOKEN_URL = "https://api.dingtalk.com/v1.0/oauth2/accessToken";
 const OAPI = "https://oapi.dingtalk.com";
 
@@ -59,7 +57,14 @@ export function createDingClient({ env = process.env, fetchImpl = globalThis.fet
     if (!dingCallsEnabled(env)) {
       throw Object.assign(new Error("钉钉调用已暂停"), { statusCode: 503, paused: true });
     }
-    await reserveApiCall();
+    let reserve = null;
+    try {
+      const mod = await import("./store.js");
+      reserve = mod.reserveApiCall;
+    } catch {
+      reserve = null;
+    }
+    if (typeof reserve === "function") await reserve();
     const access = await accessToken();
     const res = await fetchImpl(`${OAPI}${path}?access_token=${encodeURIComponent(access)}`, {
       method: "POST",
