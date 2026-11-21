@@ -22,21 +22,21 @@ const readCookies = extract("async function readCookies", "function hasSession")
 const jar = value => [{ name: "thor", value, domain: ".jd.com", path: "/", secure: true }];
 
 test("the real relogin adapter accepts only the bound native shop ID and closes its own browser", async () => {
-  for (const actualId of ["1", "2", "native-account"]) {
+  for (const actualId of ["1", "2", "native-account", "matching-shop-stale-merchant"]) {
     const chrome = new EventEmitter(); chrome.exitCode = null;
-    let submitted = 0, closed = 0, stopped = 0;
+    let submitted = 0, closed = 0, stopped = 0, identityReads = 0;
     const context = {
       URL, setTimeout, clearTimeout, expected: { store: "本店旗舰店", shopId: "1", merchantId: "9" },
       credentials: { loginName: "fixture", password: "fixture" }, signal: new AbortController().signal,
       profileIdentity: () => ({ key: "p_fixture", ephemeral: false }), isForbiddenLegacyProfileKey: () => false,
       launchChrome: async () => ({ chrome, ws: {} }), send: async () => {}, LOGIN_URL: "https://passport.shop.jd.com/login",
       watchPlatformLimits: () => ({ read: () => actualId === "native-account" ? { identity: "卡片受限" } : {}, stop: () => { stopped++; } }), recoverPasswordSession,
-      nativeMerchantMatches, watchNativeAccount: () => ({ read: () => actualId === "native-account" ? "9" : "", stop() {} }),
+      nativeMerchantMatches, watchNativeAccount: () => ({ read: () => actualId === "native-account" ? "9" : actualId === "matching-shop-stale-merchant" ? "8" : "", stop() {} }),
       readLoginPage: async () => submitted ? { href: "https://shop.jd.com/jdm/home" }
         : { href: "https://passport.shop.jd.com/login", accountVisible: true, passwordVisible: true },
       fillAndSubmit: async () => { submitted++; return true; }, sleepSignal: async () => {},
       readCookies: async () => jar("renewed"), sessionReady, assertPageShopIdentity,
-      readShopBaseIdentity: async () => ({ shopName: "本店旗舰店", shopId: actualId === "native-account" ? "" : actualId }),
+      readShopBaseIdentity: async () => ({ shopName: "本店旗舰店", shopId: actualId === "native-account" ? "" : actualId === "matching-shop-stale-merchant" ? (++identityReads === 1 ? "" : "1") : actualId }),
       discard: () => { closed++; chrome.exitCode=0; chrome.emit("exit"); }
     };
     const result = vm.runInNewContext(extract("async function reloginHomeNow", "export function reloginHomeSession") +
@@ -121,11 +121,46 @@ test("a native account match never suppresses a trade restriction or shared merc
 });
 
 test("conflicting native merchant or labeled shop IDs still reject data and cookies", async () => {
-  for (const options of [{ accountMerchant: "8", pageId: "1" }, { accountMerchant: "9", pageId: "2" }]) {
+  for (const options of [{ accountMerchant: "8", pageId: "" }, { accountMerchant: "9", pageId: "2" }]) {
     const r = await browserCase({ expectedMerchant: "9", ...options });
     await assert.rejects(r.outcome, e => e.code === "identity");
     assert.equal(r.input[0].value, "database-old");
   }
+});
+
+test("an exact labeled shop ID remains primary when the org merchant binding is stale", async () => {
+  const r = await browserCase({ pageId: "1", accountMerchant: "8", expectedMerchant: "9" });
+  assert.equal((await r.outcome).dealAmount, 100);
+  assert.equal(r.input[0].value, "browser-renewed");
+  const limited = await browserCase({ pageId: "1", accountMerchant: "8", expectedMerchant: "9", limits: { deal: "成交受限" } });
+  await assert.rejects(limited.outcome, e => e.code === "platform_limited");
+  assert.equal(limited.input[0].value, "database-old");
+});
+
+test("login accepts an exact shop ID with stale org merchant data but rejects missing, wrong or ambiguous shop IDs", async () => {
+  for (const page of [{ shopId: "81732029" }, { shopId: "" }, { shopId: "wrong" }, { shopId: "81732029", ambiguousShopId: true }]) {
+    const desk = { store: "DIKTT环境电器旗舰店", shopId: "81732029", merchantId: "39133580", ws: {},
+      accountWatch: { read: () => "81732029" } };
+    const result = await vm.runInNewContext(extract("async function verifiedDeskSession", "async function finishOpen") +
+      '\nverifiedDeskSession(desk, cookies, "https://shop.jd.com/jdm/home")', {
+        desk, cookies: jar("session"), sessionReady, nativeMerchantMatches, assertPageShopIdentity, sleep: async () => {},
+        readShopBaseIdentity: async () => ({ ...page, shopName: "DIKTT环境电器旗舰店" })
+      });
+    assert.equal(result.status, page.shopId === desk.shopId && !page.ambiguousShopId ? "ok" : "login");
+  }
+});
+
+test("login waits for the exact shop ID when the native merchant arrives before its card", async () => {
+  const desk = { store: "DIKTT个护健康旗舰店", shopId: "16046901", merchantId: "25019503", ws: {}, accountWatch: { read: () => "17563693" } };
+  let reads = 0, waits = 0;
+  const result = await vm.runInNewContext(extract("async function verifiedDeskSession", "async function finishOpen") +
+    '\nverifiedDeskSession(desk, cookies, "https://shop.jd.com/jdm/home")', {
+      desk, cookies: jar("session"), sessionReady, nativeMerchantMatches, assertPageShopIdentity,
+      sleep: async () => { waits++; },
+      readShopBaseIdentity: async () => ({ shopName: "DIKTT潮流护理旗舰店", shopId: ++reads === 1 ? "" : "16046901" })
+    });
+  assert.equal(result.status, "ok");
+  assert.equal(waits, 1);
 });
 
 test("manual login uses the same native merchant proof and refuses a shared merchant", async () => {
@@ -134,7 +169,7 @@ test("manual login uses the same native merchant proof and refuses a shared merc
       accountWatch: { read: () => "9" }, accessWatch: { read: () => ({ identity: "卡片受限" }) } };
     const result = await vm.runInNewContext(extract("async function verifiedDeskSession", "async function finishOpen") +
       '\nverifiedDeskSession(desk, cookies, "https://shop.jd.com/jdm/home")', {
-        desk, cookies: jar("session"), sessionReady, nativeMerchantMatches, assertPageShopIdentity,
+        desk, cookies: jar("session"), sessionReady, nativeMerchantMatches, assertPageShopIdentity, sleep: async () => {},
         readShopBaseIdentity: async () => ({ shopName: "", shopId: "" })
       });
     assert.equal(result.status, ambiguousMerchant ? "login" : "ok");

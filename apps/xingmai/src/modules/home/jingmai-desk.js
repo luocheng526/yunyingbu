@@ -2597,10 +2597,16 @@ async function fillLoginOnDesk(ws, loginName, password) {
 
 async function verifiedDeskSession(desk, cookies, href) {
   if (!sessionReady(href, cookies)) return null;
-  const identity = await readShopBaseIdentity(desk.ws);
+  let identity = await readShopBaseIdentity(desk.ws);
+  for (let attempt = 0; desk.shopId && !identity.shopId && attempt < 6; attempt++) {
+    if (nativeMerchantMatches(desk, identity, desk.accountWatch?.read())) break;
+    await sleep(500);
+    identity = await readShopBaseIdentity(desk.ws);
+  }
   const accountMerchant = desk.accountWatch?.read() || "";
   const nativeMatch = nativeMerchantMatches(desk, identity, accountMerchant);
-  if (accountMerchant && desk.merchantId && accountMerchant !== String(desk.merchantId).trim()) {
+  if (accountMerchant && desk.merchantId && accountMerchant !== String(desk.merchantId).trim() &&
+      (!desk.shopId || identity.shopId !== String(desk.shopId).trim())) {
     return { status: "login", message: "京麦当前账号商家身份不符，未保存数据" };
   }
   if (!nativeMatch && ((desk.shopId && !identity.shopId) || (!identity.shopId && !identity.shopName))) {
@@ -3901,7 +3907,10 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
       }
       await assertSessionPage();
       const accountMerchant = accountWatch?.read() || "";
-      if (accountMerchant && expected.merchantId && accountMerchant !== String(expected.merchantId).trim()) {
+      // The labeled shop ID is primary. A stale org merchant ID must not
+      // override an exact shop match; merchant-only fallback still fails closed.
+      if (accountMerchant && expected.merchantId && accountMerchant !== String(expected.merchantId).trim() &&
+          (!expected.shopId || identity.shopId !== String(expected.shopId).trim())) {
         throw Object.assign(new Error("京麦当前账号商家身份不符，未保存数据"), { code: "identity" });
       }
       const nativeMatch = nativeMerchantMatches(expected, identity, accountMerchant);
@@ -4093,13 +4102,17 @@ async function reloginHomeNow(signal, expected, credentials, allowed) {
         if (!sessionReady(page.href, cookies)) return null;
         const actual = await readShopBaseIdentity(desk.ws);
         const accountMerchant = desk.accountWatch.read();
-        if (accountMerchant && expected.merchantId && accountMerchant !== String(expected.merchantId).trim()) {
-          throw Object.assign(new Error("京麦当前账号商家身份不符，未保存数据"), { code: "identity" });
-        }
         const nativeMatch = nativeMerchantMatches(expected, actual, accountMerchant);
         if (!actual.shopId && !nativeMatch) {
           if (!identityWaitingAt) identityWaitingAt = Date.now();
-          if (watch.read().identity && Date.now() - identityWaitingAt >= 3000) {
+          if (Date.now() - identityWaitingAt < 3000) return null;
+        }
+        if (accountMerchant && expected.merchantId && accountMerchant !== String(expected.merchantId).trim() &&
+            (!expected.shopId || actual.shopId !== String(expected.shopId).trim())) {
+          throw Object.assign(new Error("京麦当前账号商家身份不符，未保存数据"), { code: "identity" });
+        }
+        if (!actual.shopId && !nativeMatch) {
+          if (watch.read().identity) {
             throw Object.assign(new Error(watch.read().identity), { code: "platform_limited" });
           }
           return null;
