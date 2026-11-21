@@ -5708,6 +5708,13 @@
       }
       function showDesk(st) {
         state.desk = st || {};
+        if (state.desk.status === "failed") {
+          window.clearInterval(deskTimer);
+          deskTimer = 0;
+        }
+        if (state.desk.status === "failed" || state.desk.status === "finishing") {
+          state.desk.needCode = false;
+        }
         if (state.desk.status === "code" || state.desk.needCode) {
           state.desk.status = "code";
           state.desk.needCode = true;
@@ -5717,9 +5724,9 @@
         if (!dead) {
           paint(root, state);
         }
-        if (state.desk && state.desk.open && (state.desk.status === "screen" || state.desk.status === "code")) {
+        if (state.desk && state.desk.open && (state.desk.status === "screen" || state.desk.status === "code" || state.desk.status === "finishing")) {
           pollDesk();
-          focusDeskCode();
+          if (state.desk.status === "code") focusDeskCode();
         }
       }
       function finishDeskLogin(storeName) {
@@ -5766,6 +5773,13 @@
       function applyDesk(st) {
         var prev = state.desk || {};
         var next = st || {};
+        if (next.status === "finishing" || next.status === "failed") {
+          next.open = true;
+          next.preview = false;
+          next.store = next.store || prev.store;
+          showDesk(next);
+          return;
+        }
         if (next.status === "done" || next.status === "ok") {
           window.clearInterval(deskTimer);
           deskTimer = 0;
@@ -5835,6 +5849,10 @@
             next.store = next.store || keptStore;
             if (!next.message) {
               next.message = keptMessage;
+            }
+            if (next.status === "finishing" || next.status === "failed") {
+              showDesk(next);
+              return;
             }
             if (/启动浏览器/.test(String(next.message || "")) && keptMessage && !/启动浏览器/.test(keptMessage)) {
               next.message = keptMessage;
@@ -5995,7 +6013,7 @@
         }
         watchOpeningShot(seq, name);
         var wait = window.setInterval(function () {
-          if (dead || seq !== deskSeq || !state.desk || state.desk.status === "screen" || state.desk.status === "verify" || state.desk.status === "code" || state.desk.status === "failed") {
+          if (dead || seq !== deskSeq || !state.desk || state.desk.status === "screen" || state.desk.status === "verify" || state.desk.status === "code" || state.desk.status === "finishing" || state.desk.status === "failed") {
             window.clearInterval(wait);
             return;
           }
@@ -6009,7 +6027,7 @@
               failDesk(seq, row.store || name, row.step || "打开京麦登录页", row.message || "登录没有打开");
               return;
             }
-            if (row.status === "screen" || row.status === "verify" || row.status === "code") {
+            if (row.status === "screen" || row.status === "verify" || row.status === "code" || row.status === "finishing") {
               window.clearTimeout(timed);
               window.clearInterval(wait);
               row.open = true;
@@ -6039,7 +6057,7 @@
           if (dead || seq !== deskSeq || !state.desk) {
             return;
           }
-          if (state.desk.status === "screen" || state.desk.status === "verify" || state.desk.status === "code") {
+          if (state.desk.status === "screen" || state.desk.status === "verify" || state.desk.status === "code" || state.desk.status === "finishing") {
             return;
           }
           failDesk(seq, name, state.desk.step || "打开京麦登录页", "登录页还没有出来，可以重试本店");
@@ -6065,7 +6083,7 @@
             failDesk(seq, st.store || name, st.step || "打开京麦登录页", st.message || "登录没有打开");
             return;
           }
-          if (st.status === "screen" || st.status === "verify" || st.status === "code") {
+          if (st.status === "screen" || st.status === "verify" || st.status === "code" || st.status === "finishing") {
             window.clearTimeout(timed);
             st.open = true;
             st.store = st.store || name;

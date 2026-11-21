@@ -42,6 +42,7 @@ const passwordPending = new Map();
 let loginQueue = [];
 let loginCursor = { index: 0, total: 0, store: "" };
 let loginEpoch = 0;
+let loginCompletion = null;
 let openingMark = 0;
 const orgCache = new Map();
 /** store → { store, team, manager, enabled } for ownership (no secrets). */
@@ -197,6 +198,7 @@ export function resetJingmaiDeps() {
   recovering = false;
   deskLock = Promise.resolve();
   loginEpoch = 0;
+  loginCompletion = null;
 }
 
 let orgIdentityMap = null;
@@ -663,7 +665,8 @@ function clearOpening() {
 }
 
 function loginInProgress(name) {
-  return loginCursor.store === name && loginCursor.failed !== true && (loginCursor.phase === "opening" || loginCursor.phase === "screen");
+  return loginCursor.store === name && loginCursor.failed !== true &&
+    (loginCursor.phase === "opening" || loginCursor.phase === "screen" || loginCursor.phase === "finishing");
 }
 
 function currentLoginState(fallback) {
@@ -673,6 +676,50 @@ function currentLoginState(fallback) {
     step: loginCursor.step,
     message: loginCursor.message || "正在启动浏览器"
   });
+}
+
+function finishDeskSession(name, state, expected, epoch = loginEpoch) {
+  if (epoch !== loginEpoch) return Promise.resolve(currentLoginState(name));
+  if (loginCompletion && loginCompletion.epoch === epoch && loginCompletion.store === name) {
+    return loginCompletion.promise;
+  }
+  const completion = { epoch, store: name, promise: null };
+  loginCompletion = completion;
+  clearOpening();
+  loginCursor.store = name;
+  loginCursor.phase = "finishing";
+  loginCursor.needCode = false;
+  loginCursor.step = "恢复采集";
+  loginCursor.message = "登录已确认，正在保存会话并恢复采集";
+  completion.promise = (async function () {
+    // Release the profile before collecting; concurrent UI polls must not close
+    // the browser or save this session a second time while that work finishes.
+    if (deps.desk && deps.desk.close) await deps.desk.close();
+    if (epoch !== loginEpoch) return currentLoginState(name);
+    const kept = await rememberLogin(name, state.cookies || [], {
+      ...expected, store: name, pageMatch: state.pageMatch === true
+    });
+    if (epoch !== loginEpoch) return currentLoginState(name);
+    if (kept !== "saved") {
+      loginCursor.failed = true;
+      loginCursor.phase = "failed";
+      loginCursor.step = "核对店铺身份";
+      loginCursor.message = kept === "kept"
+        ? "这次登录未通过店铺身份核验，原来的会话还在，请重试本店"
+        : "登录身份未通过核验，请重新打开该店登录";
+      return currentLoginState(name);
+    }
+    return advanceAfterSuccess(name);
+  })().catch(function () {
+    if (epoch !== loginEpoch) return currentLoginState(name);
+    loginCursor.failed = true;
+    loginCursor.phase = "failed";
+    loginCursor.message = "登录会话保存未完成，请重试本店";
+    return currentLoginState(name);
+  }).finally(function () {
+    if (loginCompletion === completion) loginCompletion = null;
+  });
+  return completion.promise;
 }
 
 async function startQueued(shop, epoch) {
@@ -735,25 +782,14 @@ async function startQueued(shop, epoch) {
   if (epoch != null && epoch !== loginEpoch) {
     return currentLoginState(shop.store);
   }
+  if (loginCompletion && loginCompletion.epoch === loginEpoch && loginCompletion.store === shop.store) {
+    return currentLoginState(shop.store);
+  }
   if (opened.status === "ok") {
-    await deps.desk.close();
-    const kept = await rememberLogin(shop.store, opened.cookies || [], {
+    return finishDeskSession(shop.store, opened, {
       shopId: shop.shopId || "",
-      merchantId: shop.merchantId || "",
-      store: shop.store,
-      pageMatch: opened.pageMatch === true
-    });
-    if (kept === "kept") {
-      return publicState({ status: "done", store: shop.store, message: "这次登录到的不是这家店，原来的会话还在" });
-    }
-    if (kept !== "saved") {
-    loginCursor.failed = true;
-    loginCursor.phase = "failed";
-    loginCursor.step = "核对店铺身份";
-    loginCursor.message = "登录没有通过，请再试一次";
-      return publicState({ status: "failed", store: shop.store, step: "核对店铺身份", message: loginCursor.message });
-    }
-    return publicState({ status: "ok", store: shop.store, message: shop.store + " 登录成功" });
+      merchantId: shop.merchantId || ""
+    }, epoch == null ? loginEpoch : epoch);
   }
   if (opened.status === "code" || opened.needCode) {
     loginCursor.phase = "screen";
@@ -800,6 +836,12 @@ async function startQueued(shop, epoch) {
 async function advanceAfterSuccess(store) {
   const next = loginQueue.shift();
   if (!next) {
+    // The completed result remains available to late UI polls, but no active
+    // cursor/two-minute guard may keep the freshly logged-in shop out of live2.
+    loginEpoch += 1;
+    clearOpening();
+    loginCursor = { index: 1, total: 1, store, phase: "done", failed: false,
+      startedAt: 0, step: "", message: store + " 登录成功" };
     return publicState({ status: "ok", store: store, message: store + " 登录成功" });
   }
   loginCursor.index += 1;
@@ -1125,10 +1167,15 @@ export async function recoverDroppedShops(cookie) {
 }
 
 export async function reloginState(store) {
+  const epoch = loginEpoch;
   const name = loginCursor.store || String(store || "").trim();
   if (!name) {
     return publicState({ status: "missing", message: "请重新打开登录" });
   }
+  if (loginCursor.phase === "done") {
+    return publicState({ status: "ok", store: name, message: loginCursor.message });
+  }
+  if (loginCursor.phase === "finishing") return currentLoginState(name);
   const idle = !loginCursor.phase || loginCursor.phase === "idle";
   if (loginCursor.failed || loginCursor.phase === "failed") {
     return publicState({ status: "failed", store: name, step: loginCursor.step, message: loginCursor.message || "登录没有打开" });
@@ -1171,6 +1218,7 @@ export async function reloginState(store) {
     }
   }
   const state = await deps.desk.poll(name);
+  if (epoch !== loginEpoch) return currentLoginState(name);
   if (idle && (!state || state.status === "opening" || state.status === "missing")) {
     return publicState({ status: "idle", store: name, message: "" });
   }
@@ -1201,26 +1249,11 @@ export async function reloginState(store) {
     });
   }
   if (state.status === "ok") {
-    const cookies = state.cookies || [];
     const cached = orgCache.get(name);
-    if (deps.desk && deps.desk.close) await deps.desk.close();
-    const kept = await rememberLogin(name, cookies, {
-      store: name,
+    return finishDeskSession(name, state, {
       shopId: (cached && cached.shopId) || "",
-      merchantId: (cached && cached.merchantId) || "",
-      pageMatch: state.pageMatch === true
-    });
-    if (kept === "kept") {
-      return publicState({ status: "login", store: name, message: "这次登录到的不是这家店，原来的会话还在" });
-    }
-    if (kept !== "saved") {
-      return publicState({
-        status: "login",
-        store: name,
-        message: "登录身份未通过核验，请重新打开该店登录"
-      });
-    }
-    return advanceAfterSuccess(name);
+      merchantId: (cached && cached.merchantId) || ""
+    }, epoch);
   }
   if (state.status === "missing") {
     return publicState({ status: "missing", store: name, message: state.message || "请重新打开登录" });

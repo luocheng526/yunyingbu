@@ -458,7 +458,7 @@ test("a mismatched login keeps the cookies already saved for that shop", async (
   }));
   try {
     const state = await reloginState("DIKTT潮流生活旗舰店");
-    assert.equal(state.status, "login");
+    assert.equal(state.status, "failed");
     assert.match(state.message, /原来的会话还在/);
     const row = (await listSessions()).find((item) => item.store === "DIKTT潮流生活旗舰店");
     assert.equal(row.cookies[0].value, "live");
@@ -482,7 +482,7 @@ test("a mismatched login with no saved session is not written as this shop", asy
   }));
   try {
     const state = await reloginState("UUMILO个人洗护旗舰店");
-    assert.equal(state.status, "login");
+    assert.equal(state.status, "failed");
     assert.match(state.message, /重新打开/);
     const row = (await listSessions()).find((item) => item.store === "UUMILO个人洗护旗舰店");
     assert.equal(row.authState, "login_expired");
