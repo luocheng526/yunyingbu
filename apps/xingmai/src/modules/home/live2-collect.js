@@ -15,6 +15,7 @@ import { beijingParts, collectAuthDecision, displayStamp, isMissingDealFieldErro
 import { homeCollectionGate } from "./jingmai-runner.js";
 import { normalizeOrgShops, readServerOrgShops } from "./org-roster.js";
 import { blankLive2Record, live2RecordFromMetrics } from "./live2.js";
+import { createLive2SalesTrends } from "./live2-sales-trend.js";
 
 function workerCount() {
   const value = Number(process.env.LIVE2_CONCURRENCY);
@@ -171,6 +172,7 @@ export function createLive2Collector(deps = {}) {
   const samplesOf = deps.listSamples || listSamples;
   const client = deps.client || jingmaiClient;
   const now = deps.now || stampNow;
+  const enrichSalesTrends = createLive2SalesTrends({ listSamples: samplesOf, now, clock });
   const file = deps.storePath === undefined ? defaultStorePath() : String(deps.storePath || "");
   const budget = deps.shopBudgetMs == null ? shopBudgetMs() : Number(deps.shopBudgetMs);
   const widthOf = deps.concurrency == null ? workerCount : function () { return deps.concurrency; };
@@ -291,7 +293,10 @@ export function createLive2Collector(deps = {}) {
     shops.forEach(function (shop) {
       shop.password = "";
     });
-    return boardFrom(shops, Date.now() - started);
+    const result = boardFrom(shops, Date.now() - started);
+    result.records = await enrichSalesTrends(result.records);
+    result.timings.apiMs = Date.now() - started;
+    return result;
   }
 
   function writeOptions(shop, phase) {
@@ -1011,6 +1016,7 @@ export function createLive2Collector(deps = {}) {
     const view = boardFrom(shops);
     view.running = true;
     view.started = true;
+    if (!background) view.records = await enrichSalesTrends(view.records);
     return view;
   }
 

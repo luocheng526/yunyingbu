@@ -317,7 +317,9 @@ test("homepage money and rates show as rounded integers", () => {
   assert.match(homeJs, /function fmtMoney\(value\) \{\n    return fmtInt\(value\);/);
   assert.match(homeJs, /return Math\.round\(n\) \+ "%"/);
   assert.match(homeJs, /Math\.round\(Math\.abs\(n\)\)/);
-  assert.doesNotMatch(homeJs, /minimumFractionDigits: 2/);
+  // Table/card amounts remain rounded; the shop trend tooltip shows precise source amounts.
+  const withoutShopTooltipMoney = homeJs.replace(/function salesTrendMoney\(value\) \{[\s\S]*?\n  \}/, "");
+  assert.doesNotMatch(withoutShopTooltipMoney, /minimumFractionDigits: 2/);
   assert.doesNotMatch(homeJs, /n\.toFixed\(2\) \+ "%"/);
   assert.match(homeJs, /return \(p \/ a\)\.toFixed\(2\);/);
 });
