@@ -1,5 +1,8 @@
 import { Router } from "express";
+import { fileURLToPath } from "node:url";
 import { isHrDesk } from "../home/nav-items.js";
+import { runSingleProbe, singleProbeStatus } from "./probe.js";
+import { createShopDayRouter } from "./shop-day-router.js";
 import {
   catalogBody,
   coverageBody,
@@ -7,7 +10,7 @@ import {
   ensureCollectLoop,
   exportView,
   isBoundAdmin,
-  linkStatus,
+  loginWithPassword,
   pickAccount,
   pollLink,
   qrBytes,
@@ -63,6 +66,18 @@ boundRouter.use((req, res, next) => {
 boundRouter.get("/", (req, res) => {
   res.json({ ok: true, module: "bound", source: "crawler", erp: false });
 });
+
+// The deployed shell still references this alias. Serve the same module file
+// as SPA navigation without changing the shared shell or retaining a stale copy.
+boundRouter.get("/client.js", (req, res) => {
+  if (!requireUser(req, res)) return;
+  res.setHeader("Cache-Control", "private, no-store");
+  res.type("application/javascript").sendFile(fileURLToPath(new URL("../../../public/shared/modules/bound.js", import.meta.url)));
+});
+
+boundRouter.use("/shop-day", (req, res, next) => {
+  if (requireAdmin(req, res)) next();
+}, createShopDayRouter());
 
 boundRouter.get("/catalog", (req, res) => {
   if (!requireUser(req, res)) {
@@ -149,6 +164,18 @@ boundRouter.post("/link/start", async (req, res) => {
   res.json(await startLink((req.body || {}).provider));
 });
 
+boundRouter.post("/link/password", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const result = await loginWithPassword(req.body || {});
+    res.status(result.statusCode || 200).json(result);
+  } catch {
+    // Never forward an upstream login error, which may contain request credentials.
+    res.status(500).json({ ok: false, message: "登录状态保存失败，请重新登录。" });
+  }
+});
+
 boundRouter.post("/link/pick", async (req, res) => {
   if (!requireAdmin(req, res)) {
     return;
@@ -179,4 +206,20 @@ boundRouter.post("/collect/tick", async (req, res) => {
     return;
   }
   res.json(await tick());
+});
+
+boundRouter.get("/collect/probe", async (req, res, next) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const result = await singleProbeStatus(req.query.date);
+    res.status(result.statusCode || 200).json(result);
+  } catch (error) { next(error); }
+});
+
+boundRouter.post("/collect/probe", async (req, res, next) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const result = await runSingleProbe(req.body || {});
+    res.status(result.statusCode || 200).json(result);
+  } catch (error) { next(error); }
 });

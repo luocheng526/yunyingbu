@@ -1,0 +1,479 @@
+/* global structuredClone, URLSearchParams, Blob, setTimeout */
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import vm from "node:vm";
+import { publicCatalog } from "../src/modules/bound/catalog.js";
+
+const source = readFileSync(new URL("../public/shared/modules/bound.js", import.meta.url), "utf8");
+const scope = { shopId: "16501691", platform: "JD", shopName: "RASW潮流生活京选菀瑶专卖店", date: "2026-10-03" };
+const selected = { goodsId: "10225590259558", goodsName: "测试除螨仪", ...scope };
+const columns = ["date", "goodsId", "goodsName", "skuId", "province", "city", "gmv", "netGmv", "tghf", "profit", "sales"]
+  .map(key => ({ columnKey: key, columnName: key === "gmv" ? "支付金额(支付)" : key }));
+function record(id, rows, page = 1, extra = {}) {
+  return { reportId: id, page, scope, goodsId: id.startsWith("product_") ? selected.goodsId : null,
+    status: rows.length ? "received" : "empty", rows,
+    response: { payload: { data: { columnInfo: columns, columnData: rows } } }, ...extra };
+}
+function fixture() {
+  const goods = Array.from({ length: 170 }, (_, i) => ({ goodsId: String(90000000000000 + i), goodsName: "商品" + i,
+    shopId: scope.shopId, gmv: i < 50 ? "100" : "0", tghf: String(i), profit: String(-i), sumLine: false }));
+  return {
+    channel_operating: [record("channel_operating", [{ date: "2026/10/03", gmv: "23181", netGmv: "20760", tghf: 9606.63, profit: "6395", thtkje: 2370.15, jhpcb: 2640.44, zdyFyAll: "309" }])],
+    shop_goods_page: [record("shop_goods_page", [{ sumLine: true, gmv: "23181" }, ...goods.slice(0, 100)], 1, { total: 170 }), record("shop_goods_page", [{ sumLine: true }, ...goods.slice(100)], 2, { total: 170 })],
+    shop_goods_total: [record("shop_goods_total", [{ sumLine: true, gmv: "23181", netGmv: "20760", tghf: "9607", profit: "6705", sales: "90" }])],
+    channel_goods: [record("channel_goods", [{ sumLine: true, profit: "9879" }, ...goods.slice(0, 50)])],
+    channel_labels: [record("channel_labels", [])],
+    channel_area: [record("channel_area", [{ province: "河北", city: "--", isProv: true, sumLine: true, gmv: "100" }, { province: "河北", city: "石家庄", gmv: "100" }])],
+    product_overview: [record("product_overview", [{ date: "2026/10/03", goodsId: selected.goodsId, goodsName: selected.goodsName, gmv: "4188", netGmv: "2918", tghf: "1663", profit: "770", sales: "12" }])],
+    product_skus: [record("product_skus", [{ skuId: selected.goodsId, gmv: "4188", sales: "12" }])],
+    product_area: [record("product_area", [{ province: "浙江", isProv: true, sumLine: true, gmv: "100" }, { province: "浙江", city: "杭州", gmv: "100" }])]
+  };
+}
+async function harness({ records = fixture(), failedPage = false, search = "", inventory, products = {}, cardRecords = {}, extras = {}, run } = {}) {
+  const calls = [];
+  const downloads = [], blobs = [];
+  class LocalURL extends URL {}
+  LocalURL.createObjectURL = blob => { blobs.push(blob); return "blob:test"; };
+  LocalURL.revokeObjectURL = () => {};
+  const root = { innerHTML: "", querySelector: () => null, addEventListener(type, fn) { this[type] = fn; }, removeEventListener() {} };
+  const reply = (body, ok = true) => Promise.resolve({ ok, json: async () => structuredClone(body) });
+  const manifest = { ok: true, scope, selected, inventory, run, reports: Object.entries(records).map(([id, pages]) => ({ id, label: id, product: id.startsWith("product_"), pages: pages.map(r => ({ page: r.page, status: r.status })) })) };
+  const context = vm.createContext({
+    window: { location: { hostname: "127.0.0.1", search } }, Date, Intl, URL: LocalURL, URLSearchParams, Blob,
+    document: { getElementById: () => null, createElement: tag => tag === 'a' ? { click() { downloads.push(this.download); } } : {}, head: { appendChild() {} } },
+    setInterval: () => 1, clearInterval() {},
+    fetch(url, options = {}) {
+      calls.push({ url, options });
+      if (url === "/api/bound") return reply({ ok: true });
+      if (url === "/api/bound/catalog") return reply(publicCatalog());
+      if (url === "/api/bound/link") return reply({ phase: "not_logged_in", collection: { batchEnabled: false } });
+      if (url === "/api/bound/progress") return reply({ items: [] });
+      if (url.startsWith("/api/bound/collect/probe")) return reply({ target: { ...scope, metric: "广告花费" }, targets: [] });
+      if (url === "/api/bound/shop-day") return reply(manifest);
+      if (url.startsWith("/api/bound/shop-day/report?")) {
+        const params = new URL(url, "http://localhost").searchParams;
+        const id = params.get("reportId"), page = Number(params.get("page"));
+        if (failedPage && id === "shop_goods_page" && page === 2) return reply({}, false);
+        const goodsId = params.get("goodsId");
+        const cardId = params.get("cardId");
+        const extraKey = id + (params.has('columnKey') ? ':' + params.get('columnKey') : params.has('trendDays') ? ':' + params.get('trendDays') : '');
+        if (extras[extraKey]) return reply({ ok: true, record: extras[extraKey].find(r => r.page === page) });
+        const available = cardId && cardRecords[id + ':' + cardId] ? cardRecords[id + ':' + cardId] : goodsId && goodsId !== selected.goodsId ? products[goodsId]?.[id] || [] : records[id] || [];
+        return reply({ ok: true, record: available.find(r => r.page === page) });
+      }
+      throw new Error("Unexpected request: " + url);
+    }
+  });
+  vm.runInContext(source, context);
+  context.window.XmModules["/bound"].mount(root);
+  const settle = () => new Promise(resolve => setTimeout(resolve, 10));
+  const click = async attrs => {
+    root.click({ target: { closest: selector => selector === "[data-act]" ? { getAttribute: name => attrs[name] } : null } });
+    await settle();
+  };
+  const change = async (act, value, attrs = {}) => { root.change({ target: { value, checked: attrs.checked, getAttribute: name => name === "data-act" ? act : attrs[name] } }); await settle(); };
+  await settle();
+  return { root, calls, click, change, blobs, downloads };
+}
+
+function periodFixture() {
+  const records = fixture();
+  const items = [
+    { ...selected, spuid: 'spu-1', gmv: '4188', netGmv: '2918', sales: '12', refund: '1270', tghf: '1663', profit: '770', netHpCost: '200' },
+    { ...selected, goodsId: '10225590259559', goodsName: '第二件商品', spuid: 'spu-1', gmv: '100', netGmv: '100', sales: '1', refund: '0', tghf: '25', profit: '50', netHpCost: '5' }
+  ];
+  records.shop_goods_page = [record('shop_goods_page', items, 1, { total: 2 })];
+  records.shop_spu_page = [record('shop_spu_page', [{ ...items[0], goodsId: undefined }], 1, { total: 1 })];
+  records.shop_spu_total = [record('shop_spu_total', [{ sumLine: true, gmv: '4288' }])];
+  const products = {};
+  for (const item of items) {
+    const daily = Array.from({ length: 30 }, (_, index) => ({ ...item, date: new Date(Date.parse('2026-10-03T00:00:00Z') - index * 86400000).toISOString().slice(0, 10).replaceAll('-', '/'), ...(index ? { gmv: index === 1 ? '0' : String(1000 + index), netGmv: index === 1 ? '-77' : String(900 + index), refund: '77', profit: '-20' } : {}) }));
+    const r = record('product_overview', [daily[0]], 1, { goodsId: item.goodsId });
+    r.response.payload = { code: 0, data: [{ columnInfo: columns, columnData: [{ gmv: '99999999' }] }, { columnInfo: columns, columnData: daily }] };
+    if (item.goodsId === selected.goodsId) records.product_overview = [r];
+    else products[item.goodsId] = { product_overview: [r] };
+  }
+  return { records, products, inventory: { complete: true, items } };
+}
+
+test('关键指标使用专用卡片与比较值，点击联动明细，缺采指标不沿用另一指标结果', async () => {
+  const graph = record('key_graph', [{ gmv: '23180.55', tghf: '9606.63' }], 1, {
+    metricColumns: [{ columnKey: 'gmv', columnName: '支付金额(支付)' }, { columnKey: 'tghf', columnName: '推广花费' }],
+    metricCards: { gmv: { value: '23180.55', yoy: null, mom: '0.12' }, tghf: { value: '9606.63', yoy: '0.2', mom: null } },
+    metricTrend: [{ date: scope.date, cells: { gmv: { value: '23180.55', lastYearValue: '20000', yoy: null, mom: '0.12' }, tghf: { value: '9606.63', lastYearValue: null } } }]
+  });
+  const rows = [{ ...selected, goodsName: '指标链接 A', cells: [{ column: 'gmv', value: '123.45' }] }];
+  const h = await harness({ extras: { key_graph: [graph], 'key_goods:gmv': [record('key_goods', rows, 1, { columnKey: 'gmv', total: 1 })], 'key_shops:gmv': [record('key_shops', [{ shopName: scope.shopName, gmv: '23180.55' }], 1, { columnKey: 'gmv' })] } });
+  await h.click({ 'data-act': 'page', 'data-page': 'channelAnalysisNew' });
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.match(h.root.innerHTML, /23,180.55/);
+  assert.match(h.root.innerHTML, /12.00%/);
+  assert.match(h.root.innerHTML, /指标链接 A/);
+  assert.match(h.root.innerHTML, /去年同期/);
+  assert.doesNotMatch(h.root.innerHTML, /支付金额\(支付\)同比/);
+  assert.doesNotMatch(h.root.innerHTML, /店铺利润（已扣自定义费用）|data-tab="qd_gjzbfx_qdck"/);
+  await h.click({ 'data-act': 'tab', 'data-tab': 'qd_gjzbfx_dpck' });
+  assert.match(h.root.innerHTML, /data-key="shopName"[^>]*>店铺/);
+  assert.match(h.root.innerHTML, /RASW潮流生活京选菀瑶专卖店/);
+  await h.click({ 'data-act': 'tab', 'data-tab': 'qd_gjzbfx_ljck' });
+  await h.click({ 'data-act': 'archive-key-metric', 'data-key': 'tghf' });
+  assert.doesNotMatch(h.root.innerHTML, /指标链接 A/);
+  assert.match(h.root.innerHTML, /这张表尚未采集/);
+  assert.ok(h.calls.some(c => c.url.includes('reportId=key_goods') && c.url.includes('columnKey=tghf')));
+  await h.click({ 'data-act': 'archive-trend-fold' });
+  assert.doesNotMatch(h.root.innerHTML, /<svg viewBox/);
+  assert.equal(h.calls.some(c => c.options.method && c.options.method !== 'GET'), false);
+});
+
+test('SPU 周期直接展示专用接口数值，缺日不造零，导出和展开保留 SPU 身份', async () => {
+  const f = periodFixture(), product = f.records.shop_spu_page[0].rows[0];
+  const periods = [{ spuid: product.spuid, rows: [{ date: '2026/10/03', gmv: '4287.68', tghf: '1688.22' }], missingDates: [] }];
+  const h = await harness({ ...f, extras: { 'shop_spu_period:7': [record('shop_spu_period', [product], 1, { trendDays: 7, total: 1, periods })] } });
+  await h.click({ 'data-act': 'page', 'data-page': 'productOverview' });
+  await h.click({ 'data-act': 'chip', 'data-key': 'view', 'data-value': 'period' });
+  assert.match(h.root.innerHTML, /4,287.68/);
+  assert.equal((h.root.innerHTML.match(/data-period-date=/g) || []).length, 7);
+  assert.match(h.root.innerHTML, /未采集/);
+  assert.match(h.root.innerHTML, /data-act="archive-gallery-spu" data-spuid="spu-1"/);
+  assert.doesNotMatch(h.root.innerHTML, /data-act="archive-product" data-goods-id=""/);
+  await h.click({ 'data-act': 'archive-export' });
+  const csv = await h.blobs[0].text();
+  assert.match(csv, /"spu-1","2026-10-03","已采集"/);
+  assert.match(csv, /"4287.68"/);
+  assert.match(csv, /"2026-10-02","未采集"/);
+});
+
+test('渠道总览明确单店范围，缺少店铺列表时不冒充全账号总览', async () => {
+  const h = await harness();
+  await h.click({ 'data-act': 'page', 'data-page': 'channelOverview' });
+  assert.match(h.root.innerHTML, /全账号渠道汇总和店铺分组尚未采集/);
+  await h.click({ 'data-act': 'tab', 'data-tab': 'qdzl_dp' });
+  assert.match(h.root.innerHTML, /这张表尚未采集/);
+  assert.equal(h.calls.some(c => c.url.includes('channelOverViewList') || c.options.method === 'POST'), false);
+});
+
+test('商品周期复用真实逐日档案，7/15天跨月展开；SPU不由SKU取整值拼凑', async () => {
+  const h = await harness(periodFixture());
+  await h.click({ 'data-act': 'page', 'data-page': 'productOverview' });
+  assert.match(h.root.innerHTML, />周期<\/button>/);
+  await h.click({ 'data-act': 'chip', 'data-key': 'view', 'data-value': 'period' });
+  assert.match(h.root.innerHTML, /SPU 周期使用独立接口，尚未采集/);
+  assert.doesNotMatch(h.root.innerHTML, /data-period-date=/);
+  await h.click({ 'data-act': 'dim', 'data-dim': 'sku' });
+  assert.equal((h.root.innerHTML.match(/data-period-date=/g) || []).length, 14);
+  assert.match(h.root.innerHTML, /rowspan="7"/);
+  assert.match(h.root.innerHTML, /2026\/09\/27/);
+  assert.doesNotMatch(h.root.innerHTML, /2026\/09\/26|99,999,999|99999999|档案未通过核验/);
+  assert.match(h.root.innerHTML, /<b><span class="bd-num ">0<\/span><\/b>/);
+  assert.match(h.root.innerHTML, /is-negative/);
+  await h.change('archive-period-days', '15');
+  assert.equal((h.root.innerHTML.match(/data-period-date=/g) || []).length, 30);
+  assert.match(h.root.innerHTML, /rowspan="15"/);
+  assert.match(h.root.innerHTML, /2026\/09\/19/);
+  await h.change('q', selected.goodsId);
+  assert.equal((h.root.innerHTML.match(/data-period-date=/g) || []).length, 15);
+  await h.click({ 'data-act': 'archive-export' });
+  const csv = await h.blobs[0].text();
+  assert.match(csv, /"时间范围","数据状态"/);
+  assert.equal(csv.trim().split('\r\n').length, 16);
+  assert.match(csv, /"2026-10-02","已采集"/);
+  assert.match(h.downloads[0], /period-15-page-1/);
+  assert.equal(h.calls.filter(c => c.url.includes('goodsId=10225590259559')).length, 1);
+  assert.equal(h.calls.some(c => c.options.method && c.options.method !== 'GET'), false);
+  await h.click({ 'data-act': 'archive-product', 'data-goods-id': selected.goodsId, 'data-product-page': 'productOperation' });
+  assert.match(h.root.innerHTML, /data-page="productOperation"/);
+  assert.doesNotMatch(h.root.innerHTML, /data-period-date=/);
+});
+
+test('周期缺日标记未采集，身份冲突、重复日期和锚点金额不符均不展示', async () => {
+  for (const scenario of ['missing', 'foreign_product', 'foreign_shop', 'duplicate', 'future', 'anchor', 'invalid_date']) {
+    const options = periodFixture();
+    const rows = options.records.product_overview[0].response.payload.data[1].columnData;
+    if (scenario === 'missing') rows.splice(1, 1);
+    if (scenario === 'foreign_product') rows[1].goodsId = 'other';
+    if (scenario === 'foreign_shop') rows[1].shopId = 'other';
+    if (scenario === 'duplicate') rows[1].date = rows[0].date;
+    if (scenario === 'future') rows[1].date = '2026/10/04';
+    if (scenario === 'invalid_date') rows[1].date = '2026/09/31';
+    if (scenario === 'anchor') { rows[0] = { ...rows[0], gmv: '99999' }; }
+    const h = await harness(options);
+    await h.click({ 'data-act': 'page', 'data-page': 'productOverview' });
+    await h.click({ 'data-act': 'chip', 'data-key': 'dim', 'data-value': 'sku' });
+    await h.change('q', selected.goodsId);
+    await h.click({ 'data-act': 'chip', 'data-key': 'view', 'data-value': 'period' });
+    assert.match(h.root.innerHTML, scenario === 'missing' ? /bd-period-missing">未采集/ : /档案未通过核验，请刷新重试/);
+    if (scenario !== 'missing') assert.doesNotMatch(h.root.innerHTML, /bd-period-value/);
+    await h.click({ 'data-act': 'archive-export' });
+    const csv = await h.blobs[0].text();
+    assert.match(csv, scenario === 'missing' ? /"2026-10-02","未采集"/ : /档案未通过核验/);
+    await h.change('pick-date', '2026-10-04');
+    assert.match(h.root.innerHTML, /当前选择范围未采集/);
+    assert.doesNotMatch(h.root.innerHTML, /data-period-date=/);
+  }
+});
+
+test("本机默认显示已采店日，完整商品分页保留零销量费用，不使用热销前50合计", async () => {
+  const h = await harness();
+  assert.match(h.root.innerHTML, /data-local-archive="true"/);
+  assert.match(h.root.innerHTML, /2026年10月03日|2026年10月3日/);
+  for (const value of ["23,181", "20,760", "9,606.63", "6,395"]) assert.ok(h.root.innerHTML.includes(value));
+  assert.match(h.root.innerHTML, /已扣自定义费用/);
+  assert.doesNotMatch(h.root.innerHTML, /未采完|data-act="panel"|data-act="mark"/);
+  await h.click({ "data-act": "page", "data-page": "productOverview" });
+  assert.match(h.root.innerHTML, /当前表 170 条/);
+  assert.match(h.root.innerHTML, /6,705/);
+  assert.doesNotMatch(h.root.innerHTML, /9,879/);
+  await h.click({ "data-act": "sort", "data-key": "tghf" });
+  assert.match(h.root.innerHTML, /商品169/); // sort all 170, not just the first displayed page
+  await h.click({ "data-act": "page-no", "data-delta": "1" });
+  assert.match(h.root.innerHTML, /第 2 \/ 4 页/);
+  await h.change("q", "90000000000169");
+  assert.match(h.root.innerHTML, /当前表 1 条/);
+  assert.match(h.root.innerHTML, /90000000000169/); // IDs are text; no separators
+  assert.equal(h.calls.some(c => c.options.method && c.options.method !== "GET"), false);
+  assert.equal(h.calls.some(c => c.url.startsWith("/api/bound/view")), false);
+});
+
+test("未采日期不复用金额，空标签和未采页面不伪装为零", async () => {
+  const h = await harness();
+  await h.change("pick-date", "2026-10-04");
+  assert.match(h.root.innerHTML, /当前选择范围未采集/);
+  assert.doesNotMatch(h.root.innerHTML, /23,181|9,606.63|6,395/);
+  await h.click({ "data-act": "archive-date" });
+  assert.match(h.root.innerHTML, /9,606.63/);
+  await h.click({ "data-act": "tab", "data-tab": "qdfx_bqfx" });
+  assert.match(h.root.innerHTML, /接口已采集完成，返回 0 条记录/);
+  await h.click({ "data-act": "page", "data-page": "productStock" });
+  assert.match(h.root.innerHTML, /这个页面本轮尚未采集/);
+  assert.doesNotMatch(h.root.innerHTML, /23,181/);
+});
+
+test("商品明细按选定商品显示，地域省市分离，时间序列只展示选定日", async () => {
+  const records = fixture();
+  records.product_overview[0].response.payload.data = [{ columnInfo: columns, columnData: [{ date: "2026/10/02", gmv: "999999" }] }, { columnInfo: columns, columnData: [{ date: "2026/10/02", gmv: "999999" }, ...records.product_overview[0].rows] }];
+  const h = await harness({ records });
+  await h.click({ "data-act": "page", "data-page": "productPanorama" });
+  assert.match(h.root.innerHTML, /商品 ID：10225590259558/);
+  assert.match(h.root.innerHTML, /4,188/);
+  assert.doesNotMatch(h.root.innerHTML, /999,999|999999|2026\/10\/02/);
+  await h.click({ "data-act": "tab", "data-tab": "spqj_sku" });
+  assert.match(h.root.innerHTML, /skuId/);
+  await h.click({ "data-act": "tab", "data-tab": "spqj_area" });
+  assert.match(h.root.innerHTML, /当前表 1 条/);
+  assert.doesNotMatch(h.root.innerHTML, /杭州/);
+  await h.click({ "data-act": "chip", "data-key": "area", "data-value": "city" });
+  assert.match(h.root.innerHTML, /当前表 1 条/);
+  assert.match(h.root.innerHTML, /杭州/);
+});
+
+test("分页失败或重复商品时不宣称完整，不显示商品汇总卡", async () => {
+  for (const duplicate of [false, true]) {
+    const records = fixture();
+    if (duplicate) records.shop_goods_page[1].rows[1].goodsId = records.shop_goods_page[0].rows[1].goodsId;
+    const h = await harness({ records, failedPage: !duplicate });
+    await h.click({ "data-act": "page", "data-page": "productOverview" });
+    assert.match(h.root.innerHTML, /商品分页不完整/);
+    assert.doesNotMatch(h.root.innerHTML, /全店商品分页已收齐|6,705/);
+  }
+});
+
+test("单笔核验深链仍打开连接旧站，归档读取不要求旧站在线", async () => {
+  const h = await harness({ search: "?probeDate=2026-10-03" });
+  assert.match(h.root.innerHTML, /data-bound-password/);
+  assert.doesNotMatch(h.root.innerHTML, /data-local-archive="true"/);
+  await h.click({ "data-act": "page", "data-page": "channelAnalysis" });
+  assert.match(h.root.innerHTML, /9,606.63/);
+});
+
+test("来源比例大于1仍按比例显示，嵌套费用不覆盖主指标且文本转义", async () => {
+  const records = fixture();
+  records.channel_operating[0].rows[0].refundRatio = "1.5";
+  records.channel_operating[0].rows[0].date = '<img src=x onerror="alert(1)">';
+  records.channel_operating[0].rows[0].lstGmv = [{ cost: "9999999" }];
+  records.channel_operating[0].response.payload.data.columnInfo = [...columns, { columnKey: "refundRatio", columnName: "退款率(按金额)" }];
+  const h = await harness({ records });
+  assert.match(h.root.innerHTML, /150.00%/);
+  assert.match(h.root.innerHTML, /23,181/);
+  assert.doesNotMatch(h.root.innerHTML, /9999999|<img src=x/);
+  assert.match(h.root.innerHTML, /&lt;img/);
+});
+
+test("商品表按业务顺序展示图片、上架日期和独立全店汇总，不能把销售件数标为单数", async () => {
+  const records = fixture();
+  const first = records.shop_goods_page[0].rows[1];
+  Object.assign(first, { goodsId: selected.goodsId, spuid: "10035131488857", goodsName: "除螨仪完整标题", sales: "12", onSaleTime: "2026-06-11 14:11:13", goodsUrl: "img11.360buyimg.com/n1/jfs/test.png", refundRatio: "1.2482", tghfXseZb: "393.93" });
+  records.shop_goods_page[0].response.payload.data.columnInfo = columns.filter(c => !["sales", "goodsName"].includes(c.columnKey));
+  const h = await harness({ records });
+  await h.click({ "data-act": "page", "data-page": "productOverview" });
+  const header = h.root.innerHTML.match(/<thead>[\s\S]*?<\/thead>/)[0];
+  const keys = [...header.matchAll(/data-key="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(keys.slice(0, 13), ["goodsName", "shopName", "onSaleTime", "gmv", "netGmv", "sales", "refund", "refundRatio", "netHpCost", "netHpCostRatio", "tghf", "tghfXseZb", "profit"]);
+  assert.match(header, /销售件数\(支付\)/);
+  assert.match(header, /SPU（未采集）/);
+  assert.match(h.root.innerHTML, /src="https:\/\/img11\.360buyimg\.com\/n1\/jfs\/test.png"/);
+  assert.match(h.root.innerHTML, /referrerpolicy="no-referrer"/);
+  assert.match(h.root.innerHTML, /2026\/06\/11/);
+  assert.match(h.root.innerHTML, /124.82%/);
+  assert.match(h.root.innerHTML, /39,393.00%/);
+  assert.match(h.root.innerHTML, /style="width:100%"/);
+  assert.match(h.root.innerHTML, /<td>12<\/td>/);
+  const summary = () => h.root.innerHTML.match(/<tr class="bd-total" data-product-summary="all">[\s\S]*?<\/tr>/)[0];
+  assert.match(summary(), /23,181/);
+  assert.match(summary(), /6,705/);
+  assert.doesNotMatch(summary(), /5,000|9,879/);
+  const before = summary();
+  await h.click({ "data-act": "page-no", "data-delta": "1" });
+  assert.equal(summary(), before, "the total is not recomputed from the displayed page");
+  await h.change("q", "10035131488857");
+  assert.match(h.root.innerHTML, /当前表 1 条/);
+  assert.equal(summary(), before, "search keeps the explicitly labelled whole-shop total");
+  await h.click({ "data-act": "archive-product" });
+  assert.match(h.root.innerHTML, /商品 ID：10225590259558/);
+  assert.match(h.root.innerHTML, /4,188/);
+  assert.equal(h.calls.some(c => c.options.method && c.options.method !== "GET"), false);
+});
+
+test("商品图片仅允许已知图片来源，失败时保留占位，商品文本必须转义", async () => {
+  const records = fixture();
+  const urls = ["javascript:alert(1)", "https://foreign.example/a.png", "https://img11.360buyimg.com.foreign.example/a.png", "https://secret@img11.360buyimg.com/a.png", "http://img11.360buyimg.com/a.png"];
+  urls.forEach((goodsUrl, i) => Object.assign(records.shop_goods_page[0].rows[i + 1], { goodsUrl, goodsName: '<img src=x onerror="oops">' }));
+  const h = await harness({ records });
+  await h.click({ "data-act": "page", "data-page": "productOverview" });
+  assert.doesNotMatch(h.root.innerHTML, /<img /);
+  assert.match(h.root.innerHTML, /暂无图/);
+  assert.match(h.root.innerHTML, /&lt;img/);
+  const img = { tagName: "IMG", parentElement: { classList: { contains: name => name === "bd-product-thumb" } } };
+  h.root.error({ target: img });
+  assert.equal(img.hidden, true);
+});
+
+test("SPU 独立汇总可展开到完整商品链接，分类数量不能冒充已核验明细", async () => {
+  const records = fixture();
+  const goods = records.shop_goods_page.flatMap(r => r.rows).filter(r => !r.sumLine);
+  goods.forEach((r, i) => { r.spuid = 'spu-' + (i % 2); });
+  records.shop_spu_page = [record('shop_spu_page', [0, 1].map(i => ({ spuid: 'spu-' + i, shopId: scope.shopId, goodsName: 'SPU组' + i, gmv: '1000', profit: '-1' })), 1, { total: 2 })];
+  records.shop_spu_total = [record('shop_spu_total', [{ sumLine: true, gmv: '2000', profit: '-2' }])];
+  records.shop_cards_spu = [record('shop_cards_spu', [
+    { id: 1, cardName: '亏损链接', count: '2', ratio: 1, grow: 0, calculateRule: JSON.stringify([{ columnKey: 'profit', calculation: 'lt', calculatedValue: 0 }]) },
+    { id: 2, cardName: '规则缺字段', count: '1', calculateRule: JSON.stringify([{ columnKey: 'missing', calculation: 'gte', calculatedValue: 0 }]) }
+  ])];
+  const h = await harness({ records });
+  await h.click({ 'data-act': 'page', 'data-page': 'productOverview' });
+  assert.match(h.root.innerHTML, /当前表 2 条/);
+  assert.match(h.root.innerHTML, /2,000/);
+  assert.match(h.root.innerHTML, /分类明细待核验/);
+  await h.click({ 'data-act': 'expand', 'data-key': 'spu-spu-0' });
+  assert.match(h.root.innerHTML, /data-product-id="90000000000168"/);
+  assert.doesNotMatch(h.root.innerHTML, /data-product-id="90000000000169"/);
+  await h.click({ 'data-act': 'archive-card', 'data-id': '1' });
+  assert.match(h.root.innerHTML, /当前表 2 条/);
+  await h.click({ 'data-act': 'archive-card', 'data-id': '2' });
+  assert.match(h.root.innerHTML, /分类明细尚未核验/);
+  assert.doesNotMatch(h.root.innerHTML, /data-product-id=/);
+  await h.click({ 'data-act': 'chip', 'data-key': 'dim', 'data-value': 'sku' });
+  assert.match(h.root.innerHTML, /当前表 170 条/);
+  assert.match(h.root.innerHTML, /23,181/);
+});
+
+test("商品切换只读对应商品档案，缺采时不沿用上一件商品金额，刷新保留选择", async () => {
+  const records = fixture(), nextId = '90000000000000';
+  const inventory = { complete: true, items: [selected, { goodsId: nextId, goodsName: '另一商品' }] };
+  const products = { [nextId]: { product_overview: [] } };
+  const h = await harness({ records, inventory, products, run: { status: 'collecting', done: 382, total: 1544 } });
+  await h.click({ 'data-act': 'page', 'data-page': 'productPanorama' });
+  assert.match(h.root.innerHTML, /4,188/);
+  await h.change('archive-select-product', nextId);
+  assert.match(h.root.innerHTML, /商品 ID：90000000000000/);
+  assert.match(h.root.innerHTML, /尚未采集或档案读取失败/);
+  assert.doesNotMatch(h.root.innerHTML, /4,188/);
+  products[nextId].product_overview.push(record('product_overview', [{ gmv: '888', date: '2026/10/03' }], 1, { goodsId: nextId }));
+  await h.click({ 'data-act': 'archive-refresh' });
+  assert.match(h.root.innerHTML, /商品 ID：90000000000000/);
+  assert.match(h.root.innerHTML, />888</);
+  assert.match(h.root.innerHTML, /382 \/ 1544/);
+  assert.match(h.root.innerHTML, /请勿同时在旧站登录此账号/);
+  assert.equal(h.calls.some(c => c.options.method && c.options.method !== 'GET'), false);
+});
+
+test("运营时段表和图表不拼接，推广类型各用自己的字段与计划名称", async () => {
+  const records = fixture();
+  const detail = { columnInfo: [{ columnKey: 'hour', columnName: '小时' }, { columnKey: 'gmv', columnName: '支付金额' }], columnData: [{ hour: '00', gmv: '123' }] };
+  const chart = { columnInfo: detail.columnInfo, columnData: [{ hour: '00', gmv: '456' }] };
+  records.product_operation = [record('product_operation', [{ date: '2026/10/03', gmv: '4188' }])];
+  records.product_operation_hour = [record('product_operation_hour', [...detail.columnData, ...chart.columnData], 1, { response: { payload: { data: [detail, chart] } } })];
+  const groups = [
+    { promoteKey: 'invalid', promoteName: '无效单', sumCost: 0, extensibleTableWrapper: { columnInfo: [{ columnKey: 'invalidCost', columnName: '无效单费用' }], columnData: [{ name: '无效单', invalidCost: '0' }] } },
+    { promoteKey: 'jd', promoteName: '京东快车', sumCost: 1663.44, extensibleTableWrapper: { columnInfo: [{ columnKey: 'cost', columnName: '花费' }], columnData: [{ sumLine: true, cost: '1663.44' }, { planName: '计划甲', cost: '1600' }, { planName: '计划乙', cost: '63.44' }] } }
+  ];
+  records.product_promotion = [record('product_promotion', groups.flatMap(g => g.extensibleTableWrapper.columnData), 1, { response: { payload: { data: groups } } })];
+  const h = await harness({ records });
+  await h.click({ 'data-act': 'page', 'data-page': 'productOperation' });
+  await h.click({ 'data-act': 'tab', 'data-tab': 'spyy_hour' });
+  assert.match(h.root.innerHTML, /当前表 1 条/);
+  assert.match(h.root.innerHTML, />123</);
+  assert.doesNotMatch(h.root.innerHTML, />456</);
+  await h.click({ 'data-act': 'tab', 'data-tab': 'spyy_tg' });
+  assert.match(h.root.innerHTML, /无效单费用/);
+  await h.click({ 'data-act': 'archive-promotion', 'data-key': 'jd' });
+  assert.match(h.root.innerHTML, /当前表 2 条/);
+  assert.match(h.root.innerHTML, /计划名称/);
+  assert.match(h.root.innerHTML, /计划甲/);
+  assert.match(h.root.innerHTML, /1,663.44/);
+  assert.doesNotMatch(h.root.innerHTML, /无效单费用/);
+});
+
+test("筛选、字段设置和导出只使用已采行，导出覆盖所有筛选页并防公式执行", async () => {
+  const records = fixture();
+  const goods = records.shop_goods_page.flatMap(r => r.rows).filter(r => !r.sumLine);
+  goods.forEach((r, i) => { r.catePathName = i % 2 ? '甲' : '乙'; r.hasTask = i % 2; });
+  goods[1].goodsName = '=HYPERLINK("https://example.test")';
+  const h = await harness({ records });
+  await h.click({ 'data-act': 'page', 'data-page': 'productOverview' });
+  await h.change('archive-category', '甲');
+  await h.change('archive-flag', 'hasTask');
+  assert.match(h.root.innerHTML, /当前表 85 条/);
+  await h.change('archive-column', '', { 'data-key': 'tghf', checked: false });
+  assert.doesNotMatch(h.root.innerHTML.match(/<thead>[\s\S]*?<\/thead>/)[0], /data-key="tghf"/);
+  await h.click({ 'data-act': 'archive-export' });
+  const csv = await h.blobs[0].text();
+  assert.equal(csv.split('\r\n').length, 86);
+  assert.match(csv, /'=HYPERLINK/);
+  assert.equal(h.downloads[0], '2026-10-03-shop_goods_page-sku.csv');
+  assert.equal(h.calls.some(c => c.options.method && c.options.method !== 'GET'), false);
+});
+
+test("分类卡优先使用核验过的源明细和独立合计，不用取整利润重新判断成员", async () => {
+  const records = fixture();
+  const goods = records.shop_goods_page[0].rows.slice(1, 4).map((row, i) => ({ ...row, platform: 'JD', profit: i === 0 ? '0' : i === 1 ? '-1' : '1' }));
+  records.shop_goods_page = [record('shop_goods_page', goods, 1, { total: 3 })];
+  records.shop_cards_sku = [record('shop_cards_sku', [{ id: 519726, count: '2', cardName: '亏损链接', ratio: 2 / 3, calculateRule: JSON.stringify([{ columnKey: 'profit', calculation: 'lt', calculatedValue: 0 }]) }])];
+  const cardRecords = {
+    'shop_goods_page:519726': [record('shop_goods_page', goods.slice(0, 2), 1, { cardId: '519726', total: 2 })],
+    'shop_goods_total:519726': [record('shop_goods_total', [{ sumLine: true, profit: '-1.15' }], 1, { cardId: '519726' })]
+  };
+  const h = await harness({ records, cardRecords });
+  await h.click({ 'data-act': 'page', 'data-page': 'productOverview' });
+  await h.click({ 'data-act': 'archive-card', 'data-id': '519726' });
+  assert.match(h.root.innerHTML, /当前表 2 条/);
+  assert.match(h.root.innerHTML, /汇总：当前分类全部/);
+  assert.match(h.root.innerHTML, /-1.15/);
+  assert.match(h.root.innerHTML, /data-product-id="90000000000000"/);
+  assert.doesNotMatch(h.root.innerHTML, /分类明细待核验|分类明细尚未核验/);
+  assert.match(h.root.innerHTML, /66.67%/);
+  assert.equal(h.calls.some(c => c.options.method && c.options.method !== 'GET'), false);
+});
+
+test("推广图表使用实际花费列，未知数值显示缺失，不转换为零", async () => {
+  const records = fixture();
+  const groups = [{ promoteKey: 'jd', promoteName: '京东快车', sumCost: 63.44,
+    extensibleTableWrapper: { columnInfo: [{ columnKey: 'cost', columnName: '花费' }], columnData: [{ planName: '计划甲', cost: '63.44' }, { planName: '计划乙', cost: '--' }] } }];
+  records.product_promotion = [record('product_promotion', groups[0].extensibleTableWrapper.columnData, 1, { response: { payload: { data: groups } } })];
+  const h = await harness({ records });
+  await h.click({ 'data-act': 'page', 'data-page': 'productOperation' });
+  await h.click({ 'data-act': 'tab', 'data-tab': 'spyy_tg' });
+  await h.click({ 'data-act': 'chip', 'data-key': 'view', 'data-value': 'chart' });
+  assert.match(h.root.innerHTML, /花费 · 当前页记录/);
+  assert.match(h.root.innerHTML, /63.44/);
+  assert.match(h.root.innerHTML, /计划乙<\/span><i style="width:0%;"><\/i><b>—<\/b>/);
+});

@@ -1,3 +1,4 @@
+/* global window, URLSearchParams, Blob, setInterval, clearInterval */
 /* xm-module-bound — 边界 BI 工作台。只读本库，只请求 /api/bound。爬虫，非 ERP。 */
 (function () {
   var state = {
@@ -14,6 +15,11 @@
     catalog: null,
     viewData: null,
     link: null,
+    probe: null,
+    probeDate: "",
+    probeBusy: false,
+    passwordBusy: false,
+    loginEditing: false,
     admin: false,
     error: "",
     open: {},
@@ -36,9 +42,651 @@
     profilePane: "info",
     shopView: "list",
     sortKey: "",
-    sortDir: "desc"
+    sortDir: "desc",
+    archiveGoodsId: "",
+    archiveCard: "",
+    archiveCardsExpanded: false,
+    archiveCategory: "",
+    archiveFlag: "",
+    archiveProfit: "",
+    archiveColumnsHidden: {},
+    archivePageSize: 50,
+    archiveSummary: "all",
+    archivePromotion: "",
+    archiveChartMetric: "",
+    archivePeriodDays: 7,
+    archiveKeyMetric: "gmv",
+    archiveTrendFolded: false,
+    archiveRefreshBusy: false
   };
   var active = 0;
+  var loadRevision = 0;
+  var archivePromise = null;
+
+  // The standalone loopback harness exposes archived responses. Reading them must
+  // never trigger collection or put single-shop rows into the legacy daily table.
+  async function readLocalArchive(refresh) {
+    if (!window.location) return;
+    if (refresh) archivePromise = null;
+    if (!archivePromise) archivePromise = (async function () {
+      var response = await fetch("/api/bound/shop-day");
+      if (!response.ok) { if (state.localArchive) throw new Error("archive unavailable"); return; }
+      var manifest = await response.json();
+      if (!manifest.ok || !manifest.scope || !Array.isArray(manifest.reports)) { if (state.localArchive) throw new Error("archive manifest invalid"); return; }
+      var records = {};
+      var failures = [];
+      await Promise.all(manifest.reports.map(async function (report) {
+        records[report.id] = [];
+        await Promise.all((report.pages || []).map(async function (page) {
+          if (page.status !== "received" && page.status !== "empty") return;
+          try {
+            var result = await fetch("/api/bound/shop-day/report?reportId=" + encodeURIComponent(report.id) + "&page=" + page.page);
+            if (!result.ok) throw new Error("archive unavailable");
+            var body = await result.json();
+            var record = body.record;
+            var scope = record && record.scope;
+            if (!body.ok || !scope || scope.shopId !== manifest.scope.shopId || scope.platform !== manifest.scope.platform || scope.date !== manifest.scope.date || record.reportId !== report.id || record.page !== page.page || !Array.isArray(record.rows) || (record.status !== "received" && record.status !== "empty")) throw new Error("archive scope mismatch");
+            if (report.product && (!manifest.selected || String(record.goodsId) !== String(manifest.selected.goodsId))) throw new Error("product mismatch");
+            records[report.id].push(record);
+          } catch { failures.push(report.label + "第 " + page.page + " 页"); }
+        }));
+        records[report.id].sort(function (a, b) { return a.page - b.page; });
+      }));
+      var previous = state.localArchive;
+      var products = previous && !refresh ? previous.products : {};
+      if (manifest.selected) {
+        products[String(manifest.selected.goodsId)] = {};
+        manifest.reports.filter(function (r) { return r.product; }).forEach(function (r) {
+          products[String(manifest.selected.goodsId)][r.id] = records[r.id];
+        });
+      }
+      state.localArchive = { scope: manifest.scope, selected: manifest.selected, records: records, failures: failures, products: products,
+        runtime: manifest.runtime || 'local', inventory: manifest.inventory, reports: manifest.reports, run: manifest.runtime === 'server' ? manifest.fourPageRun : manifest.run, exclusions: manifest.exclusions || [], cardRecords: {}, periods: {}, extras: {} };
+      if (!previous) {
+        state.from = state.to = manifest.scope.date;
+        state.daysType = "1";
+        state.shop = manifest.scope.shopName;
+        state.view = "list";
+        state.dim = records.shop_spu_page && records.shop_spu_page.length ? "spu" : "sku";
+        if (state.page !== "link") { state.page = "channelAnalysis"; state.tab = "qdfx_jy"; }
+        state.pageNo = 1;
+      }
+      var notice = document.querySelector && document.querySelector(".local-notice");
+      if (notice) notice.textContent = "边界数据中心 · 本机已采数据　" + manifest.scope.shopName + " · " + manifest.scope.date + "。采集期间请勿在旧站登录同一账号；本地查看已采数据无需重新登录。";
+    })().catch(function () { state.error = state.localArchive ? "刷新失败，仍展示上次读取的已采数据。请稍后重试。" : "本机采集档案读取失败，请刷新重试。"; });
+    await archivePromise;
+  }
+
+  function archiveSelected() {
+    var archive = state.localArchive;
+    var id = state.archiveGoodsId || (archive.selected && archive.selected.goodsId);
+    return ((archive.inventory && archive.inventory.items) || []).find(function (p) { return String(p.goodsId) === String(id); }) || (archive.selected && String(archive.selected.goodsId) === String(id) ? archive.selected : null);
+  }
+  async function readArchiveProduct() {
+    if (!state.localArchive || !["productPanorama", "productOperation"].includes(state.page)) return;
+    var archive = state.localArchive, selected = archiveSelected();
+    if (!selected || archive.products[selected.goodsId]) return;
+    var records = {};
+    await Promise.all(archive.reports.filter(function (r) { return r.product; }).map(async function (report) {
+      records[report.id] = [];
+      try {
+        var response = await fetch("/api/bound/shop-day/report?reportId=" + encodeURIComponent(report.id) + "&goodsId=" + encodeURIComponent(selected.goodsId) + "&page=1");
+        if (!response.ok) return;
+        var body = await response.json(), record = body.record;
+        if (body.ok && record && ["received", "empty"].includes(record.status) && record.reportId === report.id && record.page === 1 && String(record.goodsId) === String(selected.goodsId) && record.scope.shopId === archive.scope.shopId && record.scope.platform === archive.scope.platform && record.scope.date === archive.scope.date && Array.isArray(record.rows)) records[report.id] = [record];
+      } catch { /* Missing or unreadable product tables stay explicitly uncollected. */ }
+    }));
+    archive.products[selected.goodsId] = records;
+  }
+  function archiveRecords(id) {
+    if (["key_graph", "key_shops", "key_goods", "channel_shop_table", "shop_goods_period", "shop_spu_period"].includes(id)) {
+      var extra = state.localArchive.extras[archiveExtraKey(id)];
+      return extra && extra.status === 'ready' ? extra.records : [];
+    }
+    if (/^product_/.test(id || "")) {
+      var selected = archiveSelected();
+      var records = selected && state.localArchive.products[selected.goodsId];
+      return records && records[id] || [];
+    }
+    return state.localArchive.records[id] || [];
+  }
+  function archiveExtraKey(id) {
+    return id + (['key_shops', 'key_goods'].includes(id) ? ':' + state.archiveKeyMetric : /_period$/.test(id) ? ':' + state.archivePeriodDays : '');
+  }
+  // These GETs read saved reports only. Navigating a page never logs in or calls BI.
+  function fillArchiveExtras(root) {
+    var archive = state.localArchive, token = active;
+    if (!archive) return;
+    var ids = state.page === 'channelOverview' ? ['channel_shop_table'] : state.page === 'channelAnalysisNew' ? ['key_graph'] : state.page === 'productOverview' && state.view === 'period' ? [state.dim === 'spu' ? 'shop_spu_period' : 'shop_goods_period'] : [];
+    if (state.page === 'channelAnalysisNew' && archiveRecords('key_graph').length) ids.push(state.tab === 'qd_gjzbfx_dpck' ? 'key_shops' : 'key_goods');
+    ids.forEach(function (id) {
+      var key = archiveExtraKey(id);
+      if (archive.extras[key]) return;
+      var metric = ['key_shops', 'key_goods'].includes(id) ? state.archiveKeyMetric : null;
+      var days = /_period$/.test(id) ? state.archivePeriodDays : null;
+      archive.extras[key] = { status: 'loading', records: [] };
+      (async function () {
+        var records = [], expected = null, seen = new Set();
+        for (var page = 1; page <= 10; page++) {
+          var query = '?reportId=' + id + '&page=' + page + (metric ? '&columnKey=' + encodeURIComponent(metric) : '') + (days ? '&trendDays=' + days : '');
+          var response = await fetch('/api/bound/shop-day/report' + query);
+          if (!response.ok) throw new Error('not_collected');
+          var result = await response.json(), r = result.record;
+          if (!result.ok || !r || !['received', 'empty'].includes(r.status) || r.reportId !== id || r.page !== page || metric && r.columnKey !== metric || days && r.trendDays !== days || !Array.isArray(r.rows) || !r.scope || r.scope.shopId !== archive.scope.shopId || r.scope.date !== archive.scope.date || r.scope.platform !== archive.scope.platform) throw new Error('scope_mismatch');
+          if (days || id === 'key_goods') {
+            if (expected === null) expected = r.total;
+            if (!Number.isInteger(expected) || r.total !== expected) throw new Error('pagination_total');
+            r.rows.filter(function (row) { return !row.sumLine; }).forEach(function (row) {
+              var identity = String(id === 'shop_spu_period' ? row.spuid || '' : row.goodsId || '');
+              if (!identity || seen.has(identity) || String(row.shopId) !== archive.scope.shopId || row.platform !== archive.scope.platform) throw new Error('pagination_identity');
+              seen.add(identity);
+            });
+          }
+          records.push(r);
+          if (!r.nextPage) break;
+          if (r.nextPage !== page + 1) throw new Error('pagination_order');
+        }
+        if (expected !== null && expected !== seen.size) throw new Error('pagination_incomplete');
+        archive.extras[key] = { status: 'ready', records: records };
+        if (id === 'key_graph' && !records[0].metricColumns.some(function (c) { return c.columnKey === state.archiveKeyMetric; })) state.archiveKeyMetric = records[0].metricColumns[0].columnKey;
+      })().catch(function () { archive.extras[key] = { status: 'missing', records: [] }; }).finally(function () { if (token === active && state.localArchive === archive) paint(root); });
+    });
+  }
+  async function readArchiveCard() {
+    if (!state.localArchive || !state.archiveCard) return;
+    var archive = state.localArchive, cardId = state.archiveCard;
+    var dim = state.page === 'productOverview' ? state.dim : 'sku';
+    var key = dim + ':' + cardId;
+    if (archive.cardRecords[key]) return;
+    var card = archiveRows('shop_cards_' + dim).find(function (c) { return String(c.id) === cardId; });
+    if (!card) return;
+    var prefix = dim === 'spu' ? 'shop_spu_' : 'shop_goods_';
+    var rows = [], expected = null, summary = null;
+    async function read(reportId, page) {
+      var response = await fetch('/api/bound/shop-day/report?reportId=' + reportId + '&page=' + page + '&cardId=' + encodeURIComponent(cardId));
+      if (!response.ok) throw new Error('not_collected');
+      var result = await response.json(), r = result.record;
+      if (!result.ok || !r || !['received', 'empty'].includes(r.status) || r.cardId !== cardId || r.reportId !== reportId || r.page !== page || !Array.isArray(r.rows) || r.scope.shopId !== archive.scope.shopId || r.scope.platform !== archive.scope.platform || r.scope.date !== archive.scope.date) throw new Error('invalid_card_archive');
+      return r;
+    }
+    try {
+      for (var page = 1; page <= 10; page++) {
+        var r = await read(prefix + 'page', page);
+        if (expected === null) expected = r.total;
+        if (!Number.isInteger(expected) || r.total !== expected || expected !== Number(card.count)) throw new Error('card_count_mismatch');
+        rows = rows.concat(r.rows.filter(function (row) { return !row.sumLine; }));
+        if (!r.nextPage) break;
+        if (r.nextPage !== page + 1) throw new Error('invalid_next_page');
+      }
+      var identity = dim === 'spu' ? 'spuid' : 'goodsId';
+      var known = new Set(archiveRows(prefix + 'page').filter(function (row) { return !row.sumLine; }).map(function (row) { return String(row[identity]); }));
+      if (rows.length !== expected || new Set(rows.map(function (row) { return String(row[identity]); })).size !== expected || rows.some(function (row) { return !known.has(String(row[identity])) || String(row.shopId) !== archive.scope.shopId || row.platform !== archive.scope.platform; })) throw new Error('card_scope_mismatch');
+      try { summary = (await read(prefix + 'total', 1)).rows[0] || null; } catch { /* List completeness never implies a total response exists. */ }
+      archive.cardRecords[key] = { verified: true, rows: rows, summary: summary };
+    } catch { archive.cardRecords[key] = { verified: false }; }
+  }
+  function archiveRows(id) {
+    return archiveRecords(id).reduce(function (rows, record) { return rows.concat(record.rows); }, []);
+  }
+  function archiveColumns(id, rows, explicitTable) {
+    var record = archiveRecords(id)[0];
+    var payload = record && record.response && record.response.payload;
+    var tables = payload && payload.data;
+    tables = Array.isArray(tables) ? tables : [tables];
+    var table = explicitTable || tables.filter(function (item) { return item && Array.isArray(item.columnInfo); }).pop();
+    var info = table ? table.columnInfo.slice() : [];
+    if (['channel_shop_table', 'key_shops'].includes(id) && !info.some(function (c) { return c.columnKey === 'shopName'; })) info.unshift({ columnKey: 'shopName', columnName: '店铺' });
+    if (id === "product_promotion") {
+      var nameKey = rows.some(function (r) { return r.planName != null; }) ? "planName" : "name";
+      if (!info.some(function (c) { return c.columnKey === nameKey; })) info.unshift({ columnKey: nameKey, columnName: nameKey === "planName" ? "计划名称" : "类型" });
+    }
+    if (id === "shop_goods_page" || id === "shop_spu_page") {
+      // Match the product list's business order. IDs belong with the product;
+      // sales is pieces, never silently relabel it as number of orders.
+      var productOrder = [
+        ["goodsName", "商品"], ["shopName", "店铺"], ["onSaleTime", "上架时间"],
+        ["gmv", "支付金额(支付)"], ["netGmv", "净销售额(支付)"], ["sales", "销售件数(支付)"],
+        ["refund", "退款金额"], ["refundRatio", "退款率(按金额)"],
+        ["netHpCost", "净货品成本(支付)"], ["netHpCostRatio", "净货品成本占比(支付)"],
+        ["tghf", "推广花费(支付预估)"], ["tghfXseZb", "推广花费销售额占比(支付预估)"], ["profit", "利润(支付预估)"]
+      ];
+      var rest = info.filter(function (c) { return !["goodsId", "spuid"].includes(c.columnKey) && !productOrder.some(function (item) { return item[0] === c.columnKey; }); });
+      info = productOrder.map(function (item) {
+        return info.find(function (c) { return c.columnKey === item[0]; }) || { columnKey: item[0], columnName: item[1] };
+      }).concat(rest);
+    }
+    if (id === "product_skus" && !info.some(function (c) { return c.columnKey === "skuId"; })) info.unshift({ columnKey: "skuId", columnName: "SKU ID" });
+    if (id === "channel_operating") info = info.concat([
+      { columnKey: "tghf", columnName: "推广花费(支付预估)" },
+      { columnKey: "thtkje", columnName: "退款金额" },
+      { columnKey: "jhpcb", columnName: "净货品成本(支付)" },
+      { columnKey: "deliverCost", columnName: "发货费用(支付)" }
+    ]);
+    return info.filter(function (column) { return column.columnKey !== "seeGoods"; }).map(function (column) {
+      var key = column.columnKey;
+      var style = {};
+      try { style = JSON.parse(column.styleRule || "{}"); } catch { /* metadata is optional */ }
+      var identifier = /id$|code$|date|hour|time$|name$|province|city|platform|leaders/i.test(key);
+      var numeric = !identifier && (style.isNumberCell === true || rows.some(function (row) { return row[key] != null && /^-?\d+(\.\d+)?$/.test(String(row[key])); }));
+      return { key: key, label: column.columnName, on: true, numeric: numeric, rate: !!(style.renderAttr && style.renderAttr.formatType === "percent") || /率|占比|同比|环比/.test(column.columnName), sourceRatio: true, sourceValue: true, note: column.note || "", aliases: [] };
+    });
+  }
+
+  function completeArchivePages(id) {
+    var pages = archiveRecords(id), rows = archiveRows(id).filter(function (r) { return r.sumLine !== true; });
+    var expected = pages[0] && pages[0].total, key = id === "shop_spu_page" ? "spuid" : "goodsId";
+    return Number.isInteger(expected) && expected === rows.length && new Set(rows.map(function (r) { return String(r[key]); })).size === expected && rows.every(function (r) { return r[key] && String(r.shopId) === state.localArchive.scope.shopId; }) && pages.every(function (r, i) { return r.page === i + 1 && r.total === expected; });
+  }
+  function archiveCardRules(card) {
+    try { var rules = JSON.parse(card.calculateRule); return Array.isArray(rules) ? rules : []; } catch { return []; }
+  }
+  // A source count is not evidence of membership. Enable a local card filter
+  // only when every rule field is present and its exact result matches that count.
+  function archiveCardRows(card, rows) {
+    var rules = archiveCardRules(card);
+    var ops = { lt: function (a, b) { return a < b; }, lte: function (a, b) { return a <= b; }, gt: function (a, b) { return a > b; }, gte: function (a, b) { return a >= b; }, eq: function (a, b) { return a === b; } };
+    if (!rules.length || rules.some(function (r) { return !ops[r.calculation] || r.compareType && r.compareType !== "value" || r.filterType && r.filterType !== "default" || !Number.isFinite(Number(r.calculatedValue)) || rows.some(function (row) { return row[r.columnKey] == null || row[r.columnKey] === "" || !Number.isFinite(Number(row[r.columnKey])); }); })) return null;
+    var filtered = rows.filter(function (row) { return rules.every(function (r) { return ops[r.calculation](Number(row[r.columnKey]), Number(r.calculatedValue)); }); });
+    return filtered.length === Number(card.count) ? filtered : null;
+  }
+  function archivePromotionGroups() {
+    var record = archiveRecords("product_promotion")[0];
+    var groups = record && record.response.payload.data;
+    return Array.isArray(groups) ? groups.filter(function (g) { return g.extensibleTableWrapper && Array.isArray(g.extensibleTableWrapper.columnData); }) : [];
+  }
+  function buildArchiveView() {
+    var archive = state.localArchive;
+    var scope = archive.scope;
+    var meta = pageMeta() || { id: state.page, label: "边界数据中心" };
+    var tabsByPage = {
+      channelOverview: [["qdzl_jy", "单店经营概况", "channel_operating"], ["qdzl_dp", "店铺列表", "channel_shop_table"], ["qdzl_pl", "品类分布", "channel_category"]],
+      channelAnalysis: [["qdfx_jy", "经营数据", "channel_operating"], ["qdfx_rx", "商品明细（全量）", "shop_goods_page"], ["qdfx_pl", "品类分析", "channel_category"], ["qdfx_bqfx", "标签分析", "channel_labels"], ["qdfx_area", "销售地域分析", "channel_area"], ["qdfx_hour", "销售时段分析", "channel_hour"]],
+      productOverview: [["sp_zl_list", "全店商品列表", state.dim === "spu" ? "shop_spu_page" : "shop_goods_page"]],
+      channelAnalysisNew: [["qd_gjzbfx_ljck", "按链接查看", "key_goods"], ["qd_gjzbfx_dpck", "按店铺查看", "key_shops"]],
+      productPanorama: [["spqj_zl", "总览数据", "product_overview"], ["spqj_sku", "SKU销售分析", "product_skus"], ["spqj_area", "销售地域分析", "product_area"], ["spqj_hour", "销售时段分析", "product_hour"]],
+      productOperation: [["spyy_zl", "运营总览", "product_operation"], ["spyy_tg", "推广分析", "product_promotion"], ["spyy_sku", "SKU分析", "product_operation_skus"], ["spyy_area", "销售地域分析", "product_operation_area"], ["spyy_hour", "销售时段分析", "product_operation_hour"]]
+    };
+    var choices = tabsByPage[state.page] || [];
+    var choice = choices.find(function (tab) { return tab[0] === state.tab; }) || choices[0];
+    var id = choice && choice[2];
+    var validRange = state.from === scope.date && state.to === scope.date && (!state.shop || state.shop === scope.shopName);
+    var available = !!id && archiveRecords(id).length > 0;
+    // Province rows are marked sumLine by BI, but belong to the province view.
+    var rows = available && validRange ? archiveRows(id).filter(function (row) { return row.sumLine !== true || /_area$/.test(id) && row.isProv === true; }) : [];
+    if (state.page === 'channelAnalysisNew') rows = rows.map(function (row) {
+      var copy = Object.assign({}, row);
+      (Array.isArray(row.cells) ? row.cells : []).forEach(function (cell) { if (/^[A-Za-z][A-Za-z0-9_]*$/.test(cell.column) && !['constructor', 'prototype'].includes(cell.column)) copy[cell.column] = cell.value; });
+      return copy;
+    });
+    var product = ["productPanorama", "productOperation"].includes(state.page);
+    var goods = ["shop_goods_page", "shop_spu_page"].includes(id);
+    var region = /_area$/.test(id || "");
+    var complete = !goods || completeArchivePages(id);
+    var explicitTable = null, promotionGroups = [], selectedPromotion = null;
+    if (id === "product_operation_hour" && available && validRange) {
+      // Upstream PeriodAnalysis uses data[0] for its table, data[1] for its chart.
+      var hourTables = archiveRecords(id)[0].response.payload.data;
+      explicitTable = hourTables[state.view === "chart" ? 1 : 0];
+      rows = explicitTable && Array.isArray(explicitTable.columnData) ? explicitTable.columnData.filter(function (r) { return !r.sumLine; }) : [];
+    }
+    if (id === "product_promotion" && available && validRange) {
+      promotionGroups = archivePromotionGroups();
+      selectedPromotion = promotionGroups.find(function (g) { return String(g.promoteKey) === state.archivePromotion; }) || promotionGroups[0];
+      explicitTable = selectedPromotion && selectedPromotion.extensibleTableWrapper;
+      rows = explicitTable ? explicitTable.columnData.filter(function (r) { return !r.sumLine; }) : [];
+    }
+    if (region) rows = rows.filter(function (row) { return state.area === "city" ? row.isProv !== true : row.isProv === true; });
+    var columns = archiveColumns(id, rows, explicitTable);
+    var allRows = rows.slice(), categoryOptions = [];
+    var classifications = goods && validRange && complete ? archiveRows(id === "shop_spu_page" ? "shop_cards_spu" : "shop_cards_sku") : [];
+    var unavailableCard = false;
+    if (goods) {
+      categoryOptions = Array.from(new Set(rows.map(function (r) { return r.catePathName; }).filter(Boolean))).sort();
+      var card = classifications.find(function (c) { return String(c.id) === state.archiveCard; });
+      var cardArchive = archive.cardRecords[(id === 'shop_spu_page' ? 'spu:' : 'sku:') + state.archiveCard];
+      if (card) { var members = cardArchive && cardArchive.verified ? cardArchive.rows : archiveCardRows(card, rows); unavailableCard = members === null; rows = members || []; }
+      if (state.archiveCategory) rows = rows.filter(function (r) { return r.catePathName === state.archiveCategory; });
+      if (state.archiveFlag) rows = rows.filter(function (r) { return r[state.archiveFlag] === true || Number(r[state.archiveFlag]) > 0; });
+      if (state.archiveProfit) rows = rows.filter(function (r) { return r.profit != null && Number.isFinite(Number(r.profit)) && (state.archiveProfit === "loss" ? Number(r.profit) < 0 : Number(r.profit) >= 0); });
+    }
+    var q = state.q.trim().toLowerCase();
+    if (q) rows = rows.filter(function (row) {
+      return (goods ? columns.concat([{ key: "goodsId" }, { key: "spuid" }]) : columns).some(function (column) { return typeof row[column.key] !== "object" && String(row[column.key] == null ? "" : row[column.key]).toLowerCase().indexOf(q) >= 0; });
+    });
+    if (state.sortKey) rows.sort(function (a, b) {
+      var column = columns.find(function (c) { return c.key === state.sortKey; });
+      var x = a[state.sortKey], y = b[state.sortKey];
+      var cmp = column && column.numeric && x != null && y != null ? Number(x) - Number(y) : String(x == null ? "" : x).localeCompare(String(y == null ? "" : y), "zh");
+      return state.sortDir === "asc" ? cmp : -cmp;
+    });
+    var total = rows.length;
+    var pageSize = state.archivePageSize;
+    state.pageNo = Math.min(Math.max(1, state.pageNo), Math.max(1, Math.ceil(total / pageSize)));
+    var metricReport = product ? (state.page === "productOperation" ? "product_operation" : "product_overview") : (state.page === "productOverview" ? (state.dim === "spu" ? "shop_spu_total" : "shop_goods_total") : "channel_operating");
+    var metricRow = validRange && id && state.page !== 'channelAnalysisNew' ? archiveRows(metricReport)[0] : null;
+    // A partial goods response is never promoted to a shop total.
+    if (state.page === "productOverview" && !complete) metricRow = null;
+    var cardDefinitions = [
+      ["gmv", "支付金额(支付)"], ["netGmv", "净销售额(支付)"], ["tghf", "推广花费(支付预估)"],
+      ["profit", product ? "商品利润(支付预估)" : (state.page === "productOverview" ? "商品合计利润（未扣店铺自定义费用）" : "店铺利润（已扣自定义费用）")],
+      [product || state.page === "productOverview" ? "refund" : "thtkje", "退款金额"],
+      [product || state.page === "productOverview" ? "netHpCost" : "jhpcb", "净货品成本(支付)"],
+      ["ptCost", "平台花费(支付预估)"], ["deliverCost", "发货费用(支付)"],
+      [product || state.page === "productOverview" ? "sales" : "zdyFyAll", product || state.page === "productOverview" ? "销售件数(支付)" : "自定义费用"]
+    ];
+    var cards = metricRow ? cardDefinitions.map(function (entry) {
+      return { key: entry[0], label: entry[1], value: metricRow[entry[0]], on: true, sourceValue: true, note: entry[0] === "tghf" ? "保留来源表值；支付预估口径" : "来源表原值" };
+    }) : [];
+    var message = !validRange ? "当前选择范围未采集。已保存的数据仅覆盖 " + scope.date + "，未采数据不计为 0。" : !id ? "这个页面本轮尚未采集。请查看渠道详情、商品总览或商品全景分析。" : !available ? "这张表尚未采集或档案读取失败。采集完成后点击刷新已采数据。" : !complete ? "商品分页不完整，暂不显示商品合计指标。" : unavailableCard ? "已取得此卡片的数量与规则，但分类明细尚未核验，暂不显示商品列表。选择“全部”可返回。" : total === 0 ? (q || state.archiveCard || state.archiveCategory || state.archiveFlag || state.archiveProfit ? "没有匹配的记录。" : "接口已采集完成，返回 0 条记录。") : "";
+    return {
+      localArchive: true, page: { id: meta.id, label: meta.label, ops: [] },
+      tabs: choices.map(function (tab) { return { id: tab[0], label: tab[1] }; }),
+      tab: choice ? { id: choice[0], label: choice[1] } : null,
+      range: { from: state.from, to: state.to }, daysType: state.daysType,
+      scope: scope, selected: product ? archiveSelected() : null, region: region, goods: goods,
+      classifications: classifications, categoryOptions: categoryOptions, allRows: allRows, filteredRows: rows,
+      promotionGroups: promotionGroups, selectedPromotion: selectedPromotion,
+      promotionSummary: selectedPromotion && selectedPromotion.extensibleTableWrapper.columnData.find(function (r) { return r.sumLine; }),
+      reportId: id, complete: complete, message: message,
+      goodsSummary: goods && validRange && complete && available ? (state.archiveCard ? cardArchive && cardArchive.verified && cardArchive.summary : archiveRows(id === "shop_spu_page" ? "shop_spu_total" : "shop_goods_total")[0]) : null,
+      coverage: { status: validRange && available ? "ready" : "missing" },
+      cardStatus: "ready", cards: cards, channelCount: 1, shopCount: 1, shops: [scope.shopName],
+      columns: columns.map(function (c) { c.on = !(state.archiveColumnsHidden[id] || []).includes(c.key); return c; }), total: total, pageNo: state.pageNo, pageSize: pageSize,
+      rows: rows.slice((state.pageNo - 1) * pageSize, state.pageNo * pageSize).map(function (row, index) {
+        var metrics = {};
+        Object.keys(row).forEach(function (key) { if (row[key] == null || typeof row[key] !== "object") metrics[key] = row[key]; });
+        metrics.payAmount = row.gmv;
+        return { key: String(row.goodsId || row.spuid || index), name: row.goodsName || row.planName || row.name || row.date || row.cateName || (region && state.area === "city" ? row.city : row.province) || row.hour, shop: scope.shopName, platform: row.platform, metrics: metrics, raw: row };
+      })
+    };
+  }
+
+  function archiveProductImage(value) {
+    if (typeof value !== "string" || !value) return "";
+    var candidate = value.indexOf("//") === 0 ? "https:" + value : value.indexOf("://") < 0 ? "https://" + value : value;
+    try {
+      var url = new URL(candidate);
+      // Only the image origin actually present in this shop's archived results.
+      if (url.protocol !== "https:" || url.hostname !== "img11.360buyimg.com" || url.port || url.username || url.password) return "";
+      return url.href;
+    } catch { return ""; }
+  }
+
+  function archivePeriodDates() {
+    var end = Date.parse(state.localArchive.scope.date + 'T00:00:00Z');
+    return Array.from({ length: state.archivePeriodDays }, function (_, i) { return new Date(end - i * 86400000).toISOString().slice(0, 10); });
+  }
+  function inspectArchivePeriod(record, goodsId, scope) {
+    if (!record || record.reportId !== 'product_overview' || record.page !== 1 || record.goodsId !== goodsId || record.status !== 'received'
+      || !record.scope || record.scope.shopId !== scope.shopId || record.scope.platform !== scope.platform || record.scope.date !== scope.date) throw new Error('period_scope');
+    // Product Panorama's Overview uses data[1] for daily history; data[0] is the selected range aggregate.
+    var table = record.response && record.response.payload && record.response.payload.code === 0 && record.response.payload.data[1];
+    if (!table || !Array.isArray(table.columnData) || !Array.isArray(table.columnInfo) || table.progress != null && Number(table.progress) < 100) throw new Error('period_table');
+    var rows = {};
+    table.columnData.forEach(function (row) {
+      var date = typeof row.date === 'string' ? row.date.replace(/\//g, '-') : '';
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date + 'T00:00:00Z')) || new Date(date + 'T00:00:00Z').toISOString().slice(0, 10) !== date || date > scope.date
+        || rows[date] || row.sumLine || String(row.goodsId) !== goodsId || String(row.shopId) !== scope.shopId || row.platform !== scope.platform) throw new Error('period_row');
+      rows[date] = row;
+    });
+    var anchor = record.rows && record.rows[0];
+    if (!anchor || !rows[scope.date] || ['gmv', 'netGmv', 'sales', 'refund', 'tghf', 'profit'].some(function (key) { return rows[scope.date][key] == null || anchor[key] == null || Number(rows[scope.date][key]) !== Number(anchor[key]); })) throw new Error('period_anchor');
+    return { status: 'ready', rows: rows, columns: table.columnInfo };
+  }
+  function fillArchivePeriods(root) {
+    var data = state.viewData, archive = state.localArchive, token = active;
+    if (!archive || state.page !== 'productOverview' || state.view !== 'period' || !data || data.message || data.reportId !== 'shop_goods_page') return;
+    if (archiveRecords('shop_goods_period').length) return;
+    var queue = data.rows.map(function (row) { return String(row.metrics.goodsId); }).filter(function (id) { return !archive.periods[id]; });
+    if (!queue.length) return;
+    queue.forEach(function (id) { archive.periods[id] = { status: 'loading' }; });
+    async function worker() {
+      while (queue.length) {
+        if (token !== active || state.localArchive !== archive) return;
+        var goodsId = queue.shift();
+        try {
+          var cached = archive.products[goodsId] && archive.products[goodsId].product_overview;
+          var record = cached && cached[0];
+          if (!record) {
+            var response = await fetch('/api/bound/shop-day/report?reportId=product_overview&goodsId=' + encodeURIComponent(goodsId) + '&page=1');
+            if (!response.ok) throw new Error('period_unavailable');
+            var body = await response.json();
+            if (!body.ok) throw new Error('period_unavailable');
+            record = body.record;
+          }
+          archive.periods[goodsId] = inspectArchivePeriod(record, goodsId, archive.scope);
+        } catch { archive.periods[goodsId] = { status: 'unavailable', rows: {} }; }
+      }
+    }
+    Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker)).then(function () { if (token === active && state.localArchive === archive) paint(root); });
+  }
+  function archivePeriodColumns(data) {
+    var dedicated = archiveRecords(data.reportId === 'shop_spu_page' ? 'shop_spu_period' : 'shop_goods_period');
+    if (dedicated.length) return data.columns.filter(function (c) { return ['goodsName', 'onSaleTime'].includes(c.key) || c.numeric && dedicated.some(function (r) { return (r.periods || []).some(function (p) { return p.rows.some(function (row) { return row[c.key] != null; }); }); }); });
+    var keys = ['goodsName', 'onSaleTime', 'gmv', 'netGmv', 'sales', 'refund', 'netHpCost', 'tghf', 'profit'];
+    // Only common source fields are shown. Missing ratio fields are not inferred from rounded amounts.
+    return keys.map(function (key) { return data.columns.find(function (c) { return c.key === key; }); }).filter(Boolean);
+  }
+  function archivePeriodItem(data, product) {
+    var spu = data.reportId === 'shop_spu_page', id = spu ? product.spuid : product.goodsId;
+    var records = archiveRecords(spu ? 'shop_spu_period' : 'shop_goods_period');
+    if (records.length) {
+      var entry = records.flatMap(function (r) { return r.periods || []; }).find(function (p) { return String(spu ? p.spuid : p.goodsId) === String(id); });
+      var rows = {};
+      if (entry) entry.rows.forEach(function (r) { rows[String(r.date).replace(/\//g, '-')] = r; });
+      return { status: entry ? 'ready' : 'unavailable', rows: rows, dedicated: true };
+    }
+    return spu ? { status: 'unavailable', rows: {} } : state.localArchive.periods[id];
+  }
+  function archivePeriodPending(data) {
+    return data.rows.some(function (row) { var item = archivePeriodItem(data, row.metrics); return !item || item.status === 'loading'; });
+  }
+  function archivePeriodStatus(item, row) {
+    return !item || item.status === 'loading' ? '读取中' : item.status !== 'ready' ? '档案未通过核验，请刷新重试' : row ? '已采集' : '未采集';
+  }
+  function renderArchivePeriod(data) {
+    if (data.reportId === 'shop_spu_page' && !archiveRecords('shop_spu_period').length) return '<p class="bd-miss">SPU 周期使用独立接口，尚未采集。SKU 已有逐日档案，可先切换查看。</p><button type="button" data-act="dim" data-dim="sku">查看 SKU 周期</button>';
+    var dates = archivePeriodDates(), columns = archivePeriodColumns(data).filter(function (c) { return c.on; });
+    var metrics = columns.filter(function (c) { return !['goodsName', 'onSaleTime'].includes(c.key); });
+    var onSale = columns.some(function (c) { return c.key === 'onSaleTime'; });
+    var head = '<thead><tr><th class="bd-period-product">商品</th><th>时间范围</th>' + (onSale ? '<th>上架时间</th>' : '') + metrics.map(function (c) { return '<th><button type="button" data-act="sort" data-key="' + esc(c.key) + '" title="按 ' + esc(data.scope.date) + ' 的数值排序">' + esc(c.label) + '</button></th>'; }).join('') + '</tr></thead>';
+    var body = data.rows.map(function (product) {
+      var p = product.metrics, item = archivePeriodItem(data, p), src = archiveProductImage(p.goodsUrl);
+      return '<tbody data-period-product="' + esc(p.goodsId || p.spuid) + '">' + dates.map(function (date, index) {
+        var row = item && item.status === 'ready' && item.rows[date];
+        var status = archivePeriodStatus(item, row);
+        var identity = index ? '' : '<td class="bd-period-product" rowspan="' + dates.length + '"><div class="bd-product-cell"><span class="bd-product-thumb">暂无图' + (src ? '<img src="' + esc(src) + '" alt="' + esc(product.name) + '" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span><div class="bd-product-caption"><button type="button" class="bd-product-name" data-act="archive-product" data-goods-id="' + esc(p.goodsId) + '">' + esc(product.name) + '</button><small class="bd-product-id">ID ' + esc(p.goodsId) + ' · SPU ' + esc(p.spuid || '—') + '</small><small>' + esc(product.shop) + '</small></div></div><div class="bd-period-actions"><button type="button" data-act="archive-product" data-goods-id="' + esc(p.goodsId) + '">全景分析</button><button type="button" data-act="archive-product" data-goods-id="' + esc(p.goodsId) + '" data-product-page="productOperation">运营分析</button></div></td>';
+        if (!index && data.reportId === 'shop_spu_page') identity = '<td class="bd-period-product" rowspan="' + dates.length + '"><strong>' + esc(product.name) + '</strong><p>SPU ' + esc(p.spuid) + '</p><p>' + esc(product.shop) + '</p><button type="button" data-act="archive-gallery-spu" data-spuid="' + esc(p.spuid) + '">展开商品链接</button></td>';
+        return '<tr data-period-date="' + date + '">' + identity + '<td class="bd-period-date"><time datetime="' + date + '">' + date.replace(/-/g, '/') + '</time><small>' + ['日', '一', '二', '三', '四', '五', '六'][new Date(date + 'T00:00:00Z').getUTCDay()] + '</small></td>' + (!index && onSale ? '<td rowspan="' + dates.length + '">' + esc(p.onSaleTime ? String(p.onSaleTime).split(' ')[0].replace(/-/g, '/') : '—') + '</td>' : '') + metrics.map(function (c) {
+          if (!row) return '<td class="bd-period-missing">' + esc(status) + '</td>';
+          var value = row[c.key], numeric = value != null && value !== '' && Number.isFinite(Number(value));
+          if (!numeric) return '<td title="来源未返回此指标">—</td>';
+          var max = Math.max(1, ...dates.map(function (d) { var v = item.rows[d] && item.rows[d][c.key]; return v == null || !Number.isFinite(Number(v)) ? 0 : Math.abs(Number(v)); }));
+          return '<td><span class="bd-period-value' + (c.key === 'profit' ? Number(value) < 0 ? ' is-negative' : Number(value) > 0 ? ' is-positive' : '' : '') + '"><i style="width:' + (Math.abs(Number(value)) / max * 100) + '%"></i><b>' + formatCell(value, c) + '</b></span></td>';
+        }).join('') + '</tr>';
+      }).join('') + '</tbody>';
+    }).join('');
+    return '<p class="bd-status">商品筛选、排序和上方卡片按 ' + esc(data.scope.date) + '；下表逐日展开截至该日的 ' + dates.length + ' 天。数据来自' + (archiveRecords(data.reportId === 'shop_spu_page' ? 'shop_spu_period' : 'shop_goods_period').length ? '已保存的商品总览周期接口' : '已保存的商品经营趋势') + '，缺失日期不计为 0。</p><div class="bd-scroll"><table class="bd-table bd-period-table">' + head + body + '</table></div>';
+  }
+
+  function renderArchiveGoodsTable(data) {
+    var columns = data.columns.filter(function (c) { return c.on; });
+    var isSpu = data.reportId === "shop_spu_page";
+    function valueCell(metrics, column, summary, raw) {
+      var value = metrics[column.key];
+      if (column.key === "goodsName") {
+        if (summary) return '<strong>汇总：' + (state.archiveSummary === "page" ? '当前页' : state.archiveCard ? '当前分类全部' : '全店全部') + '</strong><small class="bd-product-id">' + (state.archiveSummary === "page" ? '展示值相加，可能有取整差异' : '包含零销量商品 · 不随搜索变化') + '</small>';
+        var src = archiveProductImage(metrics.goodsUrl);
+        var expandable = isSpu && !metrics.goodsId;
+        return '<div class="bd-product-cell">' + (expandable ? '<button type="button" class="bd-expand" data-act="expand" data-key="spu-' + esc(metrics.spuid) + '" aria-expanded="' + !!state.open['spu-' + metrics.spuid] + '" aria-label="展开 SPU 商品链接">' + (state.open['spu-' + metrics.spuid] ? '⌄' : '›') + '</button>' : '') + '<span class="bd-product-thumb"><span>暂无图</span>' +
+          (src ? '<img src="' + esc(src) + '" alt="' + esc(metrics.goodsName || "商品缩略图") + '" width="32" height="32" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') + '</span>' +
+          '<div class="bd-product-caption"><button type="button" class="bd-product-name" data-act="' + (expandable ? 'expand' : 'archive-product') + '" data-key="spu-' + esc(metrics.spuid) + '" data-goods-id="' + esc(metrics.goodsId) + '" title="' + esc(value) + '">' + esc(value || "未命名商品") + '</button>' +
+          '<small class="bd-product-id" title="商品 ID：' + esc(metrics.goodsId) + '；SPU ID：' + esc(metrics.spuid) + '">ID ' + esc(metrics.goodsId || "—") + ' · SPU ' + esc(metrics.spuid || "—") + '</small></div></div>';
+      }
+      if (column.key === "shopName") return summary ? "" : '<span class="bd-product-shop" title="' + esc(value || data.scope.shopName) + '">' + esc(value || data.scope.shopName) + '</span>';
+      if (column.key === "onSaleTime") return summary ? "" : '<span title="' + esc(value) + '">' + esc(value ? String(value).split(" ")[0].replace(/-/g, "/") : "—") + '</span>';
+      // Monetary source rows may be rounded; use the separately collected total.
+      if (column.key === "sales" || /Orders$|Count$/.test(column.key)) return value == null || value === "" ? "—" : esc(value);
+      var formatted = formatCell(value, column);
+      if (column.key === "tghfXseZb" && value != null && value !== "" && Number.isFinite(Number(value))) {
+        var width = Math.min(100, Math.max(0, Number(value) * 100));
+        return '<span class="bd-ratio-cell"><i style="width:' + width + '%"></i>' + formatted + '</span>';
+      }
+      var detailKey = { gmv: 'lstGmv', refund: 'lstRefund', netHpCost: 'lstNetHpCost', saleCost: 'lstSaleCost', fhSaleCost: 'lstFhSaleCost', deliverCost: 'lstDeliverCost', tghf: 'lstTghf', ptCost: 'lstPthf' }[column.key];
+      var detailRow = raw || metrics;
+      var detail = detailKey && detailRow[detailKey];
+      if (column.key === 'tghf' && !Array.isArray(detail)) detail = (detailRow.lstSaleCost || []).filter(function (d) { return d.code === 'tghf'; });
+      if (Array.isArray(detail) && detail.length) return '<details class="bd-metric-detail"><summary>' + formatted + '</summary><div><strong>' + esc(column.label) + ' · 来源明细</strong>' + detail.map(function (d) { return '<p><span>' + esc(d.name || d.code) + '</span><b>' + esc(d.originCost == null ? d.cost : d.originCost) + '</b></p>'; }).join('') + '<small>明细保留来源精度，表格主值可能已取整。</small></div></details>';
+      return formatted;
+    }
+    var header = '<thead><tr>' + columns.map(function (column, index) {
+      var mark = state.sortKey === column.key ? (state.sortDir === "asc" ? " ↑" : " ↓") : "";
+      var label = index === 0 ? '商品 <span class="bd-product-dim">' + (isSpu ? '<b>SPU</b> · SKU' : (archiveRecords('shop_spu_page').length ? 'SPU · <b>SKU</b>' : 'SPU（未采集） · <b>SKU</b>')) + '</span>' : esc(column.label);
+      return '<th scope="col"' + (state.sortKey === column.key ? ' aria-sort="' + (state.sortDir === "asc" ? "ascending" : "descending") + '"' : '') + '><button type="button" data-act="sort" data-key="' + esc(column.key) + '" title="' + esc(column.note || column.label) + '">' + label + mark + '</button></th>';
+    }).join("") + '</tr></thead>';
+    var summaryMetrics = data.goodsSummary;
+    if (state.archiveSummary === "page" && summaryMetrics) {
+      summaryMetrics = {};
+      columns.forEach(function (c) {
+        if (c.numeric && !c.rate && !/realTime/i.test(c.key) && data.rows.length && data.rows.every(function (r) { return r.metrics[c.key] != null && r.metrics[c.key] !== "" && Number.isFinite(Number(r.metrics[c.key])); })) summaryMetrics[c.key] = Math.round(data.rows.reduce(function (sum, r) { return sum + Number(r.metrics[c.key]); }, 0) * 10000) / 10000;
+      });
+    }
+    var summary = summaryMetrics ? '<tr class="bd-total" data-product-summary="' + esc(state.archiveSummary) + '">' + columns.map(function (column) { return '<td>' + valueCell(summaryMetrics, column, true) + '</td>'; }).join("") + '</tr>' : '';
+    function rowHtml(metrics, child, raw) {
+      return '<tr' + (child ? ' class="bd-product-child"' : '') + ' data-product-id="' + esc(metrics.goodsId || metrics.spuid) + '">' + columns.map(function (column) { return '<td>' + valueCell(metrics, column, false, raw) + '</td>'; }).join("") + '</tr>';
+    }
+    var body = data.rows.map(function (row) {
+      var html = rowHtml(row.metrics, false, row.raw);
+      if (isSpu && state.open['spu-' + row.metrics.spuid]) {
+        var children = archiveRows('shop_goods_page').filter(function (r) { return !r.sumLine && String(r.spuid) === String(row.metrics.spuid); });
+        html += completeArchivePages('shop_goods_page') ? children.map(function (r) { return rowHtml(r, true); }).join('') : '<tr><td colspan="' + columns.length + '">商品链接分页尚未收齐，暂不展开。</td></tr>';
+      }
+      return html;
+    }).join("");
+    return '<div class="bd-scroll bd-product-scroll" tabindex="0" role="region" aria-label="商品明细表，可横向滚动"><table class="bd-table bd-product-table">' + header + '<tbody>' + summary + body + '</tbody></table></div>';
+  }
+
+  function renderArchiveClassifications(data) {
+    if (data.page.id === 'channelAnalysisNew') return renderArchiveIndicators(data);
+    if (data.page.id !== "productOverview" || !data.classifications.length) return renderCards(data);
+    var cards = state.archiveCardsExpanded ? data.classifications : data.classifications.slice(0, 4);
+    return '<section class="bd-block"><h2>综合指标 <small>商品分类</small></h2><div class="bd-classifications"><button type="button" data-act="archive-card" data-id="" class="bd-class-card' + (!state.archiveCard ? ' is-on' : '') + '"><span>全部</span><strong>' + data.allRows.length + '</strong><small>' + (data.reportId === "shop_spu_page" ? 'SPU' : '商品链接') + '</small></button>' + cards.map(function (c) {
+      var rules = archiveCardRules(c).map(function (r) { return (r.columnName || r.columnKey) + ' ' + ({ lt: '<', lte: '≤', gt: '>', gte: '≥', eq: '=' }[r.calculation] || r.calculation) + ' ' + r.calculatedValue + (r.compareType === 'time' ? '（对比期）' : ''); }).join('；');
+      var collected = state.localArchive.cardRecords[(data.reportId === 'shop_spu_page' ? 'spu:' : 'sku:') + c.id];
+      var supported = collected && collected.verified || archiveCardRows(c, data.allRows) !== null;
+      return '<button type="button" data-act="archive-card" data-id="' + esc(c.id) + '" class="bd-class-card' + (state.archiveCard === String(c.id) ? ' is-on' : '') + '" title="' + esc(rules + (supported ? '' : '；分类明细尚未核验')) + '"><span>' + esc(c.labelName ? c.labelName + ' · ' : '') + esc(c.cardName) + '</span><small class="bd-card-rule">' + esc(rules) + '</small><strong>' + esc(c.count) + '</strong><small>占比 ' + formatCell(c.ratio, { numeric: true, rate: true, sourceRatio: true }) + ' · 环比 ' + formatCell(c.grow, { numeric: true, rate: true, sourceRatio: true }) + '</small>' + (!supported ? '<small>分类明细待核验</small>' : '') + '</button>';
+    }).join('') + '</div><button type="button" class="bd-plain" data-act="archive-cards-expand">' + (state.archiveCardsExpanded ? '收起' : '展开更多') + '</button></section>';
+  }
+
+  function renderArchiveIndicators(data) {
+    var record = archiveRecords('key_graph')[0];
+    if (!record || data.range.from !== data.scope.date || data.range.to !== data.scope.date) return '<section class="bd-block"><h2>关键指标</h2><p class="bd-miss">关键指标卡和趋势尚未采集。补采后点击“刷新已采数据”。</p></section>';
+    var selected = record.metricColumns.find(function (c) { return c.columnKey === state.archiveKeyMetric; });
+    var cards = record.metricColumns.map(function (c) {
+      var value = record.metricCards[c.columnKey] || {}, rate = /率|占比/.test(c.columnName);
+      return '<button type="button" data-act="archive-key-metric" data-key="' + esc(c.columnKey) + '" class="bd-class-card' + (state.archiveKeyMetric === c.columnKey ? ' is-on' : '') + '" title="' + esc(c.note || c.columnName) + '"><span>' + esc(c.columnName) + '</span><strong>' + formatCell(value.value, { numeric: true, rate: rate, sourceRatio: true }) + '</strong><small>同比 ' + formatCell(value.yoy, { numeric: true, rate: true, sourceRatio: true }) + ' · 环比 ' + formatCell(value.mom, { numeric: true, rate: true, sourceRatio: true }) + '</small></button>';
+    }).join('');
+    var points = record.metricTrend.slice().sort(function (a, b) { return a.date.localeCompare(b.date); });
+    var column = { numeric: true, rate: /率|占比/.test(selected && selected.columnName), sourceRatio: true };
+    var series = points.map(function (p) { return { date: p.date, cell: p.cells[state.archiveKeyMetric] || {} }; });
+    var values = series.flatMap(function (p) { return [p.cell.value, p.cell.lastYearValue].filter(function (v) { return v != null && v !== '' && Number.isFinite(Number(v)); }).map(Number); });
+    var min = Math.min(0, ...values), max = Math.max(1, ...values), span = max - min;
+    function line(key, color) {
+      var segments = [], path = '';
+      series.forEach(function (p, i) {
+        var v = p.cell[key];
+        if (v == null || v === '' || !Number.isFinite(Number(v))) { if (path) segments.push(path); path = ''; return; }
+        path += (path ? ' L' : 'M') + (50 + i * 700 / Math.max(1, series.length - 1)) + ',' + (180 - (Number(v) - min) / span * 150);
+      });
+      if (path) segments.push(path);
+      return segments.map(function (d) { return '<path d="' + d + '" stroke="' + color + '" stroke-width="2" fill="none"/>'; }).join('') + series.map(function (p, i) {
+        var v = p.cell[key]; if (v == null || v === '' || !Number.isFinite(Number(v))) return '';
+        return '<circle cx="' + (50 + i * 700 / Math.max(1, series.length - 1)) + '" cy="' + (180 - (Number(v) - min) / span * 150) + '" r="4" fill="' + color + '"><title>' + esc(p.date + ' ' + (key === 'value' ? '本期' : '去年同期') + ' ' + v) + '</title></circle>';
+      }).join('');
+    }
+    var chart = '<svg viewBox="0 0 800 220" role="img" aria-label="' + esc((selected && selected.columnName) + '趋势，本期及去年同期') + '" style="width:100%;max-height:260px"><path d="M50,20 V180 H750" fill="none" stroke="var(--xm-border,#ddd)"/>' + line('lastYearValue', '#97a2b2') + line('value', '#376bed') + '<text x="50" y="208" fill="currentColor" font-size="12">' + esc(series[0] && series[0].date) + '</text><text x="750" y="208" text-anchor="end" fill="currentColor" font-size="12">' + esc(series.at(-1) && series.at(-1).date) + '</text></svg>';
+    var table = '<details><summary>查看趋势数值</summary><div class="bd-scroll"><table class="bd-table"><thead><tr><th>日期</th><th>本期</th><th>去年同期</th><th>同比</th><th>环比</th></tr></thead><tbody>' + series.map(function (p) { return '<tr><td>' + esc(p.date) + '</td>' + ['value', 'lastYearValue', 'yoy', 'mom'].map(function (k) { return '<td>' + formatCell(p.cell[k], ['yoy', 'mom'].includes(k) ? { numeric: true, rate: true, sourceRatio: true } : column) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div></details>';
+    return '<section class="bd-block"><h2>关键指标 <small>点击指标联动趋势和明细</small></h2><div class="bd-classifications">' + cards + '</div><button type="button" data-act="archive-trend-fold">' + (state.archiveTrendFolded ? '展开指标趋势' : '收起指标趋势') + '</button>' + (state.archiveTrendFolded ? '' : '<h3>' + esc(selected && selected.columnName) + '</h3><p class="bd-status">蓝色：本期 · 灰色：去年同期；同比和环比保留来源值。</p>' + chart + table) + '</section>';
+  }
+
+  function renderArchiveControls(data) {
+    var goods = data.goods;
+    var period = state.page === 'productOverview' && state.view === 'period';
+    var columns = period ? archivePeriodColumns(data) : data.columns;
+    var category = goods ? '<select data-act="archive-category" aria-label="品类"><option value="">全部品类</option>' + data.categoryOptions.map(function (c) { return '<option value="' + esc(c) + '"' + (state.archiveCategory === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select>' : '';
+    return '<div class="bd-tools bd-archive-tools"><input data-act="q" value="' + esc(state.q) + '" placeholder="搜索商品 / SPU ID / SKU ID / 地域">' + category +
+      (goods ? '<select data-act="archive-flag" aria-label="任务筛选"><option value="">全部商品</option>' + [['hasUnread', '跟进'], ['hasTodo', '待办'], ['hasTask', '有任务']].map(function (x) { return '<option value="' + x[0] + '"' + (state.archiveFlag === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select><select data-act="archive-profit" aria-label="盈亏筛选"><option value="">全部盈亏（显示值）</option><option value="profit"' + (state.archiveProfit === 'profit' ? ' selected' : '') + '>盈利及持平（显示值）</option><option value="loss"' + (state.archiveProfit === 'loss' ? ' selected' : '') + '>亏损（显示值）</option></select>' : '') +
+      '<button type="button" data-act="archive-reset">重置筛选</button>' + chips(goods ? (state.page === 'productOverview' ? [['list', '列表'], ['period', '周期'], ['gallery', '大图']] : [['list', '列表'], ['gallery', '大图']]) : [['list', '列表'], ['chart', '图表']], 'view') +
+      (period ? '<div class="bd-period-days" role="group" aria-label="周期天数">' + [7, 15].map(function (n) { return '<label><input type="radio" name="bound-period-days" data-act="archive-period-days" value="' + n + '"' + (state.archivePeriodDays === n ? ' checked' : '') + '>' + n + '天</label>'; }).join('') + '</div>' : '') +
+      (state.view === 'chart' ? '<select data-act="archive-chart-metric" aria-label="图表指标">' + data.columns.filter(function (c) { return c.numeric; }).map(function (c) { return '<option value="' + esc(c.key) + '"' + (archiveChartColumn(data).key === c.key ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join('') + '</select>' : '') +
+      '<button type="button" data-act="archive-columns">表格设置</button><button type="button" data-act="archive-export"' + (data.message || period && (data.reportId === 'shop_spu_page' && !archiveRecords('shop_spu_period').length || archivePeriodPending(data)) ? ' disabled' : '') + '>' + (period ? '导出本页周期' : '导出当前筛选') + '</button></div>' +
+      (state.panel === 'archive-columns' ? '<div class="bd-archive-columns"><strong>显示字段</strong>' + columns.map(function (c) { return '<label><input type="checkbox" data-act="archive-column" data-key="' + esc(c.key) + '"' + (c.on ? ' checked' : '') + (c.key === 'goodsName' ? ' disabled' : '') + '> ' + esc(c.label) + '</label>'; }).join('') + '<button type="button" data-act="archive-columns-reset">恢复全部字段</button></div>' : '');
+  }
+
+  function renderArchiveGallery(data) {
+    return '<div class="bd-gallery">' + data.rows.map(function (r) {
+      var src = archiveProductImage(r.metrics.goodsUrl);
+      return '<article class="bd-tile"><span class="bd-product-thumb">暂无图' + (src ? '<img src="' + esc(src) + '" alt="' + esc(r.name) + '" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span><button type="button" class="bd-product-name" data-act="' + (r.metrics.goodsId ? 'archive-product' : 'archive-gallery-spu') + '" data-goods-id="' + esc(r.metrics.goodsId) + '" data-spuid="' + esc(r.metrics.spuid) + '">' + esc(r.name) + '</button><small>' + esc(r.shop) + '</small><p>支付金额：' + formatCell(r.metrics.gmv, { numeric: true }) + '</p><p>推广花费：' + formatCell(r.metrics.tghf, { numeric: true }) + '</p><p>利润：' + formatCell(r.metrics.profit, { numeric: true, key: 'profit' }) + '</p></article>';
+    }).join('') + '</div>';
+  }
+
+  function archiveRunText() {
+    var run = state.localArchive.run;
+    if (!run) return '读取本机档案，无需重新登录。';
+    var label = { collecting: '正在采集', running: '正在采集', stopped: '采集已停止', paused: '采集已暂停', complete_with_deferred: '本轮采集完成，仍有待核验项', complete: '采集完成', interrupted: '采集中断' }[run.status] || run.status;
+    var reason = run.errors && run.errors.length ? run.errors[run.errors.length - 1].reason : '';
+    var error = { login_conflict: '账号已在其他位置登录，请先结束另一处操作后再建立采集会话。', server_login_required: '需要在连接旧站重新登录后续采。', login_expired: '自动重登未恢复会话，请重新登录后续采。', account_disabled: '旧站账号已禁用，已停止重试。', device_restricted: '旧站设备限制，已停止重试。' }[reason] || '';
+    return label + '：' + run.done + ' / ' + run.total + ' 项。' + (['collecting', 'running'].includes(run.status) ? '请勿同时在旧站登录此账号。' : error || '本地浏览无需登录。');
+  }
+  function archiveChartColumn(data) {
+    return data.columns.find(function (c) { return c.numeric && c.key === state.archiveChartMetric; }) || data.columns.find(function (c) { return c.key === 'gmv'; }) || data.columns.find(function (c) { return c.numeric; }) || {};
+  }
+  function renderArchiveChart(data) {
+    var column = archiveChartColumn(data);
+    if (!column.key) return '<p class="bd-miss">此表没有可展示的数值指标。</p>';
+    var max = Math.max.apply(Math, [1].concat(data.rows.map(function (r) { return Math.abs(Number(r.metrics[column.key])) || 0; })));
+    return '<p class="bd-status">' + esc(column.label) + ' · 当前页记录</p><div class="bd-bars">' + data.rows.map(function (r) {
+      var value = r.metrics[column.key];
+      var valid = value != null && value !== '' && Number.isFinite(Number(value));
+      var width = valid ? Math.abs(Number(value)) / max * 100 : 0;
+      return '<div class="bd-bar"><span title="' + esc(r.name) + '">' + esc(r.name || '—') + '</span><i style="width:' + width + '%;' + (Number(value) < 0 ? 'background:#17a66a' : '') + '"></i><b>' + (valid ? formatCell(value, column) : '—') + '</b></div>';
+    }).join('') + '</div>';
+  }
+  function renderArchiveTable(data) {
+    if (!data.promotionSummary) return renderTable(data);
+    var metrics = Object.assign({}, data.promotionSummary, { planName: '合计（本类型全部计划）' });
+    return renderTable(data, [{ key: 'promotion-sum', name: '合计（本类型全部计划）', shop: data.scope.shopName, metrics: metrics }].concat(data.rows));
+  }
+
+  function renderArchiveMain(data) {
+    var scope = data.scope;
+    var selected = data.selected;
+    var tabs = data.tabs.map(function (tab) { return '<button type="button" data-act="tab" data-tab="' + esc(tab.id) + '" class="' + (data.tab.id === tab.id ? "is-on" : "") + '">' + esc(tab.label) + '</button>'; }).join("");
+    var explanation = data.page.id === 'channelAnalysisNew' ? '指标卡、趋势和下方明细来自关键指标分析专用接口；点击指标切换明细。单店条件下按旧站规则不显示“按渠道查看”。' : data.page.id === "productOverview"
+      ? "商品合计取完整分页对应的全部合计，包含零销量但有花费或退款的商品。利润未扣店铺自定义费用；金额保留来源表的显示精度，不将逐行取整金额相加。"
+      : selected ? "仅展示这件商品在所选日期的已采结果。金额保留来源表显示精度。"
+      : "上方指标取店铺经营表，店铺利润已扣自定义费用。商品、品类等明细表利润口径不同，不能直接替代店铺利润。推广花费为支付预估口径。";
+    var inventory = state.localArchive.inventory;
+    var selectProduct = selected ? '<section class="bd-block"><label>选择商品 <select data-act="archive-select-product" aria-label="选择商品">' + ((inventory && inventory.items) || [selected]).map(function (p) { return '<option value="' + esc(p.goodsId) + '"' + (String(p.goodsId) === String(selected.goodsId) ? ' selected' : '') + '>' + esc(p.goodsName + ' · ' + p.goodsId) + '</option>'; }).join('') + '</select></label><p>商品 ID：' + esc(selected.goodsId) + '</p><button type="button" class="bd-plain" data-act="page" data-page="' + (data.page.id === 'productOperation' ? 'productPanorama' : 'productOperation') + '">' + (data.page.id === 'productOperation' ? '查看商品全景' : '查看商品运营分析') + '</button></section>' : '';
+    var dim = data.page.id === 'productOverview' ? chips([['spu', 'SPU'], ['sku', 'SKU']], 'dim') : '';
+    var report = '<section class="bd-block"><h2>' + esc(data.tab ? data.tab.label : "采集范围") + '</h2>' + dim +
+      (data.region ? chips([["province", "按省份"], ["city", "按城市"]], "area") + '<p class="bd-status">省份汇总和城市明细分开展示，避免重复计算。</p>' : "") +
+      (data.promotionGroups.length ? '<div class="bd-chips">' + data.promotionGroups.map(function (g) { return '<button type="button" data-act="archive-promotion" data-key="' + esc(g.promoteKey) + '" class="' + (g === data.selectedPromotion ? 'is-on' : '') + '">' + esc(g.promoteName) + '</button>'; }).join('') + '</div><p>' + (data.selectedPromotion.promoteKey === 'wxd' ? '无效单费用见下表，与推广花费口径不同。' : '本推广类型花费：' + formatCell(data.selectedPromotion.sumCost, { numeric: true })) + '</p>' : '') +
+      renderArchiveControls(data) +
+      (data.goods && state.view !== 'period' ? '<div class="bd-summary-switch">汇总：' + chips([['all', '全部'], ['page', '当前页']], 'archiveSummary') + '</div>' : '') +
+      (data.message ? '<p class="bd-miss">' + esc(data.message) + '</p>' : data.goods ? (state.view === 'period' && state.page === 'productOverview' ? renderArchivePeriod(data) : state.view === 'gallery' ? renderArchiveGallery(data) : renderArchiveGoodsTable(data)) : state.view === 'chart' ? renderArchiveChart(data) : renderArchiveTable(data)) +
+      (data.goods && state.view !== 'period' ? '<p class="bd-status">当前为 ' + (data.reportId === 'shop_spu_page' ? 'SPU 汇总，点击箭头展开商品链接' : 'SKU 商品链接明细') + '。销售件数按接口原口径展示，不等同于销售单数。左右滚动可查看全部指标。</p>' : '') +
+      '<div class="bd-sum">当前表 ' + esc(data.total) + ' 条' + (data.goods && data.complete && data.coverage.status === "ready" ? ' · 全店商品分页已收齐' : '') + ' · 表格筛选不改变上方指标范围</div>' +
+      '<div class="bd-pager"><select data-act="archive-page-size" aria-label="每页条数">' + [20, 50, 100].map(function (n) { return '<option value="' + n + '"' + (data.pageSize === n ? ' selected' : '') + '>' + n + ' 条/页</option>'; }).join('') + '</select><button type="button" data-act="page-no" data-delta="-1"' + (data.pageNo <= 1 ? " disabled" : "") + '>上一页</button><span>第 ' + data.pageNo + ' / ' + Math.max(1, Math.ceil(data.total / data.pageSize)) + ' 页</span><button type="button" data-act="page-no" data-delta="1"' + (data.pageNo * data.pageSize >= data.total ? " disabled" : "") + '>下一页</button></div></section>';
+    return '<section class="bd-main" data-bound-erp="false" data-local-archive="true" data-page="' + esc(data.page.id) + '">' +
+      '<header class="bd-head"><div><h1>' + esc(data.page.label) + '</h1><p class="bd-sub">' + (state.localArchive.runtime === 'server' ? '服务器' : '本机') + '已采数据 · 京东 · ' + esc(scope.shopName) + '</p></div><div class="bd-filters">' + renderDateBar(data) + '<button type="button" data-act="archive-date">返回已采日期 ' + esc(scope.date) + '</button></div></header>' +
+      '<div class="bd-archive-progress"><span data-archive-progress>' + esc(archiveRunText()) + '</span><button type="button" data-act="archive-refresh"' + (state.archiveRefreshBusy ? ' disabled' : '') + '>' + (state.archiveRefreshBusy ? '正在刷新…' : '刷新已采数据') + '</button></div>' + selectProduct +
+      (state.error ? '<p class="bd-banner" role="alert">' + esc(state.error) + '</p>' : '') +
+      (state.localArchive.failures.length ? '<p class="bd-banner">部分档案读取失败：' + esc(state.localArchive.failures.join("、")) + '</p>' : '') +
+      (data.page.id === 'channelOverview' ? '<p class="bd-banner">当前总览范围：京东 · ' + esc(scope.shopName) + ' · ' + esc(scope.date) + '。全账号渠道汇总和店铺分组尚未采集。</p>' : '') +
+      renderArchiveClassifications(data) + '<p class="bd-status">' + esc(explanation) + '</p>' +
+      '<div class="bd-tabs">' + tabs + '</div>' + report + '</section>';
+  }
   var timer = 0;
   var detach = function () {};
 
@@ -105,6 +753,7 @@
       ".bd-cal-day.is-edge.is-one{border-radius:4px;}",
       ".bd-cal-foot{margin:8px 0 0;color:#86909c;font-size:12px;text-align:right;}",
       ".bd-primary{height:30px;padding:0 12px;border:0;border-radius:4px;background:#3b6cff;color:#fff;cursor:pointer;font:inherit;font-size:12px;}",
+      ".bd-login{display:grid;gap:10px;max-width:420px;margin:12px 0;}.bd-login label{display:grid;gap:5px;}.bd-login input:not([type=checkbox]){box-sizing:border-box;width:100%;padding:8px;border:1px solid var(--xm-border,#e1e4ea);border-radius:4px;background:var(--xm-bg,#fff);color:inherit;font:inherit;}.bd-login .bd-auto{display:flex;align-items:center;gap:6px;}.bd-login button:disabled{opacity:.6;cursor:wait;}",
       ".bd-kpi-head .bd-primary{margin-left:auto;height:28px;}",
       ".bd-kpis{margin:0 0 12px;padding:8px 4px 12px;background:#fff;border:1px solid #eceff5;border-radius:6px;}",
       ".bd-kpi-head{display:flex;gap:12px;align-items:center;margin:0 12px 4px;font-size:14px;}",
@@ -148,6 +797,25 @@
       ".bd-table th{background:#fafafa;color:#3b6cff;font-weight:500;}",
       ".bd-table th button{border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;}",
       ".bd-table tr.bd-total td{font-weight:650;background:#fafafa;}",
+      ".bd-product-scroll{max-height:65vh;border:1px solid var(--xm-border,#e5e7eb);border-radius:5px;margin-top:10px;}",
+      ".bd-metric-detail summary{cursor:pointer;list-style:none;text-decoration:underline dotted;text-underline-offset:3px}.bd-metric-detail>div{min-width:240px;max-width:360px;white-space:normal;text-align:left;padding:10px;background:var(--xm-bg,#f5f8ff);border:1px solid var(--xm-border,#d7e0ef)}.bd-metric-detail p{display:flex;justify-content:space-between;gap:15px;margin:7px 0;font-size:12px}.bd-metric-detail small{font-size:11px;color:var(--xm-muted,#66748a)}",
+      ".bd-archive-progress{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin:10px 0;background:var(--xm-bg,#edf3ff);border:1px solid var(--xm-border,#dce6ff);border-radius:5px;font-size:12px}.bd-archive-progress button,.bd-plain{border:0;background:transparent;color:var(--xm-accent,#3b6cff);cursor:pointer;font:inherit}",
+      ".bd-archive-tools{flex-wrap:wrap}.bd-archive-tools select,.bd-pager select,.bd-block select{max-width:100%;height:30px;border:1px solid var(--xm-border,#e1e4ea);border-radius:4px;background:var(--xm-bg,#fff);color:inherit;padding:0 6px}.bd-archive-tools select{max-width:240px}.bd-archive-columns{display:flex;flex-wrap:wrap;gap:12px;padding:12px;border:1px solid var(--xm-border,#e1e4ea);margin:8px 0}.bd-archive-columns strong{width:100%}.bd-summary-switch{display:flex;align-items:center;gap:10px;margin-top:10px}",
+      ".bd-classifications{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin:12px 0}.bd-class-card{display:grid;gap:8px;min-height:105px;text-align:left;padding:12px;border:1px solid var(--xm-border,#d7e0ef);border-radius:4px;background:var(--xm-bg,#fff);color:inherit;cursor:pointer;font:inherit}.bd-class-card strong{font-size:21px}.bd-class-card small{font-size:11px;color:var(--xm-muted,#66748a)}.bd-class-card.is-on{background:#3b6cdf;color:white}.bd-class-card.is-on small{color:inherit}.bd-card-rule{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bd-block h2 small{font-weight:400;color:#86909c;margin-left:8px}.bd-product-child td{background:var(--xm-bg,#f6f9ff)!important}.bd-product-child td:first-child{padding-left:32px}.bd-expand{border:0;background:transparent;cursor:pointer;color:#3b6cff;font-size:18px}.bd-tile .bd-product-thumb{width:100%;height:150px;margin-bottom:10px;display:block}.bd-tile .bd-product-thumb img{width:100%;height:100%;object-fit:contain}.bd-tile .bd-product-name{white-space:normal}.bd-tile small{display:block;color:#86909c}",
+      ".bd-product-table{border-collapse:separate;border-spacing:0;background:var(--xm-surface,#fff);}",
+      ".bd-period-days{display:flex;gap:10px;align-items:center}.bd-period-days label{display:flex;align-items:center;gap:4px;white-space:nowrap}.bd-period-table{border-collapse:separate;border-spacing:0;background:var(--xm-surface,#fff)}.bd-period-table th{position:sticky;top:0;z-index:3;background:var(--xm-bg,#eef3ff)}.bd-period-table td{padding:3px 8px;height:24px;border-bottom:0;vertical-align:middle}.bd-period-table tbody:nth-of-type(odd){background:var(--xm-bg,#f2f5fa)}.bd-period-table tbody tr:last-child td{border-bottom:1px solid var(--xm-border,#d7e0ef)}.bd-period-table .bd-period-product{position:sticky;left:0;min-width:280px;max-width:280px;box-sizing:border-box;z-index:2;background:var(--xm-surface,#fff);white-space:normal;border-right:1px solid var(--xm-border,#d7e0ef);border-bottom:1px solid var(--xm-border,#d7e0ef);padding:12px}.bd-period-table th.bd-period-product{z-index:4;background:var(--xm-bg,#eef3ff)}.bd-period-table .bd-product-thumb,.bd-period-table .bd-product-thumb img{width:78px;height:100px;flex-basis:78px}.bd-period-table .bd-product-name{white-space:normal;display:block;line-height:1.5;text-align:left;max-height:7.5em;overflow:hidden}.bd-period-table .bd-product-caption small{display:block;color:var(--xm-muted,#66748a);font-size:11px;overflow-wrap:anywhere}.bd-period-actions{display:flex;gap:6px;margin-top:8px}.bd-period-actions button{border:0;background:#3b6cdf;color:white;border-radius:3px;padding:4px 7px;cursor:pointer}.bd-period-date small{margin-left:10px;color:var(--xm-muted,#66748a)}.bd-period-value{display:block;position:relative;min-width:90px;padding:0 5px;text-align:right;isolation:isolate}.bd-period-value i{position:absolute;inset:2px auto 2px 0;z-index:-1;background:#d5e8fa;border-radius:4px}.bd-period-value b{font-weight:400}.bd-period-value.is-positive i{background:#f8ceca}.bd-period-value.is-negative i{background:#ccebdc}.bd-period-missing{color:var(--xm-muted,#66748a);font-size:11px}",
+      ".bd-product-table th{position:sticky;top:0;z-index:3;height:46px;box-sizing:border-box;background:var(--xm-bg,#eef3ff);color:var(--xm-text,#173d75);}",
+      ".bd-product-table th:first-child,.bd-product-table td:first-child{position:sticky;left:0;min-width:260px;max-width:260px;width:260px;box-sizing:border-box;z-index:2;background:var(--xm-surface,#fff);border-right:1px solid var(--xm-border,#e5e7eb);}",
+      ".bd-product-table th:first-child{z-index:5;background:var(--xm-bg,#eef3ff);}",
+      ".bd-product-table .bd-total td{position:sticky;top:46px;z-index:2;background:var(--xm-bg,#f4f7ff);}",
+      ".bd-product-table .bd-total td:first-child{z-index:4;}",
+      ".bd-product-cell{display:flex;align-items:center;gap:8px;min-height:38px;}",
+      ".bd-product-thumb{position:relative;flex:0 0 32px;width:32px;height:32px;display:grid;place-items:center;background:var(--xm-bg,#f4f6fa);border:1px solid var(--xm-border,#e5e7eb);border-radius:4px;color:var(--xm-muted,#86909c);font-size:9px;}",
+      ".bd-product-thumb img{position:absolute;inset:0;width:32px;height:32px;object-fit:contain;background:var(--xm-surface,#fff);border-radius:3px;}",
+      ".bd-product-caption{min-width:0;flex:1;}.bd-product-name{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:inherit;line-height:20px;color:var(--xm-primary,#1677ff);background:none;border:0;padding:0;text-align:left;}.bd-product-name[data-act]{cursor:pointer;text-decoration:underline;text-underline-offset:3px;}",
+      ".bd-product-id{display:block;font-size:10px;line-height:16px;font-weight:400;color:var(--xm-muted,#86909c);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.bd-product-shop{display:block;max-width:170px;overflow:hidden;text-overflow:ellipsis;color:var(--xm-primary,#1677ff);}",
+      ".bd-product-dim{font-size:10px;margin-left:8px;color:var(--xm-muted,#86909c);}.bd-product-dim b{color:var(--xm-primary,#1677ff);}",
+      ".bd-ratio-cell{display:block;position:relative;min-width:100px;isolation:isolate;}.bd-ratio-cell i{position:absolute;left:0;top:0;bottom:0;z-index:-1;border-radius:4px;background:#d8e8ff;}.bd-ratio-cell .bd-num{position:relative;}",
       ".bd-dot{display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:2px;vertical-align:middle;}",
       ".bd-num{display:inline-block;min-width:56px;padding:2px 6px;border-radius:2px;text-align:right;color:#1d2129;}",
       ".bd-num.is-neg{color:#00b42a;}",
@@ -173,7 +841,7 @@
       ".bd-progress td.is-current{color:#3b6cff;font-weight:650;}",
       ".bd-reason{margin-top:2px;max-width:280px;color:#8a93a6;font-size:12px;font-weight:400;white-space:normal;}",
       ".bd-detail{white-space:normal;text-align:left;font-size:12px;line-height:1.6;color:#4e5969;}",
-      "@media(max-width:900px){.bd-app{grid-template-columns:1fr}.bd-head{flex-direction:column}.bd-gallery{grid-template-columns:1fr 1fr}}"
+      "@media(max-width:900px){.bd-head{flex-direction:column}.bd-gallery{grid-template-columns:1fr 1fr}}"
     ].join("");
     if (document.head) {
       document.head.appendChild(style);
@@ -234,7 +902,7 @@
         return '<button type="button" data-act="page" data-page="' + esc(page.id) + '" class="' + (page.id === state.page ? "is-on" : "") + '">' + esc(page.label) + "</button>";
       }).join("");
       if (mod.id === "mine" && state.admin) {
-        buttons += '<button type="button" data-act="page" data-page="link" class="' + (state.page === "link" ? "is-on" : "") + '">扫码连接旧站</button>';
+        buttons += '<button type="button" data-act="page" data-page="link" class="' + (state.page === "link" ? "is-on" : "") + '">连接旧站</button>';
       }
       return '<div class="bd-mod">' + esc(mod.label) + "</div>" + buttons;
     }).join("");
@@ -299,7 +967,7 @@
   function shanghaiToday() {
     try {
       return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-    } catch (error) {
+    } catch {
       return iso(new Date());
     }
   }
@@ -380,21 +1048,22 @@
 
   function defaultCalendarRange(preset) {
     var today = shanghaiToday();
+    var range;
     if (preset === "date") {
       var day = clampRange(reliableDay(), reliableDay());
       return { from: day.from, to: day.to, daysType: "1" };
     }
     if (preset === "week") {
-      var range = latestWeek();
+      range = latestWeek();
       return { from: range.from, to: range.to, daysType: "week" };
     }
     if (preset === "month") {
       var start = today.slice(0, 7) + "-01";
-      var range = clampRange(start, monthEndIso(start));
+      range = clampRange(start, monthEndIso(start));
       return { from: range.from, to: range.to, daysType: "month" };
     }
     if (preset === "year") {
-      var range = clampRange(today.slice(0, 4) + "-01-01", today.slice(0, 4) + "-12-31");
+      range = clampRange(today.slice(0, 4) + "-01-01", today.slice(0, 4) + "-12-31");
       return { from: range.from, to: range.to, daysType: "year" };
     }
     return null;
@@ -402,6 +1071,7 @@
 
   function shiftRange(delta) {
     var cap = reliableDay();
+    var start, range;
     var type = state.daysType;
     if (!state.from || (type !== "1" && type !== "week" && type !== "month" && type !== "year")) {
       return null;
@@ -414,7 +1084,7 @@
       return { from: day, to: day, daysType: "1" };
     }
     if (type === "week") {
-      var start = iso(addDays(parseIso(weekStart(state.from)), delta * 7));
+      start = iso(addDays(parseIso(weekStart(state.from)), delta * 7));
       var end = iso(addDays(parseIso(start), 6));
       if (end < DATA_START || start > cap || end > cap) {
         return null;
@@ -424,19 +1094,19 @@
     if (type === "month") {
       var cursor = parseIso(state.from.slice(0, 7) + "-01");
       cursor.setMonth(cursor.getMonth() + delta);
-      var start = iso(new Date(cursor.getFullYear(), cursor.getMonth(), 1));
+      start = iso(new Date(cursor.getFullYear(), cursor.getMonth(), 1));
       if (start < DATA_START || start > cap) {
         return null;
       }
-      var range = clampRange(start, monthEndIso(start));
+      range = clampRange(start, monthEndIso(start));
       return { from: range.from, to: range.to, daysType: "month" };
     }
     var year = Number(state.from.slice(0, 4)) + delta;
-    var start = year + "-01-01";
+    start = year + "-01-01";
     if (year < 2026 || start > cap) {
       return null;
     }
-    var range = clampRange(start, year + "-12-31");
+    range = clampRange(start, year + "-12-31");
     return { from: range.from, to: range.to, daysType: "year" };
   }
 
@@ -645,10 +1315,10 @@
     if (!column || !column.numeric || !Number.isFinite(num)) {
       return esc(value);
     }
-    if (column.rate && Math.abs(num) <= 1) {
+    if (column.rate && (column.sourceRatio || Math.abs(num) <= 1)) {
       num = num * 100;
     }
-    var whole = Math.abs(num) >= 100 && Math.abs(num - Math.round(num)) < 0.001;
+    var whole = column.sourceValue ? Number.isInteger(num) : Math.abs(num) >= 100 && Math.abs(num - Math.round(num)) < 0.001;
     var digits = column.rate || !whole ? 2 : 0;
     var text = num.toLocaleString("zh-CN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
     if (column.rate) {
@@ -716,6 +1386,7 @@
     var grid = cards.join("");
     var meta = "渠道 " + channelCount + " 个 · 店铺 " + shopCount + " 个";
     var action = '<button type="button" class="bd-primary" data-act="panel" data-panel="cards">设定指标</button>';
+    if (data.localArchive) action = "";
     if (ui) {
       return ui.ContentCard({
         title: title,
@@ -914,7 +1585,7 @@
     if (card.rate && Math.abs(num) <= 1) {
       num = num * 100;
     }
-    var whole = !card.rate && Math.abs(num) >= 100 && Math.abs(num - Math.round(num)) < 0.001;
+    var whole = !card.rate && (card.sourceValue ? Number.isInteger(num) : Math.abs(num) >= 100 && Math.abs(num - Math.round(num)) < 0.001);
     var digits = card.rate || !whole ? 2 : 0;
     var text = num.toLocaleString("zh-CN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
     return esc(card.rate ? text + "%" : text);
@@ -946,9 +1617,9 @@
         return '<article class="bd-tile"><strong>' + esc(row.name || "未命名") + "</strong><div>" + esc(row.shop) + "</div><div>" + formatCell(metricOf(row, { key: "payAmount", numeric: true, money: true, aliases: ["gmv", "xse"] }), { key: "payAmount", numeric: true, money: true }) + "</div></article>";
       }).join("") + "</div>";
     }
-    var suffix = data.page && data.page.id === "channelAnalysisNew" ? (state.compare === "mom" ? "环比" : "同比") : "";
-    var showOpener = !(data.page && (data.page.id === "channelOverview" || data.page.id === "channelAnalysis"));
-    if (state.sortKey) {
+    var suffix = !data.localArchive && data.page && data.page.id === "channelAnalysisNew" ? (state.compare === "mom" ? "环比" : "同比") : "";
+    var showOpener = !data.localArchive && !(data.page && (data.page.id === "channelOverview" || data.page.id === "channelAnalysis"));
+    if (state.sortKey && !data.localArchive) {
       var sortColumn = null;
       cols.forEach(function (column) {
         if (column.key === state.sortKey) {
@@ -1038,7 +1709,7 @@
     }
     var source = data.shopRows || [];
     var gaps = data.shopGaps || [];
-    var gapNote = gaps.length ? '<p class="bd-banner">店铺明细缺失：' + esc(gaps.join("、")) + "。这些天的金额没有采全，不会按 0 计入店铺汇总，已安排补采。</p>" : "";
+    var gapNote = gaps.length ? '<p class="bd-banner">店铺明细缺失：' + esc(gaps.join("、")) + "。这些天的金额没有采全，不会按 0 计入店铺汇总。请查看采集进度。</p>" : "";
     var channelPay = Number(sumCell(data.allSum, "payAmount").replace(/,/g, "")) || 0;
     var shopPay = source.reduce(function (sum, row) {
       return sum + (Number((row.metrics || {}).payAmount) || 0);
@@ -1051,12 +1722,12 @@
       return uiShop.ContentCard({ title: "店铺列表", content: content });
     }
     if (source.length && channelPay > 0 && shopPay === 0) {
-      var mismatch = "这一天的店铺明细金额是 0，和渠道支付 " + sumCell(data.allSum, "payAmount") + " 对不上。这是明细没采全，不会把缺失显示成真实的 0。已安排补采。";
+      var mismatch = "这一天的店铺明细金额是 0，和渠道支付 " + sumCell(data.allSum, "payAmount") + " 对不上。这是明细没采全，不会把缺失显示成真实的 0。请查看采集进度。";
       return shopCard(uiShop ? uiShop.EmptyState({ title: "店铺明细缺失", description: mismatch }) : '<p class="bd-banner">' + esc(mismatch) + "</p>");
     }
     if (!source.length) {
       if (gapNote) {
-        var gapText = "店铺明细缺失：" + gaps.join("、") + "。这些天的金额没有采全，不会按 0 计入店铺汇总，已安排补采。";
+        var gapText = "店铺明细缺失：" + gaps.join("、") + "。这些天的金额没有采全，不会按 0 计入店铺汇总。请查看采集进度。";
         return shopCard(uiShop ? uiShop.EmptyState({ title: "店铺明细缺失", description: gapText }) : gapNote);
       }
       var waiting = data.shopStatus && data.shopStatus !== "ready" ? "店铺列表还没采完。" : "这个范围内没有店铺记录。";
@@ -1126,7 +1797,9 @@
     var cursor = progress.cursor || {};
     var phase = progress.phase || "";
     var now = "采集还没开始。";
-    if (phase === "collecting" && cursor.label) {
+    if (progress.collection && !progress.collection.batchEnabled) {
+      now = progress.collection.message;
+    } else if (phase === "collecting" && cursor.label) {
       now = "正在采集：" + (cursor.page || "") + " / " + cursor.label + "，" + (cursor.start || "") + (cursor.end && cursor.end !== cursor.start ? " 至 " + cursor.end : "");
     } else if (phase === "collecting") {
       now = "正在采集。这一页每几秒刷新一次。";
@@ -1135,7 +1808,7 @@
     } else if (phase === "needs_scan" || phase === "waiting_scan") {
       now = "采集停住，等扫码。下面是已经入库的进度。";
     }
-    var labels = { done: "已完成", partial: "进行中", failed: "失败", pending: "还没开始" };
+    var labels = { done: "已完成", partial: "部分完成", failed: "失败", pending: "还没开始" };
     var rows = progress.items.map(function (item) {
       var current = cursor.id === item.id && (cursor.dim || "all") === (item.dim || "all");
       var dim = item.dim && item.dim !== "all" ? " " + item.dim.toUpperCase() : "";
@@ -1167,6 +1840,32 @@
     return '<section class="bd-block"><h2 class="bd-block-title">采集进度</h2><p class="bd-now">' + esc(now) + "</p><div class=\"bd-meter\"><i style=\"width:" + width + "%\"></i></div><p class=\"bd-status\">已完成 " + esc(done) + " / " + esc(total) + " 张表。进行中 " + esc(counts.partial || 0) + "，失败 " + esc(counts.failed || 0) + "，还没开始 " + esc(counts.pending || 0) + "。范围 " + esc(progress.startOn) + " 至 " + esc(progress.today) + "。</p><div class=\"bd-progress\"><table class=\"bd-table\"><tr><th>页面</th><th>表</th><th>已采天数</th><th>失败</th><th>最近一天</th><th>状态</th></tr>" + rows + "</table></div></section>";
   }
 
+  function renderProbe() {
+    var probe = state.probe;
+    if (!probe || !probe.target) return "";
+    var target = probe.target;
+    var busy = state.probeBusy || probe.running;
+    var last = probe.last;
+    var metric = last && last.metric;
+    var result = metric ? '<p><strong>接口支付金额：' + esc(metric.displayValue) + '</strong> · ' + (metric.matchesPage ? "与旧站页面一致" : "与页面不一致") + '</p><p class="bd-status">' + esc(metric.definition) + '。' + esc(metric.precisionNote) + '</p>' : '';
+    var candidateRow = last && last.sample && last.sample.row;
+    if (!metric && target.metric === "广告花费" && last && last.status === "response_received"
+      && candidateRow && String(candidateRow.date || "").replace(/\//g, "-") === target.date
+      && typeof candidateRow.tghf === "number" && Number.isFinite(candidateRow.tghf)) {
+      var adMatchesPage = target.pageConfirmation && target.pageConfirmation.source === "user"
+        && typeof target.pageDisplay === "string" && Number(target.pageDisplay.replace(/,/g, "")) === candidateRow.tghf;
+      result = '<p><strong>' + (adMatchesPage ? '接口广告花费：' : '推广相关候选值：')
+        + esc(new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 20 }).format(candidateRow.tghf))
+        + '</strong>' + (adMatchesPage ? ' · 与用户确认的旧站页面一致' : '')
+        + '</p><p class="bd-status">接口字段 tghf。' + (adMatchesPage ? '页面金额已人工核对；账单实际消耗口径尚未单独验证。' : '广告金额口径待核对；尚未确认为广告账单实际消耗。') + '</p>';
+    }
+    var tasks = (probe.targets || [target]).map(function (item) {
+      return '<button type="button" data-act="probe-target" data-date="' + esc(item.date) + '"' + (busy ? ' disabled' : '') + '>' + esc(item.date + " · " + item.metric) + '</button>';
+    }).join("");
+    var baseline = target.pageDisplay == null ? "尚未核对旧站页面值。" : "已确认的旧站页面值：" + esc(target.pageDisplay) + "。";
+    return '<section class="bd-block"><h2 class="bd-block-title">单店试采</h2><div class="bd-tools">' + tasks + '</div><p>' + esc(target.shopName) + " · " + esc(target.date) + " · " + esc(target.metric) + '</p><p class="bd-status">' + baseline + '每次只请求这一家店的数据，并核对指定日期行。</p><div class="bd-tools"><button type="button" data-act="probe"' + (busy ? ' disabled' : '') + '>' + (busy ? "试采中…" : "试采一次") + '</button></div>' + result + (last ? '<p role="status">' + esc(last.message) + '</p><p class="bd-status">请求次数：' + esc(last.requestCount) + " · " + esc(last.finishedAt) + "</p>" : "") + '</section>';
+  }
+
   function renderLink() {
     var link = state.link || {};
     var showQr = link.qrReady && (link.phase === "waiting_scan" || link.phase === "needs_scan" || link.phase === "choose_account");
@@ -1174,7 +1873,11 @@
     var accounts = (link.accounts || []).map(function (account) {
       return '<button type="button" data-act="pick" data-company="' + esc(account.companyId) + '">' + esc(account.companyName || account.name || account.companyId) + "</button>";
     }).join("");
-    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>扫码连接旧站</h1><p class="bd-sub">二维码来自旧站官方登录接口，和登录页同一张。扫码后服务器沿用这个会话补采，页面查询不再打旧站。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + "</p></div></header><section class=\"bd-block\"><p>" + esc(link.message || "") + "</p>" + qr + '<div class="bd-tools"><button type="button" data-act="scan" data-provider="WECHAT">微信</button><button type="button" data-act="scan" data-provider="FEISHU">飞书</button><button type="button" data-act="scan" data-provider="DINGTALK">钉钉</button><button type="button" data-act="scan" data-provider="QYWX">企业微信</button>' + accounts + "</div></section>" + renderProgress() + "</section>";
+    var password = '<div class="bd-login" data-bound-password><label>旧站账号<input name="bound-user-name" autocomplete="username" value="' + esc(link.userName || "") + '"></label><label>旧站密码<input name="bound-password" type="password" autocomplete="current-password"></label><label class="bd-auto"><input name="bound-auto-relogin" type="checkbox" checked>登录正常过期后自动重新登录</label><button class="bd-primary" type="button" data-act="password-login"' + (state.passwordBusy ? ' disabled' : '') + '>' + (state.passwordBusy ? "正在登录…" : "账号密码登录") + '</button><p class="bd-status">密码仅在服务运行期间保留，服务重启后需重新输入。异地登录、账号禁用或重新登录失败时会停止。</p></div>';
+    var archive = state.localArchive;
+    var run = archive && archive.run, running = run && ['running', 'collecting'].includes(run.status);
+    var scoped = archive ? '<section class="bd-block"><h2>单店四页采集</h2><p>' + esc(archive.scope.shopName + ' · ' + archive.scope.date) + '</p><p>渠道总览（单店范围）、渠道详情、关键指标分析、商品总览</p><p data-archive-progress>' + esc(archiveRunText()) + '</p>' + (archive.runtime === 'server' ? '<button type="button" data-act="archive-job-start"' + (running ? ' disabled' : '') + '>开始 / 继续补采</button><button type="button" data-act="archive-job-stop"' + (!running ? ' disabled' : '') + '>停止采集</button><p class="bd-status">只补缺少的结果，已成功归档的数据直接复用。关闭页面后服务器继续采集；账号冲突或接口异常时停止。</p>' : '<p class="bd-status">旧的全模块批量采集保持暂停。四页专用接口正在逐项核验。</p>') + '<button type="button" data-act="archive-refresh">刷新已采数据</button></section>' : renderProgress();
+    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>连接旧站</h1><p class="bd-sub">使用旧站账号密码建立采集会话。</p><p class="bd-status">同一账号只能保持一处登录。采集期间查看本系统已采数据，旧站对照需等采集停止后进行。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + '</p></div></header><section class="bd-block"><p role="status">' + esc(link.message || "") + '</p>' + password + '<details><summary>扫码登录（备用）</summary>' + qr + '<div class="bd-tools"><button type="button" data-act="scan" data-provider="WECHAT">微信</button><button type="button" data-act="scan" data-provider="FEISHU">飞书</button><button type="button" data-act="scan" data-provider="DINGTALK">钉钉</button><button type="button" data-act="scan" data-provider="QYWX">企业微信</button>' + accounts + '</div></details></section>' + (archive ? '' : renderProbe()) + scoped + '</section>';
   }
 
   function renderMain() {
@@ -1182,6 +1885,7 @@
       return renderLink();
     }
     var data = state.viewData;
+    if (data && data.localArchive) return renderArchiveMain(data);
     var meta = pageMeta();
     if (!data || !meta) {
       return '<section class="bd-main"><p class="bd-miss">' + esc(state.error || "正在读取本库") + "</p></section>";
@@ -1253,9 +1957,12 @@
   }
 
   function paint(root) {
+    if (state.localArchive && state.page !== "link") state.viewData = buildArchiveView();
     var focus = root.querySelector && root.querySelector("[data-act='q']");
     var start = focus ? focus.selectionStart : null;
     render(root);
+    fillArchiveExtras(root);
+    fillArchivePeriods(root);
     if (start != null && root.querySelector) {
       var next = root.querySelector("[data-act='q']");
       if (next) {
@@ -1268,13 +1975,17 @@
   }
 
   async function load(root, token) {
+    var revision = ++loadRevision;
     state.error = "";
     var stamp = await fetch("/api/bound");
-    var view = state.page === "link" ? null : await fetch("/api/bound/view?" + queryString());
+    await readLocalArchive();
+    await readArchiveProduct();
+    if (token !== active || revision !== loadRevision) return;
+    var view = state.page === "link" || state.localArchive ? null : await fetch("/api/bound/view?" + queryString());
     var catalog = state.catalog ? null : await fetch("/api/bound/catalog");
     var link = await fetch("/api/bound/link");
     var progress = state.page === "link" ? await fetch("/api/bound/progress") : null;
-    if (token !== active) {
+    if (token !== active || revision !== loadRevision) {
       return;
     }
     if (!stamp.ok) {
@@ -1304,7 +2015,17 @@
     }
     state.admin = link.ok;
     state.link = link.ok ? await link.json() : null;
-    paint(root);
+    if (state.page === "link" && state.admin) {
+      try {
+        var requestedProbeDate = state.probeDate;
+        var probe = await fetch("/api/bound/collect/probe" + (requestedProbeDate ? "?date=" + encodeURIComponent(requestedProbeDate) : ""));
+        if (token !== active || requestedProbeDate !== state.probeDate) return;
+        state.probe = probe.ok ? await probe.json() : null;
+      } catch {
+        state.probe = null;
+      }
+    }
+    if (!state.loginEditing && !state.passwordBusy) paint(root);
   }
 
   function openPicker(root, preset) {
@@ -1319,7 +2040,7 @@
     try {
       input.showPicker();
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -1339,15 +2060,93 @@
         return;
       }
       var act = node.getAttribute("data-act");
-      if (act === "page") {
+      if (state.localArchive && act.indexOf("archive-") === 0) {
+        if (act === 'archive-job-start' || act === 'archive-job-stop') {
+          if (state.localArchive.runtime !== 'server') return;
+          fetch('/api/bound/shop-day/' + (act === 'archive-job-start' ? 'four-pages/start' : 'stop'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(async function (r) {
+            var result = await r.json(); if (!r.ok || !result.ok) throw new Error('job_failed');
+            if (result.run) state.localArchive.run = result.run;
+          }).catch(function () { state.error = '采集任务未启动，请确认登录状态后重试。'; }).finally(function () { if (token === active) paint(root); });
+          return;
+        }
+        if (act === 'archive-key-metric') {
+          var graph = archiveRecords('key_graph')[0], metric = node.getAttribute('data-key');
+          if (graph && graph.metricColumns.some(function (c) { return c.columnKey === metric; })) { state.archiveKeyMetric = metric; state.q = state.sortKey = ''; state.pageNo = 1; paint(root); }
+          return;
+        }
+        if (act === 'archive-trend-fold') { state.archiveTrendFolded = !state.archiveTrendFolded; paint(root); return; }
+        if (act === "archive-refresh") {
+          if (state.archiveRefreshBusy) return;
+          state.error = "";
+          state.archiveRefreshBusy = true;
+          paint(root);
+          readLocalArchive(true).then(readArchiveProduct).then(readArchiveCard).finally(function () { state.archiveRefreshBusy = false; if (token === active) paint(root); });
+          return;
+        }
+        if (act === "archive-card") { state.archiveCard = node.getAttribute("data-id") || ""; state.pageNo = 1; paint(root); readArchiveCard().then(function () { if (token === active) paint(root); }); return; }
+        if (act === "archive-cards-expand") { state.archiveCardsExpanded = !state.archiveCardsExpanded; paint(root); return; }
+        if (act === "archive-columns") { state.panel = state.panel === "archive-columns" ? "" : "archive-columns"; paint(root); return; }
+        if (act === "archive-columns-reset") { state.archiveColumnsHidden[state.viewData.reportId] = []; paint(root); return; }
+        if (act === "archive-reset") {
+          state.q = state.archiveCard = state.archiveCategory = state.archiveFlag = state.archiveProfit = state.sortKey = "";
+          state.pageNo = 1; paint(root); return;
+        }
+        if (act === "archive-promotion") { state.archivePromotion = node.getAttribute("data-key"); state.q = state.sortKey = ""; state.pageNo = 1; paint(root); return; }
+        if (act === "archive-gallery-spu") { state.view = "list"; state.open['spu-' + node.getAttribute('data-spuid')] = true; paint(root); return; }
+        if (act === "archive-export") {
+          var data = state.viewData, columns = data.columns.filter(function (c) { return c.on; });
+          var exportRows = data.filteredRows;
+          var periodExport = state.page === 'productOverview' && state.view === 'period';
+          if (periodExport) {
+            if (data.message || data.reportId === 'shop_spu_page' && !archiveRecords('shop_spu_period').length || archivePeriodPending(data)) return;
+            columns = [{ key: 'goodsId', label: '商品 ID' }, { key: 'spuid', label: 'SPU ID' }, { key: 'date', label: '时间范围' }, { key: 'coverage', label: '数据状态' }].concat(archivePeriodColumns(data).filter(function (c) { return c.on; }));
+            exportRows = data.rows.flatMap(function (product) {
+              var item = archivePeriodItem(data, product.metrics);
+              return archivePeriodDates().map(function (date) {
+                var daily = item && item.status === 'ready' && item.rows[date];
+                return Object.assign({}, daily || {}, { goodsId: product.metrics.goodsId, spuid: product.metrics.spuid, goodsName: product.name, onSaleTime: product.metrics.onSaleTime, date: date, coverage: archivePeriodStatus(item, daily) });
+              });
+            });
+          }
+          function csvCell(value) {
+            var text = String(value == null ? "" : value);
+            // Protect exported text from spreadsheet formula evaluation.
+            if (/^[=+@\t\r]/.test(text) || /^-\D/.test(text)) text = "'" + text;
+            return '"' + text.replace(/"/g, '""') + '"';
+          }
+          var csv = '\ufeff' + [columns.map(function (c) { return csvCell(c.label); }).join(',')].concat(exportRows.map(function (r) { return columns.map(function (c) { var value = r[c.key]; return csvCell(c.rate && value != null && value !== '' && Number.isFinite(Number(value)) ? (Number(value) * 100).toFixed(2) + '%' : value); }).join(','); })).join('\r\n');
+          var href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+          var anchor = document.createElement('a'); anchor.href = href; anchor.download = data.scope.date + '-' + data.reportId + '-' + (data.selected ? data.selected.goodsId : state.dim) + (periodExport ? '-period-' + state.archivePeriodDays + '-page-' + data.pageNo : '') + '.csv'; anchor.click(); URL.revokeObjectURL(href);
+          return;
+        }
+      }
+      if (act === "archive-product" && state.localArchive && state.localArchive.selected) {
+        var goodsId = node.getAttribute("data-goods-id") || state.localArchive.selected.goodsId;
+        var allowed = String(goodsId) === String(state.localArchive.selected.goodsId) || ((state.localArchive.inventory && state.localArchive.inventory.items) || []).some(function (p) { return String(p.goodsId) === String(goodsId); });
+        if (!allowed) return;
+        state.archiveGoodsId = goodsId;
+        state.page = node.getAttribute('data-product-page') === 'productOperation' ? 'productOperation' : 'productPanorama';
+        state.tab = state.page === 'productOperation' ? 'spyy_zl' : 'spqj_zl';
+        state.view = 'list';
+        state.q = "";
+        state.sortKey = "";
+        state.pageNo = 1;
+      } else if (act === "archive-date" && state.localArchive) {
+        state.from = state.to = state.localArchive.scope.date;
+        state.daysType = "1";
+        state.pageNo = 1;
+      } else if (act === "page") {
+        if (state.localArchive) { state.q = ""; state.sortKey = ""; state.view = "list"; state.archiveCard = state.archiveCategory = state.archiveFlag = state.archiveProfit = ""; }
         state.page = node.getAttribute("data-page");
         state.tab = "";
         state.pageNo = 1;
         state.panel = "";
       } else if (act === "tab") {
+        if (state.localArchive) { state.q = ""; state.sortKey = ""; state.view = "list"; state.panel = ""; }
         state.tab = node.getAttribute("data-tab");
         state.pageNo = 1;
       } else if (act === "dim") {
+        if (state.localArchive) { state.archiveCard = ""; state.q = ""; state.sortKey = ""; }
         state.dim = node.getAttribute("data-dim");
         state.pageNo = 1;
       } else if (act === "sort") {
@@ -1382,6 +2181,7 @@
           return;
         }
         if (chipKey === "dim") {
+          if (state.localArchive) { state.archiveCard = ""; state.q = ""; state.sortKey = ""; }
           state.pageNo = 1;
           load(root, token);
           return;
@@ -1444,6 +2244,60 @@
         var yearRange = clampRange(year + "-01-01", year + "-12-31");
         state.datePop = "";
         applyRange({ from: yearRange.from, to: yearRange.to, daysType: "year" });
+      } else if (act === "password-login") {
+        if (state.passwordBusy || state.probeBusy) return;
+        var userField = root.querySelector('[name="bound-user-name"]');
+        var passwordField = root.querySelector('[name="bound-password"]');
+        var autoField = root.querySelector('[name="bound-auto-relogin"]');
+        if (!userField || !passwordField || !userField.value.trim() || !passwordField.value) {
+          state.error = "请填写旧站账号和密码。";
+          paint(root);
+          return;
+        }
+        var loginBody = JSON.stringify({ userName: userField.value.trim(), password: passwordField.value, autoRelogin: Boolean(autoField && autoField.checked) });
+        passwordField.value = "";
+        state.loginEditing = false;
+        state.passwordBusy = true;
+        paint(root);
+        fetch("/api/bound/link/password", { method: "POST", headers: { "Content-Type": "application/json" }, body: loginBody })
+          .then(function (response) { return response.json(); }).then(function (result) {
+            if (token !== active) return;
+            state.link = result;
+            if (!result.ok) state.error = result.message || "登录未成功";
+          }).catch(function () {
+            if (token === active) state.error = "登录请求未完成，请重新检查登录状态。";
+          }).finally(function () {
+            state.passwordBusy = false;
+            if (token === active) paint(root);
+          });
+        loginBody = "";
+        return;
+      } else if (act === "probe-target") {
+        if (state.probeBusy || state.passwordBusy) return;
+        state.probeDate = node.getAttribute("data-date");
+        state.probe = null;
+        paint(root);
+        load(root, token);
+        return;
+      } else if (act === "probe") {
+        if (state.probeBusy || state.passwordBusy || !state.probe || !state.probe.target) return;
+        state.probeBusy = true;
+        var target = state.probe.target;
+        paint(root);
+        fetch("/api/bound/collect/probe", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ shopId: target.shopId, platform: target.platform, date: target.date })
+        }).then(function (response) { return response.json(); }).then(function (result) {
+          if (token !== active) return;
+          if (result.record) state.probe.last = result.record;
+          else state.error = result.message || "本次试采未开始";
+        }).catch(function () {
+          if (token === active) state.error = "没有收到试采结果，请查看最近一次记录，避免重复提交。";
+        }).finally(function () {
+          state.probeBusy = false;
+          if (token === active) paint(root);
+        });
+        return;
       } else if (act === "scan") {
         fetch("/api/bound/link/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: node.getAttribute("data-provider") }) }).then(function () {
           return load(root, token);
@@ -1509,10 +2363,10 @@
         if (daySpan(start, end) > 60) {
           return;
         }
-        var chosen = clampRange(start, end);
+        var calendarChosen = clampRange(start, end);
         state.calAnchor = "";
         state.datePop = "";
-        applyRange({ from: chosen.from, to: chosen.to, daysType: "custom" });
+        applyRange({ from: calendarChosen.from, to: calendarChosen.to, daysType: "custom" });
         load(root, token);
         return;
       } else {
@@ -1526,6 +2380,38 @@
         return;
       }
       var act = node.getAttribute("data-act");
+      if (state.localArchive) {
+        if (act === 'archive-period-days') {
+          if ([7, 15].includes(Number(node.value))) state.archivePeriodDays = Number(node.value);
+          paint(root); return;
+        }
+        if (act === "archive-select-product") {
+          if (!((state.localArchive.inventory && state.localArchive.inventory.items) || []).some(function (p) { return String(p.goodsId) === node.value; })) return;
+          state.archiveGoodsId = node.value; state.q = state.sortKey = state.archivePromotion = ""; state.pageNo = 1;
+          load(root, token); return;
+        }
+        if (act === "archive-category" || act === "archive-flag" || act === "archive-profit" || act === "archive-page-size") {
+          if (act === "archive-category") state.archiveCategory = node.value;
+          if (act === "archive-flag" && ["", "hasTask", "hasTodo", "hasUnread"].includes(node.value)) state.archiveFlag = node.value;
+          if (act === "archive-profit" && ["", "profit", "loss"].includes(node.value)) state.archiveProfit = node.value;
+          if (act === "archive-page-size" && [20, 50, 100].includes(Number(node.value))) state.archivePageSize = Number(node.value);
+          state.pageNo = 1; paint(root); return;
+        }
+        if (act === "archive-column") {
+          var id = state.viewData.reportId, key = node.getAttribute("data-key");
+          if (key === "goodsName") return;
+          var hidden = state.archiveColumnsHidden[id] || [];
+          state.archiveColumnsHidden[id] = node.checked ? hidden.filter(function (k) { return k !== key; }) : Array.from(new Set(hidden.concat(key)));
+          paint(root); return;
+        }
+        if (act === "archive-chart-metric") { state.archiveChartMetric = node.value; paint(root); return; }
+      }
+      if (act === "q" && state.localArchive) {
+        state.q = node.value;
+        state.pageNo = 1;
+        paint(root);
+        return;
+      }
       if (act === "combo" || act === "warehouse" || act === "split-combo") {
         if (act === "combo") state.hideCombo = Boolean(node.checked);
         if (act === "warehouse") state.splitWarehouse = Boolean(node.checked);
@@ -1588,10 +2474,31 @@
     }
     root.addEventListener("click", onClick);
     root.addEventListener("change", onChange);
+    function onArchiveSearch(event) {
+      if (state.localArchive && event.target.getAttribute && event.target.getAttribute("data-act") === "q") onChange(event);
+    }
+    root.addEventListener("input", onArchiveSearch);
+    function onProductImageError(event) {
+      var img = event.target;
+      if (img && img.tagName === "IMG" && img.parentElement && img.parentElement.classList.contains("bd-product-thumb")) img.hidden = true;
+    }
+    root.addEventListener("error", onProductImageError, true);
+    function onLoginFocus(event) {
+      if (event.target.closest && event.target.closest("[data-bound-password]")) state.loginEditing = true;
+    }
+    function onLoginBlur(event) {
+      state.loginEditing = Boolean(event.relatedTarget && event.relatedTarget.closest && event.relatedTarget.closest("[data-bound-password]"));
+    }
+    root.addEventListener("focusin", onLoginFocus);
+    root.addEventListener("focusout", onLoginBlur);
     return function () {
       if (root.removeEventListener) {
         root.removeEventListener("click", onClick);
         root.removeEventListener("change", onChange);
+        root.removeEventListener("input", onArchiveSearch);
+        root.removeEventListener("error", onProductImageError, true);
+        root.removeEventListener("focusin", onLoginFocus);
+        root.removeEventListener("focusout", onLoginBlur);
       }
     };
   }
@@ -1600,6 +2507,9 @@
   window.XmModules["/bound"] = {
     mount: function (root) {
       var token = ++active;
+      state.loginEditing = false;
+      var initialProbeDate = new URLSearchParams(window.location && window.location.search || "").get("probeDate");
+      if (initialProbeDate) { state.page = "link"; state.probeDate = initialProbeDate; }
       ensureStyle();
       if (root.classList) {
         root.classList.add("xm-ui-scope");
@@ -1608,9 +2518,18 @@
       detach = listen(root, token);
       load(root, token);
       if (typeof setInterval === "function") {
+        var archivePollTick = 0;
         timer = setInterval(function () {
-          if (state.page === "link" && state.admin) {
+          if (state.page === "link" && state.admin && !state.loginEditing && !state.passwordBusy) {
             load(root, token);
+          }
+          if (state.localArchive && ++archivePollTick % 10 === 0 && token === active) {
+            fetch("/api/bound/shop-day/run").then(function (r) { return r.ok ? r.json() : null; }).then(function (result) {
+              if (!result || !result.ok || token !== active) return;
+              state.localArchive.run = result.run;
+              var label = root.querySelector && root.querySelector('[data-archive-progress]');
+              if (label) label.textContent = archiveRunText();
+            }).catch(function () { /* The saved data remains readable during a local outage. */ });
           }
         }, 3000);
       }

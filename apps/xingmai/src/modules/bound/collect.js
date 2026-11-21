@@ -1,7 +1,12 @@
 import { randomBytes } from "node:crypto";
+import { Buffer } from "node:buffer";
+import { URLSearchParams } from "node:url";
 import { API_ORIGIN, MASTERS, ORIGIN, PAGE_SIZE, accessCodes, reports } from "./catalog.js";
 import { listSheetHeads, readState, replaceMasters, writeMaster, writeSheet, writeState } from "./persist.js";
 import { collectScopes, shanghaiToday } from "./time.js";
+import { createPasswordAuth } from "./password-login.js";
+import { isSingleShopRequest } from "./probe-target.js";
+import { shopDayRequest } from "./shop-day-contract.js";
 
 const QUIET_MODULES = new Set(["hp", "team"]);
 const QUIET_MASTERS = new Set(["goods", "teams", "members"]);
@@ -10,6 +15,28 @@ const KNOWN_ACCESS = new Set(accessCodes());
 let fetchImpl = globalThis.fetch;
 let timer = null;
 let busy = false;
+let scopedReadBusy = false;
+const passwordAuth = createPasswordAuth({ readSession: session, saveSession, request: callUpstream, allowUserOnlyIdentity: () => !collectionStatus().batchEnabled });
+
+export function resetPasswordCredentials() { passwordAuth.forget(); }
+
+export async function loginWithPassword(input) {
+  if (collectionStatus().batchEnabled) {
+    return { ok: false, statusCode: 409, message: "账号密码试采阶段请保持批量采集关闭。" };
+  }
+  const result = await passwordAuth.signIn(input);
+  return { ...(await linkStatus()), ...result, passwordAuth: passwordAuth.status() };
+}
+
+// Bulk collection must stay off until the single-shop request is verified.
+export function collectionStatus() {
+  const batchEnabled = process.env.BOUND_COLLECTION_MODE === "batch";
+  return {
+    mode: batchEnabled ? "batch" : "paused",
+    batchEnabled,
+    message: batchEnabled ? "" : "批量采集已暂停，先核验单店、单日、单项数据。"
+  };
+}
 
 export function setBoundFetch(next) {
   fetchImpl = next || globalThis.fetch;
@@ -17,17 +44,17 @@ export function setBoundFetch(next) {
 
 export function stopCollectLoop() {
   if (timer) {
-    clearInterval(timer);
+    globalThis.clearInterval(timer);
   }
   timer = null;
   busy = false;
 }
 
 export function ensureCollectLoop() {
-  if (timer || process.env.BOUND_COLLECT_LOOP === "0") {
+  if (!collectionStatus().batchEnabled || timer || process.env.BOUND_COLLECT_LOOP === "0") {
     return;
   }
-  timer = setInterval(() => {
+  timer = globalThis.setInterval(() => {
     tick().catch(() => {});
   }, 4000);
   if (typeof timer.unref === "function") {
@@ -89,7 +116,7 @@ async function callUpstream(current, spec) {
   const headers = {
     "X-Requested-With": "XMLHttpRequest",
     Origin: ORIGIN,
-    Referer: `${ORIGIN}/login`,
+    Referer: spec.referer || `${ORIGIN}/login`,
     Accept: "application/json,image/*,*/*"
   };
   const cookie = Object.entries(current.cookies || {}).map(([key, value]) => `${key}=${value}`).join("; ");
@@ -107,14 +134,102 @@ async function callUpstream(current, spec) {
     headers["Content-Type"] = "application/json;charset=UTF-8";
     body = JSON.stringify(spec.body || {});
   }
-  const response = await fetchImpl(url, { method: spec.method === "get" ? "GET" : "POST", headers, body });
+  const response = await fetchImpl(url, {
+    method: spec.method === "get" ? "GET" : "POST", headers, body,
+    ...(spec.signal ? { signal: spec.signal } : {}),
+    ...(spec.redirect ? { redirect: spec.redirect } : {})
+  });
   absorbCookies(current, response);
   const type = response.headers.get("content-type") || "";
   if (!type.includes("json")) {
     const buffer = Buffer.from(await response.arrayBuffer());
     return { binary: true, type, buffer, status: response.status };
   }
-  return response.json();
+  const payload = await response.json();
+  return spec.withHttpStatus ? { httpStatus: response.status, payload } : payload;
+}
+
+// Uses this module's server session only; a login in another browser is not a server login.
+export async function requestSingleShopProbe(body, onRequest) {
+  if (!isSingleShopRequest(body) || collectionStatus().batchEnabled) return { blocked: "invalid_scope" };
+  return requestScopedRead({ method: "json", path: "/v2/channel/shop/operatingData", access: "qd_fx", body,
+    referer: `${ORIGIN}/workTable/channelAnalysis` }, onRequest);
+}
+
+// Callers supply a report identifier, never an upstream URL or arbitrary request body.
+export async function requestShopDayReport(input, onRequest = () => {}) {
+  const spec = shopDayRequest(input);
+  if (!spec || collectionStatus().batchEnabled) return { blocked: "invalid_scope" };
+  return requestScopedRead(spec, onRequest);
+}
+
+async function requestScopedRead(spec, onRequest = () => {}) {
+  if (scopedReadBusy) return { blocked: "collector_busy" };
+  scopedReadBusy = true;
+  try { return await performScopedRead(spec, onRequest); }
+  finally { scopedReadBusy = false; }
+}
+
+async function performScopedRead(spec, onRequest) {
+  let current = await session();
+  if (passwordAuth.status().busy) return { blocked: "login_busy" };
+  const canRefresh = current.provider === "PASSWORD" && passwordAuth.status().autoReloginReady;
+  if (!["logged_in", "collecting"].includes(current.phase) || (!Object.keys(current.cookies || {}).length && !canRefresh)) {
+    return { blocked: "server_login_required" };
+  }
+  if (Array.isArray(current.allowed) && !current.allowed.includes(spec.access)) {
+    return { blocked: "permission_denied" };
+  }
+  const send = async () => {
+    if (Array.isArray(current.allowed) && !current.allowed.includes(spec.access)) return { blocked: "permission_denied" };
+    onRequest();
+    return callUpstream(current, {
+      ...spec,
+      signal: globalThis.AbortSignal.timeout(15000), redirect: "error", withHttpStatus: true
+    });
+  };
+  let result = await send();
+  if ((await session()).authGeneration !== current.authGeneration) return { blocked: "session_changed" };
+  const invalid = value => [-7, 9901, 1011].includes(value.payload?.code);
+  const expired = value => value.payload?.code === -1 || value.httpStatus === 401;
+  if (invalid(result)) {
+    passwordAuth.forget();
+  } else if (expired(result) && current.provider === "PASSWORD" && passwordAuth.status().autoReloginReady) {
+    const reloginTrigger = { httpStatus: result.httpStatus || result.status || null, upstreamCode: typeof result.payload?.code === "number" ? result.payload.code : null };
+    const renewed = await passwordAuth.refresh();
+    result.relogin = { attempted: true, succeeded: renewed.ok };
+    result.reloginTrigger = reloginTrigger;
+    if (renewed.ok) {
+      current = await session();
+      result = { ...(await send()), relogin: { attempted: true, succeeded: true }, reloginTrigger };
+      if ((await session()).authGeneration !== current.authGeneration) return { blocked: "session_changed" };
+    }
+  }
+  if (invalid(result) || expired(result)) {
+    passwordAuth.forget();
+    if ((await session()).authGeneration === current.authGeneration) {
+      current.phase = current.provider === "PASSWORD" ? "needs_password" : "needs_scan";
+      current.message = invalid(result) ? "旧站登录发生冲突、账号禁用或设备限制，已停止自动重登。" : "服务器会话已失效，请重新登录。";
+      await saveSession(current);
+    }
+  } else if ((await session()).authGeneration !== current.authGeneration) {
+    return { blocked: "session_changed" };
+  } else {
+    await saveSession(current);
+  }
+  return result;
+}
+
+// Only the standalone loopback harness exposes this check. It clears this collector's
+// cookie copy, never calls upstream logout or invents an expiry response.
+export async function clearProbeSessionCookies() {
+  const current = await session();
+  if (collectionStatus().batchEnabled || passwordAuth.status().busy || current.phase !== "logged_in"
+    || current.provider !== "PASSWORD" || !passwordAuth.status().autoReloginReady) {
+    return { ok: false, reason: "relogin_not_ready" };
+  }
+  await saveSession({ ...current, cookies: {} });
+  return { ok: true };
 }
 
 function formBody(value) {
@@ -199,37 +314,46 @@ function providerQuery(provider) {
 
 export async function linkStatus() {
   const current = await session();
+  const collection = collectionStatus();
+  const pausedLogin = !collection.batchEnabled && ["collecting", "logged_in"].includes(current.phase);
   return {
     ok: true,
     module: "bound",
     source: "crawler",
     erp: false,
-    phase: current.phase,
+    phase: pausedLogin ? "logged_in" : current.phase,
+    collection,
     provider: current.provider,
+    passwordAuth: passwordAuth.status(),
     deviceId: current.deviceId,
-    message: qrClient === "old"
+    message: qrClient === "old" && current.provider !== "PASSWORD"
       ? "二维码还在闪。请点浏览器左上角的刷新按钮，重新打开这一页。刷新后请用微信扫这一张，它会停住。"
-      : current.message,
+      : pausedLogin && current.provider !== "PASSWORD" ? collection.message : current.message,
     qrToken: current.scene || "",
     userName: current.userName,
     accounts: current.accounts || [],
     qrReady: Boolean(current.qrUrl),
-    cursor: current.cursor || null
+    cursor: collection.batchEnabled ? current.cursor || null : null
   };
 }
 
 export async function startLink(provider) {
+  if (passwordAuth.status().busy) return { ...(await linkStatus()), ok: false, message: "正在验证账号密码，请稍候。" };
+  passwordAuth.forget();
   const current = await session();
+  current.authGeneration = randomBytes(16).toString("hex");
   current.provider = ["FEISHU", "DINGTALK", "QYWX", "WECHAT"].includes(provider) ? provider : "WECHAT";
   current.phase = "waiting_scan";
   current.message = "正在向旧站官方登录接口取二维码";
   current.accounts = [];
   current.loginTicket = "";
+  await saveSession(current);
   const payload = await callUpstream(current, {
     method: "get",
     path: "/auth/qrcode",
     query: { deviceId: current.deviceId, domain: "hejun.ecbis.cn", ...providerQuery(current.provider) }
   });
+  if ((await session()).authGeneration !== current.authGeneration) return linkStatus();
   if (!payload || payload.code !== 0 || !payload.data) {
     current.phase = "needs_scan";
     current.message = (payload && payload.content) || "官方登录二维码没有生成";
@@ -302,9 +426,10 @@ async function finishLogin(current, data) {
   let info = null;
   try {
     info = await callUpstream(current, { method: "get", path: "/auth/info" });
-  } catch (error) {
+  } catch {
     info = null;
   }
+  if ((await session()).authGeneration !== current.authGeneration) return;
   if (!info || info.code !== 0) {
     const detail = String((info && (info.content || info.message)) || "没有返回").slice(0, 40);
     current.phase = "needs_scan";
@@ -324,11 +449,14 @@ async function finishLogin(current, data) {
     || current.userName
     || ""
   );
-  current.phase = "collecting";
+  const collection = collectionStatus();
+  current.phase = collection.batchEnabled ? "collecting" : "logged_in";
   current.scene = "";
   current.qrUrl = "";
   current.loginTicket = "";
-  current.message = "已登录。按筛选时间整段补采，最近两天不取。页面查询不会再打旧站。";
+  current.message = collection.batchEnabled
+    ? "已登录。按筛选时间整段补采，最近两天不取。页面查询不会再打旧站。"
+    : `已登录。${collection.message}`;
   current.accounts = [];
   await saveSession(current);
 }
@@ -344,7 +472,7 @@ async function sessionAlive(current) {
   try {
     const info = await callUpstream(current, { method: "get", path: "/auth/info" });
     return Boolean(info && info.code === 0);
-  } catch (error) {
+  } catch {
     return true;
   }
 }
@@ -360,6 +488,7 @@ async function dropLogin(current) {
 
 async function saveUnlessLoggedIn(current) {
   const latest = await session();
+  if (latest.authGeneration !== current.authGeneration) return linkStatus();
   if (latest.phase === "collecting" || latest.phase === "logged_in" || latest.phase === "choose_account") {
     return linkStatus();
   }
@@ -388,6 +517,7 @@ async function pollLinkOnce() {
       ...providerQuery(current.provider)
     }
   });
+  if ((await session()).authGeneration !== current.authGeneration) return linkStatus();
   const code = Number(payload && payload.code);
   const content = String((payload && payload.content) || "");
   if (code === 0) {
@@ -463,6 +593,7 @@ export async function pickAccount(companyId) {
       agreementStatus: true
     }
   });
+  if ((await session()).authGeneration !== current.authGeneration) return linkStatus();
   if (!payload || payload.code !== 0) {
     current.message = (payload && payload.content) || "企业账号登录失败";
     await saveSession(current);
@@ -601,6 +732,9 @@ export function reportBody(report, dim, scope, page) {
 }
 
 export async function noteWanted(page, report, dim, scope) {
+  if (!collectionStatus().batchEnabled) {
+    return;
+  }
   if (!page || (page.module !== "channel" && page.module !== "goods") || !report || page.local) {
     return;
   }
@@ -922,6 +1056,10 @@ async function runReport(current, unit) {
 }
 
 export async function tick() {
+  const collection = collectionStatus();
+  if (!collection.batchEnabled) {
+    return { ok: true, skipped: true, reason: "batch_disabled", collection };
+  }
   if (busy) {
     return { ok: true, skipped: true };
   }

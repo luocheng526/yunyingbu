@@ -17,7 +17,7 @@ import {
   publicCatalog,
   tabById
 } from "./catalog.js";
-import { noteWanted } from "./collect.js";
+import { collectionStatus, noteWanted } from "./collect.js";
 import { listMasters, listSheetHeads, listSheets, readMarks, readPref, readState, writeMark, writePref } from "./persist.js";
 import { presetRange, reliableEnd, shanghaiToday } from "./time.js";
 
@@ -887,6 +887,7 @@ function reportProgress(heads, reportId, dim) {
 export async function progressBody() {
   const heads = await listSheetHeads();
   const session = (await readState("session", {})) || {};
+  const collection = collectionStatus();
   const today = shanghaiToday();
   const dayCount = eachDay(START_ON, today).length;
   const items = [];
@@ -930,9 +931,10 @@ export async function progressBody() {
     module: "bound",
     source: "crawler",
     erp: false,
-    phase: session.phase || "idle",
-    message: session.message || "",
-    cursor: session.cursor || null,
+    phase: !collection.batchEnabled && session.phase === "collecting" ? "logged_in" : session.phase || "idle",
+    message: collection.batchEnabled ? session.message || "" : collection.message,
+    cursor: collection.batchEnabled ? session.cursor || null : null,
+    collection,
     startOn: START_ON,
     today,
     dayCount,

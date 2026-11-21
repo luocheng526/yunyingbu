@@ -1,0 +1,213 @@
+{
+  "scope": {
+    "shopId": "16501691",
+    "shopName": "RASW潮流生活京选菀瑶专卖店",
+    "platform": "JD",
+    "date": "2026-10-03",
+    "pages": [
+      "channelOverview",
+      "channelAnalysis",
+      "channelAnalysisNew",
+      "productOverview"
+    ],
+    "overview": "single_shop_only_account_wide_totals_deferred"
+  },
+  "updatedAt": "2026-11-21T06:03:56.935Z",
+  "baseline": "074db97e4fd77a062a4c7ff340642dba5114b9f2",
+  "authorization": "Single-shop/day four-page completion, followed by release-center submission and server collection. No direct SSH deployment.",
+  "release": {
+    "submitted": false,
+    "deployed": false,
+    "workflow": "project release center approval",
+    "files": [
+      {
+        "path": "public/shared/modules/bound.js",
+        "sha256": "b8327daee832be0e42ba6144c8751dd1a70889cd250e11e1abe6dac42f733d6f"
+      },
+      {
+        "path": "src/modules/bound/catalog.js",
+        "sha256": "b72022e690f7a49bde9facfe218ad84609de07da0cda537b6f6019bcfff79145"
+      },
+      {
+        "path": "src/modules/bound/collect.js",
+        "sha256": "5ff0be430f4404c155bced84d4f2965904c6742c9c35d4d3d112e3a15f32dec1"
+      },
+      {
+        "path": "src/modules/bound/four-page-job.js",
+        "sha256": "0800ff0358a9a9b9bb386e21a80feeb60030bd9e9fb88054be5ba3d200de8ea7"
+      },
+      {
+        "path": "src/modules/bound/four-page-shapes.js",
+        "sha256": "b88194f0421823a07eac038ae5ff386c960eb93f4aed2eafa40f84b4070093f6"
+      },
+      {
+        "path": "src/modules/bound/password-login.js",
+        "sha256": "bc30cf4eabb2763d2689f261900f096f073616c633df8405dee003d2e5a73f80"
+      },
+      {
+        "path": "src/modules/bound/persist.js",
+        "sha256": "05022b91106c0a1c066cd193e609dc38259f6c7cfe64e102fdcdced40dd86887"
+      },
+      {
+        "path": "src/modules/bound/probe-metric.js",
+        "sha256": "a37c80763215c4a541efd7b0ba1b9f3722f00d15e4f149e0738596e3ac9000d4"
+      },
+      {
+        "path": "src/modules/bound/probe-target.js",
+        "sha256": "36b6af69c8c5c60ac3ca08df67d4b3a932b79b64ccd746dd2548e7bb3f429af1"
+      },
+      {
+        "path": "src/modules/bound/probe-targets.json",
+        "sha256": "4a965ac35489b8ac261fe3a31fdb906f13c2394247e2ca52dc2b81ad37d60738"
+      },
+      {
+        "path": "src/modules/bound/probe.js",
+        "sha256": "a2fdbf8dc037bee770b5f7858d64c2a7b2e5553a31547818079b2d4df75d0638"
+      },
+      {
+        "path": "src/modules/bound/router.js",
+        "sha256": "7667eb842ce7afcfed643004066d0eb73686535ab9d5c5144a701c0206e384a7"
+      },
+      {
+        "path": "src/modules/bound/shop-day-contract.js",
+        "sha256": "5484c8c1920043e54e47cb844e740154dd7ffeab574896e2ddefb726a9b0361f"
+      },
+      {
+        "path": "src/modules/bound/shop-day-router.js",
+        "sha256": "616ee650e4dc3ad38726c74c1d6728dfe53f71a96562f47cce736bcb9e2c85ef"
+      },
+      {
+        "path": "src/modules/bound/shop-day.js",
+        "sha256": "42af463be9dc1b601df0214a858bb107d6ec54845ea3454ec9e6eb1f9891532f"
+      },
+      {
+        "path": "src/modules/bound/store.js",
+        "sha256": "5198419561773e623c61afc7725983d408e40edac69cfd86379424158dfb652c"
+      },
+      {
+        "path": "src/modules/bound/time.js",
+        "sha256": "d9ba37fb223d1438ee1a0f4b71c9be639a54c89fe8f5e040f4b9e8e8ae7a59ea"
+      },
+      {
+        "path": "src/modules/bound/view.js",
+        "sha256": "1929d0da6dfbaf0dbae7264fb443e744c9e130dda5b775223932204a506f5e80"
+      }
+    ]
+  },
+  "existingEvidence": {
+    "coreResults": 1544,
+    "goodsLinks": 170,
+    "spus": 87,
+    "promotionExact": "9606.63",
+    "recollectCore": false
+  },
+  "liveEvidence": {
+    "fourPageSelectors": 28,
+    "allReceived": true,
+    "metricCount": 11,
+    "classification": {
+      "status": "complete",
+      "done": 36,
+      "errors": []
+    },
+    "periodAudit": [
+      {
+        "type": "goods",
+        "days": 7,
+        "count": 170,
+        "compared": 1020,
+        "missingValues": 0,
+        "missingDates": 0,
+        "differences": []
+      },
+      {
+        "type": "goods",
+        "days": 15,
+        "count": 170,
+        "compared": 1020,
+        "missingValues": 0,
+        "missingDates": 0,
+        "differences": []
+      },
+      {
+        "type": "spu",
+        "days": 7,
+        "count": 87,
+        "compared": 522,
+        "missingValues": 0,
+        "missingDates": 0,
+        "differences": []
+      },
+      {
+        "type": "spu",
+        "days": 15,
+        "count": 87,
+        "compared": 522,
+        "missingValues": 0,
+        "missingDates": 0,
+        "differences": []
+      }
+    ],
+    "offlineServerJob": {
+      "status": "complete",
+      "done": 128,
+      "total": 128,
+      "cached": 128,
+      "requests": 0,
+      "errors": []
+    }
+  },
+  "browser": {
+    "fourPages": true,
+    "leftNavigationWidth": 112,
+    "shopTable": 1,
+    "provinceRows": 23,
+    "cityRows": 76,
+    "goodsLinks": 170,
+    "spus": 87,
+    "skuPeriodDays": [
+      7,
+      15
+    ],
+    "spuPeriodDays": [
+      7,
+      15
+    ],
+    "finalSpuPeriodRows": 750,
+    "classificationLossSkuRows": 63,
+    "csvDataRows": 63,
+    "consoleErrors": 0,
+    "fixes": [
+      "Key metric source column names do not receive duplicate comparison suffix",
+      "Province source sumLine rows remain visible separately from city rows"
+    ]
+  },
+  "verified": {
+    "boundTests": {
+      "pass": 86,
+      "fail": 0,
+      "excluded": "bound-nav.test.js"
+    },
+    "eslintChangedFiles": "pass",
+    "gitDiffCheck": "pass",
+    "productionCatalogMatches": true,
+    "integrationBlocker": "Baseline profile/middleware.js imports absent profile/app-icon-png.js; app.test.js/home.test.js/theme.test.js absent in this baseline. No out-of-scope repair.",
+    "legacyClientAlias": {
+      "path": "/api/bound/client.js?v=qr-still-3",
+      "source": "public/shared/modules/bound.js",
+      "tested": true
+    }
+  },
+  "deferred": [
+    "Account-wide channel totals/grouping",
+    "Additional shops/dates beyond fixed anchor and source-provided trend windows",
+    "BI-side editing of targets/tags/follow-ups",
+    "Unverified category selector endpoint",
+    "Other module pages beyond four-page server job"
+  ],
+  "next": [
+    "Submit verified runtime bundle to release center",
+    "Wait for release-center approval",
+    "After deployment, establish BI server session and run fixed-shop/day four-page job; do not transfer local passwords or claim server collection before observed"
+  ]
+}

@@ -1,3 +1,4 @@
+/* global URLSearchParams, setTimeout */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -45,6 +46,8 @@ function appFor(user) {
 }
 
 test.beforeEach(() => {
+  // These regression cases exercise the explicitly enabled legacy batch mode.
+  process.env.BOUND_COLLECTION_MODE = "batch";
   resetBoundStore();
   setBoundClock(() => new Date("2026-11-16T04:00:00Z"));
 });
