@@ -2278,59 +2278,66 @@ async function loginSurfaceReady(ws) {
   }
 }
 
-async function fillAndSubmit(ws, loginName, password) {
+async function fillAndSubmit(ws, loginName, password, signal) {
+  if (signal?.aborted) return false;
   const filled = await fillLoginOnDesk(ws, loginName, password);
   if (!filled) {
     return false;
   }
-  const expression = `(${loginPageAction.toString()})(document, ${JSON.stringify({ submit: true })})`;
+  const expression = `(${loginPageAction.toString()})(document, ${JSON.stringify({ submit: true, requireReady: true })})`;
   const frames = await frameIds(ws);
-  let clicked = false;
-  for (let i = 0; i < frames.length; i += 1) {
-    try {
-      let contextId = 0;
-      if (frames[i]) {
-        const world = await send(ws, "Page.createIsolatedWorld", { frameId: frames[i], grantUniveralAccess: true }, undefined, 2500);
-        contextId = world.executionContextId || 0;
+  let previous = "";
+  for (let attempt = 0; attempt < 32; attempt += 1) {
+    if (signal?.aborted) return false;
+    let candidate = null;
+    for (let i = 0; i < frames.length; i += 1) {
+      try {
+        let contextId = 0;
+        if (frames[i]) {
+          const world = await send(ws, "Page.createIsolatedWorld", { frameId: frames[i], grantUniveralAccess: true }, undefined, 2500);
+          contextId = world.executionContextId || 0;
+        }
+        const result = contextId
+          ? await send(ws, "Runtime.evaluate", { expression: expression, contextId: contextId, returnByValue: true }, undefined, 2500)
+          : await send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true }, undefined, 2500);
+        const hit = result && result.result ? result.result.value : null;
+        if (hit && hit.kind === "blocked") return false;
+        if (hit && hit.kind === "button") {
+          candidate = { ...hit, frame: frames[i] || "" };
+          break;
+        }
+      } catch {
+        /* The page may still be replacing its login component. */
       }
-      const result = contextId
-        ? await send(ws, "Runtime.evaluate", { expression: expression, contextId: contextId, returnByValue: true }, undefined, 2500)
-        : await send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true }, undefined, 2500);
-      const hit = result && result.result ? result.result.value : null;
-      if (hit && hit.kind === "button") {
-        await send(ws, "Input.dispatchMouseEvent", {
-          type: "mousePressed",
-          x: hit.x,
-          y: hit.y,
-          button: "left",
-          clickCount: 1
-        }, undefined, 2000);
-        await send(ws, "Input.dispatchMouseEvent", {
-          type: "mouseReleased",
-          x: hit.x,
-          y: hit.y,
-          button: "left",
-          clickCount: 1
-        }, undefined, 2000);
-        clicked = true;
-        break;
-      }
-    } catch {
-      /* try the next frame */
     }
+    const key = candidate ? JSON.stringify(candidate) : "";
+    // The form can be visible underneath Jingdong's loading mask. Wait for an
+    // unobstructed, stable button; sending a click to the mask is not a submit.
+    if (key && key === previous) {
+      if (signal?.aborted) return false;
+      const hit = candidate;
+      await send(ws, "Input.dispatchMouseEvent", {
+        type: "mousePressed",
+        x: hit.x,
+        y: hit.y,
+        button: "left",
+        buttons: 1,
+        clickCount: 1
+      }, undefined, 2000);
+      await send(ws, "Input.dispatchMouseEvent", {
+        type: "mouseReleased",
+        x: hit.x,
+        y: hit.y,
+        button: "left",
+        buttons: 0,
+        clickCount: 1
+      }, undefined, 2000);
+      return true;
+    }
+    previous = key;
+    await sleepSignal(250, signal);
   }
-  if (clicked) {
-    return true;
-  }
-  return evaluate(ws, `(() => {
-    const button = [...document.querySelectorAll("button, [role=button], input[type=submit]")].find((node) => {
-      const text = String(node.innerText || node.value || "").replace(/\\s+/g, "");
-      return text === "立即登录" || text === "登录";
-    });
-    if (!button) return false;
-    button.click();
-    return true;
-  })()`);
+  return false;
 }
 
 async function clickSendCode(ws) {
@@ -2610,8 +2617,7 @@ async function finishOpen(desk, loginName, password, ticket, manual) {
         if (manual) {
           filled = await fillLoginOnDesk(desk.ws, loginName, password);
         } else {
-          await fillAndSubmit(desk.ws, loginName, password);
-          desk.submitted = true;
+          desk.submitted = await fillAndSubmit(desk.ws, loginName, password);
         }
       } catch {
         /* keep the picture open for manual login */
@@ -3112,6 +3118,34 @@ export function loginPageAction(doc, action) {
     const button = loginSubmit(doc);
     if (!button) {
       return { kind: "none", x: 0, y: 0 };
+    }
+    if (action.requireReady) {
+      const owner = button.ownerDocument || doc;
+      const text = String(owner.body && owner.body.innerText || "");
+      const fields = owner.querySelectorAll ? [...owner.querySelectorAll("input")] : [];
+      if (fields.some(node => visible(node) && /验证码|短信|校验码/.test(node.placeholder || "")) ||
+          /滑块|安全验证|请完成.{0,8}验证|登录异常|账号异常|密码.{0,6}错误|账号或密码不正确/.test(text)) {
+        return { kind: "blocked" };
+      }
+      if (owner.readyState !== "complete" || button.disabled || button.getAttribute?.("aria-disabled") === "true") {
+        return { kind: "wait" };
+      }
+      const rect = button.getBoundingClientRect();
+      const top = owner.elementFromPoint?.(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      if (!top || !(top === button || button.contains?.(top))) return { kind: "wait" };
+      // Also respect overlays covering a containing frame.
+      let view = owner;
+      let x = rect.left + rect.width / 2;
+      let y = rect.top + rect.height / 2;
+      for (let depth = 0; depth < 5 && view.defaultView?.frameElement; depth += 1) {
+        const frame = view.defaultView.frameElement;
+        const box = frame.getBoundingClientRect();
+        x += box.left;
+        y += box.top;
+        const above = frame.ownerDocument.elementFromPoint?.(x, y);
+        if (above !== frame) return { kind: "wait" };
+        view = frame.ownerDocument;
+      }
     }
     return pointOf(button, 0, 0, "button");
   }
@@ -3977,7 +4011,7 @@ async function reloginHomeNow(signal, expected, credentials, allowed) {
       allowed,
       page: () => readLoginPage(desk.ws),
       limit: () => { const value = watch.read(); return value.deal || value.identity; },
-      submit: (name, password) => fillAndSubmit(desk.ws, name, password),
+      submit: (name, password) => fillAndSubmit(desk.ws, name, password, signal),
       sleep: sleepSignal,
       verifiedSession: async page => {
         const url = new URL(page.href || "about:blank");
