@@ -3891,7 +3891,7 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
     }
     async function assertSessionPage() {
       const limited = accessWatch && accessWatch.read().deal;
-      if (limited) throw Object.assign(new Error(limited), { code: "platform_limited" });
+      if (limited) throw Object.assign(new Error(limited), { code: "platform_limited", platformLimitSource: "browser_trade" });
       const href = String(await evaluate(ws, "location.href") || "");
       if (/passport\.|\/login/i.test(href)) {
         throw Object.assign(new Error("服务器浏览器已返回京东登录页，请重新登录或完成验证"), { code: "login" });
@@ -3899,24 +3899,26 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
     }
     async function finishMetrics(metrics) {
       await assertSessionPage();
-      let identity = await readShopBaseIdentity(ws);
-      for (let attempt = 0; expected.shopId && !identity.shopId && attempt < 6; attempt++) {
-        if (nativeMerchantMatches(expected, identity, accountWatch?.read())) break;
-        await sleepSignal(500, signal);
+      let identity, accountMerchant = "", nativeMatch = false;
+      for (let attempt = 0; attempt <= 6; attempt++) {
         identity = await readShopBaseIdentity(ws);
+        await assertSessionPage();
+        // Page checks can overlap an account refresh. Read its current proof
+        // after each await and allow an in-flight response the same bounded wait.
+        accountMerchant = accountWatch?.read() || "";
+        nativeMatch = nativeMerchantMatches(expected, identity, accountMerchant);
+        if (!expected.shopId || identity.shopId || nativeMatch || attempt === 6) break;
+        await sleepSignal(500, signal);
       }
-      await assertSessionPage();
-      const accountMerchant = accountWatch?.read() || "";
       // The labeled shop ID is primary. A stale org merchant ID must not
       // override an exact shop match; merchant-only fallback still fails closed.
       if (accountMerchant && expected.merchantId && accountMerchant !== String(expected.merchantId).trim() &&
           (!expected.shopId || identity.shopId !== String(expected.shopId).trim())) {
         throw Object.assign(new Error("京麦当前账号商家身份不符，未保存数据"), { code: "identity" });
       }
-      const nativeMatch = nativeMerchantMatches(expected, identity, accountMerchant);
       if (expected.shopId && !identity.shopId && !nativeMatch) {
         const limited = accessWatch && accessWatch.read().identity;
-        if (limited) throw Object.assign(new Error(limited), { code: "platform_limited" });
+        if (limited) throw Object.assign(new Error(limited), { code: "platform_limited", platformLimitSource: "browser_identity" });
       }
       assertPageShopIdentity({ ...expected, requireIdentity: true }, identity.shopName,
         { ...vaneWatch.read(), ...identity, ...(nativeMatch ? { venderId: accountMerchant } : {}) });
@@ -3925,7 +3927,7 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
         cookies.splice(0, cookies.length, ...renewed);
       }
       settled = true;
-      return metrics;
+      return nativeMatch ? { ...metrics, preferNativeCollection: true } : metrics;
     }
     let card = null;
     for (let attempt = 0; attempt < 12 && !card && !networkDone; attempt += 1) {
@@ -4113,7 +4115,7 @@ async function reloginHomeNow(signal, expected, credentials, allowed) {
         }
         if (!actual.shopId && !nativeMatch) {
           if (watch.read().identity) {
-            throw Object.assign(new Error(watch.read().identity), { code: "platform_limited" });
+            throw Object.assign(new Error(watch.read().identity), { code: "platform_limited", platformLimitSource: "browser_identity" });
           }
           return null;
         }

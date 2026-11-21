@@ -28,7 +28,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1331-home-browser-connection";
+export const LIVE2_RUNTIME_MARK = "0.1.1332-home-native-cadence";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
@@ -418,7 +418,7 @@ export function createLive2Collector(deps = {}) {
     }
   }
 
-  async function holdPlatform(shop, phase, previous, error) {
+  async function holdPlatform(shop, phase, previous, error, source = "collection") {
     const prior = previous || {};
     const sameSession = prior.platformSessionVersion === phase.sessionVersion;
     const attempts = (sameSession ? Number(prior.platformFailures) || 0 : 0) + 1;
@@ -432,6 +432,7 @@ export function createLive2Collector(deps = {}) {
       pendingCollect: false, pendingUpdate: false, partialData: false, dataUnavailable: false,
       platformLimited: true, platformRetryAt: clock() + minutes * 60000,
       platformFailures: attempts, platformSessionVersion: phase.sessionVersion,
+      platformLimitSource: error.platformLimitSource || source,
       ...(error.loginAttempted ? { passwordAttemptedVersion: phase.sessionVersion } : {}),
       checkedAt: now(),
       offlineReason: reason };
@@ -511,11 +512,13 @@ export function createLive2Collector(deps = {}) {
       if (current && hasNumbers(current) && dayOf(current.capturedAt) === today && String(current.capturedAt) >= at) {
         return;
       }
-      published.set(name, rowFromSample({
+      const adopted = rowFromSample({
         store: name,
         team: current && current.team,
         manager: current && current.manager
-      }, sample));
+      }, sample);
+      if (current?.browserPreferredSessionVersion) adopted.browserPreferredSessionVersion = current.browserPreferredSessionVersion;
+      published.set(name, adopted);
       changed = true;
     });
     if (!changed) {
@@ -642,7 +645,11 @@ export function createLive2Collector(deps = {}) {
     // ID; its verified deal is reused below, without a second trade request.
     const retryLimited = base.platformSessionVersion === phase.sessionVersion &&
       (base.platformLimited || Number(base.platformFailures) > 0);
-    if ((expired || retryLimited) && client.recoverBrowserSession) jar = null;
+    // A successful recovery clears the error, not the route that worked. Keep
+    // that preference for this session so later rounds/restarts do not resume
+    // the rejected legacy probes. The browser still verifies identity each time.
+    const preferBrowser = retryLimited || base.browserPreferredSessionVersion === phase.sessionVersion;
+    if ((expired || preferBrowser) && client.recoverBrowserSession) jar = null;
     let verified = false;
     if (jar && client.fetchAccountIdentity) {
       try {
@@ -650,7 +657,7 @@ export function createLive2Collector(deps = {}) {
         verified = true;
       } catch (error) {
         if (inactive(shop, phase)) return null;
-        if (error.code === "platform_limited") return holdPlatform(shop, phase, base, error);
+        if (error.code === "platform_limited") return holdPlatform(shop, phase, base, error, "legacy_identity");
         if (error.code === "login" || (error.code === "identity_missing" && client.recoverBrowserSession)) jar = null;
         else {
           await markCollectFail(shop, error.message, phase);
@@ -692,6 +699,7 @@ export function createLive2Collector(deps = {}) {
           });
           jar = recovered.cookies;
           phase.browserDeal = recovered.deal;
+          phase.preferBrowser = preferBrowser || recovered.deal?.preferNativeCollection === true;
           verified = true;
         } else {
           jar = await loginJar(shop);
@@ -701,7 +709,7 @@ export function createLive2Collector(deps = {}) {
       } catch (error) {
         shop.password = "";
         if (phase.closed || phase.superseded) return null;
-        if (error.code === "platform_limited") return holdPlatform(shop, phase, base, error);
+        if (error.code === "platform_limited") return holdPlatform(shop, phase, base, error, "browser_recovery");
         // A fresh identity/login/network failure must not retain the previous
         // platform-limit label and hide the action now required by this shop.
         base.platformLimited = false;
@@ -746,10 +754,12 @@ export function createLive2Collector(deps = {}) {
           if (phase.closed || phase.superseded) {
             return;
           }
+          if (deal.preferNativeCollection === true) phase.preferBrowser = true;
           phase.dealMs += Date.now() - started;
           phase.dealMarked = true;
           if (!await persistMetrics(shop, deal, phase)) return;
           const partial = live2RecordFromMetrics(shop, Object.assign({}, deal), phase.capturedAt);
+          if (phase.preferBrowser) partial.browserPreferredSessionVersion = phase.sessionVersion;
           partial.pendingCollect = false;
           draft.set(shop.store, publicRecord(partial));
           phase.saveMs += writeStore(file ? file + ".draft" : "", { records: Array.from(draft.values()) });
@@ -757,6 +767,7 @@ export function createLive2Collector(deps = {}) {
       });
       if (inactive(shop, phase)) return null;
       if (phase.storageError) throw phase.storageError;
+      if (metrics.preferNativeCollection === true) phase.preferBrowser = true;
       if (!await persistMetrics(shop, metrics, phase)) return null;
       if (!phase.dealMarked) {
         phase.dealMs += Date.now() - started;
@@ -764,6 +775,7 @@ export function createLive2Collector(deps = {}) {
         phase.adsMs += Date.now() - started - phase.dealMs;
       }
       const row = live2RecordFromMetrics(shop, metrics, phase.capturedAt);
+      if (phase.preferBrowser) row.browserPreferredSessionVersion = phase.sessionVersion;
       if (!row.online && !row.adsFailed) {
         row.offline = true;
         row.offlineReason = row.offlineReason || "京麦没有返回成交金额";

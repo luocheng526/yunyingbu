@@ -181,3 +181,74 @@ for (const outcome of ["success", "platform_limited", "identity", "login", "netw
     }
   });
 }
+
+for (const learnFrom of ["cooldown", "native_identity"]) {
+test(`verified browser route survives later rounds, restart, midnight and ads errors (${learnFrom})`, async t => {
+  await resetJingmaiStore();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "home-native-route-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const cookies = value => [{ name: "thor", value, domain: ".jd.com", path: "/" }];
+  for (const store of ["A", "B"]) await saveSession(store, { cookies: cookies(store), authState: "ok", enabled: true, shopId: store });
+  const version = sessionVersionOf(await getSession("A"));
+  let time = Date.parse("2026-11-21T13:14:00+08:00"), pending, browserReads = 0, expectPreferred = true, blocked = false, sampleAvailable = false, adsFail = false;
+  const stamp = () => new Date(time + 8 * 3600000).toISOString().slice(0, 19).replaceAll("-", "/").replace("T", " ");
+  const calls = [];
+  const deps = {
+    storePath: path.join(dir, "state.json"), concurrency: 1, clock: () => time, now: stamp,
+    loadOrg: async () => ["A", "B"].map(store => ({ store, shopId: store, enabled: true })),
+    listSessions, listSamples: async () => sampleAvailable ? [{ store: "A", capturedAt: stamp(), ok: true, dealAmount: 999, paidAmount: 5 }] : [], track: task => { pending = task; },
+    client: {
+      fetchAccountIdentity: async jar => { const store = jar[0].value[0]; calls.push("identity:" + store); return { shopId: store }; },
+      recoverBrowserSession: async (_jar, _signal, expected) => {
+        calls.push("browser:" + expected.store); browserReads++;
+        assert.equal(expected.requireIdentity, true);
+        if (blocked) throw Object.assign(new Error("京东提示操作频繁"), { code: "platform_limited", platformLimitSource: "browser_trade" });
+        return { cookies: cookies("A-renewed"), deal: { dealAmount: 100 + browserReads } };
+      },
+      fetchHome: async (_jar, _signal, expected) => {
+        calls.push("metrics:" + expected.store);
+        if (expected.store === "A" && expectPreferred && !(learnFrom === "native_identity" && browserReads === 0)) assert.equal(expected.browserDeal.dealAmount, 100 + browserReads);
+        else assert.equal(expected.browserDeal, undefined);
+        return { dealAmount: expected.browserDeal?.dealAmount || 100,
+          ...(expected.store === "A" && learnFrom === "native_identity" ? { preferNativeCollection: true } : {}),
+          paidAmount: expected.store === "A" && adsFail ? null : 5,
+          ...(expected.store === "A" && adsFail ? { paidError: "广告暂不可用" } : {}) };
+      }
+    }
+  };
+  let collector = createLive2Collector({ ...deps, published: learnFrom === "cooldown" ? [{ shop: "A", platformLimited: true,
+    platformSessionVersion: version, platformFailures: 1, platformRetryAt: time }] : [] });
+  const round = async () => { calls.length = 0; await collector.start(""); await pending; return (await collector.board("")).records; };
+  for (let i = 0; i < 3; i++) {
+    if (i === 2) { time += 24 * 3600000; sampleAvailable = true; collector = createLive2Collector(deps); }
+    const rows = await round();
+    assert.deepEqual(calls, [i === 0 && learnFrom === "native_identity" ? "identity:A" : "browser:A", "metrics:A", "identity:B", "metrics:B"], "success must not send the next round back to the rejected legacy path");
+    assert.equal(rows.find(r => r.shop === "A").liveAmount, 100 + browserReads);
+    assert.equal(rows.find(r => r.shop === "A").platformLimited, undefined);
+    time += 10 * 60000;
+  }
+  adsFail = true;
+  const partial = (await round()).find(r => r.shop === "A");
+  assert.equal(partial.adsFailed, true);
+  assert.deepEqual(calls, ["browser:A", "metrics:A", "identity:B", "metrics:B"]);
+  adsFail = false; time += 10 * 60000;
+  collector = createLive2Collector(deps);
+  await round();
+  assert.deepEqual(calls, ["browser:A", "metrics:A", "identity:B", "metrics:B"], "an advertising failure must not discard the verified trade route");
+  blocked = true;
+  let rows = await round();
+  assert.equal(rows.find(r => r.shop === "A").platformLimited, true);
+  assert.equal(rows.find(r => r.shop === "A").platformLimitSource, "browser_trade");
+  assert.deepEqual(calls, ["browser:A", "identity:B", "metrics:B"], "an actual browser limit still stops the shop");
+  time += 10 * 60000;
+  collector = createLive2Collector(deps);
+  await round();
+  assert.deepEqual(calls, ["identity:B", "metrics:B"], "the persisted route must never bypass cooldown");
+  // An explicitly saved new login is a different session, not the old preference.
+  await saveSession("A", { cookies: cookies("A-new-login"), authState: "ok", enabled: true, shopId: "A" });
+  blocked = false; expectPreferred = false;
+  rows = await round();
+  assert.deepEqual(calls, ["identity:A", "metrics:A", "identity:B", "metrics:B"]);
+  assert.equal(rows.find(r => r.shop === "A").online, true);
+});
+}

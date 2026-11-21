@@ -47,18 +47,18 @@ test("the real relogin adapter accepts only the bound native shop ID and closes 
   }
 });
 
-async function browserCase({ resident = "resident-new", saved = "database-old", name = "本店旗舰店", pageId = "", merchantId = "", unavailable = false, lateRedirect = false, loading = false, response = null, limits = {}, accountMerchant = "", expectedMerchant = "", ambiguousMerchant = false } = {}) {
+async function browserCase({ resident = "resident-new", saved = "database-old", name = "本店旗舰店", pageId = "", merchantId = "", unavailable = false, lateRedirect = false, loading = false, response = null, limits = {}, accountMerchant = "", expectedMerchant = "", ambiguousMerchant = false, refreshDuringIdentityCheck = false } = {}) {
   const input = saved ? jar(saved) : [];
   let browserJar = resident ? jar(resident) : [], href = "about:blank";
   const commands = [], cookieReads = [], waits = [];
-  let locationReads = 0;
+  let locationReads = 0, identityReads = 0, refreshStarted = false, accountReady = true;
   const context = vm.createContext({
     input, signal: new AbortController().signal, expected: { store: "本店旗舰店", shopId: "1", merchantId: expectedMerchant, ambiguousMerchant, requireIdentity: true },
     normalizeDealExpected: x => x, profileIdentity: () => ({ key: "p_1", ephemeral: false }),
     isForbiddenLegacyProfileKey: () => false, launchChrome: async () => ({ ws: {} }), discard: () => {},
     watchVaneIdentity: () => ({ read: () => ({}), stop: () => {} }), watchShopData: () => response ? Promise.resolve(JSON.stringify(response)) : unavailable ? Promise.resolve("") : new Promise(() => {}),
     watchPlatformLimits: () => ({ read: () => limits, stop: () => {} }),
-    watchNativeAccount: () => ({ read: () => accountMerchant, stop: () => {} }), nativeMerchantMatches,
+    watchNativeAccount: () => ({ read: () => accountReady ? accountMerchant : "", stop: () => {} }), nativeMerchantMatches,
     send: async (_ws, method, params) => {
       commands.push(method);
       if (method === "Network.setCookies") browserJar = params.cookies;
@@ -72,12 +72,13 @@ async function browserCase({ resident = "resident-new", saved = "database-old", 
       }
       return {};
     },
-    sleepSignal: async ms => { waits.push(ms); }, waitDomContentLoaded: async () => {}, evaluate: async () => {
+    sleepSignal: async ms => { waits.push(ms); if (refreshStarted && ms === 500) accountReady = true; }, waitDomContentLoaded: async () => {}, evaluate: async () => {
       locationReads++;
+      if (refreshDuringIdentityCheck && identityReads > 0 && !refreshStarted) { refreshStarted = true; accountReady = false; }
       return lateRedirect && locationReads > 1 ? "https://passport.shop.jd.com/login/index.action/jdm" : href;
     },
     readShopBaseName: async () => name,
-    readShopBaseIdentity: async () => ({ shopName: name, shopId: pageId, merchantId }), assertPageShopIdentity, cookieParams,
+    readShopBaseIdentity: async () => { identityReads++; return { shopName: name, shopId: pageId, merchantId }; }, assertPageShopIdentity, cookieParams,
     normalizeCookie: x => x, hasSession: x => x.some(c => c.name === "thor"),
     parseHomeCard, homeDealUnavailable, shopDealUnavailable, extractShopDeal,
     homeCardText: async () => response || loading ? "正在加载中..." : "经营数据\n成交金额\n" + (unavailable ? "—" : "100") + "\n成交单量\n1\n成交客户数\n1"
@@ -92,13 +93,13 @@ const tradeResponse = value => ({ code: 200, data: { refreshTime: "2026-11-21 00
 
 test("a browser trade limit preserves the old cookie jar and rejects the reading", async () => {
   const r = await browserCase({ pageId: "1", limits: { deal: "京东提示操作频繁" } });
-  await assert.rejects(r.outcome, e => e.code === "platform_limited");
+  await assert.rejects(r.outcome, e => e.code === "platform_limited" && e.platformLimitSource === "browser_trade");
   assert.equal(r.input[0].value, "database-old");
 });
 
 test("blocked identity lookup is reported only when the required native shop ID is missing", async () => {
   const missing = await browserCase({ limits: { identity: "京东拦截了当前请求" } });
-  await assert.rejects(missing.outcome, e => e.code === "platform_limited");
+  await assert.rejects(missing.outcome, e => e.code === "platform_limited" && e.platformLimitSource === "browser_identity");
   const verified = await browserCase({ pageId: "1", limits: { identity: "京东拦截了当前请求" } });
   assert.equal((await verified.outcome).dealAmount, 100);
 });
@@ -107,7 +108,9 @@ for (const merchant of ["14707016", "83335358", "22623081"]) {
   test(`successful native account ${merchant} verifies a unique merchant when the shop card is blocked`, async () => {
     const r = await browserCase({ name: "", accountMerchant: merchant, expectedMerchant: merchant,
       response: tradeResponse("100"), limits: { identity: "京东拦截了店铺信息卡片" } });
-    assert.equal((await r.outcome).dealAmount, 100);
+    const result = await r.outcome;
+    assert.equal(result.dealAmount, 100);
+    assert.equal(result.preferNativeCollection, true);
     assert.equal(r.input[0].value, "browser-renewed");
   });
 }
@@ -118,6 +121,16 @@ test("a native account match never suppresses a trade restriction or shared merc
     await assert.rejects(r.outcome, e => e.code === "platform_limited");
     assert.equal(r.input[0].value, "database-old");
   }
+});
+
+test("an account refresh during the final page check is awaited instead of falsely reporting a card limit", async () => {
+  const run = await browserCase({ name: "", accountMerchant: "9", expectedMerchant: "9", refreshDuringIdentityCheck: true,
+    response: tradeResponse("100"), limits: { identity: "信息卡片受限" } });
+  const result = await run.outcome;
+  assert.equal(result.dealAmount, 100);
+  assert.equal(result.preferNativeCollection, true);
+  assert.ok(run.waits.includes(500));
+  assert.equal(run.input[0].value, "browser-renewed");
 });
 
 test("conflicting native merchant or labeled shop IDs still reject data and cookies", async () => {
