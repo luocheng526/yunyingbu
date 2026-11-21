@@ -35,6 +35,7 @@
     style.id = "work-task-style";
     style.textContent =
       ".wt-nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}.wt-badge{border-radius:8px;padding:2px 8px;background:#eef3ff;color:#2f6bff;font-weight:650}.wt-badge[data-status='已完成']{background:#e8f8ee;color:#1faa5a}.wt-badge[data-status='已退回']{background:#ffecec;color:#cf1322}.wt-badge[data-status='待检查']{background:#fff3e6;color:#f08a1e}.wt-overdue{color:#cf1322;font-weight:650}.wt-log{margin:8px 0 0;padding:0;list-style:none}.wt-log li{padding:8px 0;border-top:1px solid var(--l,#e8eef8)}.wt-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.wt-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.wt-layout{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:12px}@media(max-width:980px){.wt-grid,.wt-layout{grid-template-columns:1fr}}";
+    style.textContent += ".wt-attachments{margin:10px 0 14px;padding:12px;border:1px dashed var(--xm-line,#cbdaf0);border-radius:8px;background:var(--xm-card,#fff);color:var(--xm-ink,#163568)}.wt-attachments:focus-within{border-color:var(--xm-primary,#1677ff)}.wt-attachments input{max-width:100%}.wt-attachment-title{display:block;font-size:13px;margin-bottom:8px}.wt-paste-hint{margin:8px 0;color:var(--xm-muted,#62718a);font-size:12px;line-height:1.6}.wt-paste-hint kbd{border:1px solid var(--xm-line,#cbdaf0);border-radius:4px;padding:1px 5px;font:inherit}.wt-previews{display:flex;gap:10px;flex-wrap:wrap}.wt-file-card{display:flex;align-items:center;gap:10px;max-width:100%;padding:8px;border:1px solid var(--xm-line,#cbdaf0);border-radius:8px;box-sizing:border-box}.wt-file-card img,.wt-file-icon{width:80px;height:64px;object-fit:contain;border-radius:4px;background:var(--xm-bg,#f4f7fc)}.wt-file-icon{display:grid;place-items:center;font-size:13px}.wt-file-info{display:flex;flex-direction:column;gap:5px;min-width:0;max-width:200px;font-size:12px}.wt-file-info span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wt-file-info small,.wt-file-message{color:var(--xm-muted,#62718a)}.wt-file-message{margin-top:8px;font-size:12px;line-height:1.5}.wt-file-message.is-error{color:#cf1322}@media(max-width:600px){.wt-file-card{width:100%}.wt-file-info{flex:1}}";
     document.head.appendChild(style);
   }
 
@@ -61,6 +62,106 @@
 
   function overdue(task, now) {
     return ["待执行", "进行中", "已退回"].indexOf(task.status) >= 0 && Date.parse(task.due_at + "+08:00") < now;
+  }
+
+  function attachmentError(files) {
+    if (files.length > 3 || files.reduce(function (sum, file) { return sum + file.size; }, 0) > 3 * 1024 * 1024) {
+      return "最多上传 3 个附件，合计 3 MB；请先移除附件后重试";
+    }
+    return files.some(function (file) { return !file.size; }) ? "请移除空文件" : "";
+  }
+
+  function bindAttachments(form) {
+    if (!form) return;
+    var input = form.querySelector('[name="files"]');
+    var area = form.querySelector('[data-task-attachments]');
+    var preview = form.querySelector('[data-task-previews]');
+    var message = form.querySelector('[data-task-file-message]');
+    var entries = [];
+    var sequence = 0;
+    input._wtFiles = [];
+
+    function busy() {
+      return form.querySelector('[type="submit"]').disabled;
+    }
+
+    function tell(text, error) {
+      message.textContent = text;
+      message.className = "wt-file-message" + (error ? " is-error" : "");
+    }
+
+    function render() {
+      input._wtFiles = entries.map(function (entry) { return entry.file; });
+      preview.innerHTML = entries.map(function (entry) {
+        return '<div class="wt-file-card">' + (entry.url
+          ? '<img src="' + esc(entry.url) + '" alt="' + esc(entry.file.name) + '">'
+          : '<span class="wt-file-icon">' + (/^image\//i.test(entry.file.type) ? "图片" : "文件") + '</span>') +
+          '<div class="wt-file-info"><span title="' + esc(entry.file.name) + '">' + esc(entry.file.name) + '</span><small>' + Math.max(1, Math.ceil(entry.file.size / 1024)) + ' KB</small></div>' +
+          uiButton("移除", 'data-task-remove-file="' + entry.id + '" aria-label="移除：' + esc(entry.file.name) + '"', { variant: "secondary" }) + '</div>';
+      }).join("");
+    }
+
+    function add(files, pasted) {
+      if (!files.length || busy()) return;
+      var error = attachmentError(input._wtFiles.concat(files));
+      if (error) {
+        tell(error + "，原有附件已保留。", true);
+        return;
+      }
+      files.forEach(function (file) {
+        sequence += 1;
+        if (pasted) {
+          var extension = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/bmp": "bmp" }[file.type.toLowerCase()] || "png";
+          file = new File([file], "粘贴图片-" + Date.now() + "-" + sequence + "." + extension, { type: file.type });
+        }
+        var entry = { id: sequence, file: file, url: "" };
+        entries.push(entry);
+        // Preview raster images only; all attachments still use the existing upload API.
+        if (/^image\/(png|jpeg|gif|webp|bmp)$/i.test(file.type)) {
+          var reader = new FileReader();
+          reader.onload = function () {
+            if (entries.indexOf(entry) < 0 || !form.isConnected) return;
+            entry.url = reader.result;
+            render();
+          };
+          reader.onerror = function () {
+            if (entries.indexOf(entry) < 0 || !form.isConnected) return;
+            tell("图片预览读取失败，可移除后重新添加。", true);
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+      render();
+      tell((pasted ? "已粘贴 " : "已添加 ") + files.length + " 个附件，共 " + entries.length + "/3 个；发布任务时一并上传。", false);
+    }
+
+    input.addEventListener("change", function () {
+      add([].slice.call(input.files || []), false);
+      input.value = "";
+    });
+    preview.addEventListener("click", function (event) {
+      var button = event.target.closest('[data-task-remove-file]');
+      if (!button || busy()) return;
+      var id = Number(button.getAttribute("data-task-remove-file"));
+      entries = entries.filter(function (entry) { return entry.id !== id; });
+      render();
+      tell("已移除附件，剩余 " + entries.length + "/3 个。", false);
+      area.focus();
+    });
+    form.addEventListener("paste", function (event) {
+      var target = event.target;
+      if (!target.matches('textarea[name="description"], textarea[name="criteria"]') && !area.contains(target)) return;
+      var clipboard = event.clipboardData;
+      if (!clipboard) return;
+      var images = [].slice.call(clipboard.items || []).filter(function (item) {
+        return item.kind === "file" && /^image\//i.test(item.type);
+      }).map(function (item) { return item.getAsFile(); }).filter(Boolean);
+      if (!images.length) images = [].slice.call(clipboard.files || []).filter(function (file) { return /^image\//i.test(file.type); });
+      if (!images.length) return;
+      // Keep native text insertion (including the caret/maxlength rules) for mixed clipboard content.
+      if (!target.matches("textarea") || !clipboard.getData("text/plain") || busy()) event.preventDefault();
+      add(images, true);
+    });
   }
 
   function mount(host, tab, openId) {
@@ -123,6 +224,7 @@
         });
       }
       host.innerHTML = chips + '<p class="work-msg" data-task-msg></p>' + (priority ? '<div class="wt-layout">' + body + priority + "</div>" : body);
+      bindAttachments(host.querySelector('[data-task-form="publish"]'));
     }
 
     function compose() {
@@ -132,7 +234,7 @@
       var start = nowDate.getFullYear() + "-" + pad(nowDate.getMonth() + 1) + "-" + pad(nowDate.getDate()) + "T" + pad(nowDate.getHours()) + ":" + pad(nowDate.getMinutes());
       return '<form data-task-form="publish">' + xm().ContentCard({
         title: "发布任务",
-        content: '<div class="wt-grid"><label class="work-field">任务标题<input name="title" required maxlength="200" placeholder="请输入任务标题"></label><label class="work-field">执行人<select name="assignee">' + options("") + '</select></label><label class="work-field">检查人<select name="reviewer">' + options("") + '</select></label><label class="work-field">计划开始<input name="start_at" type="datetime-local" required value="' + esc(start) + '"></label><label class="work-field">截止时间<input name="due_at" type="datetime-local" required value="' + esc(ctx.today) + 'T23:59"></label></div><label class="work-field">任务说明<textarea name="description" maxlength="4000"></textarea></label><label class="work-field">完成要求<textarea name="criteria" maxlength="2000"></textarea></label><label class="work-field">任务附件<input name="files" type="file" multiple><span>最多 3 个文件，合计 3 MB</span></label>' + uiButton("发布任务", "", { type: "submit" })
+        content: '<div class="wt-grid"><label class="work-field">任务标题<input name="title" required maxlength="200" placeholder="请输入任务标题"></label><label class="work-field">执行人<select name="assignee">' + options("") + '</select></label><label class="work-field">检查人<select name="reviewer">' + options("") + '</select></label><label class="work-field">计划开始<input name="start_at" type="datetime-local" required value="' + esc(start) + '"></label><label class="work-field">截止时间<input name="due_at" type="datetime-local" required value="' + esc(ctx.today) + 'T23:59"></label></div><label class="work-field">任务说明<textarea name="description" maxlength="4000" placeholder="输入任务说明，也可直接粘贴图片，图片将添加到下方附件" aria-describedby="wt-paste-hint"></textarea></label><label class="work-field">完成要求<textarea name="criteria" maxlength="2000" placeholder="输入完成要求，也可直接粘贴图片，图片将添加到下方附件" aria-describedby="wt-paste-hint"></textarea></label><div class="wt-attachments" data-task-attachments tabindex="0" role="group" aria-label="任务附件，可在此粘贴图片" aria-describedby="wt-paste-hint"><label class="work-field"><span class="wt-attachment-title">任务附件</span><input name="files" type="file" multiple></label><p class="wt-paste-hint" id="wt-paste-hint">复制图片后，在任务说明、完成要求或此处按 <kbd>Ctrl + V</kbd> 粘贴（Mac：⌘V）。支持连续添加，可预览、移除；最多 3 个文件，合计 3 MB。</p><div class="wt-previews" data-task-previews></div><div class="wt-file-message" data-task-file-message role="status" aria-live="polite">尚未添加附件</div></div>' + uiButton("发布任务", "", { type: "submit" })
       }) + "</form>";
     }
 
@@ -177,11 +279,9 @@
     }
 
     function checkFiles(input) {
-      var files = [].slice.call((input && input.files) || []);
-      if (files.length > 3 || files.reduce(function (sum, file) { return sum + file.size; }, 0) > 3 * 1024 * 1024) {
-        throw new Error("最多上传 3 个附件，合计 3 MB");
-      }
-      if (files.some(function (file) { return !file.size; })) throw new Error("请移除空文件");
+      var files = [].slice.call((input && (input._wtFiles || input.files)) || []);
+      var error = attachmentError(files);
+      if (error) throw new Error(error);
       return files;
     }
 
