@@ -59,23 +59,60 @@
     archiveTrendFolded: false,
     archiveRefreshBusy: false
   };
-  state.history = false;
-  state.historyCoverage = null;
-  function archiveActive() { return !!state.localArchive && !state.history; }
   var active = 0;
   var loadRevision = 0;
-  var archivePromise = null;
+  var archivePromise = null, archiveKey = "", archiveRevision = 0, savedOptionsPromise = null;
+  function savedUrl(path, query, archive) {
+    var scope = archive && archive.scope;
+    var saved = archive ? archive.unified : state.savedOptions;
+    if (!saved) return "/api/bound/shop-day" + path + (query ? "?" + query : "");
+    if (!scope) {
+      var options = state.savedOptions, selected = options.shops.find(function (s) { return s.platform + ":" + s.shopId === state.savedShopKey; }) || options.defaultScope;
+      scope = { platform: selected.platform, shopId: selected.shopId, from: state.from || options.defaultScope.date, to: state.to || options.defaultScope.date };
+    }
+    var params = new URLSearchParams(query || "");
+    params.set("shopId", scope.shopId); params.set("platform", scope.platform);
+    params.set("from", scope.from || scope.date); params.set("to", scope.to || scope.date);
+    return "/api/bound/shop-day/saved" + path + "?" + params.toString();
+  }
+  function sameArchiveScope(a, b) {
+    return a && b && a.shopId === b.shopId && a.platform === b.platform && (a.from || a.date) === (b.from || b.date) && (a.to || a.date) === (b.to || b.date);
+  }
+  async function readSavedOptions(refresh) {
+    if (refresh) savedOptionsPromise = null;
+    if (!savedOptionsPromise) savedOptionsPromise = (async function () {
+      try {
+        var r = await fetch("/api/bound/shop-day/saved/options");
+        if (!r.ok) return;
+        var options = await r.json();
+        if (!options.ok || !Array.isArray(options.shops) || !options.defaultScope) return;
+        if (!state.savedOptions) {
+          state.savedShopKey = options.defaultScope.platform + ":" + options.defaultScope.shopId;
+          state.from = state.to = options.defaultScope.date; state.daysType = "1";
+        }
+        state.savedOptions = options;
+      } catch { /* Standalone local harnesses can still serve fixed archived data. */ }
+    })();
+    await savedOptionsPromise;
+  }
 
   // The standalone loopback harness exposes archived responses. Reading them must
   // never trigger collection or put single-shop rows into the legacy daily table.
   async function readLocalArchive(refresh) {
-    if (!window.location || state.history && state.page !== 'link') return;
-    if (refresh) archivePromise = null;
+    if (!window.location) return;
+    await readSavedOptions(refresh);
+    var url = savedUrl("", ""), changed = archiveKey !== url;
+    if (refresh || changed) { archivePromise = null; archiveKey = url; archiveRevision++; }
+    var revision = archiveRevision;
+    if (changed && state.savedOptions) {
+      state.archiveGoodsId = state.archiveCard = state.archiveCategory = state.archiveFlag = state.archiveProfit = state.q = state.sortKey = "";
+      state.pageNo = 1; state.open = {};
+    }
     if (!archivePromise) archivePromise = (async function () {
-      var response = await fetch("/api/bound/shop-day");
-      if (!response.ok) { if (state.localArchive) throw new Error("archive unavailable"); return; }
+      var response = await fetch(url);
+      if (!response.ok) { if (state.localArchive || state.savedOptions) throw new Error("archive unavailable"); return; }
       var manifest = await response.json();
-      if (!manifest.ok || !manifest.scope || !Array.isArray(manifest.reports)) { if (state.localArchive) throw new Error("archive manifest invalid"); return; }
+      if (!manifest.ok || !manifest.scope || !Array.isArray(manifest.reports)) { if (state.localArchive || state.savedOptions) throw new Error("archive manifest invalid"); return; }
       var records = {};
       var failures = [];
       await Promise.all(manifest.reports.map(async function (report) {
@@ -83,20 +120,21 @@
         await Promise.all((report.pages || []).map(async function (page) {
           if (page.status !== "received" && page.status !== "empty") return;
           try {
-            var result = await fetch("/api/bound/shop-day/report?reportId=" + encodeURIComponent(report.id) + "&page=" + page.page);
+            var result = await fetch(savedUrl("/report", "reportId=" + encodeURIComponent(report.id) + "&page=" + page.page, manifest));
             if (!result.ok) throw new Error("archive unavailable");
             var body = await result.json();
             var record = body.record;
             var scope = record && record.scope;
-            if (!body.ok || !scope || scope.shopId !== manifest.scope.shopId || scope.platform !== manifest.scope.platform || scope.date !== manifest.scope.date || record.reportId !== report.id || record.page !== page.page || !Array.isArray(record.rows) || (record.status !== "received" && record.status !== "empty")) throw new Error("archive scope mismatch");
+            if (!body.ok || !scope || !sameArchiveScope(scope, manifest.scope) || record.reportId !== report.id || record.page !== page.page || !Array.isArray(record.rows) || (record.status !== "received" && record.status !== "empty")) throw new Error("archive scope mismatch");
             if (report.product && (!manifest.selected || String(record.goodsId) !== String(manifest.selected.goodsId))) throw new Error("product mismatch");
             records[report.id].push(record);
           } catch { failures.push(report.label + "第 " + page.page + " 页"); }
         }));
         records[report.id].sort(function (a, b) { return a.page - b.page; });
       }));
+      if (revision !== archiveRevision) return;
       var previous = state.localArchive;
-      var products = previous && !refresh ? previous.products : {};
+      var products = previous && !refresh && !changed ? previous.products : {};
       if (manifest.selected) {
         products[String(manifest.selected.goodsId)] = {};
         manifest.reports.filter(function (r) { return r.product; }).forEach(function (r) {
@@ -104,9 +142,9 @@
         });
       }
       state.localArchive = { scope: manifest.scope, selected: manifest.selected, records: records, failures: failures, products: products,
-        runtime: manifest.runtime || 'local', inventory: manifest.inventory, reports: manifest.reports, run: manifest.runtime === 'server' ? manifest.fourPageRun : manifest.run, exclusions: manifest.exclusions || [], cardRecords: {}, periods: {}, extras: {} };
-      if (!previous && !state.history) {
-        state.from = state.to = manifest.scope.date;
+        unified: manifest.unified, collectionScope: manifest.collectionScope || manifest.scope, runtime: manifest.runtime || 'local', inventory: manifest.inventory, reports: manifest.reports, run: manifest.runtime === 'server' ? manifest.fourPageRun : manifest.run, exclusions: manifest.exclusions || [], cardRecords: {}, periods: {}, extras: {} };
+      if (!previous) {
+        state.from = manifest.scope.from || manifest.scope.date; state.to = manifest.scope.to || manifest.scope.date;
         state.daysType = "1";
         state.shop = manifest.scope.shopName;
         state.view = "list";
@@ -114,9 +152,19 @@
         if (state.page !== "link") { state.page = "channelAnalysis"; state.tab = "qdfx_jy"; }
         state.pageNo = 1;
       }
+      state.shop = manifest.scope.shopName;
+      if (changed && !records.shop_spu_page?.length) state.dim = "sku";
       var notice = document.querySelector && document.querySelector(".local-notice");
       if (notice) notice.textContent = "边界数据中心 · 本机已采数据　" + manifest.scope.shopName + " · " + manifest.scope.date + "。采集期间请勿在旧站登录同一账号；本地查看已采数据无需重新登录。";
-    })().catch(function () { state.error = state.localArchive ? "刷新失败，仍展示上次读取的已采数据。请稍后重试。" : "本机采集档案读取失败，请刷新重试。"; });
+    })().catch(function () {
+      if (revision !== archiveRevision) return;
+      state.error = "已采数据读取失败，请刷新重试。";
+      if (changed && state.savedOptions) {
+        var params = new URL(url, "http://localhost").searchParams;
+        var shop = state.savedOptions.shops.find(function (s) { return s.platform + ":" + s.shopId === state.savedShopKey; }) || state.savedOptions.defaultScope;
+        state.localArchive = { scope: Object.assign({}, shop, { date: params.get("to"), from: params.get("from"), to: params.get("to") }), unified: true, collectionScope: state.savedOptions.defaultScope, runtime: "server", records: {}, products: {}, failures: [], reports: [], extras: {}, periods: {}, cardRecords: {} };
+      }
+    });
     await archivePromise;
   }
 
@@ -126,17 +174,17 @@
     return ((archive.inventory && archive.inventory.items) || []).find(function (p) { return String(p.goodsId) === String(id); }) || (archive.selected && String(archive.selected.goodsId) === String(id) ? archive.selected : null);
   }
   async function readArchiveProduct() {
-    if (!archiveActive() || !["productPanorama", "productOperation"].includes(state.page)) return;
+    if (!state.localArchive || !["productPanorama", "productOperation"].includes(state.page)) return;
     var archive = state.localArchive, selected = archiveSelected();
     if (!selected || archive.products[selected.goodsId]) return;
     var records = {};
     await Promise.all(archive.reports.filter(function (r) { return r.product; }).map(async function (report) {
       records[report.id] = [];
       try {
-        var response = await fetch("/api/bound/shop-day/report?reportId=" + encodeURIComponent(report.id) + "&goodsId=" + encodeURIComponent(selected.goodsId) + "&page=1");
+        var response = await fetch(savedUrl("/report", "reportId=" + encodeURIComponent(report.id) + "&goodsId=" + encodeURIComponent(selected.goodsId) + "&page=1", archive));
         if (!response.ok) return;
         var body = await response.json(), record = body.record;
-        if (body.ok && record && ["received", "empty"].includes(record.status) && record.reportId === report.id && record.page === 1 && String(record.goodsId) === String(selected.goodsId) && record.scope.shopId === archive.scope.shopId && record.scope.platform === archive.scope.platform && record.scope.date === archive.scope.date && Array.isArray(record.rows)) records[report.id] = [record];
+        if (body.ok && record && ["received", "empty"].includes(record.status) && record.reportId === report.id && record.page === 1 && String(record.goodsId) === String(selected.goodsId) && sameArchiveScope(record.scope, archive.scope) && Array.isArray(record.rows)) records[report.id] = [record];
       } catch { /* Missing or unreadable product tables stay explicitly uncollected. */ }
     }));
     archive.products[selected.goodsId] = records;
@@ -159,7 +207,7 @@
   // These GETs read saved reports only. Navigating a page never logs in or calls BI.
   function fillArchiveExtras(root) {
     var archive = state.localArchive, token = active;
-    if (!archiveActive()) return;
+    if (!archive) return;
     var ids = state.page === 'channelOverview' ? ['channel_shop_table'] : state.page === 'channelAnalysisNew' ? ['key_graph'] : state.page === 'productOverview' && state.view === 'period' ? [state.dim === 'spu' ? 'shop_spu_period' : 'shop_goods_period'] : [];
     if (state.page === 'channelAnalysisNew' && archiveRecords('key_graph').length) ids.push(state.tab === 'qd_gjzbfx_dpck' ? 'key_shops' : 'key_goods');
     ids.forEach(function (id) {
@@ -172,10 +220,10 @@
         var records = [], expected = null, seen = new Set();
         for (var page = 1; page <= 10; page++) {
           var query = '?reportId=' + id + '&page=' + page + (metric ? '&columnKey=' + encodeURIComponent(metric) : '') + (days ? '&trendDays=' + days : '');
-          var response = await fetch('/api/bound/shop-day/report' + query);
+          var response = await fetch(savedUrl("/report", query.slice(1), archive));
           if (!response.ok) throw new Error('not_collected');
           var result = await response.json(), r = result.record;
-          if (!result.ok || !r || !['received', 'empty'].includes(r.status) || r.reportId !== id || r.page !== page || metric && r.columnKey !== metric || days && r.trendDays !== days || !Array.isArray(r.rows) || !r.scope || r.scope.shopId !== archive.scope.shopId || r.scope.date !== archive.scope.date || r.scope.platform !== archive.scope.platform) throw new Error('scope_mismatch');
+          if (!result.ok || !r || !['received', 'empty'].includes(r.status) || r.reportId !== id || r.page !== page || metric && r.columnKey !== metric || days && r.trendDays !== days || !Array.isArray(r.rows) || !r.scope || !sameArchiveScope(r.scope, archive.scope)) throw new Error('scope_mismatch');
           if (days || id === 'key_goods') {
             if (expected === null) expected = r.total;
             if (!Number.isInteger(expected) || r.total !== expected) throw new Error('pagination_total');
@@ -191,7 +239,7 @@
         }
         if (expected !== null && expected !== seen.size) throw new Error('pagination_incomplete');
         archive.extras[key] = { status: 'ready', records: records };
-        if (id === 'key_graph' && !records[0].metricColumns.some(function (c) { return c.columnKey === state.archiveKeyMetric; })) state.archiveKeyMetric = records[0].metricColumns[0].columnKey;
+        if (state.localArchive === archive && id === 'key_graph' && !records[0].metricColumns.some(function (c) { return c.columnKey === state.archiveKeyMetric; })) state.archiveKeyMetric = records[0].metricColumns[0].columnKey;
       })().catch(function () { archive.extras[key] = { status: 'missing', records: [] }; }).finally(function () { if (token === active && state.localArchive === archive) paint(root); });
     });
   }
@@ -206,10 +254,10 @@
     var prefix = dim === 'spu' ? 'shop_spu_' : 'shop_goods_';
     var rows = [], expected = null, summary = null;
     async function read(reportId, page) {
-      var response = await fetch('/api/bound/shop-day/report?reportId=' + reportId + '&page=' + page + '&cardId=' + encodeURIComponent(cardId));
+      var response = await fetch(savedUrl("/report", "reportId=" + reportId + "&page=" + page + "&cardId=" + encodeURIComponent(cardId), archive));
       if (!response.ok) throw new Error('not_collected');
       var result = await response.json(), r = result.record;
-      if (!result.ok || !r || !['received', 'empty'].includes(r.status) || r.cardId !== cardId || r.reportId !== reportId || r.page !== page || !Array.isArray(r.rows) || r.scope.shopId !== archive.scope.shopId || r.scope.platform !== archive.scope.platform || r.scope.date !== archive.scope.date) throw new Error('invalid_card_archive');
+      if (!result.ok || !r || !['received', 'empty'].includes(r.status) || r.cardId !== cardId || r.reportId !== reportId || r.page !== page || !Array.isArray(r.rows) || !sameArchiveScope(r.scope, archive.scope)) throw new Error('invalid_card_archive');
       return r;
     }
     try {
@@ -278,7 +326,7 @@
   function completeArchivePages(id) {
     var pages = archiveRecords(id), rows = archiveRows(id).filter(function (r) { return r.sumLine !== true; });
     var expected = pages[0] && pages[0].total, key = id === "shop_spu_page" ? "spuid" : "goodsId";
-    return Number.isInteger(expected) && expected === rows.length && new Set(rows.map(function (r) { return String(r[key]); })).size === expected && rows.every(function (r) { return r[key] && String(r.shopId) === state.localArchive.scope.shopId; }) && pages.every(function (r, i) { return r.page === i + 1 && r.total === expected; });
+    return !pages.some(function (r) { return r.completeness === 'partial'; }) && Number.isInteger(expected) && expected === rows.length && new Set(rows.map(function (r) { return String(r[key]); })).size === expected && rows.every(function (r) { return r[key] && String(r.shopId) === state.localArchive.scope.shopId; }) && pages.every(function (r, i) { return r.page === i + 1 && r.total === expected; });
   }
   function archiveCardRules(card) {
     try { var rules = JSON.parse(card.calculateRule); return Array.isArray(rules) ? rules : []; } catch { return []; }
@@ -303,8 +351,8 @@
     var meta = pageMeta() || { id: state.page, label: "边界数据中心" };
     var tabsByPage = {
       channelOverview: [["qdzl_jy", "单店经营概况", "channel_operating"], ["qdzl_dp", "店铺列表", "channel_shop_table"], ["qdzl_pl", "品类分布", "channel_category"]],
-      channelAnalysis: [["qdfx_jy", "经营数据", "channel_operating"], ["qdfx_rx", "商品明细（全量）", "shop_goods_page"], ["qdfx_pl", "品类分析", "channel_category"], ["qdfx_bqfx", "标签分析", "channel_labels"], ["qdfx_area", "销售地域分析", "channel_area"], ["qdfx_hour", "销售时段分析", "channel_hour"]],
-      productOverview: [["sp_zl_list", "全店商品列表", state.dim === "spu" ? "shop_spu_page" : "shop_goods_page"]],
+      channelAnalysis: [["qdfx_jy", "经营数据", "channel_operating"], ["qdfx_rx", "商品明细", "shop_goods_page"], ["qdfx_pl", "品类分析", "channel_category"], ["qdfx_bqfx", "标签分析", "channel_labels"], ["qdfx_area", "销售地域分析", "channel_area"], ["qdfx_hour", "销售时段分析", "channel_hour"]],
+      productOverview: [["sp_zl_list", "商品列表", state.dim === "spu" ? "shop_spu_page" : "shop_goods_page"]],
       channelAnalysisNew: [["qd_gjzbfx_ljck", "按链接查看", "key_goods"], ["qd_gjzbfx_dpck", "按店铺查看", "key_shops"]],
       productPanorama: [["spqj_zl", "总览数据", "product_overview"], ["spqj_sku", "SKU销售分析", "product_skus"], ["spqj_area", "销售地域分析", "product_area"], ["spqj_hour", "销售时段分析", "product_hour"]],
       productOperation: [["spyy_zl", "运营总览", "product_operation"], ["spyy_tg", "推广分析", "product_promotion"], ["spyy_sku", "SKU分析", "product_operation_skus"], ["spyy_area", "销售地域分析", "product_operation_area"], ["spyy_hour", "销售时段分析", "product_operation_hour"]]
@@ -312,8 +360,9 @@
     var choices = tabsByPage[state.page] || [];
     var choice = choices.find(function (tab) { return tab[0] === state.tab; }) || choices[0];
     var id = choice && choice[2];
-    var validRange = state.from === scope.date && state.to === scope.date && (!state.shop || state.shop === scope.shopName);
+    var validRange = state.from === (scope.from || scope.date) && state.to === (scope.to || scope.date) && (!state.shop || state.shop === scope.shopName);
     var available = !!id && archiveRecords(id).length > 0;
+    var partial = available && archiveRecords(id).some(function (r) { return r.completeness === "partial"; });
     // Province rows are marked sumLine by BI, but belong to the province view.
     var rows = available && validRange ? archiveRows(id).filter(function (row) { return row.sumLine !== true || /_area$/.test(id) && row.isProv === true; }) : [];
     if (state.page === 'channelAnalysisNew') rows = rows.map(function (row) {
@@ -380,7 +429,7 @@
     var cards = metricRow ? cardDefinitions.map(function (entry) {
       return { key: entry[0], label: entry[1], value: metricRow[entry[0]], on: true, sourceValue: true, note: entry[0] === "tghf" ? "保留来源表值；支付预估口径" : "来源表原值" };
     }) : [];
-    var message = !validRange ? "当前选择范围未采集。已保存的数据仅覆盖 " + scope.date + "，未采数据不计为 0。" : !id ? "这个页面本轮尚未采集。请查看渠道详情、商品总览或商品全景分析。" : !available ? "这张表尚未采集或档案读取失败。采集完成后点击刷新已采数据。" : !complete ? "商品分页不完整，暂不显示商品合计指标。" : unavailableCard ? "已取得此卡片的数量与规则，但分类明细尚未核验，暂不显示商品列表。选择“全部”可返回。" : total === 0 ? (q || state.archiveCard || state.archiveCategory || state.archiveFlag || state.archiveProfit ? "没有匹配的记录。" : "接口已采集完成，返回 0 条记录。") : "";
+    var message = !validRange ? "当前选择范围未采集。已保存的数据仅覆盖 " + scope.date + "，未采数据不计为 0。" : !id ? "这个页面本轮尚未采集。请查看渠道详情、商品总览或商品全景分析。" : !available ? "这张表尚未采集或档案读取失败。采集完成后点击刷新已采数据。" : !complete ? "商品分页不完整，暂不显示商品合计指标。" : partial ? "以下为已保存的部分明细，不代表全部记录。" : unavailableCard ? "已取得此卡片的数量与规则，但分类明细尚未核验，暂不显示商品列表。选择“全部”可返回。" : total === 0 ? (q || state.archiveCard || state.archiveCategory || state.archiveFlag || state.archiveProfit ? "没有匹配的记录。" : "接口已采集完成，返回 0 条记录。") : "";
     return {
       localArchive: true, page: { id: meta.id, label: meta.label, ops: [] },
       tabs: choices.map(function (tab) { return { id: tab[0], label: tab[1] }; }),
@@ -390,7 +439,7 @@
       classifications: classifications, categoryOptions: categoryOptions, allRows: allRows, filteredRows: rows,
       promotionGroups: promotionGroups, selectedPromotion: selectedPromotion,
       promotionSummary: selectedPromotion && selectedPromotion.extensibleTableWrapper.columnData.find(function (r) { return r.sumLine; }),
-      reportId: id, complete: complete, message: message,
+      reportId: id, complete: complete, partial: partial, message: message,
       goodsSummary: goods && validRange && complete && available ? (state.archiveCard ? cardArchive && cardArchive.verified && cardArchive.summary : archiveRows(id === "shop_spu_page" ? "shop_spu_total" : "shop_goods_total")[0]) : null,
       coverage: { status: validRange && available ? "ready" : "missing" },
       cardStatus: "ready", cards: cards, channelCount: 1, shopCount: 1, shops: [scope.shopName],
@@ -417,7 +466,7 @@
 
   function archivePeriodDates() {
     var end = Date.parse(state.localArchive.scope.date + 'T00:00:00Z');
-    return Array.from({ length: state.archivePeriodDays }, function (_, i) { return new Date(end - i * 86400000).toISOString().slice(0, 10); });
+    return Array.from({ length: state.archivePeriodDays }, function (_, i) { return new Date(end - i * 86400000).toISOString().slice(0, 10); }).filter(function (date) { return date >= DATA_START; });
   }
   function inspectArchivePeriod(record, goodsId, scope) {
     if (!record || record.reportId !== 'product_overview' || record.page !== 1 || record.goodsId !== goodsId || record.status !== 'received'
@@ -438,7 +487,7 @@
   }
   function fillArchivePeriods(root) {
     var data = state.viewData, archive = state.localArchive, token = active;
-    if (!archiveActive() || state.page !== 'productOverview' || state.view !== 'period' || !data || data.message || data.reportId !== 'shop_goods_page') return;
+    if (!archive || state.page !== 'productOverview' || state.view !== 'period' || !data || data.message || data.reportId !== 'shop_goods_page') return;
     if (archiveRecords('shop_goods_period').length) return;
     var queue = data.rows.map(function (row) { return String(row.metrics.goodsId); }).filter(function (id) { return !archive.periods[id]; });
     if (!queue.length) return;
@@ -451,7 +500,7 @@
           var cached = archive.products[goodsId] && archive.products[goodsId].product_overview;
           var record = cached && cached[0];
           if (!record) {
-            var response = await fetch('/api/bound/shop-day/report?reportId=product_overview&goodsId=' + encodeURIComponent(goodsId) + '&page=1');
+            var response = await fetch(savedUrl("/report", "reportId=product_overview&goodsId=" + encodeURIComponent(goodsId) + "&page=1", archive));
             if (!response.ok) throw new Error('period_unavailable');
             var body = await response.json();
             if (!body.ok) throw new Error('period_unavailable');
@@ -622,7 +671,7 @@
       '<button type="button" data-act="archive-reset">重置筛选</button>' + chips(goods ? (state.page === 'productOverview' ? [['list', '列表'], ['period', '周期'], ['gallery', '大图']] : [['list', '列表'], ['gallery', '大图']]) : [['list', '列表'], ['chart', '图表']], 'view') +
       (period ? '<div class="bd-period-days" role="group" aria-label="周期天数">' + [7, 15].map(function (n) { return '<label><input type="radio" name="bound-period-days" data-act="archive-period-days" value="' + n + '"' + (state.archivePeriodDays === n ? ' checked' : '') + '>' + n + '天</label>'; }).join('') + '</div>' : '') +
       (state.view === 'chart' ? '<select data-act="archive-chart-metric" aria-label="图表指标">' + data.columns.filter(function (c) { return c.numeric; }).map(function (c) { return '<option value="' + esc(c.key) + '"' + (archiveChartColumn(data).key === c.key ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join('') + '</select>' : '') +
-      '<button type="button" data-act="archive-columns">表格设置</button><button type="button" data-act="archive-export"' + (data.message || period && (data.reportId === 'shop_spu_page' && !archiveRecords('shop_spu_period').length || archivePeriodPending(data)) ? ' disabled' : '') + '>' + (period ? '导出本页周期' : '导出当前筛选') + '</button></div>' +
+      '<button type="button" data-act="archive-columns">表格设置</button><button type="button" data-act="archive-export"' + (data.message && !data.partial || period && (data.reportId === 'shop_spu_page' && !archiveRecords('shop_spu_period').length || archivePeriodPending(data)) ? ' disabled' : '') + '>' + (period ? '导出本页周期' : '导出当前筛选') + '</button></div>' +
       (state.panel === 'archive-columns' ? '<div class="bd-archive-columns"><strong>显示字段</strong>' + columns.map(function (c) { return '<label><input type="checkbox" data-act="archive-column" data-key="' + esc(c.key) + '"' + (c.on ? ' checked' : '') + (c.key === 'goodsName' ? ' disabled' : '') + '> ' + esc(c.label) + '</label>'; }).join('') + '<button type="button" data-act="archive-columns-reset">恢复全部字段</button></div>' : '');
   }
 
@@ -635,11 +684,11 @@
 
   function archiveRunText() {
     var run = state.localArchive.run;
-    if (!run) return '读取本机档案，无需重新登录。';
+    if (!run || state.page !== 'link' && state.localArchive.unified) return '查看已保存数据，无需登录 BI 或重新采集。';
     var label = { collecting: '正在采集', running: '正在采集', stopped: '采集已停止', paused: '采集已暂停', complete_with_deferred: '本轮采集完成，仍有待核验项', complete: '采集完成', interrupted: '采集中断' }[run.status] || run.status;
     var reason = run.errors && run.errors.length ? run.errors[run.errors.length - 1].reason : '';
     var error = { login_conflict: '账号已在其他位置登录，请先结束另一处操作后再建立采集会话。', server_login_required: '需要在连接旧站重新登录后续采。', login_expired: '自动重登未恢复会话，请重新登录后续采。', account_disabled: '旧站账号已禁用，已停止重试。', device_restricted: '旧站设备限制，已停止重试。' }[reason] || '';
-    return label + '：' + run.done + ' / ' + run.total + ' 项。' + (['collecting', 'running'].includes(run.status) ? '请勿同时在旧站登录此账号。' : error || '本地浏览无需登录。');
+    return label + '：' + run.done + ' / ' + run.total + ' 项。' + (['collecting', 'running'].includes(run.status) ? '请勿同时在旧站登录此账号。' : error || '查看已保存数据无需登录 BI。');
   }
   function archiveChartColumn(data) {
     return data.columns.find(function (c) { return c.numeric && c.key === state.archiveChartMetric; }) || data.columns.find(function (c) { return c.key === 'gmv'; }) || data.columns.find(function (c) { return c.numeric; }) || {};
@@ -669,6 +718,10 @@
       ? "商品合计取完整分页对应的全部合计，包含零销量但有花费或退款的商品。利润未扣店铺自定义费用；金额保留来源表的显示精度，不将逐行取整金额相加。"
       : selected ? "仅展示这件商品在所选日期的已采结果。金额保留来源表显示精度。"
       : "上方指标取店铺经营表，店铺利润已扣自定义费用。商品、品类等明细表利润口径不同，不能直接替代店铺利润。推广花费为支付预估口径。";
+    var provenance = archiveRecords(data.page.id === 'channelAnalysisNew' ? 'key_graph' : data.page.id === 'productOverview' ? data.reportId : 'channel_operating')[0];
+    if (provenance && provenance.source) explanation = provenance.source.note + "。保留来源表金额精度与指标口径。";
+    if (data.page.id === 'productOverview' && !data.complete) explanation = "展示已保存的商品明细；分页未核齐时不显示全店商品合计或分类数量。";
+    var shopPicker = state.savedOptions ? '<label>店铺 <select data-act="saved-shop" aria-label="选择店铺">' + state.savedOptions.shops.map(function (s) { return '<option value="' + esc(s.platform + ':' + s.shopId) + '"' + (s.shopId === scope.shopId && s.platform === scope.platform ? ' selected' : '') + '>' + esc(s.shopName) + '</option>'; }).join('') + '</select></label>' : '';
     var inventory = state.localArchive.inventory;
     var selectProduct = selected ? '<section class="bd-block"><label>选择商品 <select data-act="archive-select-product" aria-label="选择商品">' + ((inventory && inventory.items) || [selected]).map(function (p) { return '<option value="' + esc(p.goodsId) + '"' + (String(p.goodsId) === String(selected.goodsId) ? ' selected' : '') + '>' + esc(p.goodsName + ' · ' + p.goodsId) + '</option>'; }).join('') + '</select></label><p>商品 ID：' + esc(selected.goodsId) + '</p><button type="button" class="bd-plain" data-act="page" data-page="' + (data.page.id === 'productOperation' ? 'productPanorama' : 'productOperation') + '">' + (data.page.id === 'productOperation' ? '查看商品全景' : '查看商品运营分析') + '</button></section>' : '';
     var dim = data.page.id === 'productOverview' ? chips([['spu', 'SPU'], ['sku', 'SKU']], 'dim') : '';
@@ -677,16 +730,17 @@
       (data.promotionGroups.length ? '<div class="bd-chips">' + data.promotionGroups.map(function (g) { return '<button type="button" data-act="archive-promotion" data-key="' + esc(g.promoteKey) + '" class="' + (g === data.selectedPromotion ? 'is-on' : '') + '">' + esc(g.promoteName) + '</button>'; }).join('') + '</div><p>' + (data.selectedPromotion.promoteKey === 'wxd' ? '无效单费用见下表，与推广花费口径不同。' : '本推广类型花费：' + formatCell(data.selectedPromotion.sumCost, { numeric: true })) + '</p>' : '') +
       renderArchiveControls(data) +
       (data.goods && state.view !== 'period' ? '<div class="bd-summary-switch">汇总：' + chips([['all', '全部'], ['page', '当前页']], 'archiveSummary') + '</div>' : '') +
-      (data.message ? '<p class="bd-miss">' + esc(data.message) + '</p>' : data.goods ? (state.view === 'period' && state.page === 'productOverview' ? renderArchivePeriod(data) : state.view === 'gallery' ? renderArchiveGallery(data) : renderArchiveGoodsTable(data)) : state.view === 'chart' ? renderArchiveChart(data) : renderArchiveTable(data)) +
+      (data.message ? '<p class="bd-miss">' + esc(data.message) + '</p>' : '') +
+      (data.message && !(data.partial && data.rows.length) ? '' : data.goods ? (state.view === 'period' && state.page === 'productOverview' ? renderArchivePeriod(data) : state.view === 'gallery' ? renderArchiveGallery(data) : renderArchiveGoodsTable(data)) : state.view === 'chart' ? renderArchiveChart(data) : renderArchiveTable(data)) +
       (data.goods && state.view !== 'period' ? '<p class="bd-status">当前为 ' + (data.reportId === 'shop_spu_page' ? 'SPU 汇总，点击箭头展开商品链接' : 'SKU 商品链接明细') + '。销售件数按接口原口径展示，不等同于销售单数。左右滚动可查看全部指标。</p>' : '') +
       '<div class="bd-sum">当前表 ' + esc(data.total) + ' 条' + (data.goods && data.complete && data.coverage.status === "ready" ? ' · 全店商品分页已收齐' : '') + ' · 表格筛选不改变上方指标范围</div>' +
       '<div class="bd-pager"><select data-act="archive-page-size" aria-label="每页条数">' + [20, 50, 100].map(function (n) { return '<option value="' + n + '"' + (data.pageSize === n ? ' selected' : '') + '>' + n + ' 条/页</option>'; }).join('') + '</select><button type="button" data-act="page-no" data-delta="-1"' + (data.pageNo <= 1 ? " disabled" : "") + '>上一页</button><span>第 ' + data.pageNo + ' / ' + Math.max(1, Math.ceil(data.total / data.pageSize)) + ' 页</span><button type="button" data-act="page-no" data-delta="1"' + (data.pageNo * data.pageSize >= data.total ? " disabled" : "") + '>下一页</button></div></section>';
     return '<section class="bd-main" data-bound-erp="false" data-local-archive="true" data-page="' + esc(data.page.id) + '">' +
-      '<header class="bd-head"><div><h1>' + esc(data.page.label) + '</h1><p class="bd-sub">' + (state.localArchive.runtime === 'server' ? '服务器' : '本机') + '已采数据 · 京东 · ' + esc(scope.shopName) + '</p></div><div class="bd-filters">' + renderDateBar(data) + '<button type="button" data-act="archive-date">返回已采日期 ' + esc(scope.date) + '</button></div></header>' +
+      '<header class="bd-head"><div><h1>' + esc(data.page.label) + '</h1><p class="bd-sub">' + (state.localArchive.runtime === 'server' ? '服务器' : '本机') + '已采数据 · ' + esc(scope.platform) + ' · ' + esc(scope.shopName) + '</p></div><div class="bd-filters">' + shopPicker + renderDateBar(data) + '<button type="button" data-act="archive-date">单日 ' + esc(scope.date) + '</button></div></header>' +
       '<div class="bd-archive-progress"><span data-archive-progress>' + esc(archiveRunText()) + '</span><button type="button" data-act="archive-refresh"' + (state.archiveRefreshBusy ? ' disabled' : '') + '>' + (state.archiveRefreshBusy ? '正在刷新…' : '刷新已采数据') + '</button></div>' + selectProduct +
       (state.error ? '<p class="bd-banner" role="alert">' + esc(state.error) + '</p>' : '') +
       (state.localArchive.failures.length ? '<p class="bd-banner">部分档案读取失败：' + esc(state.localArchive.failures.join("、")) + '</p>' : '') +
-      (data.page.id === 'channelOverview' ? '<p class="bd-banner">当前总览范围：京东 · ' + esc(scope.shopName) + ' · ' + esc(scope.date) + '。全账号渠道汇总和店铺分组尚未采集。</p>' : '') +
+      (data.page.id === 'channelOverview' ? '<p class="bd-banner">当前总览范围：' + esc(scope.platform) + ' · ' + esc(scope.shopName) + ' · ' + esc(scope.date) + '。全账号渠道汇总和店铺分组尚未采集。</p>' : '') +
       renderArchiveClassifications(data) + '<p class="bd-status">' + esc(explanation) + '</p>' +
       '<div class="bd-tabs">' + tabs + '</div>' + report + '</section>';
   }
@@ -879,7 +933,6 @@
 
   function queryString() {
     var params = new URLSearchParams();
-    if (state.history) params.set('history', '1');
     params.set("page", state.page);
     if (state.tab) {
       params.set("tab", state.tab);
@@ -894,7 +947,6 @@
       params.set("daysType", state.daysType);
     }
     params.set("pageNo", String(state.pageNo));
-    params.set("pageSize", "50");
     return params.toString();
   }
 
@@ -993,7 +1045,6 @@
 
   function clampRange(from, to) {
     var cap = reliableDay();
-    if (to < DATA_START) to = DATA_START;
     if (to > cap) {
       to = cap;
     }
@@ -1003,6 +1054,7 @@
     if (from < DATA_START) {
       from = DATA_START;
     }
+    if (to < DATA_START) to = DATA_START;
     if (from > to) {
       from = to;
     }
@@ -1253,7 +1305,7 @@
     }).join("");
     return '<div class="bd-datepick"><span class="bd-stat-time">' + esc(statText(data.range.from, data.range.to, daysType)) + '</span><div class="bd-presets">' + buttons +
       '<i class="bd-split"></i><button type="button" class="bd-arrow" data-act="shift" data-delta="-1" aria-label="上一期"' + (shiftRange(-1) ? "" : " disabled") + '>‹</button><button type="button" class="bd-arrow" data-act="shift" data-delta="1" aria-label="下一期"' + (shiftRange(1) ? "" : " disabled") + '>›</button><i class="bd-split"></i>' +
-      '<button type="button" data-act="preset" data-preset="custom" class="bd-custom' + (preset === "custom" ? " is-on" : "") + '">自定义<span class="bd-tip">' + (state.history ? '只查看服务器已存数据，不发起采集。范围从2026年9月1日开始，自定义最多连续60天。' : '自定义最多连续 60 天。每个时间段只向边界 BI 查一次，不把单日相加。最近两天不取。') + '</span></button></div>' +
+      '<button type="button" data-act="preset" data-preset="custom" class="bd-custom' + (preset === "custom" ? " is-on" : "") + '">自定义<span class="bd-tip">自定义最多连续 60 天。只查看已保存的对应时间段数据；切换日期不会触发采集。最近两天不取。</span></button></div>' +
       '<input class="bd-picker" data-act="pick-date" type="date" min="' + DATA_START + '" max="' + esc(cap) + '" value="' + esc(dayValue) + '">' +
       '<input class="bd-picker" data-act="pick-week" type="week" max="' + esc(isoWeekValue(iso(addDays(parseIso(weekStart(today)), -7)))) + '" value="' + esc(isoWeekValue(monday)) + '">' +
       '<input class="bd-picker" data-act="pick-month" type="month" min="2026-09" max="' + esc(today.slice(0, 7)) + '" value="' + esc(monthValue) + '">' +
@@ -1341,11 +1393,6 @@
   }
 
   function renderStatus(data) {
-    if (state.history) {
-      var days = historyDates(data.tab && data.tab.id, data.dim);
-      return '<p class="bd-banner">服务器历史采集记录，完整性尚未逐表核验。' + (days.length ? '本表有 ' + days.length + ' 天记录（' + esc(days[0]) + ' 至 ' + esc(days[days.length - 1]) + '）。<button type="button" data-act="history-latest">查看最近有记录日期</button>' : '本表暂无已完成的单日记录。') + '</p>' +
-        (!data.total ? '<p class="bd-miss">本次筛选没有可展示的历史记录，不能据此认定当日数据为 0。</p>' : '');
-    }
     var coverage = data.coverage || {};
     var bad = "";
     if (coverage.status === "missing") {
@@ -1628,7 +1675,7 @@
         return '<article class="bd-tile"><strong>' + esc(row.name || "未命名") + "</strong><div>" + esc(row.shop) + "</div><div>" + formatCell(metricOf(row, { key: "payAmount", numeric: true, money: true, aliases: ["gmv", "xse"] }), { key: "payAmount", numeric: true, money: true }) + "</div></article>";
       }).join("") + "</div>";
     }
-    var suffix = !data.localArchive && !state.history && data.page && data.page.id === "channelAnalysisNew" ? (state.compare === "mom" ? "环比" : "同比") : "";
+    var suffix = !data.localArchive && data.page && data.page.id === "channelAnalysisNew" ? (state.compare === "mom" ? "环比" : "同比") : "";
     var showOpener = !data.localArchive && !(data.page && (data.page.id === "channelOverview" || data.page.id === "channelAnalysis"));
     if (state.sortKey && !data.localArchive) {
       var sortColumn = null;
@@ -1770,7 +1817,6 @@
   }
 
   function renderSums(data) {
-    if (state.history) return '<div class="bd-sum">当前筛选有 ' + esc(data.total) + ' 条已存记录；未核验完整性的历史表不计算全店汇总。</div>';
     var amount = sumCell(data.pageSum, "payAmount");
     var allAmount = sumCell(data.allSum, "payAmount");
     return '<div class="bd-sum"><span>当前页汇总 ' + esc(amount) + "</span><span>全部汇总 " + esc(allAmount) + "</span><span>记录 " + esc(data.total) + "</span></div>";
@@ -1888,7 +1934,7 @@
     var password = '<div class="bd-login" data-bound-password><label>旧站账号<input name="bound-user-name" autocomplete="username" value="' + esc(link.userName || "") + '"></label><label>旧站密码<input name="bound-password" type="password" autocomplete="current-password"></label><label class="bd-auto"><input name="bound-auto-relogin" type="checkbox" checked>登录正常过期后自动重新登录</label><button class="bd-primary" type="button" data-act="password-login"' + (state.passwordBusy ? ' disabled' : '') + '>' + (state.passwordBusy ? "正在登录…" : "账号密码登录") + '</button><p class="bd-status">密码仅在服务运行期间保留，服务重启后需重新输入。异地登录、账号禁用或重新登录失败时会停止。</p></div>';
     var archive = state.localArchive;
     var run = archive && archive.run, running = run && ['running', 'collecting'].includes(run.status);
-    var scoped = archive ? '<section class="bd-block"><h2>单店四页采集</h2><p>' + esc(archive.scope.shopName + ' · ' + archive.scope.date) + '</p><p>渠道总览（单店范围）、渠道详情、关键指标分析、商品总览</p><p data-archive-progress>' + esc(archiveRunText()) + '</p>' + (archive.runtime === 'server' ? '<button type="button" data-act="archive-job-start"' + (running ? ' disabled' : '') + '>开始 / 继续补采</button><button type="button" data-act="archive-job-stop"' + (!running ? ' disabled' : '') + '>停止采集</button><p class="bd-status">只补缺少的结果，已成功归档的数据直接复用。关闭页面后服务器继续采集；账号冲突或接口异常时停止。</p>' : '<p class="bd-status">旧的全模块批量采集保持暂停。四页专用接口正在逐项核验。</p>') + '<button type="button" data-act="archive-refresh">刷新已采数据</button></section>' : renderProgress();
+    var scoped = archive ? '<section class="bd-block"><h2>单店四页采集</h2><p>' + esc((archive.collectionScope || archive.scope).shopName + ' · ' + (archive.collectionScope || archive.scope).date) + '</p><p>渠道总览（单店范围）、渠道详情、关键指标分析、商品总览</p><p data-archive-progress>' + esc(archiveRunText()) + '</p>' + (archive.runtime === 'server' ? '<button type="button" data-act="archive-job-start"' + (running ? ' disabled' : '') + '>开始 / 继续补采</button><button type="button" data-act="archive-job-stop"' + (!running ? ' disabled' : '') + '>停止采集</button><p class="bd-status">采集固定为上方店铺及日期，浏览筛选不会改变采集范围。只补缺少的结果，已成功归档的数据直接复用。关闭页面后服务器继续采集；账号冲突或接口异常时停止。</p>' : '<p class="bd-status">旧的全模块批量采集保持暂停。四页专用接口正在逐项核验。</p>') + '<button type="button" data-act="archive-refresh">刷新已采数据</button></section>' : renderProgress();
     return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>连接旧站</h1><p class="bd-sub">使用旧站账号密码建立采集会话。</p><p class="bd-status">同一账号只能保持一处登录。采集期间查看本系统已采数据，旧站对照需等采集停止后进行。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + '</p></div></header><section class="bd-block"><p role="status">' + esc(link.message || "") + '</p>' + password + '<details><summary>扫码登录（备用）</summary>' + qr + '<div class="bd-tools"><button type="button" data-act="scan" data-provider="WECHAT">微信</button><button type="button" data-act="scan" data-provider="FEISHU">飞书</button><button type="button" data-act="scan" data-provider="DINGTALK">钉钉</button><button type="button" data-act="scan" data-provider="QYWX">企业微信</button>' + accounts + '</div></details></section>' + (archive ? '' : renderProbe()) + scoped + '</section>';
   }
 
@@ -1954,30 +2000,22 @@
       '<header class="bd-head">' + heading +
       '<div class="bd-filters">' + filters + "</div></header>" +
       renderStatus(data) +
-      (state.history ? '' : renderCards(data)) +
+      renderCards(data) +
       renderPanel(data) +
       tabBar +
-      (state.history ? '' : renderExtras(data)) +
+      renderExtras(data) +
       renderTeamExtra(data) +
       renderSpecial(data) +
       tableBlock +
       renderShopBlock(data) + "</section>";
   }
 
-  function historyDates(tab, dim) {
-    var found = ((state.historyCoverage && state.historyCoverage.reports) || []).find(function (r) { return r.id === tab && r.dim === (dim || 'all'); });
-    return ((found && found.ready) || []).filter(function (d) { return /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= DATA_START; }).sort();
-  }
-  function renderSource() {
-    if (state.page === 'link') return '';
-    return '<div class="bd-tools" style="padding:12px 24px;margin:0;background:var(--xm-card,#fff);border-bottom:1px solid var(--xm-border,#e5e7eb)" aria-label="数据来源"><strong>查看数据</strong><button type="button" data-act="data-source" data-source="archive" class="' + (!state.history ? 'is-on' : '') + '">本次单店数据</button><button type="button" data-act="data-source" data-source="history" class="' + (state.history ? 'is-on' : '') + '">服务器历史数据</button><span>' + (state.history ? '2026-09-01 起 · 可切换店铺和日期 · 查看不补采' : 'RASW · 2026-10-03 · 已核验档案') + '</span></div>';
-  }
   function render(root) {
-    root.innerHTML = '<div class="bd-app xm-ui-scope" data-bound-erp="false"><nav class="bd-side" aria-label="边界数据中心">' + renderNav() + '</nav><div style="min-width:0">' + renderSource() + renderMain() + "</div></div>";
+    root.innerHTML = '<div class="bd-app xm-ui-scope" data-bound-erp="false"><nav class="bd-side" aria-label="边界数据中心">' + renderNav() + '</nav>' + renderMain() + "</div>";
   }
 
   function paint(root) {
-    if (archiveActive() && state.page !== "link") state.viewData = buildArchiveView();
+    if (state.localArchive && state.page !== "link") state.viewData = buildArchiveView();
     var focus = root.querySelector && root.querySelector("[data-act='q']");
     var start = focus ? focus.selectionStart : null;
     render(root);
@@ -2001,18 +2039,8 @@
     await readLocalArchive();
     await readArchiveProduct();
     if (token !== active || revision !== loadRevision) return;
+    var view = state.page === "link" || state.localArchive ? null : await fetch("/api/bound/view?" + queryString());
     var catalog = state.catalog ? null : await fetch("/api/bound/catalog");
-    if (state.history && !state.historyCoverage) {
-      var coverageResponse = await fetch('/api/bound/coverage');
-      if (coverageResponse.ok) state.historyCoverage = await coverageResponse.json();
-    }
-    if (state.history && state.historyInitial) {
-      var dates = historyDates('qdfx_dplb', 'all');
-      state.from = state.to = dates[dates.length - 1] || DATA_START;
-      state.daysType = '1'; state.historyInitial = false;
-    }
-    if (token !== active || revision !== loadRevision) return;
-    var view = state.page === "link" || archiveActive() ? null : await fetch("/api/bound/view?" + queryString());
     var link = await fetch("/api/bound/link");
     var progress = state.page === "link" ? await fetch("/api/bound/progress") : null;
     if (token !== active || revision !== loadRevision) {
@@ -2090,20 +2118,6 @@
         return;
       }
       var act = node.getAttribute("data-act");
-      if (act === 'data-source') {
-        var history = node.getAttribute('data-source') === 'history';
-        if (history === state.history) return;
-        state.history = history; state.viewData = null; state.q = state.shop = state.sortKey = state.panel = ''; state.view = 'list'; state.pageNo = 1;
-        state.page = 'channelAnalysis'; state.tab = history ? 'qdfx_dplb' : 'qdfx_jy';
-        state.historyInitial = history;
-        if (!history && state.localArchive) { state.from = state.to = state.localArchive.scope.date; state.shop = state.localArchive.scope.shopName; state.daysType = '1'; }
-        paint(root); load(root, token); return;
-      }
-      if (act === 'history-latest' && state.history) {
-        var ready = historyDates(state.viewData.tab.id, state.viewData.dim);
-        if (ready.length) { state.from = state.to = ready[ready.length - 1]; state.daysType = '1'; state.pageNo = 1; load(root, token); }
-        return;
-      }
       if (state.localArchive && act.indexOf("archive-") === 0) {
         if (act === 'archive-job-start' || act === 'archive-job-stop') {
           if (state.localArchive.runtime !== 'server') return;
@@ -2142,7 +2156,7 @@
           var exportRows = data.filteredRows;
           var periodExport = state.page === 'productOverview' && state.view === 'period';
           if (periodExport) {
-            if (data.message || data.reportId === 'shop_spu_page' && !archiveRecords('shop_spu_period').length || archivePeriodPending(data)) return;
+            if (data.message && !data.partial || data.reportId === 'shop_spu_page' && !archiveRecords('shop_spu_period').length || archivePeriodPending(data)) return;
             columns = [{ key: 'goodsId', label: '商品 ID' }, { key: 'spuid', label: 'SPU ID' }, { key: 'date', label: '时间范围' }, { key: 'coverage', label: '数据状态' }].concat(archivePeriodColumns(data).filter(function (c) { return c.on; }));
             exportRows = data.rows.flatMap(function (product) {
               var item = archivePeriodItem(data, product.metrics);
@@ -2183,13 +2197,6 @@
         if (state.localArchive) { state.q = ""; state.sortKey = ""; state.view = "list"; state.archiveCard = state.archiveCategory = state.archiveFlag = state.archiveProfit = ""; }
         state.page = node.getAttribute("data-page");
         state.tab = "";
-        if (state.history) {
-          var historyPage = pageMeta();
-          var historyTab = ((historyPage && historyPage.tabs) || []).find(function (tab) {
-            return historyDates(tab.id, (tab.dims || []).includes(state.dim) ? state.dim : (tab.dims || ['all'])[0]).length;
-          });
-          if (historyTab) state.tab = historyTab.id;
-        }
         state.pageNo = 1;
         state.panel = "";
       } else if (act === "tab") {
@@ -2212,7 +2219,7 @@
         return;
       } else if (act === "view") {
         state.view = node.getAttribute("data-view");
-        if (state.history) load(root, token); else paint(root);
+        paint(root);
         return;
       } else if (act === "shop-view") {
         state.shopView = node.getAttribute("data-view");
@@ -2431,6 +2438,11 @@
         return;
       }
       var act = node.getAttribute("data-act");
+      if (act === "saved-shop" && state.savedOptions) {
+        var shop = state.savedOptions.shops.find(function (s) { return s.platform + ":" + s.shopId === node.value; });
+        if (shop) { state.savedShopKey = node.value; state.shop = shop.shopName; state.pageNo = 1; load(root, token); }
+        return;
+      }
       if (state.localArchive) {
         if (act === 'archive-period-days') {
           if ([7, 15].includes(Number(node.value))) state.archivePeriodDays = Number(node.value);
@@ -2457,10 +2469,10 @@
         }
         if (act === "archive-chart-metric") { state.archiveChartMetric = node.value; paint(root); return; }
       }
-      if (act === "q" && (archiveActive() || state.history)) {
+      if (act === "q" && state.localArchive) {
         state.q = node.value;
         state.pageNo = 1;
-        if (state.history) load(root, token); else paint(root);
+        paint(root);
         return;
       }
       if (act === "combo" || act === "warehouse" || act === "split-combo") {
@@ -2526,13 +2538,9 @@
     root.addEventListener("click", onClick);
     root.addEventListener("change", onChange);
     function onArchiveSearch(event) {
-      if (archiveActive() && event.target.getAttribute && event.target.getAttribute("data-act") === "q") onChange(event);
+      if (state.localArchive && event.target.getAttribute && event.target.getAttribute("data-act") === "q") onChange(event);
     }
     root.addEventListener("input", onArchiveSearch);
-    function onHistorySearchKey(event) {
-      if (state.history && event.key === 'Enter' && event.target.getAttribute && event.target.getAttribute('data-act') === 'q') onChange(event);
-    }
-    root.addEventListener('keydown', onHistorySearchKey);
     function onProductImageError(event) {
       var img = event.target;
       if (img && img.tagName === "IMG" && img.parentElement && img.parentElement.classList.contains("bd-product-thumb")) img.hidden = true;
@@ -2551,7 +2559,6 @@
         root.removeEventListener("click", onClick);
         root.removeEventListener("change", onChange);
         root.removeEventListener("input", onArchiveSearch);
-        root.removeEventListener('keydown', onHistorySearchKey);
         root.removeEventListener("error", onProductImageError, true);
         root.removeEventListener("focusin", onLoginFocus);
         root.removeEventListener("focusout", onLoginBlur);
@@ -2564,9 +2571,6 @@
     mount: function (root) {
       var token = ++active;
       state.loginEditing = false;
-      if (new URLSearchParams(window.location && window.location.search || '').get('source') === 'history') {
-        state.history = true; state.historyInitial = true; state.page = 'channelAnalysis'; state.tab = 'qdfx_dplb'; state.shop = state.q = ''; state.viewData = null;
-      }
       var initialProbeDate = new URLSearchParams(window.location && window.location.search || "").get("probeDate");
       if (initialProbeDate) { state.page = "link"; state.probeDate = initialProbeDate; }
       ensureStyle();

@@ -30,7 +30,7 @@ function fixture() {
     product_area: [record("product_area", [{ province: "浙江", isProv: true, sumLine: true, gmv: "100" }, { province: "浙江", city: "杭州", gmv: "100" }])]
   };
 }
-async function harness({ records = fixture(), failedPage = false, search = "", inventory, products = {}, cardRecords = {}, extras = {}, run, history = {} } = {}) {
+async function harness({ records = fixture(), failedPage = false, search = "", inventory, products = {}, cardRecords = {}, extras = {}, run, saved } = {}) {
   const calls = [];
   const downloads = [], blobs = [];
   class LocalURL extends URL {}
@@ -49,9 +49,16 @@ async function harness({ records = fixture(), failedPage = false, search = "", i
       if (url === "/api/bound/catalog") return reply(publicCatalog());
       if (url === "/api/bound/link") return reply({ phase: "not_logged_in", collection: { batchEnabled: false } });
       if (url === "/api/bound/progress") return reply({ items: [] });
-      if (url === '/api/bound/coverage') return reply({ reports: history.coverage || [] });
-      if (url.startsWith('/api/bound/view?') && history.view) return reply(history.view(new URL(url, 'http://localhost').searchParams));
       if (url.startsWith("/api/bound/collect/probe")) return reply({ target: { ...scope, metric: "广告花费" }, targets: [] });
+      if (url === "/api/bound/shop-day/saved/options") return saved ? reply(saved.options) : reply({}, false);
+      if (url.startsWith("/api/bound/shop-day/saved?")) {
+        const p = new URL(url, "http://localhost").searchParams;
+        return reply(saved.manifest(p, manifest));
+      }
+      if (url.startsWith("/api/bound/shop-day/saved/report?")) {
+        const p = new URL(url, "http://localhost").searchParams;
+        return reply({ ok: true, record: saved.record(p, records) });
+      }
       if (url === "/api/bound/shop-day") return reply(manifest);
       if (url.startsWith("/api/bound/shop-day/report?")) {
         const params = new URL(url, "http://localhost").searchParams;
@@ -79,44 +86,67 @@ async function harness({ records = fixture(), failedPage = false, search = "", i
   return { root, calls, click, change, blobs, downloads };
 }
 
-function historyFixture() {
+
+function savedFixture() {
+  const second = { ...scope, shopId: "12345", shopName: "另一家店" };
+  function localRecords(p, original) {
+    if (p.get("shopId") === scope.shopId && p.get("from") === scope.date && p.get("to") === scope.date) return original;
+    const current = { ...(p.get("shopId") === second.shopId ? second : scope), date: p.get("to"), from: p.get("from"), to: p.get("to") };
+    if (p.get("to") === "2026-09-01") return {};
+    const row = { ...current, date: p.get("to"), gmv: "12345", netGmv: "11000", tghf: "900", profit: "500" };
+    const goods = { ...row, goodsId: "99999999", goodsName: "旧库商品", spuid: "88", gmv: "321" };
+    const raw = {
+      channel_operating: [record("channel_operating", [row], 1, { scope: current })],
+      shop_goods_page: [record("shop_goods_page", [goods], 1, { scope: current, total: 1, completeness: "partial" })],
+      key_graph: [record("key_graph", [row], 1, { scope: current, metricCards: { gmv: { value: "12345" } }, metricColumns: [columns.find(c => c.columnKey === "gmv")], metricTrend: [] })],
+      key_shops: [record("key_shops", [row], 1, { scope: current, columnKey: "gmv" })],
+      key_goods: [record("key_goods", [goods], 1, { scope: current, columnKey: "gmv", total: 1, completeness: "partial" })],
+      channel_shop_table: [record("channel_shop_table", [row], 1, { scope: current })]
+    };
+    return raw;
+  }
   return {
-    coverage: [{ id: 'qdfx_dplb', dim: 'all', ready: ['2026-08-31', '2026-09-01', '2026-11-18'] }],
-    view: p => ({ ok: true, page: { id: p.get('page'), label: '渠道详情', ops: ['date', 'shop', 'search', 'export'] },
-      tab: { id: 'qdfx_dplb', label: '店铺列表' }, tabs: [{ id: 'qdfx_dplb', label: '店铺列表' }],
-      range: { from: p.get('from'), to: p.get('to') }, dim: 'all', daysType: '1', shops: [scope.shopName],
-      coverage: { status: 'ready' }, cards: [], columns: [{ key: 'name', label: '店铺', on: true }, { key: 'payAmount', label: '支付金额', numeric: true, on: true }],
-      rows: [{ key: 'historical-row', name: scope.shopName, shop: scope.shopName, metrics: { payAmount: 12345 }, fields: [] }],
-      total: 1, pageNo: Number(p.get('pageNo')), pageSize: 50, shopRows: [], allSum: null, pageSum: null })
+    options: { ok: true, shops: [scope, second], dates: [scope.date, "2026-11-18"], defaultScope: scope },
+    manifest(p, original) {
+      const current = { ...(p.get("shopId") === second.shopId ? second : scope), date: p.get("to"), from: p.get("from"), to: p.get("to") };
+      const records = localRecords(p, Object.fromEntries(original.reports.map(r => [r.id, r.pages])));
+      return { ...original, unified: true, runtime: "server", scope: current, collectionScope: scope,
+        reports: Object.entries(records).filter(([id]) => !["key_graph", "key_goods", "key_shops", "channel_shop_table"].includes(id)).map(([id, pages]) => ({ id, pages: pages.map(r => ({page: r.page, status: r.status})) })) };
+    },
+    record(p, original) { return localRecords(p, original)[p.get("reportId")]?.find(r => r.page === Number(p.get("page"))); }
   };
 }
 
-test('历史数据入口绕开固定单店档案，按最近有记录日期读取，筛选后可切回', async () => {
-  const h = await harness({ history: historyFixture() });
-  await h.click({ 'data-act': 'data-source', 'data-source': 'history' });
-  assert.match(h.root.innerHTML, /12,345/);
-  assert.match(h.root.innerHTML, /本表有 2 天记录/);
-  assert.doesNotMatch(h.root.innerHTML, /2026-08-31|23,181/);
-  let view = h.calls.filter(c => c.url.startsWith('/api/bound/view?')).at(-1);
-  assert.match(view.url, /history=1/); assert.match(view.url, /from=2026-11-18/);
-  await h.change('shop', scope.shopName);
-  await h.change('q', 'RASW');
-  view = h.calls.filter(c => c.url.startsWith('/api/bound/view?')).at(-1);
-  assert.equal(new URL(view.url, 'http://localhost').searchParams.get('q'), 'RASW');
-  assert.equal(new URL(view.url, 'http://localhost').searchParams.get('shop'), scope.shopName);
-  await h.click({ 'data-act': 'data-source', 'data-source': 'archive' });
+test("新页面统一读取旧库：四页、店铺日期、筛选导出都不分入口且不触发采集", async () => {
+  const h = await harness({ saved: savedFixture() });
   assert.match(h.root.innerHTML, /23,181/);
-  assert.match(h.root.innerHTML, /2026-10-03/);
-  assert.equal(h.calls.some(c => c.options.method === 'POST'), false);
-});
-
-test('历史数据直达链接不加载单店档案，日期选择不早于九月', async () => {
-  const h = await harness({ search: '?source=history', history: historyFixture() });
+  assert.doesNotMatch(h.root.innerHTML, /本次单店数据|服务器历史数据|data-source/);
+  await h.change("pick-date", "2026-11-18");
   assert.match(h.root.innerHTML, /12,345/);
-  assert.equal(h.calls.some(c => c.url.startsWith('/api/bound/shop-day')), false);
-  await h.change('pick-date', '2026-08-01');
-  const view = h.calls.filter(c => c.url.startsWith('/api/bound/view?')).at(-1);
-  assert.equal(new URL(view.url, 'http://localhost').searchParams.get('from'), '2026-09-01');
+  assert.doesNotMatch(h.root.innerHTML, /23,181/);
+  await h.change("saved-shop", "JD:12345");
+  assert.match(h.root.innerHTML, /另一家店/);
+  await h.click({ "data-act": "page", "data-page": "channelOverview" });
+  assert.match(h.root.innerHTML, /12,345/);
+  await h.click({ "data-act": "page", "data-page": "channelAnalysisNew" });
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.match(h.root.innerHTML, /12,345/);
+  assert.match(h.root.innerHTML, /旧库商品/);
+  await h.click({ "data-act": "page", "data-page": "productOverview" });
+  assert.match(h.root.innerHTML, /旧库商品/);
+  assert.match(h.root.innerHTML, /商品分页不完整/);
+  assert.doesNotMatch(h.root.innerHTML, /全店商品分页已收齐/);
+  await h.change("q", "旧库商品");
+  await h.click({ "data-act": "archive-export" });
+  assert.match(await h.blobs.at(-1).text(), /旧库商品/);
+  await h.change("pick-date", "2026-08-01");
+  assert.match(h.root.innerHTML, /2026年9月1日/);
+  assert.doesNotMatch(h.root.innerHTML, /旧库商品|12,345/);
+  const url = h.calls.filter(c => c.url.startsWith("/api/bound/shop-day/saved?")).at(-1).url;
+  assert.match(url, /from=2026-09-01/);
+  assert.equal(h.calls.some(c => c.options.method === "POST" || c.url.startsWith("/api/bound/view?")), false);
+  await h.click({ "data-act": "page", "data-page": "link" });
+  assert.match(h.root.innerHTML, /RASW潮流生活京选菀瑶专卖店 · 2026-10-03/);
 });
 
 function periodFixture() {

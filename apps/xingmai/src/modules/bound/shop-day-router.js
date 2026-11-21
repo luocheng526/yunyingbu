@@ -5,6 +5,7 @@ import { createShopDayCollector } from "./shop-day.js";
 import { createFourPageJob } from "./four-page-job.js";
 import { requestShopDayReport, collectionStatus } from "./collect.js";
 import { createArchiveImport } from "./archive-import.js";
+import { createSavedData } from "./saved-data.js";
 
 export function defaultArchiveDirectory() {
   return process.env.BOUND_DAY_ARCHIVE_DIR || (process.platform === "win32"
@@ -13,11 +14,13 @@ export function defaultArchiveDirectory() {
 }
 
 // Mounted behind the module's existing Luo Cheng administrator gate. No raw
-// archive directory, arbitrary URL, shop ID or date can be supplied by clients.
+// archive directory or upstream URL can be supplied by clients. Saved-data
+// GETs accept validated shop/date selectors; collection remains fixed-scope.
 export function createShopDayRouter({ directory = defaultArchiveDirectory(), request = requestShopDayReport } = {}) {
   const router = Router();
   const collector = createShopDayCollector({ directory, request });
   const job = createFourPageJob({ directory, collector });
+  const saved = createSavedData({ collector, readRun: () => job.status() });
   const importer = createArchiveImport({ directory, blocked: async () =>
     (await job.status())?.status === "running" || collector.isBusy() });
   router.use((req, res, next) => {
@@ -37,6 +40,9 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
   });
   route("get", "/", async () => { const data = await collector.status(); delete data.directory; return { ...data, archiveMode: "single_shop", runtime: "server", fourPageRun: await job.status() }; });
   route("get", "/four-pages", () => collector.fourPageStatus());
+  route("get", "/saved/options", () => saved.options());
+  route("get", "/saved", req => saved.manifest(req.query));
+  route("get", "/saved/report", req => saved.record(req.query));
   route("post", "/import", req => importer.accept(req.body));
   route("get", "/report", async req => {
     const input = { reportId: req.query.reportId, page: Number(req.query.page || 1) };
