@@ -113,7 +113,12 @@ test("生产档案接口仅罗成可访问，采集拒绝跨站和任意范围�
   try {
     assert.equal((await fetch(base + '/restricted/shop-day')).status, 401);
     assert.equal((await fetch(base + '/restricted/shop-day', { headers: { 'x-test-user': 'ordinary' } })).status, 403);
-    assert.equal((await fetch(base + '/restricted/client.js?v=qr-still-3')).status, 401);
+    // Production treats .js as a public asset and does not populate req.user,
+    // even when the browser has a valid session cookie. Data remains protected.
+    const publicClient = await fetch(base + '/restricted/client.js?v=qr-still-3');
+    assert.equal(publicClient.status, 200);
+    assert.match(publicClient.headers.get('content-type'), /javascript/);
+    assert.match(await publicClient.text(), /archive-key-metric/);
     const client = await fetch(base + '/restricted/client.js?v=qr-still-3', { headers: { 'x-test-user': 'luocheng' } });
     assert.equal(client.status, 200);
     assert.match(client.headers.get('cache-control'), /no-store/);

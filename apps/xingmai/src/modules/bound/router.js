@@ -69,8 +69,9 @@ boundRouter.get("/", (req, res) => {
 
 // The deployed shell still references this alias. Serve the same module file
 // as SPA navigation without changing the shared shell or retaining a stale copy.
-boundRouter.get("/client.js", (req, res) => {
-  if (!requireUser(req, res)) return;
+// Like /shared/modules/bound.js, this is public application code. The shell's
+// asset middleware deliberately skips populating req.user for .js requests.
+boundRouter.get("/client.js", (_req, res) => {
   res.setHeader("Cache-Control", "private, no-store");
   res.type("application/javascript").sendFile(fileURLToPath(new URL("../../../public/shared/modules/bound.js", import.meta.url)));
 });
