@@ -3,7 +3,7 @@
  * 组织中心提供账号和密码。每家店在服务器登录后：
  * 京麦经营数据接口取成交金额，京准通 custom-report 当天总览取花费、投产比、总订单金额。
  * 采集失败但登录还在（超时、网络）：会话记 offline，cookie 留下，下一轮继续抓。
- * 登录失效：保留原会话供核验，有账号时静默再登一次；需要验证码就停在失效等人工点。
+ * 登录失效：分批自动重登，失败后持久化退避；仅明确的人工验证暂停自动重登。
  * 后台每 10 分钟开一轮；上一轮还在跑时不叠第二轮。
  */
 import fs from "node:fs";
@@ -29,7 +29,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1346-home-session-recheck";
+export const LIVE2_RUNTIME_MARK = "0.1.1347-home-auto-relogin";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
@@ -163,6 +163,8 @@ export function createLive2Collector(deps = {}) {
   const ensureSession = deps.ensureSession || ensureCollectSession;
   const claimOwner = deps.claimOwner || claimCollectorOwner;
   const persistSample = deps.saveSample || saveSample;
+  const persistCookies = deps.updateSessionCookies || updateSessionCookies;
+  const markSessionAuth = deps.markAuth || markAuth;
   const inflight = deps.inflight || new Set();
   const humanBlocks = deps.humanProtectsShop || function () { return false; };
   const sessionsOf = deps.listSessions || listSessions;
@@ -320,6 +322,11 @@ export function createLive2Collector(deps = {}) {
     return phase.closed || phase.superseded;
   }
 
+  function checkpointLogin(row) {
+    published.set(row.shop, publicRecord(row));
+    writeStore(file, { publishedAt, updatedAt, timings, records: Array.from(published.values()) });
+  }
+
   async function persistMetrics(shop, metrics, phase) {
     if (inactive(shop, phase)) return false;
     if (metrics.dealAmount == null && metrics.paidAmount == null) return true;
@@ -372,9 +379,9 @@ export function createLive2Collector(deps = {}) {
   async function keepLogin(shop, jar, phase) {
     if (inactive(shop, phase)) return;
     try {
-      const updated = await updateSessionCookies(shop.store, jar, writeOptions(shop, phase));
+      const updated = await persistCookies(shop.store, jar, writeOptions(shop, phase));
       if (rejectedWrite(updated, phase) || inactive(shop, phase)) return;
-      const marked = await markAuth(shop.store, "ok", "", writeOptions(shop, phase));
+      const marked = await markSessionAuth(shop.store, "ok", "", writeOptions(shop, phase));
       if (rejectedWrite(marked, phase) || inactive(shop, phase)) return;
     } catch {
       /* 这一轮进程里的会话仍然可用 */
@@ -389,7 +396,7 @@ export function createLive2Collector(deps = {}) {
     if (humanBlocks(shop.store)) phase.superseded = true;
     if (phase.sessionVersion == null || (phase.closed && !terminal) || phase.superseded) return;
     try {
-      const marked = await markAuth(shop.store, "offline", String(reason || "采集超时").slice(0, 200), writeOptions(shop, phase));
+      const marked = await markSessionAuth(shop.store, "offline", String(reason || "采集超时").slice(0, 200), writeOptions(shop, phase));
       rejectedWrite(marked, phase);
     } catch {
       /* cookie stays; next round still collects */
@@ -402,10 +409,12 @@ export function createLive2Collector(deps = {}) {
     const prior = published.get(shop.store) || {};
     const previous = loginRetries.get(shop.store) || (prior.loginSessionVersion === phase.sessionVersion
       ? { attempts: Number(prior.loginFailures) || 0, version: phase.sessionVersion } : null);
-    const attempts = previous && previous.version === phase.sessionVersion ? previous.attempts + 1 : 1;
+    const attempts = phase.loginReserved ? phase.loginState.loginFailures
+      : previous && previous.version === phase.sessionVersion ? previous.attempts + 1 : 1;
     loginRetries.set(shop.store, {
       version: phase.sessionVersion, attempts, reason,
-      until: error.recoveryDeferred ? phase.nextRecoveryBatchAt
+      until: phase.loginReserved ? phase.loginState.loginRetryAt
+        : error.recoveryDeferred ? phase.nextRecoveryBatchAt
         : clock() + Math.min(60, 15 * 2 ** (attempts - 1)) * 60 * 1000
     });
     phase.loginState = {
@@ -413,13 +422,19 @@ export function createLive2Collector(deps = {}) {
       loginNeedsHuman: error.needsHuman === true,
       loginRetryAt: loginRetries.get(shop.store).until,
       platformLimited: false, platformRetryAt: 0,
-      ...(error.loginAttempted ? { passwordAttemptedVersion: phase.sessionVersion } : {})
+      ...(error.loginAttempted || phase.loginReserved ? { passwordAttemptedVersion: phase.sessionVersion } : {})
     };
     try {
-      const marked = await markAuth(shop.store, "login_expired", reason || "登录已失效，请重新登录", writeOptions(shop, phase));
+      const marked = await markSessionAuth(shop.store, "login_expired", reason || "登录已失效，请重新登录", writeOptions(shop, phase));
       rejectedWrite(marked, phase);
     } catch {
       /* board still shows loginExpired from this round */
+    }
+    if (phase.loginReserved && !inactive(shop, phase)) {
+      // Persist explicit challenges immediately, not only when the other shops
+      // finish the round. A restart must not release a human-verification hold.
+      checkpointLogin({ ...prior, ...phase.loginState, shop: shop.store,
+        loginExpired: true, online: false, offline: false, offlineReason: reason });
     }
   }
 
@@ -431,9 +446,11 @@ export function createLive2Collector(deps = {}) {
     const reason = String(error.message || "京东暂时限制当前请求").slice(0, 120) + "；暂停重试" + minutes + "分钟";
     await markCollectFail(shop, reason, phase);
     if (phase.superseded || phase.closed) return null;
+    loginRetries.delete(shop.store);
     // Persist the hold with the snapshot so a process restart cannot reset it.
     // A later verified login changes sessionVersion and releases the old hold.
-    return { ...prior, shop: shop.store, online: false, offline: true, loginExpired: false,
+    const row = { ...prior, shop: shop.store, online: false, offline: true, loginExpired: false,
+      loginNeedsHuman: false, loginRetryAt: 0,
       pendingCollect: false, pendingUpdate: false, partialData: false, dataUnavailable: false,
       platformLimited: true, platformRetryAt: clock() + minutes * 60000,
       platformFailures: attempts, platformSessionVersion: phase.sessionVersion,
@@ -441,6 +458,8 @@ export function createLive2Collector(deps = {}) {
       ...(error.loginAttempted ? { passwordAttemptedVersion: phase.sessionVersion } : {}),
       checkedAt: now(),
       offlineReason: reason };
+    if (phase.loginReserved) checkpointLogin(row);
+    return row;
   }
 
   function silentLoginFailed(error) {
@@ -562,6 +581,11 @@ export function createLive2Collector(deps = {}) {
 
   async function closeSlow(shop, draft, samples, phase) {
     if (phase.superseded) return;
+    if (phase.loginReserved && !phase.dealMarked) {
+      // The password request may still settle after the deadline. Preserve its
+      // durable cooldown and old metrics instead of scheduling another login.
+      return markLoggedOut(shop, draft, samples, "自动登录超时，冷却后自动重试", phase.loginState);
+    }
     const stamp = now();
     const kept = keepNumbers(shop, draft, samples);
     if (kept && kept.liveAmount != null && !kept.loginExpired && isFreshStamp(kept.capturedAt, stamp)) {
@@ -620,11 +644,15 @@ export function createLive2Collector(deps = {}) {
     if (phase.closed || (saved && saved.enabled === false)) return null;
     phase.sessionVersion = sessionVersionOf(saved) || "g:0";
     if (inactive(shop, phase)) return null;
-    // Older versions treated a failed read AFTER verified login as a challenge.
-    // Recheck its saved session after the existing cooldown, without resubmitting
-    // credentials. Explicit verification challenges retain their manual hold.
-    if (base.loginNeedsHuman && base.passwordAttemptedVersion === phase.sessionVersion &&
-        base.offlineReason === "服务器浏览器已返回京东登录页，请重新登录或完成验证") {
+    // Only these exact old transient messages were incorrectly marked as human
+    // challenges. Keep real captcha/account/identity restrictions intact.
+    if (base.loginNeedsHuman && base.passwordAttemptedVersion === phase.sessionVersion && [
+      "服务器浏览器已返回京东登录页，请重新登录或完成验证",
+      "自动登录未完成，请在服务器登录窗口完成验证",
+      "京东登录表单未就绪，请在服务器登录窗口处理",
+      "自动登录表单提交失败，请在服务器登录窗口处理",
+      "未能填写京东登录表单，请在服务器登录窗口处理"
+    ].includes(base.offlineReason)) {
       base.loginNeedsHuman = false;
     }
     // Check durable holds before identity/network requests. A verified human
@@ -636,7 +664,8 @@ export function createLive2Collector(deps = {}) {
     if (base.platformLimited && base.platformSessionVersion === phase.sessionVersion && Number(base.platformRetryAt) > clock()) {
       return { ...base, online: false, offline: true, loginExpired: false, partialData: false };
     }
-    const expired = isLoginExpiredSession(saved);
+    const expired = isLoginExpiredSession(saved) || (base.loginSessionVersion === phase.sessionVersion &&
+      Boolean((draft.get(shop.store) || published.get(shop.store))?.loginExpired));
     if (expired && client.recoverBrowserSession) {
       if (recoverySlots <= 0) return { ...base, loginExpired: true, online: false, offline: false,
         loginSessionVersion: phase.sessionVersion, loginRetryAt: phase.nextRecoveryBatchAt,
@@ -710,8 +739,33 @@ export function createLive2Collector(deps = {}) {
               phase.recoverySlot = true;
               return true;
             },
-            credentials: base.passwordAttemptedVersion !== phase.sessionVersion && shop.login && shop.password
-              ? { loginName: shop.login, password: shop.password } : undefined
+            // A previous attempt is an audit marker, not a permanent lock.
+            // The durable cooldown/human/platform holds above govern retries.
+            credentials: shop.login && shop.password ? { loginName: shop.login, password: shop.password } : undefined,
+            beforeRelogin: async () => {
+              const current = await sessionOf(shop.store);
+              if (inactive(shop, phase) || sessionVersionOf(current) !== phase.sessionVersion) {
+                phase.superseded = true;
+                throw Object.assign(new Error("登录已由人工接管或会话已更新"), { code: "timeout" });
+              }
+              await markExpiredLogin(shop, "登录失效，正在自动重新登录", phase, { loginAttempted: true });
+              if (inactive(shop, phase)) throw Object.assign(new Error("采集已取消"), { code: "timeout" });
+              phase.loginReserved = true;
+              Object.assign(base, phase.loginState);
+              const reserved = publicRecord({ ...base, loginExpired: true, online: false,
+                offlineReason: "登录失效，正在自动重新登录" });
+              draft.set(shop.store, reserved);
+              checkpointLogin(reserved);
+            },
+            onLoginVerified: async cookies => {
+              if (inactive(shop, phase)) throw Object.assign(new Error("采集已取消"), { code: "timeout" });
+              let updated;
+              try { updated = await persistCookies(shop.store, cookies, writeOptions(shop, phase)); }
+              catch { throw Object.assign(new Error("新登录状态保存失败，冷却后自动重试"), { code: "network" }); }
+              if (rejectedWrite(updated, phase) || inactive(shop, phase)) {
+                throw Object.assign(new Error("店铺登录已更新，停止旧任务"), { code: "timeout" });
+              }
+            }
           });
           jar = recovered.cookies;
           phase.browserDeal = recovered.deal;
@@ -730,7 +784,7 @@ export function createLive2Collector(deps = {}) {
         // platform-limit label and hide the action now required by this shop.
         base.platformLimited = false;
         base.platformRetryAt = 0;
-        const authFailed = silentLoginFailed(error);
+        const authFailed = silentLoginFailed(error) || Boolean(phase.loginReserved);
         const reason = String((error && error.message) || "登录没有完成").slice(0, 200);
         if (error.loginAttempted) base.passwordAttemptedVersion = phase.sessionVersion;
         if (authFailed) await markExpiredLogin(shop, reason, phase, error);

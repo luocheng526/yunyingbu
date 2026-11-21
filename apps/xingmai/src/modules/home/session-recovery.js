@@ -20,9 +20,17 @@ export async function recoverPasswordSession(deps, credentials, signal) {
     } catch { return false; }
   };
   let submitted = false;
-  for (let attempt = 0; attempt < 32; attempt++) {
+  for (let attempt = 0; attempt < 64; attempt++) {
     const page = await deps.page();
     check(page);
+    // A slow/blank page is retryable; an unexpected web host must never receive
+    // credentials or be accepted as the merchant session.
+    try {
+      const url = new URL(page?.href || "about:blank");
+      if (/^https?:$/.test(url.protocol) && !["shop.jd.com", "passport.jd.com", "passport.shop.jd.com"].includes(url.hostname)) {
+        fail("登录页面地址异常，请在服务器登录窗口检查");
+      }
+    } catch (error) { if (error.needsHuman) throw error; }
     // This callback must verify the native shop identity before returning cookies.
     if (page && !isLogin(page)) {
       const cookies = await deps.verifiedSession(page);
@@ -33,10 +41,10 @@ export async function recoverPasswordSession(deps, credentials, signal) {
       submitted = true;
       let filled = false;
       try { filled = await deps.submit(credentials.loginName, credentials.password); }
-      catch { fail("自动登录表单提交失败，请在服务器登录窗口处理"); }
-      if (!filled) fail("未能填写京东登录表单，请在服务器登录窗口处理");
+      catch { fail("自动登录表单暂时无法提交，冷却后自动重试", "login", false); }
+      if (!filled) fail("京东登录表单暂未就绪，冷却后自动重试", "login", false);
     }
     await deps.sleep(500, signal);
   }
-  fail(submitted ? "自动登录未完成，请在服务器登录窗口完成验证" : "京东登录表单未就绪，请在服务器登录窗口处理");
+  fail(submitted ? "自动登录暂未完成，冷却后自动重试" : "京东登录表单暂未就绪，冷却后自动重试", "login", false);
 }

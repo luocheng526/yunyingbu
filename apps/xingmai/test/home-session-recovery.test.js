@@ -13,7 +13,7 @@ const form = { href: "https://passport.shop.jd.com/login/index.action/jdm", acco
 const credentials = { loginName: "fixture", password: "secret-fixture" };
 
 for (const explicitChallenge of [false, true]) {
-test(`old post-login read holds can recheck saved credentials but actual challenges stay held (${explicitChallenge})`, async () => {
+test(`old transient holds allow automatic renewal after cooldown but actual challenges stay held (${explicitChallenge})`, async () => {
   let time = Date.parse("2026-11-21T22:00:00+08:00"), pending, reads = 0;
   const reason = explicitChallenge ? "京东要求验证或拒绝自动登录，请在服务器登录窗口处理" : "服务器浏览器已返回京东登录页，请重新登录或完成验证";
   const c = createLive2Collector({ storePath: "", concurrency: 1, clock: () => time, now: () => "2026/11/21 22:16:00",
@@ -24,7 +24,7 @@ test(`old post-login read holds can recheck saved credentials but actual challen
     listSessions: async () => [{ store: "A", shopId: "1", authState: "login_expired", sessionGen: 1, cookies: jar("saved") }],
     listSamples: async () => [], claimOwner: async () => ({ ok: true }), saveSample: async () => ({ saved: true }),
     markAuth: async () => {}, track: task => { pending = task; }, client: {
-      recoverBrowserSession: async (_cookies, _signal, hint) => { reads++; assert.equal(hint.credentials, undefined); return { cookies: jar("verified"), deal: { dealAmount: 100 } }; },
+      recoverBrowserSession: async (_cookies, _signal, hint) => { reads++; assert.ok(hint.credentials); return { cookies: jar("verified"), deal: { dealAmount: 100 } }; },
       fetchHome: async (_cookies, _signal, hint) => { assert.equal(hint.browserDeal.dealAmount, 100); return { dealAmount: 100, paidAmount: 5 }; }
     }
   });
