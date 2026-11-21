@@ -1366,6 +1366,30 @@ function evaluate(ws, expression, timeoutMs) {
   });
 }
 
+async function resumeDeskEvents(desk) {
+  // A new CDP session has no event subscriptions. Never keep proof/listeners
+  // from the disconnected socket, even when the Chromium target survived.
+  const observing = Boolean(desk.accountWatch || desk.accessWatch);
+  if (desk.accountWatch) {
+    desk.accountWatch.stop();
+    desk.accountWatch = watchNativeAccount(desk.ws, send);
+  }
+  if (desk.accessWatch) {
+    desk.accessWatch.stop();
+    desk.accessWatch = watchPlatformLimits(desk.ws);
+  }
+  await send(desk.ws, "Page.enable", {}, undefined, 3000);
+  await send(desk.ws, "Network.enable", {}, undefined, 3000);
+  if (observing) {
+    const href = String(await evaluate(desk.ws, "location.href", 2500) || "");
+    // Re-observe the native account after an actual disconnect. Leave a login
+    // form/challenge intact; never resubmit credentials as part of reconnect.
+    if (/^https:\/\/shop\.jd\.com\//i.test(href) && !/\/login/i.test(href)) {
+      await send(desk.ws, "Page.reload", { ignoreCache: false }, undefined, 8000);
+    }
+  }
+}
+
 async function reconnectDesk(desk) {
   if (!desk || !desk.port || !desk.chrome || desk.chrome.exitCode != null) {
     return false;
@@ -1398,6 +1422,7 @@ async function reconnectDesk(desk) {
         }
       }
       if (desk.ws.__sessionId) {
+        await resumeDeskEvents(desk);
         return true;
       }
     }
@@ -1414,8 +1439,10 @@ async function reconnectDesk(desk) {
     desk.ws = await connectSocket(page.webSocketDebuggerUrl);
     desk.ws.__sessionId = "";
     desk.sessionId = "";
+    await resumeDeskEvents(desk);
     return desk.ws.readyState === 1;
   } catch {
+    try { desk.ws?.close(); } catch { /* already closed */ }
     return false;
   }
 }
@@ -1626,7 +1653,7 @@ function encodeFrame(text) {
   return Buffer.concat([header, mask, masked]);
 }
 
-function openSocket(url) {
+export function openSocket(url) {
   const parsed = new URL(url);
   const socket = connectTcp(Number(parsed.port), parsed.hostname);
   const listeners = { open: [], message: [], error: [] };
@@ -1634,6 +1661,7 @@ function openSocket(url) {
   let opened = false;
   let fragments = [];
   const ws = {
+    readyState: 0,
     addEventListener: function (type, fn) {
       (listeners[type] || (listeners[type] = [])).push(fn);
     },
@@ -1646,6 +1674,10 @@ function openSocket(url) {
       socket.write(encodeFrame(data));
     },
     close: function () {
+      if (ws.readyState >= 2) return;
+      const connecting = ws.readyState === 0;
+      ws.readyState = 2;
+      if (connecting) { socket.destroy(); return; }
       socket.end();
     }
   };
@@ -1681,6 +1713,7 @@ function openSocket(url) {
     const payload = buf.slice(offset, offset + size);
     buf = buf.slice(offset + size);
     if (opcode === 8) {
+      ws.readyState = 2;
       socket.end();
       return true;
     }
@@ -1695,7 +1728,12 @@ function openSocket(url) {
     return true;
   }
   socket.on("error", function () {
+    ws.readyState = 3;
     emit("error", {});
+  });
+  socket.on("close", function () {
+    ws.readyState = 3;
+    emit("close", {});
   });
   socket.on("data", function (chunk) {
     buf = Buffer.concat([buf, chunk]);
@@ -1707,11 +1745,13 @@ function openSocket(url) {
       const header = buf.slice(0, split).toString();
       buf = buf.slice(split + 4);
       if (!header.includes(" 101 ")) {
+        ws.readyState = 3;
         emit("error", {});
         socket.destroy();
         return;
       }
       opened = true;
+      ws.readyState = 1;
       emit("open", {});
     }
     while (takeFrame()) {
@@ -1735,6 +1775,7 @@ function connectSocket(url) {
   const ws = openSocket(url);
   return new Promise(function (resolve, reject) {
     const timer = setTimeout(function () {
+      ws.close();
       reject(new Error("socket"));
     }, 8000);
     ws.addEventListener("open", function () {

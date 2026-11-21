@@ -28,7 +28,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1330-home-native-identity";
+export const LIVE2_RUNTIME_MARK = "0.1.1331-home-browser-connection";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
