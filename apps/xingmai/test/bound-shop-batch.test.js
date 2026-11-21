@@ -17,6 +17,7 @@ const temp = () => mkdtemp(join(tmpdir(), "bound-shop-batch-"));
 
 test("可见店铺只接受来源列表的明确平台和店铺身份；不接受穿越路径或九月以前", () => {
   assert.deepEqual(visibleShops([{ channel: "JD", shopList: [{ shopId: 200, shopName: "第二店" }] }]), [second]);
+  assert.deepEqual(visibleShops([{ value: "JD", label: "京东", shopList: [{ value: "200", label: "第二店" }] }]), [second]);
   assert.equal(visibleShops([{ platform: "JD", shopId: "../secret" }]), null);
   assert.equal(visibleShops([{ shopId: "200" }]), null);
   assert.equal(validShopDay({ ...second, date: "2026-08-31" }), false);

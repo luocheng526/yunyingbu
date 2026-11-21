@@ -175,7 +175,7 @@ export async function requestVisibleShops() {
   if (response.httpStatus !== 200 || response.payload?.code !== 0) return { ok: false, statusCode: 502, reason: "shop_discovery_failed" };
   if (ownerOf(await session()) !== owner) return { ok: false, statusCode: 409, reason: "identity_changed" };
   const shops = visibleShops(response.payload.data);
-  if (!shops) return { ok: false, statusCode: 502, reason: "shop_list_unverified", shape: Array.isArray(response.payload.data) ? { array: true, firstKeys: Object.keys(response.payload.data[0] || {}) } : { keys: Object.keys(response.payload.data || {}) } };
+  if (!shops) return { ok: false, statusCode: 502, reason: "shop_list_unverified", shape: Array.isArray(response.payload.data) ? { array: true, firstKeys: Object.keys(response.payload.data[0] || {}), firstValue: response.payload.data[0]?.value, childKeys: Object.keys(response.payload.data[0]?.shopList?.[0] || {}) } : { keys: Object.keys(response.payload.data || {}) } };
   batchShops = new Set(shops.map(s => s.platform + ":" + s.shopId)); batchOwner = owner;
   return { ok: true, shops, owner };
 }

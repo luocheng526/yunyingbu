@@ -15,9 +15,10 @@ export function visibleShops(data) {
     if (!value || depth > 8) return;
     if (Array.isArray(value)) { value.forEach(v => visit(v, inherited, depth + 1)); return; }
     if (typeof value !== "object") return;
-    const platform = value.platform || value.channel || value.channelCode || inherited;
-    if (value.shopId != null && String(value.shopId) !== "") {
-      const scope = { platform, shopId: String(value.shopId), shopName: String(value.shopName || value.name || value.shopId), date: BATCH_DATE };
+    const platform = value.platform || value.channel || value.channelCode || (Array.isArray(value.shopList) ? value.value : null) || inherited;
+    const shopId = value.shopId ?? (inherited && !Array.isArray(value.shopList) ? value.value : null);
+    if (shopId != null && String(shopId) !== "") {
+      const scope = { platform, shopId: String(shopId), shopName: String(value.shopName || value.name || value.label || shopId), date: BATCH_DATE };
       if (!validShopDay(scope)) { invalid = true; return; }
       found.set(platform + ":" + scope.shopId, scope);
       return;
