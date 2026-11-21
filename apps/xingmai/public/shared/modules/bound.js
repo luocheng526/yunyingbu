@@ -59,6 +59,9 @@
     archiveTrendFolded: false,
     archiveRefreshBusy: false
   };
+  state.history = false;
+  state.historyCoverage = null;
+  function archiveActive() { return !!state.localArchive && !state.history; }
   var active = 0;
   var loadRevision = 0;
   var archivePromise = null;
@@ -66,7 +69,7 @@
   // The standalone loopback harness exposes archived responses. Reading them must
   // never trigger collection or put single-shop rows into the legacy daily table.
   async function readLocalArchive(refresh) {
-    if (!window.location) return;
+    if (!window.location || state.history && state.page !== 'link') return;
     if (refresh) archivePromise = null;
     if (!archivePromise) archivePromise = (async function () {
       var response = await fetch("/api/bound/shop-day");
@@ -102,7 +105,7 @@
       }
       state.localArchive = { scope: manifest.scope, selected: manifest.selected, records: records, failures: failures, products: products,
         runtime: manifest.runtime || 'local', inventory: manifest.inventory, reports: manifest.reports, run: manifest.runtime === 'server' ? manifest.fourPageRun : manifest.run, exclusions: manifest.exclusions || [], cardRecords: {}, periods: {}, extras: {} };
-      if (!previous) {
+      if (!previous && !state.history) {
         state.from = state.to = manifest.scope.date;
         state.daysType = "1";
         state.shop = manifest.scope.shopName;
@@ -123,7 +126,7 @@
     return ((archive.inventory && archive.inventory.items) || []).find(function (p) { return String(p.goodsId) === String(id); }) || (archive.selected && String(archive.selected.goodsId) === String(id) ? archive.selected : null);
   }
   async function readArchiveProduct() {
-    if (!state.localArchive || !["productPanorama", "productOperation"].includes(state.page)) return;
+    if (!archiveActive() || !["productPanorama", "productOperation"].includes(state.page)) return;
     var archive = state.localArchive, selected = archiveSelected();
     if (!selected || archive.products[selected.goodsId]) return;
     var records = {};
@@ -156,7 +159,7 @@
   // These GETs read saved reports only. Navigating a page never logs in or calls BI.
   function fillArchiveExtras(root) {
     var archive = state.localArchive, token = active;
-    if (!archive) return;
+    if (!archiveActive()) return;
     var ids = state.page === 'channelOverview' ? ['channel_shop_table'] : state.page === 'channelAnalysisNew' ? ['key_graph'] : state.page === 'productOverview' && state.view === 'period' ? [state.dim === 'spu' ? 'shop_spu_period' : 'shop_goods_period'] : [];
     if (state.page === 'channelAnalysisNew' && archiveRecords('key_graph').length) ids.push(state.tab === 'qd_gjzbfx_dpck' ? 'key_shops' : 'key_goods');
     ids.forEach(function (id) {
@@ -435,7 +438,7 @@
   }
   function fillArchivePeriods(root) {
     var data = state.viewData, archive = state.localArchive, token = active;
-    if (!archive || state.page !== 'productOverview' || state.view !== 'period' || !data || data.message || data.reportId !== 'shop_goods_page') return;
+    if (!archiveActive() || state.page !== 'productOverview' || state.view !== 'period' || !data || data.message || data.reportId !== 'shop_goods_page') return;
     if (archiveRecords('shop_goods_period').length) return;
     var queue = data.rows.map(function (row) { return String(row.metrics.goodsId); }).filter(function (id) { return !archive.periods[id]; });
     if (!queue.length) return;
@@ -876,6 +879,7 @@
 
   function queryString() {
     var params = new URLSearchParams();
+    if (state.history) params.set('history', '1');
     params.set("page", state.page);
     if (state.tab) {
       params.set("tab", state.tab);
@@ -890,6 +894,7 @@
       params.set("daysType", state.daysType);
     }
     params.set("pageNo", String(state.pageNo));
+    params.set("pageSize", "50");
     return params.toString();
   }
 
@@ -988,6 +993,7 @@
 
   function clampRange(from, to) {
     var cap = reliableDay();
+    if (to < DATA_START) to = DATA_START;
     if (to > cap) {
       to = cap;
     }
@@ -1247,7 +1253,7 @@
     }).join("");
     return '<div class="bd-datepick"><span class="bd-stat-time">' + esc(statText(data.range.from, data.range.to, daysType)) + '</span><div class="bd-presets">' + buttons +
       '<i class="bd-split"></i><button type="button" class="bd-arrow" data-act="shift" data-delta="-1" aria-label="上一期"' + (shiftRange(-1) ? "" : " disabled") + '>‹</button><button type="button" class="bd-arrow" data-act="shift" data-delta="1" aria-label="下一期"' + (shiftRange(1) ? "" : " disabled") + '>›</button><i class="bd-split"></i>' +
-      '<button type="button" data-act="preset" data-preset="custom" class="bd-custom' + (preset === "custom" ? " is-on" : "") + '">自定义<span class="bd-tip">自定义最多连续 60 天。每个时间段只向边界 BI 查一次，不把单日相加。最近两天不取。</span></button></div>' +
+      '<button type="button" data-act="preset" data-preset="custom" class="bd-custom' + (preset === "custom" ? " is-on" : "") + '">自定义<span class="bd-tip">' + (state.history ? '只查看服务器已存数据，不发起采集。范围从2026年9月1日开始，自定义最多连续60天。' : '自定义最多连续 60 天。每个时间段只向边界 BI 查一次，不把单日相加。最近两天不取。') + '</span></button></div>' +
       '<input class="bd-picker" data-act="pick-date" type="date" min="' + DATA_START + '" max="' + esc(cap) + '" value="' + esc(dayValue) + '">' +
       '<input class="bd-picker" data-act="pick-week" type="week" max="' + esc(isoWeekValue(iso(addDays(parseIso(weekStart(today)), -7)))) + '" value="' + esc(isoWeekValue(monday)) + '">' +
       '<input class="bd-picker" data-act="pick-month" type="month" min="2026-09" max="' + esc(today.slice(0, 7)) + '" value="' + esc(monthValue) + '">' +
@@ -1335,6 +1341,11 @@
   }
 
   function renderStatus(data) {
+    if (state.history) {
+      var days = historyDates(data.tab && data.tab.id, data.dim);
+      return '<p class="bd-banner">服务器历史采集记录，完整性尚未逐表核验。' + (days.length ? '本表有 ' + days.length + ' 天记录（' + esc(days[0]) + ' 至 ' + esc(days[days.length - 1]) + '）。<button type="button" data-act="history-latest">查看最近有记录日期</button>' : '本表暂无已完成的单日记录。') + '</p>' +
+        (!data.total ? '<p class="bd-miss">本次筛选没有可展示的历史记录，不能据此认定当日数据为 0。</p>' : '');
+    }
     var coverage = data.coverage || {};
     var bad = "";
     if (coverage.status === "missing") {
@@ -1617,7 +1628,7 @@
         return '<article class="bd-tile"><strong>' + esc(row.name || "未命名") + "</strong><div>" + esc(row.shop) + "</div><div>" + formatCell(metricOf(row, { key: "payAmount", numeric: true, money: true, aliases: ["gmv", "xse"] }), { key: "payAmount", numeric: true, money: true }) + "</div></article>";
       }).join("") + "</div>";
     }
-    var suffix = !data.localArchive && data.page && data.page.id === "channelAnalysisNew" ? (state.compare === "mom" ? "环比" : "同比") : "";
+    var suffix = !data.localArchive && !state.history && data.page && data.page.id === "channelAnalysisNew" ? (state.compare === "mom" ? "环比" : "同比") : "";
     var showOpener = !data.localArchive && !(data.page && (data.page.id === "channelOverview" || data.page.id === "channelAnalysis"));
     if (state.sortKey && !data.localArchive) {
       var sortColumn = null;
@@ -1759,6 +1770,7 @@
   }
 
   function renderSums(data) {
+    if (state.history) return '<div class="bd-sum">当前筛选有 ' + esc(data.total) + ' 条已存记录；未核验完整性的历史表不计算全店汇总。</div>';
     var amount = sumCell(data.pageSum, "payAmount");
     var allAmount = sumCell(data.allSum, "payAmount");
     return '<div class="bd-sum"><span>当前页汇总 ' + esc(amount) + "</span><span>全部汇总 " + esc(allAmount) + "</span><span>记录 " + esc(data.total) + "</span></div>";
@@ -1942,22 +1954,30 @@
       '<header class="bd-head">' + heading +
       '<div class="bd-filters">' + filters + "</div></header>" +
       renderStatus(data) +
-      renderCards(data) +
+      (state.history ? '' : renderCards(data)) +
       renderPanel(data) +
       tabBar +
-      renderExtras(data) +
+      (state.history ? '' : renderExtras(data)) +
       renderTeamExtra(data) +
       renderSpecial(data) +
       tableBlock +
       renderShopBlock(data) + "</section>";
   }
 
+  function historyDates(tab, dim) {
+    var found = ((state.historyCoverage && state.historyCoverage.reports) || []).find(function (r) { return r.id === tab && r.dim === (dim || 'all'); });
+    return ((found && found.ready) || []).filter(function (d) { return /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= DATA_START; }).sort();
+  }
+  function renderSource() {
+    if (state.page === 'link') return '';
+    return '<div class="bd-tools" style="padding:12px 24px;margin:0;background:var(--xm-card,#fff);border-bottom:1px solid var(--xm-border,#e5e7eb)" aria-label="数据来源"><strong>查看数据</strong><button type="button" data-act="data-source" data-source="archive" class="' + (!state.history ? 'is-on' : '') + '">本次单店数据</button><button type="button" data-act="data-source" data-source="history" class="' + (state.history ? 'is-on' : '') + '">服务器历史数据</button><span>' + (state.history ? '2026-09-01 起 · 可切换店铺和日期 · 查看不补采' : 'RASW · 2026-10-03 · 已核验档案') + '</span></div>';
+  }
   function render(root) {
-    root.innerHTML = '<div class="bd-app xm-ui-scope" data-bound-erp="false"><nav class="bd-side" aria-label="边界数据中心">' + renderNav() + '</nav>' + renderMain() + "</div>";
+    root.innerHTML = '<div class="bd-app xm-ui-scope" data-bound-erp="false"><nav class="bd-side" aria-label="边界数据中心">' + renderNav() + '</nav><div style="min-width:0">' + renderSource() + renderMain() + "</div></div>";
   }
 
   function paint(root) {
-    if (state.localArchive && state.page !== "link") state.viewData = buildArchiveView();
+    if (archiveActive() && state.page !== "link") state.viewData = buildArchiveView();
     var focus = root.querySelector && root.querySelector("[data-act='q']");
     var start = focus ? focus.selectionStart : null;
     render(root);
@@ -1981,8 +2001,18 @@
     await readLocalArchive();
     await readArchiveProduct();
     if (token !== active || revision !== loadRevision) return;
-    var view = state.page === "link" || state.localArchive ? null : await fetch("/api/bound/view?" + queryString());
     var catalog = state.catalog ? null : await fetch("/api/bound/catalog");
+    if (state.history && !state.historyCoverage) {
+      var coverageResponse = await fetch('/api/bound/coverage');
+      if (coverageResponse.ok) state.historyCoverage = await coverageResponse.json();
+    }
+    if (state.history && state.historyInitial) {
+      var dates = historyDates('qdfx_dplb', 'all');
+      state.from = state.to = dates[dates.length - 1] || DATA_START;
+      state.daysType = '1'; state.historyInitial = false;
+    }
+    if (token !== active || revision !== loadRevision) return;
+    var view = state.page === "link" || archiveActive() ? null : await fetch("/api/bound/view?" + queryString());
     var link = await fetch("/api/bound/link");
     var progress = state.page === "link" ? await fetch("/api/bound/progress") : null;
     if (token !== active || revision !== loadRevision) {
@@ -2060,6 +2090,20 @@
         return;
       }
       var act = node.getAttribute("data-act");
+      if (act === 'data-source') {
+        var history = node.getAttribute('data-source') === 'history';
+        if (history === state.history) return;
+        state.history = history; state.viewData = null; state.q = state.shop = state.sortKey = state.panel = ''; state.view = 'list'; state.pageNo = 1;
+        state.page = 'channelAnalysis'; state.tab = history ? 'qdfx_dplb' : 'qdfx_jy';
+        state.historyInitial = history;
+        if (!history && state.localArchive) { state.from = state.to = state.localArchive.scope.date; state.shop = state.localArchive.scope.shopName; state.daysType = '1'; }
+        paint(root); load(root, token); return;
+      }
+      if (act === 'history-latest' && state.history) {
+        var ready = historyDates(state.viewData.tab.id, state.viewData.dim);
+        if (ready.length) { state.from = state.to = ready[ready.length - 1]; state.daysType = '1'; state.pageNo = 1; load(root, token); }
+        return;
+      }
       if (state.localArchive && act.indexOf("archive-") === 0) {
         if (act === 'archive-job-start' || act === 'archive-job-stop') {
           if (state.localArchive.runtime !== 'server') return;
@@ -2139,6 +2183,13 @@
         if (state.localArchive) { state.q = ""; state.sortKey = ""; state.view = "list"; state.archiveCard = state.archiveCategory = state.archiveFlag = state.archiveProfit = ""; }
         state.page = node.getAttribute("data-page");
         state.tab = "";
+        if (state.history) {
+          var historyPage = pageMeta();
+          var historyTab = ((historyPage && historyPage.tabs) || []).find(function (tab) {
+            return historyDates(tab.id, (tab.dims || []).includes(state.dim) ? state.dim : (tab.dims || ['all'])[0]).length;
+          });
+          if (historyTab) state.tab = historyTab.id;
+        }
         state.pageNo = 1;
         state.panel = "";
       } else if (act === "tab") {
@@ -2161,7 +2212,7 @@
         return;
       } else if (act === "view") {
         state.view = node.getAttribute("data-view");
-        paint(root);
+        if (state.history) load(root, token); else paint(root);
         return;
       } else if (act === "shop-view") {
         state.shopView = node.getAttribute("data-view");
@@ -2406,10 +2457,10 @@
         }
         if (act === "archive-chart-metric") { state.archiveChartMetric = node.value; paint(root); return; }
       }
-      if (act === "q" && state.localArchive) {
+      if (act === "q" && (archiveActive() || state.history)) {
         state.q = node.value;
         state.pageNo = 1;
-        paint(root);
+        if (state.history) load(root, token); else paint(root);
         return;
       }
       if (act === "combo" || act === "warehouse" || act === "split-combo") {
@@ -2475,9 +2526,13 @@
     root.addEventListener("click", onClick);
     root.addEventListener("change", onChange);
     function onArchiveSearch(event) {
-      if (state.localArchive && event.target.getAttribute && event.target.getAttribute("data-act") === "q") onChange(event);
+      if (archiveActive() && event.target.getAttribute && event.target.getAttribute("data-act") === "q") onChange(event);
     }
     root.addEventListener("input", onArchiveSearch);
+    function onHistorySearchKey(event) {
+      if (state.history && event.key === 'Enter' && event.target.getAttribute && event.target.getAttribute('data-act') === 'q') onChange(event);
+    }
+    root.addEventListener('keydown', onHistorySearchKey);
     function onProductImageError(event) {
       var img = event.target;
       if (img && img.tagName === "IMG" && img.parentElement && img.parentElement.classList.contains("bd-product-thumb")) img.hidden = true;
@@ -2496,6 +2551,7 @@
         root.removeEventListener("click", onClick);
         root.removeEventListener("change", onChange);
         root.removeEventListener("input", onArchiveSearch);
+        root.removeEventListener('keydown', onHistorySearchKey);
         root.removeEventListener("error", onProductImageError, true);
         root.removeEventListener("focusin", onLoginFocus);
         root.removeEventListener("focusout", onLoginBlur);
@@ -2508,6 +2564,9 @@
     mount: function (root) {
       var token = ++active;
       state.loginEditing = false;
+      if (new URLSearchParams(window.location && window.location.search || '').get('source') === 'history') {
+        state.history = true; state.historyInitial = true; state.page = 'channelAnalysis'; state.tab = 'qdfx_dplb'; state.shop = state.q = ''; state.viewData = null;
+      }
       var initialProbeDate = new URLSearchParams(window.location && window.location.search || "").get("probeDate");
       if (initialProbeDate) { state.page = "link"; state.probeDate = initialProbeDate; }
       ensureStyle();

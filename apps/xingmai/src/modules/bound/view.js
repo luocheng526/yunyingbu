@@ -33,6 +33,7 @@ export function normalizeRange(query) {
   const cap = reliableEnd();
   let from = DATE_RE.test(String(query.from || "")) ? String(query.from) : cap;
   let to = DATE_RE.test(String(query.to || "")) ? String(query.to) : from;
+  if (to < START_ON) to = START_ON;
   if (from < START_ON) {
     from = START_ON;
   }
@@ -699,7 +700,7 @@ export async function readView(query) {
   }
   const cardSheet = page.cards ? sheetsFor(all, page.cards.id, "all", range.from, range.to) : [];
   const cardPage = (cardSheet[0] && cardSheet[0].status === "done" && cardSheet[0]) || null;
-  if (!page.local && coverage.status === "missing") {
+  if (!page.local && coverage.status === "missing" && query.history !== "1") {
     await noteWanted(page, trend || tab, dim, { start: range.from, end: range.to, daysType });
     if (page.id === "channelOverview" && tab && tab.id === "qdzl_lb" && shopStatus === "missing") {
       await noteWanted(page, tabById(pageById("channelAnalysis"), "qdfx_dplb"), "all", { start: range.from, end: range.to, daysType });

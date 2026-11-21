@@ -11,8 +11,20 @@ import { pollLink, resetBoundStore, setBoundClock, setBoundFetch, startLink, tic
 import { readState, writeSheet, writeState } from "../src/modules/bound/persist.js";
 import { publicCatalog, reports } from "../src/modules/bound/catalog.js";
 import { reportBody } from "../src/modules/bound/collect.js";
+import { readView } from "../src/modules/bound/view.js";
 
 process.env.BOUND_COLLECT_LOOP = "0";
+
+test('历史查看缺失日期只读数据库，不加入补采队列', async () => {
+  resetBoundStore();
+  await writeState('wanted', []);
+  const result = await readView({ history: '1', page: 'channelAnalysis', tab: 'qdfx_dplb', from: '2026-10-03', to: '2026-10-03' });
+  assert.equal(result.total, 0);
+  assert.deepEqual(await readState('wanted', []), []);
+  const beforeSeptember = await readView({ history: '1', page: 'channelAnalysis', tab: 'qdfx_dplb', from: '2026-08-01', to: '2026-08-02' });
+  assert.deepEqual(beforeSeptember.range, { from: '2026-09-01', to: '2026-09-01' });
+  assert.deepEqual(await readState('wanted', []), []);
+});
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 const clientPath = join(rootDir, "../public/shared/modules/bound.js");

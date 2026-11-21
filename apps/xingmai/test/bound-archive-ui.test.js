@@ -30,7 +30,7 @@ function fixture() {
     product_area: [record("product_area", [{ province: "浙江", isProv: true, sumLine: true, gmv: "100" }, { province: "浙江", city: "杭州", gmv: "100" }])]
   };
 }
-async function harness({ records = fixture(), failedPage = false, search = "", inventory, products = {}, cardRecords = {}, extras = {}, run } = {}) {
+async function harness({ records = fixture(), failedPage = false, search = "", inventory, products = {}, cardRecords = {}, extras = {}, run, history = {} } = {}) {
   const calls = [];
   const downloads = [], blobs = [];
   class LocalURL extends URL {}
@@ -49,6 +49,8 @@ async function harness({ records = fixture(), failedPage = false, search = "", i
       if (url === "/api/bound/catalog") return reply(publicCatalog());
       if (url === "/api/bound/link") return reply({ phase: "not_logged_in", collection: { batchEnabled: false } });
       if (url === "/api/bound/progress") return reply({ items: [] });
+      if (url === '/api/bound/coverage') return reply({ reports: history.coverage || [] });
+      if (url.startsWith('/api/bound/view?') && history.view) return reply(history.view(new URL(url, 'http://localhost').searchParams));
       if (url.startsWith("/api/bound/collect/probe")) return reply({ target: { ...scope, metric: "广告花费" }, targets: [] });
       if (url === "/api/bound/shop-day") return reply(manifest);
       if (url.startsWith("/api/bound/shop-day/report?")) {
@@ -76,6 +78,46 @@ async function harness({ records = fixture(), failedPage = false, search = "", i
   await settle();
   return { root, calls, click, change, blobs, downloads };
 }
+
+function historyFixture() {
+  return {
+    coverage: [{ id: 'qdfx_dplb', dim: 'all', ready: ['2026-08-31', '2026-09-01', '2026-11-18'] }],
+    view: p => ({ ok: true, page: { id: p.get('page'), label: '渠道详情', ops: ['date', 'shop', 'search', 'export'] },
+      tab: { id: 'qdfx_dplb', label: '店铺列表' }, tabs: [{ id: 'qdfx_dplb', label: '店铺列表' }],
+      range: { from: p.get('from'), to: p.get('to') }, dim: 'all', daysType: '1', shops: [scope.shopName],
+      coverage: { status: 'ready' }, cards: [], columns: [{ key: 'name', label: '店铺', on: true }, { key: 'payAmount', label: '支付金额', numeric: true, on: true }],
+      rows: [{ key: 'historical-row', name: scope.shopName, shop: scope.shopName, metrics: { payAmount: 12345 }, fields: [] }],
+      total: 1, pageNo: Number(p.get('pageNo')), pageSize: 50, shopRows: [], allSum: null, pageSum: null })
+  };
+}
+
+test('历史数据入口绕开固定单店档案，按最近有记录日期读取，筛选后可切回', async () => {
+  const h = await harness({ history: historyFixture() });
+  await h.click({ 'data-act': 'data-source', 'data-source': 'history' });
+  assert.match(h.root.innerHTML, /12,345/);
+  assert.match(h.root.innerHTML, /本表有 2 天记录/);
+  assert.doesNotMatch(h.root.innerHTML, /2026-08-31|23,181/);
+  let view = h.calls.filter(c => c.url.startsWith('/api/bound/view?')).at(-1);
+  assert.match(view.url, /history=1/); assert.match(view.url, /from=2026-11-18/);
+  await h.change('shop', scope.shopName);
+  await h.change('q', 'RASW');
+  view = h.calls.filter(c => c.url.startsWith('/api/bound/view?')).at(-1);
+  assert.equal(new URL(view.url, 'http://localhost').searchParams.get('q'), 'RASW');
+  assert.equal(new URL(view.url, 'http://localhost').searchParams.get('shop'), scope.shopName);
+  await h.click({ 'data-act': 'data-source', 'data-source': 'archive' });
+  assert.match(h.root.innerHTML, /23,181/);
+  assert.match(h.root.innerHTML, /2026-10-03/);
+  assert.equal(h.calls.some(c => c.options.method === 'POST'), false);
+});
+
+test('历史数据直达链接不加载单店档案，日期选择不早于九月', async () => {
+  const h = await harness({ search: '?source=history', history: historyFixture() });
+  assert.match(h.root.innerHTML, /12,345/);
+  assert.equal(h.calls.some(c => c.url.startsWith('/api/bound/shop-day')), false);
+  await h.change('pick-date', '2026-08-01');
+  const view = h.calls.filter(c => c.url.startsWith('/api/bound/view?')).at(-1);
+  assert.equal(new URL(view.url, 'http://localhost').searchParams.get('from'), '2026-09-01');
+});
 
 function periodFixture() {
   const records = fixture();
