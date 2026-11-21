@@ -3401,16 +3401,17 @@
   function salesTrendDelta(trend) {
     if (!trend || trend.status === "unavailable") return { text: "对比暂不可用", cls: "" };
     if (trend.status === "no-current") return { text: "暂无今日数据", cls: "" };
-    if (trend.status === "no-baseline") return { text: "暂无同期数据", cls: "" };
+    if (trend.status === "no-platform-compare") return { text: "京麦未返回对比", cls: "" };
+    if (trend.status === "invalid-platform-compare") return { text: "京麦对比异常", cls: "" };
     if (trend.status === "zero-baseline") return { text: "昨日同期为0", cls: "" };
     var n = asNum(trend.change);
-    if (n == null) return { text: "暂无同期数据", cls: "" };
+    if (n == null) return { text: "京麦未返回对比", cls: "" };
     return { text: (n > 0 ? "↑" : n < 0 ? "↓" : "") + Math.abs(n).toFixed(2) + "%", cls: n > 0 ? " is-up" : n < 0 ? " is-down" : "" };
   }
   function live2SalesCellHtml(row) {
     var delta = salesTrendDelta(row.salesTrend);
     return '<td class="xm-hm-num"><button type="button" class="xm-hm-shop-sales" data-shop-sales="' + escapeHtml(row.shop) +
-      '" aria-label="' + escapeHtml(row.shop + "，实时成交金额 " + (row.liveAmount == null ? "—" : row.liveAmount) + "，较昨日同期 " + delta.text + "，查看趋势") +
+      '" aria-label="' + escapeHtml(row.shop + "，实时成交金额 " + (row.liveAmount == null ? "—" : row.liveAmount) + "，京麦较昨日 " + delta.text + "，查看趋势") +
       '"><span>' + escapeHtml(row.liveAmount == null ? "—" : row.liveAmount) + '</span><span class="xm-hm-sales-delta' + delta.cls + '">' + delta.text + '</span></button></td>';
   }
   function salesTrendMoney(value) {
@@ -3445,11 +3446,12 @@
   }
   function shopSalesTipHtml(row) {
     var trend = row.salesTrend || {}, delta = salesTrendDelta(row.salesTrend);
-    var note = trend.status === "unavailable" || !row.salesTrend ? "历史数据暂不可用，请稍后刷新" : trend.status === "no-current" ? "暂无今日有效成交数据" : trend.status === "no-baseline" ? "昨日相同时段暂无采集记录" : "较昨日同期（" + salesTrendTime(trend.yesterdaySecond) + "）";
+    var note = trend.status === "unavailable" || !row.salesTrend ? "对比数据暂不可用，请稍后刷新" : trend.status === "no-current" ? "暂无今日有效成交数据" : trend.status === "no-platform-compare" ? "京麦本次未提供涨跌幅" : trend.status === "invalid-platform-compare" ? "京麦本次对比数据异常" : trend.status === "rate-only" ? "京麦较昨日；下降100%无法反算昨日金额" : "京麦较昨日";
+    var basis = trend.historyUnavailable ? "历史走势暂不可用，当前对比仍取京麦" : "蓝线按各次京麦涨跌幅反算，未采集时段不补零";
     return '<div class="xm-hm-sales-tip-head"><strong>' + escapeHtml(row.shop) + '</strong><div class="xm-hm-sales-legend"><span><i></i>昨天</span><span><i></i>今天</span></div></div>' +
       '<div class="xm-hm-sales-caption">实时成交金额 · 今日 ' + salesTrendTime(trend.comparedSecond) + '</div><div class="xm-hm-sales-total">' + salesTrendMoney(trend.todayAmount) + '</div>' +
-      '<div class="xm-hm-sales-baseline">昨日同期 ' + salesTrendMoney(trend.yesterdayAmount) + '</div><div class="xm-hm-sales-note"><span class="xm-hm-sales-delta' + delta.cls + '">' + delta.text + '</span><span>' + note + '</span></div>' +
-      salesTrendSvg(trend) + '<div class="xm-hm-sales-foot">' + escapeHtml(trend.todayDate || "") + ' / ' + escapeHtml(trend.yesterdayDate || "") + ' · 按实际采集记录，长时间缺数据处断开</div>';
+      '<div class="xm-hm-sales-baseline">昨日同期' + (trend.yesterdayEstimated ? '（反算）≈ ' : ' ') + salesTrendMoney(trend.yesterdayAmount) + '</div><div class="xm-hm-sales-note"><span class="xm-hm-sales-delta' + delta.cls + '">' + delta.text + '</span><span>' + note + '</span></div>' +
+      salesTrendSvg(trend) + '<div class="xm-hm-sales-foot">' + escapeHtml(trend.todayDate || "") + ' / ' + escapeHtml(trend.yesterdayDate || "") + '<br>' + basis + '</div>';
   }
   function hideShopSalesTip() {
     window.clearTimeout(shopSalesTipTimer);

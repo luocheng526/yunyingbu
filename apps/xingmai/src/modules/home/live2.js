@@ -64,6 +64,12 @@ export function live2RecordFromMetrics(shop, metrics, capturedAt) {
   const row = blankLive2Record(shop);
   const numbers = live2Metrics(metrics, metrics);
   row.liveAmount = numbers.liveAmount;
+  // Keep the comparison from the same Jingmai reading as the displayed amount.
+  // dealRate is already normalized to percentage points by the Jingmai parser.
+  row.dealRate = numbers.liveAmount == null ? null : asNumber(metrics.dealRate);
+  row.yesterdayAmount = numbers.liveAmount == null ? null : asNumber(metrics.yesterdayAmount);
+  row.dealRateLabel = numbers.liveAmount == null ? "" : String(metrics.dealRateLabel || "");
+  row.platformUpdatedAt = numbers.liveAmount == null ? "" : String(metrics.platformUpdatedAt || "");
   row.paidAmount = numbers.paidAmount;
   row.roi = numbers.roi;
   row.paidDeal = numbers.paidDeal;

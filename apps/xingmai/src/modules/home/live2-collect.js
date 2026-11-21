@@ -468,6 +468,10 @@ export function createLive2Collector(deps = {}) {
   function rowFromSample(shop, sample) {
     const row = live2RecordFromMetrics(shop, {
       dealAmount: sample.dealAmount,
+      dealRate: sample.dealRate,
+      yesterdayAmount: sample.yesterdayAmount,
+      dealRateLabel: sample.dealRateLabel,
+      platformUpdatedAt: sample.platformUpdatedAt,
       paidAmount: sample.paidAmount,
       paidRoi: sample.paidRoi,
       paidDeal: sample.paidDeal
