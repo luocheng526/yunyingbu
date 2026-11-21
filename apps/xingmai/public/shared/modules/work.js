@@ -1753,7 +1753,7 @@
    return;
   }
   var script = document.createElement("script");
-  script.src = "/shared/modules/work-tasks.js?v=task5-paste";
+  script.src = "/shared/modules/work-tasks.js?v=task6-inline-images";
   script.setAttribute("data-work-tasks", "");
   script.onload = run;
   script.onerror = function () {

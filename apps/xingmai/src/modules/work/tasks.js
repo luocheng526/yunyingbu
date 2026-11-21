@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { dbMode, query } from "../profile/auth.js";
 import { dingUserOf, sendTaskNotice, workLink } from "./dingtalk.js";
 import { matchPerson, orgPeople } from "./store.js";
+import { parseRichContent, bindRichFiles, richPlainText } from "./rich-content.js";
 
 const tasks = new Map();
 const fileBytes = new Map();
@@ -154,6 +155,8 @@ function view(task) {
     title: task.title,
     description: task.description,
     criteria: task.criteria,
+    description_doc: task.description_doc || null,
+    criteria_doc: task.criteria_doc || null,
     publisher: task.publisher,
     assignee: task.assignee,
     reviewer: task.reviewer,
@@ -320,6 +323,14 @@ export async function publishTask(user, input) {
     if (!packed.ok) {
       return packed;
     }
+    let descriptionDoc;
+    let criteriaDoc;
+    try {
+      descriptionDoc = parseRichContent(input?.description_doc, packed.files, 4000);
+      criteriaDoc = parseRichContent(input?.criteria_doc, packed.files, 2000);
+    } catch (err) {
+      return fail(err.message);
+    }
     const now = shanghaiStamp();
     const eventId = randomUUID();
     const files = packed.files.map((file) => ({ id: randomUUID(), name: file.name, bytes: file.bytes, mime: file.mime, taskId: id }));
@@ -329,8 +340,10 @@ export async function publishTask(user, input) {
     const task = {
       id,
       title,
-      description,
-      criteria,
+      description: richPlainText(descriptionDoc, description),
+      criteria: richPlainText(criteriaDoc, criteria),
+      description_doc: bindRichFiles(descriptionDoc, files),
+      criteria_doc: bindRichFiles(criteriaDoc, files),
       publisher: me.id,
       assignee,
       reviewer,
@@ -339,7 +352,7 @@ export async function publishTask(user, input) {
       status: "待执行",
       revision: 1,
       updated_at: now,
-      files: files.map((file) => ({ id: file.id, name: file.name })),
+      files: files.map((file) => ({ id: file.id, name: file.name, mime: file.mime })),
       events: [
         {
           id: eventId,
@@ -463,5 +476,5 @@ export async function readTaskFile(user, fileId) {
   if (!bytes) {
     return fail("没有这个附件", 404);
   }
-  return { ok: true, name: meta.name, data: Buffer.from(bytes).toString("base64") };
+  return { ok: true, name: meta.name, mime: meta.mime || "application/octet-stream", data: Buffer.from(bytes).toString("base64") };
 }
