@@ -400,7 +400,7 @@ export function createLive2Collector(deps = {}) {
     const attempts = previous && previous.version === phase.sessionVersion ? previous.attempts + 1 : 1;
     loginRetries.set(shop.store, {
       version: phase.sessionVersion, attempts, reason,
-      until: clock() + Math.min(60, 15 * 2 ** (attempts - 1)) * 60 * 1000
+      until: clock() + (error.recoveryDeferred ? 10 : Math.min(60, 15 * 2 ** (attempts - 1))) * 60 * 1000
     });
     phase.loginState = {
       checkedAt: now(), loginSessionVersion: phase.sessionVersion, loginFailures: attempts,
@@ -622,6 +622,7 @@ export function createLive2Collector(deps = {}) {
         loginSessionVersion: phase.sessionVersion, loginRetryAt: clock() + LIVE2_INTERVAL_MS,
         offlineReason: "登录失效，等待下一轮分批恢复" };
       recoverySlots--;
+      phase.recoverySlot = true;
     }
     const claimed = await claimOwner(shop.store, COLLECTOR_OWNER_HOME);
     if (!claimed || !claimed.ok || inactive(shop, phase)) return null;
@@ -671,6 +672,14 @@ export function createLive2Collector(deps = {}) {
             store: shop.store, shopId: shop.shopId, merchantId: shop.merchantId,
             ambiguousMerchant: shop.ambiguousMerchant, requireIdentity: true,
             canRecover: () => !inactive(shop, phase),
+            takeReloginSlot: () => {
+              if (inactive(shop, phase)) return false;
+              if (phase.recoverySlot) return true;
+              if (recoverySlots <= 0) return false;
+              recoverySlots--;
+              phase.recoverySlot = true;
+              return true;
+            },
             credentials: base.passwordAttemptedVersion !== phase.sessionVersion && shop.login && shop.password
               ? { loginName: shop.login, password: shop.password } : undefined
           });

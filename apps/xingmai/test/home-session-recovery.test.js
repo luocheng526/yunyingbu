@@ -138,3 +138,24 @@ test("healthy shops run first and expired shops recover in bounded batches witho
   time += 10*60000; order.length=0;
   await c.start(""); await pending; assert.deepEqual(order, ["healthy", "D", "E"]);
 });
+
+test("newly expired sessions also share the per-round password limit", async () => {
+  const names=["A","B","C","D","E"], logins=[];
+  let pending;
+  const c=createLive2Collector({storePath:"", concurrency:3, now:()=>"2026/11/21 09:00:00",
+    loadOrg:async()=>names.map(store=>({store,enabled:true,login:"fixture",password:"fixture"})),
+    listSessions:async()=>names.map(store=>({store,authState:"ok",sessionGen:1,cookies:jar(store)})),
+    listSamples:async()=>[],claimOwner:async()=>({ok:true}),saveSample:async()=>({saved:true}),track:task=>{pending=task;},
+    client:{fetchAccountIdentity:async()=>{throw Object.assign(new Error("expired"),{code:"login"});},
+      recoverBrowserSession:(cookies,signal,hint)=>recoverBrowserSession(cookies,signal,hint,{
+        readDeal:async()=>{throw Object.assign(new Error("登录页"),{code:"login"});},
+        relogin:async(_signal,expected)=>{logins.push(expected.store);throw Object.assign(new Error("需要验证码"),{code:"login",needsHuman:true});}
+      }),fetchHome:async()=>assert.fail("no verified session")}
+  });
+  await c.start("");await pending;
+  assert.equal(logins.length,3);
+  const rows=(await c.board("")).records;
+  assert.equal(rows.filter(r=>r.loginNeedsHuman).length,3);
+  assert.equal(rows.filter(r=>/分批恢复/.test(r.offlineReason)).length,2);
+  assert.ok(rows.every(r=>r.loginExpired));
+});

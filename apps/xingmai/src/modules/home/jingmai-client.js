@@ -1216,12 +1216,15 @@ export async function recoverBrowserSession(cookies, signal, expected = {}, deps
   const relogin = deps.relogin || reloginHomeSession;
   let jar = (cookies || []).map(cookie => ({ ...cookie }));
   // Credentials are only supplied to the normal browser login, never to metrics.
-  const { credentials, ...hint } = expected;
+  const { credentials, takeReloginSlot, ...hint } = expected;
   let deal;
   try {
     deal = await readDeal(jar, signal, { ...hint, requireIdentity: true });
   } catch (error) {
     if (error.code !== "login" || !credentials?.loginName || !credentials?.password || signal?.aborted) throw error;
+    if (takeReloginSlot && !takeReloginSlot()) {
+      throw Object.assign(new Error("登录失效，等待下一轮分批恢复"), { code: "login", recoveryDeferred: true });
+    }
     try {
       jar = await relogin(signal, hint, credentials);
       deal = await readDeal(jar, signal, { ...hint, requireIdentity: true });
