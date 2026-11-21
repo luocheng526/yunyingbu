@@ -24,7 +24,9 @@ export function inspectKeyGraph(data, scope = SHOP_DAY) {
   const keys = columns.map(c => c.columnKey);
   if (keys.some(k => !safeKey(k)) || new Set(keys).size !== keys.length) return { status: "schema_unverified" };
   const cards = metricCells(cardTable.columnData[0]);
-  if (!cards || keys.some(k => !Object.hasOwn(cards, k))) return { status: "schema_unverified" };
+  if (!cards || !keys.some(k => Object.hasOwn(cards, k))) return { status: "schema_unverified" };
+  const available = columns.filter(c => Object.hasOwn(cards, c.columnKey));
+  const unavailableMetrics = columns.filter(c => !Object.hasOwn(cards, c.columnKey));
   const trend = [], dates = new Set();
   for (const row of [...cardTable.columnData, ...trendTable.columnData]) {
     if (row.shopId != null && row.shopId !== "" && String(row.shopId) !== scope.shopId || row.platform && ![scope.platform, "all", "All"].includes(row.platform)) return { status: "scope_mismatch" };
@@ -37,8 +39,8 @@ export function inspectKeyGraph(data, scope = SHOP_DAY) {
   }
   if (!dates.has(scope.date)) return { status: "date_unverified" };
   if (data.some(t => t.progress != null && Number(t.progress) < 100)) return { status: "upstream_pending" };
-  return { status: "received", rows: [Object.fromEntries(keys.map(k => [k, cards[k].value]))],
-    metricColumns: columns, metricCards: cards, metricTrend: trend, columns: keys.length,
+  return { status: "received", rows: [Object.fromEntries(available.map(c => [c.columnKey, cards[c.columnKey].value]))],
+    metricColumns: available, unavailableMetrics, metricCards: cards, metricTrend: trend, columns: available.length,
     matchedRows: 1, returnedRows: trend.length, total: null, pageVerified: false };
 }
 

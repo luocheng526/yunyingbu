@@ -162,6 +162,11 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500, 
     busy = true;
     try {
       const previous = await read(d.name);
+      // Revalidate an archived key-card response after a parser upgrade; no upstream call is needed.
+      if (retryFailures && previous?.status === "schema_unverified" && input.reportId === "key_graph" && previous.response) {
+        const parsed = inspectDayResponse(input.reportId, previous.response, previous.goodsId, input, scope);
+        if (good.has(parsed.status)) return { ok: true, cached: true, record: await save(d.name, { ...previous, ...parsed, revalidatedAt: new Date().toISOString() }) };
+      }
       // Repeated actions and process restarts reuse success; failures require review, not hidden retries.
       if (previous && (!retryFailures || good.has(previous.status) || !["timeout", "request_failed", "upstream_pending", "collector_busy"].includes(previous.status) || (previous.attempts || 1) >= 3)) return { ok: good.has(previous.status), cached: true, record: previous };
       if ((input.page || 1) > 1) {

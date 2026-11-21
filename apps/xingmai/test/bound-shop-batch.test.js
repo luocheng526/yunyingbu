@@ -115,3 +115,13 @@ test("传输层仅接受本次账号可见店铺，拒绝客户端伪造店铺�
     assert.equal(calls, 2);
   } finally { setBoundFetch(); resetBoundStore(); }
 });
+
+test("跨平台未返回的指标明确标为不可用，不伪造为零或误判整个指标表失败", () => {
+  const metadata = [{ columnKey: "gmv", columnName: "支付金额" }, { columnKey: "hkcb", columnName: "获客成本" }];
+  const data = [{ columnInfo: metadata, columnData: [{ cells: [{ column: "gmv", value: "0" }] }] }, { columnInfo: metadata, columnData: [{ date: second.date, cells: [{ column: "gmv", value: "0" }] }] }];
+  const parsed = inspectDayResponse("key_graph", success(data), null, {}, second);
+  assert.equal(parsed.status, "received");
+  assert.equal(parsed.metricColumns.length, 1);
+  assert.equal(parsed.unavailableMetrics[0].columnKey, "hkcb");
+  assert.equal(parsed.metricCards.hkcb, undefined);
+});
