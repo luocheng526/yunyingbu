@@ -2,7 +2,7 @@ import { setTimeout } from "node:timers";
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { SHOP_DAY, DAY_REPORTS, DAY_EXCLUSIONS, shopDayRequest } from "./shop-day-contract.js";
+import { SHOP_DAY, DAY_REPORTS, DAY_EXCLUSIONS, shopDayRequest, validShopDay } from "./shop-day-contract.js";
 import { inspectKeyGraph, inspectPeriodRows } from "./four-page-shapes.js";
 
 const good = new Set(["received", "empty"]);
@@ -10,7 +10,7 @@ const money = value => typeof value === "number" ? value : typeof value === "str
 const digest = value => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const normalizedDate = value => typeof value === "string" ? value.replaceAll("/", "-") : "";
 
-export function inspectDayResponse(reportId, response, goodsId, selectors = {}) {
+export function inspectDayResponse(reportId, response, goodsId, selectors = {}, scope = SHOP_DAY) {
   if (response.blocked) return { status: response.blocked };
   const authBlock = { '-7': 'login_conflict', '9901': 'account_disabled', '1011': 'device_restricted' }[response.payload?.code];
   if (authBlock) return { status: authBlock };
@@ -21,7 +21,7 @@ export function inspectDayResponse(reportId, response, goodsId, selectors = {}) 
   if (!report) return { status: "invalid_scope" };
   const data = response.payload.data;
   if (report.shape === "key_graph") {
-    const parsed = inspectKeyGraph(data);
+    const parsed = inspectKeyGraph(data, scope);
     return { ...parsed, ...(good.has(parsed.status) ? { dataHash: digest(parsed.rows), scopeEvidence: "fixed_shop_request_and_no_contradictory_row_identity" } : {}) };
   }
   if (report.shape === "cards") {
@@ -43,8 +43,8 @@ export function inspectDayResponse(reportId, response, goodsId, selectors = {}) 
   const categoryTotal = row => (["channel_category", "shop_goods_page", "shop_goods_total"].includes(reportId) || report.overview) && row.sumLine === true
     && row.platform === "合计" && (row.shopId == null || row.shopId === "");
   // Explicit contradictory identities invalidate the result, rather than silently filtering other shops.
-  if (allRows.some(row => row.shopId != null && String(row.shopId) !== "" && String(row.shopId) !== SHOP_DAY.shopId
-    || row.platform && ![SHOP_DAY.platform, "All", "all"].includes(row.platform) && !categoryTotal(row)
+  if (allRows.some(row => row.shopId != null && String(row.shopId) !== "" && String(row.shopId) !== scope.shopId
+    || row.platform && ![scope.platform, "All", "all"].includes(row.platform) && !categoryTotal(row)
     || goodsId && row.goodsId != null && String(row.goodsId) !== "" && String(row.goodsId) !== goodsId)) {
     return { status: "scope_mismatch" };
   }
@@ -52,10 +52,10 @@ export function inspectDayResponse(reportId, response, goodsId, selectors = {}) 
   let rows = ["tables", "promotion"].includes(report.shape) ? allRows : tables.at(-1).columnData;
   if (report.shape === "series" || report.shape === "dated_rows" || report.shape === "dated_table") {
     if (report.shape !== "series" && !rows.length) return { status: "empty", rows: [], columns: tables.at(-1).columnInfo.length, total: 0, matchedRows: 0, returnedRows: 0, dataHash: digest([]), pageVerified: false };
-    rows = rows.filter(row => normalizedDate(row.date) === SHOP_DAY.date);
+    rows = rows.filter(row => normalizedDate(row.date) === scope.date);
     if (rows.length !== 1) return { status: "date_unverified", returnedRows: tables.at(-1).columnData.length, matchedRows: rows.length };
-  } else if (rows.some(row => row.date && normalizedDate(row.date) !== SHOP_DAY.date)) return { status: "date_unverified" };
-  const period = report.shape === "period" ? inspectPeriodRows(rows, selectors.trendDays) : {};
+  } else if (rows.some(row => row.date && normalizedDate(row.date) !== scope.date)) return { status: "date_unverified" };
+  const period = report.shape === "period" ? inspectPeriodRows(rows, selectors.trendDays, scope) : {};
   if (period.status) return period;
   const total = data?.total == null ? null : Number(data.total);
   return { status: rows.length ? "received" : "empty", returnedRows: tables.at(-1).columnData.length,
@@ -66,22 +66,24 @@ export function inspectDayResponse(reportId, response, goodsId, selectors = {}) 
     ...(reportId === "channel_goods" ? { coverage: "returned_view_only", canRepresentShopTotal: false } : {}) };
 }
 
-export function chooseSoldProduct(record) {
+export function chooseSoldProduct(record, scope = SHOP_DAY) {
   if (record?.reportId !== "channel_goods" || !good.has(record.status)) return null;
-  const candidates = record.rows.filter(row => !row.sumLine && String(row.shopId) === SHOP_DAY.shopId
-    && row.platform === SHOP_DAY.platform && /^[A-Za-z0-9_-]{1,80}$/.test(String(row.goodsId || "")) && money(row.gmv) > 0);
+  const candidates = record.rows.filter(row => !row.sumLine && String(row.shopId) === scope.shopId
+    && row.platform === scope.platform && /^[A-Za-z0-9_-]{1,80}$/.test(String(row.goodsId || "")) && money(row.gmv) > 0);
   candidates.sort((a, b) => money(b.gmv) - money(a.gmv) || String(a.goodsId).localeCompare(String(b.goodsId)));
   const row = candidates[0];
   return row ? { goodsId: String(row.goodsId), goodsName: row.goodsName || "", platform: row.platform,
-    shopId: String(row.shopId), date: SHOP_DAY.date, gmv: row.gmv, sales: row.sales ?? null,
+    shopId: String(row.shopId), date: scope.date, gmv: row.gmv, sales: row.sales ?? null,
     evidence: { reportId: record.reportId, requestHash: record.requestHash, dataHash: record.dataHash },
     reason: "在当日商品表中选支付金额最高且店铺身份明确的一件商品" } : null;
 }
 
 // Local disk archive only. Never writes the legacy bound_sheet key lacking shop identity.
-export function createShopDayCollector({ directory, request, intervalMs = 1500 }) {
+export function createShopDayCollector({ directory, request, intervalMs = 1500, scope = SHOP_DAY, retryFailures = false, maxPages = 10 }) {
+  if (!validShopDay(scope)) throw new Error("invalid_scope");
+  scope = Object.freeze({ ...scope });
   if (!directory || typeof request !== "function") throw new Error("单店采集配置无效");
-  const dir = join(directory, SHOP_DAY.platform, SHOP_DAY.shopId, SHOP_DAY.date);
+  const dir = join(directory, scope.platform, scope.shopId, scope.date);
   let busy = false;
   let lastRequest = 0;
   async function read(name) {
@@ -100,8 +102,8 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500 }
   async function inventory() {
     const items = [];
     let expected = null;
-    for (let page = 1; page <= 10; page++) {
-      const spec = shopDayRequest({ reportId: "shop_goods_page", page });
+    for (let page = 1; page <= maxPages; page++) {
+      const spec = shopDayRequest({ reportId: "shop_goods_page", page }, scope, maxPages);
       const record = await read(`shop_goods_page-shop-${page}-${digest(spec).slice(0, 12)}.json`);
       if (!record || !good.has(record.status)) return { complete: false, items: [] };
       expected ??= record.total;
@@ -110,7 +112,7 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500 }
       if (!record.nextPage) break;
     }
     const ids = new Set(items.map(row => String(row.goodsId)));
-    if (expected !== items.length || ids.size !== expected || items.some(row => !row.goodsId || String(row.shopId) !== SHOP_DAY.shopId || row.platform !== SHOP_DAY.platform)) return { complete: false, items: [] };
+    if (expected !== items.length || ids.size !== expected || items.some(row => !row.goodsId || String(row.shopId) !== scope.shopId || row.platform !== scope.platform)) return { complete: false, items: [] };
     return { complete: true, items: items.map(row => ({ goodsId: String(row.goodsId), spuid: String(row.spuid || ""), goodsName: row.goodsName || "", gmv: row.gmv, sales: row.sales, categoryPath: row.catePathId || "" })) };
   }
   async function describe(input) {
@@ -142,7 +144,7 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500 }
         if (!groups.some(g => g.promoteKey === input.promoteKey && g.extensibleTableWrapper?.columnData?.some(r => !r.sumLine && String(r.planId) === input.planId))) return null;
       }
     }
-    const spec = shopDayRequest(task);
+    const spec = shopDayRequest(task, scope, maxPages);
     if (!spec) return null;
     const requestHash = digest(spec);
     const name = `${report.id}-${task.goodsId || "shop"}-${input.page || 1}-${requestHash.slice(0, 12)}.json`;
@@ -161,17 +163,17 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500 }
     try {
       const previous = await read(d.name);
       // Repeated actions and process restarts reuse success; failures require review, not hidden retries.
-      if (previous) return { ok: good.has(previous.status), cached: true, record: previous };
+      if (previous && (!retryFailures || good.has(previous.status) || !["timeout", "request_failed", "upstream_pending", "collector_busy"].includes(previous.status) || (previous.attempts || 1) >= 3)) return { ok: good.has(previous.status), cached: true, record: previous };
       if ((input.page || 1) > 1) {
         const before = await getRecord({ ...input, page: input.page - 1 });
         if (!before || before.nextPage !== input.page) return { ok: false, statusCode: 400, reason: "invalid_page" };
       }
       const wait = Math.max(0, lastRequest + intervalMs - Date.now());
       if (wait) await new Promise(resolve => setTimeout(resolve, wait));
-      const record = { id: randomUUID(), reportId: input.reportId, label: d.report.label, scope: SHOP_DAY,
+      const record = { id: randomUUID(), reportId: input.reportId, label: d.report.label, scope,
         goodsId: d.task.goodsId || null, ...(input.cardId ? { cardId: input.cardId } : {}), ...(input.categoryPath ? { categoryPath: input.categoryPath } : {}), ...(input.planId ? { planId: input.planId, promoteKey: input.promoteKey } : {}), page: input.page || 1, request: d.spec, requestHash: d.requestHash,
         ...(input.columnKey ? { columnKey: input.columnKey } : {}), ...(input.trendDays ? { trendDays: input.trendDays } : {}),
-        startedAt: new Date().toISOString(), requestCount: 0 };
+        startedAt: new Date().toISOString(), requestCount: 0, attempts: (previous?.attempts || 0) + 1 };
       try {
         lastRequest = Date.now();
         const response = await request(d.task, () => { record.requestCount += 1; });
@@ -179,7 +181,7 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500 }
         record.response = { httpStatus: response.httpStatus ?? response.status ?? null,
           payload: response.payload ?? null, blocked: response.blocked ?? null,
           relogin: response.relogin ?? null };
-        Object.assign(record, inspectDayResponse(input.reportId, response, record.goodsId, input));
+        Object.assign(record, inspectDayResponse(input.reportId, response, record.goodsId, input, scope));
         // Missing/expired authentication is a resumable gate, not a durable empty result.
         if (["server_login_required", "login_expired", "login_busy", "session_changed", "login_conflict", "account_disabled", "device_restricted"].includes(record.status)) {
           record.finishedAt = new Date().toISOString();
@@ -197,7 +199,7 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500 }
           else if (prior && prior.total !== record.total) record.status = "pagination_total_changed";
           else if (record.accumulatedRows > record.total) record.status = "pagination_count_mismatch";
           else if (record.accumulatedRows < record.total) {
-            if (!received || record.page >= 10) record.status = "pagination_incomplete";
+            if (!received || record.page >= maxPages) record.status = "pagination_incomplete";
             else record.nextPage = record.page + 1;
           }
           if ((input.reportId === "shop_goods_page" || d.report.identity) && good.has(record.status)) {
@@ -208,7 +210,7 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500 }
             for (const r of pages) for (const row of r.rows.filter(row => !row.sumLine)) {
               const identity = row[d.report.identity || "goodsId"];
               const key = JSON.stringify([row.platform, String(row.shopId), String(identity)]);
-              if (row.platform !== SHOP_DAY.platform || String(row.shopId) !== SHOP_DAY.shopId || !identity) record.status = "item_identity_unverified";
+              if (row.platform !== scope.platform || String(row.shopId) !== scope.shopId || !identity) record.status = "item_identity_unverified";
               else if (identities.has(key)) record.status = "pagination_duplicate_item";
               identities.add(key);
             }
@@ -228,7 +230,7 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500 }
     if (busy) return { ok: false, statusCode: 409, reason: "collector_busy" };
     const existing = await read("selection.json");
     if (existing) return { ok: true, selected: existing, cached: true };
-    const selected = chooseSoldProduct(await getRecord({ reportId: "channel_goods" }));
+    const selected = chooseSoldProduct(await getRecord({ reportId: "channel_goods" }), scope);
     if (!selected) return { ok: false, statusCode: 409, reason: "no_verified_sold_product" };
     return { ok: true, selected: await save("selection.json", selected) };
   }
@@ -236,7 +238,7 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500 }
     const reports = [];
     for (const report of DAY_REPORTS.filter(r => !r.manual)) {
       const pages = [];
-      for (let page = 1; page <= (report.paged ? 10 : 1); page++) {
+      for (let page = 1; page <= (report.paged ? maxPages : 1); page++) {
         const record = await getRecord({ reportId: report.id, page });
         if (!record) break;
         pages.push({ page, status: record.status, matchedRows: record.matchedRows, returnedRows: record.returnedRows,
@@ -246,7 +248,7 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500 }
       reports.push({ id: report.id, label: report.label, product: !!report.product, requiresSelection: report.requiresSelection || null,
         status: pages.length ? pages.at(-1).nextPage ? "pagination_incomplete" : pages.at(-1).status : "not_collected", pages });
     }
-    return { ok: true, scope: SHOP_DAY, busy, directory: dir, selected: await read("selection.json"), inventory: await inventory(), reports, exclusions: DAY_EXCLUSIONS, run: await runStatus() };
+    return { ok: true, scope, busy, directory: dir, selected: await read("selection.json"), inventory: await inventory(), reports, exclusions: DAY_EXCLUSIONS, run: await runStatus() };
   }
   async function fourPageStatus() {
     const graph = await getRecord({ reportId: "key_graph" });
@@ -259,7 +261,7 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500 }
     const reports = [];
     for (const task of tasks) {
       const pages = [];
-      for (let page = 1; page <= 10; page++) {
+      for (let page = 1; page <= maxPages; page++) {
         const record = await getRecord({ ...task, page });
         if (!record) break;
         pages.push({ page, status: record.status, nextPage: record.nextPage, total: record.total });
@@ -267,7 +269,7 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500 }
       }
       reports.push({ ...task, pages, status: pages.length ? pages.at(-1).nextPage ? "pagination_incomplete" : pages.at(-1).status : "not_collected" });
     }
-    return { ok: true, scope: SHOP_DAY, metrics, reports };
+    return { ok: true, scope, metrics, reports };
   }
   let runActive = false;
   let stopRequested = false;
@@ -294,7 +296,7 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500 }
     const products = stock.items.slice().sort((a, b) => (b.goodsId === selected?.goodsId ? 1 : 0) - (a.goodsId === selected?.goodsId ? 1 : 0));
     const tasks = DAY_REPORTS.filter(r => !r.product && !r.requiresSelection && !r.manual).map(r => ({ reportId: r.id, page: 1 }));
     for (const product of products) for (const report of DAY_REPORTS.filter(r => r.product && !r.manual)) tasks.push({ reportId: report.id, goodsId: product.goodsId, page: 1 });
-    const run = { id: randomUUID(), scope: SHOP_DAY, status: "running", startedAt: new Date().toISOString(), total: tasks.length, done: 0, cached: 0, requests: 0, current: null, errors: [], deferred: DAY_REPORTS.filter(r => r.requiresSelection).map(r => ({ reportId: r.id, reason: "requires_selected_category_id" })) };
+    const run = { id: randomUUID(), scope, status: "running", startedAt: new Date().toISOString(), total: tasks.length, done: 0, cached: 0, requests: 0, current: null, errors: [], deferred: DAY_REPORTS.filter(r => r.requiresSelection).map(r => ({ reportId: r.id, reason: "requires_selected_category_id" })) };
     runActive = true;
     stopRequested = false;
     await save("collection-run.json", run);

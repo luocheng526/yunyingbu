@@ -4,10 +4,10 @@ import { join } from "node:path";
 import { SHOP_DAY } from "./shop-day-contract.js";
 
 // One explicit, resumable shop/day run. Cached successes are never recollected.
-export function createFourPageJob({ collector, directory }) {
+export function createFourPageJob({ collector, directory, scope = SHOP_DAY }) {
   let active = false, stop = false;
-  let currentRun = null;
-  const dir = join(directory, SHOP_DAY.platform, SHOP_DAY.shopId, SHOP_DAY.date);
+  let currentRun = null, settled = Promise.resolve();
+  const dir = join(directory, scope.platform, scope.shopId, scope.date);
   const path = join(dir, "four-page-run.json");
   async function save(run) {
     await mkdir(dir, { recursive: true });
@@ -31,10 +31,10 @@ export function createFourPageJob({ collector, directory }) {
     stop = false;
     const tasks = ["channel_operating", "shop_goods_page", "shop_goods_total", "shop_spu_page", "shop_spu_total", "shop_cards_sku", "shop_cards_spu", "channel_category", "channel_labels", "channel_label_sum", "channel_area", "channel_hour", "channel_shop_table", "key_graph"].map(reportId => ({ reportId }));
     for (const reportId of ["shop_goods_period", "shop_spu_period"]) for (const trendDays of [7, 15]) tasks.push({ reportId, trendDays });
-    const run = { id: randomUUID(), scope: SHOP_DAY, status: "running", done: 0, total: tasks.length, cached: 0, requests: 0, errors: [], startedAt: new Date().toISOString() };
+    const run = { id: randomUUID(), scope, status: "running", done: 0, total: tasks.length, cached: 0, requests: 0, errors: [], startedAt: new Date().toISOString() };
     try { await save(run); } catch (error) { active = false; throw error; }
     currentRun = run;
-    void (async () => {
+    settled = (async () => {
       try {
         for (let index = 0; index < tasks.length; index++) {
           if (stop) { run.status = "stopped"; break; }
@@ -62,5 +62,5 @@ export function createFourPageJob({ collector, directory }) {
     })().catch(() => { active = false; });
     return { ok: true, run: { ...run } };
   }
-  return { start, status, stop: () => { stop = true; return { ok: true, stopping: active }; } };
+  return { start, status, busy: () => active, wait: async () => { await settled; return status(); }, stop: () => { stop = true; return { ok: true, stopping: active }; } };
 }

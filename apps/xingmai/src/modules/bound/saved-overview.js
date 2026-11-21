@@ -53,7 +53,7 @@ export function overviewRows(payload) {
   visit(payload);
   return { rows, columns, groups };
 }
-export function createSavedOverview({ readSheets = listSheets } = {}) {
+export function createSavedOverview({ readSheets = listSheets, readScopes = async () => [], readArchived = async () => null } = {}) {
   return async function read(query = {}) {
     const from = String(query.from || ''), to = String(query.to || from);
     if (!validDay(from) || !validDay(to) || from < '2026-09-01' || to < from || Date.parse(to) - Date.parse(from) > 366 * 86400000) return { ok: false, statusCode: 400, reason: 'invalid_range' };
@@ -94,9 +94,24 @@ export function createSavedOverview({ readSheets = listSheets } = {}) {
     const periodStart = new Date(Math.max(Date.parse('2026-09-01'), Date.parse(to) - 14 * 86400000)).toISOString().slice(0, 10);
     const dailySheets = from === to ? await readSheets({ reportId: 'qdfx_dplb', dim: 'all', from: periodStart, to }) : [];
     const periodRows = unambiguous(dailySheets.filter(s => s.status === 'done' && s.dim === 'all' && s.pageNo > 0 && s.startOn === s.endOn && validDay(s.startOn) && s.startOn >= periodStart && s.endOn <= to).flatMap(s => overviewRows(s.payload).rows.filter(r => day(r.date) === s.startOn && !r.sumLine && /^[A-Z]{2,8}$/.test(r.platform || '') && /^\d{1,24}$/.test(String(r.shopId)))), r => [r.platform, r.shopId, day(r.date)].join(':'));
+    const shopReport = report('qdfx_dplb', 'saved_shops', 'shop', SHOP_TABLE_COLUMNS);
+    const combined = new Map(shopReport.rows.map(row => [row.platform + ':' + row.shopId, row]));
+    let archiveCount = 0;
+    if (from === to) for (const item of (await readScopes()).filter(s => s.date === to)) {
+      const archived = await readArchived(item, { reportId: 'channel_shop_table' });
+      if (archived?.status !== 'received') continue;
+      for (const row of archived.rows.filter(r => !r.sumLine && r.platform === item.platform && String(r.shopId) === item.shopId)) {
+        combined.set(item.platform + ':' + item.shopId, row); archiveCount++;
+      }
+    }
+    if (archiveCount) {
+      shopReport.rows = [...combined.values()]; shopReport.status = 'received';
+      shopReport.source = { ...shopReport.source, kind: 'saved_data', archivedShops: archiveCount, note: '已完成补采的店铺使用新档案，其余保留历史采集；渠道合计仍取独立汇总接口原值' };
+      shopReport.response.payload.data.columnData = shopReport.rows;
+    }
     return { ok: true, scope, records: {
       saved_channels: report('qdzl_lb', 'saved_channels', 'channel', CHANNEL_TABLE_COLUMNS),
-      saved_shops: report('qdfx_dplb', 'saved_shops', 'shop', SHOP_TABLE_COLUMNS),
+      saved_shops: shopReport,
       saved_groups: report('qdzl_fz', 'saved_groups', 'group'),
       saved_operating: report('qdzl_jy', 'saved_operating', 'operating'),
       saved_category: report('qdzl_pl', 'saved_category', 'category'),

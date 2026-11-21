@@ -83,8 +83,8 @@ export function createPasswordAuth({ readSession, saveSession, request, allowUse
         if (input.autoRelogin && (identity.companyId || allowUserOnlyIdentity())) {
           const identityScope = identity.companyId ? "user_and_company" : "user_and_fixed_shop";
           credentials = { userName: input.userName.trim(), password: input.password, autoRelogin: true, identityScope };
-          current.message += "自动重登已就绪，仅用于当前固定店铺试采。";
-          if (!identity.companyId) current.message += "旧站未返回企业标识，将严格核对同一用户及固定店铺。";
+          current.message += "自动重登已就绪，仅用于已授权的采集任务。";
+          if (!identity.companyId) current.message += "旧站未返回企业标识，将严格核对同一用户及其可见店铺。";
         } else if (input.autoRelogin) {
           current.message += "旧站未返回完整用户和企业标识，自动重登暂不可用。";
         }

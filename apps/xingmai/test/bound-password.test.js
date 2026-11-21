@@ -91,7 +91,7 @@ test("异地登录和账号禁用不重登；重登后再次过期也立即停�
   }
 });
 
-test("关闭自动重登不缓存密码；缺企业标识仅启用固定店铺的用户校验", async () => {
+test("关闭自动重登不缓存密码；缺企业标识仍核验同一用户及可见店铺", async () => {
   const calls = setup(() => json({ code: -1 }));
   await loginWithPassword({ ...credentials, autoRelogin: false });
   await runSingleProbe(input);
@@ -106,7 +106,7 @@ test("关闭自动重登不缓存密码；缺企业标识仅启用固定店铺�
   assert.equal(result.ok, true);
   assert.equal(result.passwordAuth.autoReloginReady, true);
   assert.equal(result.passwordAuth.identityScope, "user_and_fixed_shop");
-  assert.match(result.message, /固定店铺/);
+  assert.match(result.message, /同一用户及其可见店铺/);
 });
 
 test("缺企业标识时仅重登同一用户，传输层也拒绝更换店铺或扩大日期", async () => {

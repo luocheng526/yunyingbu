@@ -47,11 +47,19 @@ export const DAY_EXCLUSIONS = Object.freeze([
   { label: "商品跨渠道及库存", status: "outside_day_scope", reason: "跨店或当前库存口径不等于本店当日数据" }
 ]);
 
-export function shopDayRequest(input) {
+export function validShopDay(scope) {
+  return scope && /^[A-Z]{2,8}$/.test(scope.platform || "") && /^\d{1,24}$/.test(scope.shopId || "")
+    && typeof scope.shopId === "string" && /^\d{4}-\d{2}-\d{2}$/.test(scope.date || "")
+    && Number.isFinite(Date.parse(scope.date)) && new Date(scope.date).toISOString().slice(0, 10) === scope.date
+    && scope.date >= "2026-09-01";
+}
+
+export function shopDayRequest(input, scope = SHOP_DAY, maxPages = 10) {
+  if (!validShopDay(scope)) return null;
   if (!input || Object.keys(input).some(key => !["reportId", "page", "goodsId", "cardId", "categoryPath", "promoteKeys", "planId", "promoteKey", "columnKey", "trendDays"].includes(key))) return null;
   const report = DAY_REPORTS.find(item => item.id === input.reportId);
   const page = input.page ?? 1;
-  if (!report || !Number.isInteger(page) || page < 1 || page > 10 || (!report.paged && page !== 1)) return null;
+  if (!report || !Number.isInteger(page) || page < 1 || page > maxPages || (!report.paged && page !== 1)) return null;
   if (report.metric ? typeof input.columnKey !== "string" || !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(input.columnKey) : input.columnKey !== undefined) return null;
   if (report.shape === "period" ? ![7, 15].includes(input.trendDays) : input.trendDays !== undefined) return null;
   if (report.product ? !/^[A-Za-z0-9_-]{1,80}$/.test(input.goodsId || "") : input.goodsId !== undefined) return null;
@@ -63,7 +71,7 @@ export function shopDayRequest(input) {
   if (report.id === "product_promotion_plan") {
     if (typeof input.planId !== "string" || !/^\d{1,30}$/.test(input.planId) || typeof input.promoteKey !== "string" || !/^[A-Za-z0-9_]{1,60}$/.test(input.promoteKey) || input.promoteKey === "wxd") return null;
   } else if (input.planId !== undefined || input.promoteKey !== undefined) return null;
-  const { platform, shopId, date } = SHOP_DAY;
+  const { platform, shopId, date } = scope;
   let body = { platform, shopId, startDate: date, endDate: date, daysType: "1" };
   if (report.id.startsWith("shop_goods_") || report.overview) body = {
     startDate: date, endDate: date, daysType: "1", shopId: "",

@@ -19,6 +19,9 @@
     probeDate: "",
     probeBusy: false,
     passwordBusy: false,
+    batchRun: null,
+    batchBusy: false,
+    batchError: "",
     loginEditing: false,
     admin: false,
     error: "",
@@ -2198,6 +2201,17 @@
     return '<section class="bd-block"><h2 class="bd-block-title">单店试采</h2><div class="bd-tools">' + tasks + '</div><p>' + esc(target.shopName) + " · " + esc(target.date) + " · " + esc(target.metric) + '</p><p class="bd-status">' + baseline + '每次只请求这一家店的数据，并核对指定日期行。</p><div class="bd-tools"><button type="button" data-act="probe"' + (busy ? ' disabled' : '') + '>' + (busy ? "试采中…" : "试采一次") + '</button></div>' + result + (last ? '<p role="status">' + esc(last.message) + '</p><p class="bd-status">请求次数：' + esc(last.requestCount) + " · " + esc(last.finishedAt) + "</p>" : "") + '</section>';
   }
 
+  function renderShopBatch() {
+    if (!state.localArchive || state.localArchive.runtime !== 'server') return '';
+    var run = state.batchRun, busy = state.batchBusy || run && run.status === 'running';
+    var names = { running: '采集中', queued: '等待采集', paused: '已暂停', interrupted: '服务重启后待续采', blocked: '已暂停，需处理异常', complete: '已完成', complete_with_errors: '本轮结束，部分店铺待处理', failed: '待处理' };
+    var reasons = { server_login_required: '请先登录旧站账号', login_expired: '登录已过期', login_conflict: '账号在其他位置登录', identity_changed: '登录账号发生变化', shop_list_unverified: '店铺列表结构待核验', shop_discovery_failed: '未取得旧站店铺列表', collector_busy: '已有采集任务运行', permission_denied: '接口权限不足', upstream_unavailable: '旧站接口连续异常', schema_unverified: '返回字段待核验', date_unverified: '日期待核验', timeout: '接口超时', request_failed: '接口请求失败' };
+    var rows = run ? run.shops.map(function (item) {
+      return '<tr><td>' + esc(item.scope.shopName) + '</td><td>' + esc(item.scope.platform) + '</td><td>' + esc(names[item.status] || item.status) + '</td><td>' + esc(item.run ? item.run.done + '/' + item.run.total : '—') + '</td><td>' + esc(reasons[item.reason] || item.reason || '') + '</td></tr>';
+    }).join('') : '';
+    return '<section class="bd-block"><h2>全店四页采集</h2>' + (state.batchError ? '<p role="alert">' + esc(state.batchError) + '</p>' : '') + '<p>当前账号全部可见店铺 · 2026-10-03</p><p>逐店采集渠道总览、渠道详情、关键指标分析和商品总览，已有成功结果直接复用。</p><p role="status">' + esc(run ? (names[run.status] || run.status) + ' · 完成 ' + run.done + '/' + run.total + ' 家 · 待处理 ' + run.failed + ' 家 · 请求 ' + run.requests + ' 次 · 复用 ' + run.cached + ' 项' : '尚未建立全店任务') + '</p>' + (run && run.current ? '<p>当前店铺：' + esc(run.current.shopName) + (run.currentRun ? ' · ' + esc(run.currentRun.done + '/' + run.currentRun.total) + ' 项' : '') + '</p>' : '') + '<button type="button" data-act="batch-start"' + (busy ? ' disabled' : '') + '>开始 / 继续全店采集</button><button type="button" data-act="batch-stop"' + (!busy ? ' disabled' : '') + '>暂停全店采集</button><p class="bd-status">关闭页面后服务器继续运行。暂停后可续采；登录冲突会停止。当前只采这一天，不启动九月以来的全量回补。</p>' + (rows ? '<div class="bd-table-wrap"><table><thead><tr><th>店铺</th><th>渠道</th><th>状态</th><th>本店任务</th><th>原因</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') + '</section>';
+  }
+
   function renderLink() {
     var link = state.link || {};
     var showQr = link.qrReady && (link.phase === "waiting_scan" || link.phase === "needs_scan" || link.phase === "choose_account");
@@ -2207,9 +2221,9 @@
     }).join("");
     var password = '<div class="bd-login" data-bound-password><label>旧站账号<input name="bound-user-name" autocomplete="username" value="' + esc(link.userName || "") + '"></label><label>旧站密码<input name="bound-password" type="password" autocomplete="current-password"></label><label class="bd-auto"><input name="bound-auto-relogin" type="checkbox" checked>登录正常过期后自动重新登录</label><button class="bd-primary" type="button" data-act="password-login"' + (state.passwordBusy ? ' disabled' : '') + '>' + (state.passwordBusy ? "正在登录…" : "账号密码登录") + '</button><p class="bd-status">密码仅在服务运行期间保留，服务重启后需重新输入。异地登录、账号禁用或重新登录失败时会停止。</p></div>';
     var archive = state.localArchive;
-    var run = archive && archive.run, running = run && ['running', 'collecting'].includes(run.status);
+    var run = archive && archive.run, running = state.batchRun && state.batchRun.status === 'running' || run && ['running', 'collecting'].includes(run.status);
     var scoped = archive ? '<section class="bd-block"><h2>单店四页采集</h2><p>' + esc((archive.collectionScope || archive.scope).shopName + ' · ' + (archive.collectionScope || archive.scope).date) + '</p><p>渠道总览（单店范围）、渠道详情、关键指标分析、商品总览</p><p data-archive-progress>' + esc(archiveRunText()) + '</p>' + (archive.runtime === 'server' ? '<button type="button" data-act="archive-job-start"' + (running ? ' disabled' : '') + '>开始 / 继续补采</button><button type="button" data-act="archive-job-stop"' + (!running ? ' disabled' : '') + '>停止采集</button><p class="bd-status">采集固定为上方店铺及日期，浏览筛选不会改变采集范围。只补缺少的结果，已成功归档的数据直接复用。关闭页面后服务器继续采集；账号冲突或接口异常时停止。</p>' : '<p class="bd-status">旧的全模块批量采集保持暂停。四页专用接口正在逐项核验。</p>') + '<button type="button" data-act="archive-refresh">刷新已采数据</button></section>' : renderProgress();
-    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>连接旧站</h1><p class="bd-sub">使用旧站账号密码建立采集会话。</p><p class="bd-status">同一账号只能保持一处登录。采集期间查看本系统已采数据，旧站对照需等采集停止后进行。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + '</p></div></header><section class="bd-block"><p role="status">' + esc(link.message || "") + '</p>' + password + '<details><summary>扫码登录（备用）</summary>' + qr + '<div class="bd-tools"><button type="button" data-act="scan" data-provider="WECHAT">微信</button><button type="button" data-act="scan" data-provider="FEISHU">飞书</button><button type="button" data-act="scan" data-provider="DINGTALK">钉钉</button><button type="button" data-act="scan" data-provider="QYWX">企业微信</button>' + accounts + '</div></details></section>' + (archive ? '' : renderProbe()) + scoped + '</section>';
+    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>连接旧站</h1><p class="bd-sub">使用旧站账号密码建立采集会话。</p><p class="bd-status">同一账号只能保持一处登录。采集期间查看本系统已采数据，旧站对照需等采集停止后进行。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + '</p></div></header><section class="bd-block"><p role="status">' + esc(link.message || "") + '</p>' + password + '<details><summary>扫码登录（备用）</summary>' + qr + '<div class="bd-tools"><button type="button" data-act="scan" data-provider="WECHAT">微信</button><button type="button" data-act="scan" data-provider="FEISHU">飞书</button><button type="button" data-act="scan" data-provider="DINGTALK">钉钉</button><button type="button" data-act="scan" data-provider="QYWX">企业微信</button>' + accounts + '</div></details></section>' + (archive ? '' : renderProbe()) + renderShopBatch() + scoped + '</section>';
   }
 
   function renderMain() {
@@ -2352,6 +2366,7 @@
     state.admin = link.ok;
     state.link = link.ok ? await link.json() : null;
     if (state.page === "link" && state.admin) {
+      try { var batchResponse = await fetch("/api/bound/shop-day/batch"); if (batchResponse.ok) state.batchRun = (await batchResponse.json()).run; } catch { /* Existing saved data remains readable. */ }
       try {
         var requestedProbeDate = state.probeDate;
         var probe = await fetch("/api/bound/collect/probe" + (requestedProbeDate ? "?date=" + encodeURIComponent(requestedProbeDate) : ""));
@@ -2438,6 +2453,16 @@
         if (act === 'archive-column-move') {
           var order = archiveDisplayColumns(state.viewData).map(function (c) { return c.key; }), current = order.indexOf(node.getAttribute('data-key')), moveTarget = current + Number(node.getAttribute('data-delta'));
           if (current > 0 && moveTarget > 0 && moveTarget < order.length) { order.splice(moveTarget, 0, order.splice(current, 1)[0]); state.archiveColumnOrder[archiveDisplayId(state.viewData)] = order; saveArchiveDisplay(); paint(root); }
+          return;
+        }
+        if (act === 'batch-start' || act === 'batch-stop') {
+          if (state.batchBusy) return;
+          state.batchBusy = true; state.batchError = ""; paint(root);
+          fetch('/api/bound/shop-day/batch/' + (act === 'batch-start' ? 'start' : 'stop'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(async function (r) {
+            var result = await r.json();
+            if (!r.ok || !result.ok) { state.batchError = '全店任务未启动：' + ({ server_login_required: '请先用账号密码登录', collector_busy: '已有采集任务运行', identity_changed: '采集账号与已有任务不一致', shop_list_unverified: '旧站店铺列表需要核验', shop_discovery_failed: '旧站店铺列表请求失败' }[result.reason] || result.reason || '请稍后重试'); return; }
+            if (result.run) state.batchRun = result.run;
+          }).catch(function () { state.batchError = '全店任务请求失败，请稍后重试。'; }).finally(function () { state.batchBusy = false; if (token === active) paint(root); });
           return;
         }
         if (act === 'archive-job-start' || act === 'archive-job-stop') {

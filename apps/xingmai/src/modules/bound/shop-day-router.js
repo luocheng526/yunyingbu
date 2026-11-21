@@ -3,10 +3,11 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { createShopDayCollector } from "./shop-day.js";
 import { createFourPageJob } from "./four-page-job.js";
-import { requestShopDayReport, collectionStatus } from "./collect.js";
+import { requestShopDayReport, collectionStatus, requestVisibleShops, requestBatchShopDayReport } from "./collect.js";
 import { createArchiveImport } from "./archive-import.js";
 import { createAnnotations } from "./annotations.js";
 import { createSavedOverview } from "./saved-overview.js";
+import { createShopBatch } from "./shop-batch.js";
 import { createSavedData } from "./saved-data.js";
 
 export function defaultArchiveDirectory() {
@@ -18,15 +19,28 @@ export function defaultArchiveDirectory() {
 // Mounted behind the module's existing Luo Cheng administrator gate. No raw
 // archive directory or upstream URL can be supplied by clients. Saved-data
 // GETs accept validated shop/date selectors; collection remains fixed-scope.
-export function createShopDayRouter({ directory = defaultArchiveDirectory(), request = requestShopDayReport } = {}) {
+export function createShopDayRouter({ directory = defaultArchiveDirectory(), request = requestShopDayReport, discover = requestVisibleShops, batchRequest = requestBatchShopDayReport } = {}) {
   const router = Router();
   const collector = createShopDayCollector({ directory, request });
   const job = createFourPageJob({ directory, collector });
+  const readers = new Map();
+  function scopedCollector(scope) {
+    const key = [scope.platform, scope.shopId, scope.date].join(":");
+    if (!readers.has(key)) {
+      if (readers.size >= 100) readers.delete(readers.keys().next().value);
+      readers.set(key, createShopDayCollector({ directory, scope, maxPages: 200, request: async () => ({ blocked: "read_only" }) }));
+    }
+    return readers.get(key);
+  }
+  const batch = createShopBatch({ directory, discover,
+    blocked: async () => collector.isBusy() || job.busy() || importer.busy(),
+    makeJob: (scope, owner) => createFourPageJob({ directory, scope, collector: createShopDayCollector({ directory, scope, retryFailures: true, maxPages: 200,
+      request: (input, onRequest) => batchRequest(input, onRequest, scope, owner) }) }) });
   const annotations = createAnnotations();
-  const savedOverview = createSavedOverview();
-  const saved = createSavedData({ collector, readRun: () => job.status() });
+  const savedOverview = createSavedOverview({ readScopes: () => batch.scopes(), readArchived: (scope, input) => scopedCollector(scope).getRecord(input) });
+  const saved = createSavedData({ collector, readRun: () => job.status(), scopedCollector, readScopes: () => batch.scopes() });
   const importer = createArchiveImport({ directory, blocked: async () =>
-    (await job.status())?.status === "running" || collector.isBusy() });
+    batch.busy() || job.busy() || collector.isBusy() });
   router.use((req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     if (collectionStatus().batchEnabled) return res.status(409).json({ ok: false, reason: "pause_legacy_batch_first" });
@@ -36,6 +50,7 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
       if (!sameOrigin || req.headers["sec-fetch-site"] === "cross-site" || !req.is("application/json")) return res.status(403).json({ ok: false, reason: "same_origin_required" });
       if (req.path !== "/import" && importer.busy()) return res.status(409).json({ ok: false, reason: "archive_import_in_progress" });
     }
+    if (req.method !== "GET" && batch.busy() && ["/collect", "/four-pages/start", "/import"].includes(req.path)) return res.status(409).json({ ok: false, reason: "collector_busy" });
     next();
   });
   const route = (method, path, action) => router[method](path, async (req, res) => {
@@ -58,7 +73,10 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
     const record = await collector.getRecord(input);
     return { ok: !!record, record, ...(record ? {} : { statusCode: 404 }) };
   });
-  route("post", "/collect", async req => (await job.status())?.status === "running" ? { ok: false, statusCode: 409, reason: "collector_busy" } : collector.collect(req.body));
+  route("post", "/collect", async req => job.busy() ? { ok: false, statusCode: 409, reason: "collector_busy" } : collector.collect(req.body));
+  route("get", "/batch", async () => ({ ok: true, run: await batch.status() }));
+  route("post", "/batch/start", req => Object.keys(req.body || {}).length ? { ok: false, statusCode: 400, reason: "invalid_scope" } : batch.start());
+  route("post", "/batch/stop", req => Object.keys(req.body || {}).length ? { ok: false, statusCode: 400, reason: "invalid_scope" } : batch.stop());
   route("get", "/run", async () => ({ ok: true, run: await job.status() }));
   route("post", "/four-pages/start", req => Object.keys(req.body || {}).length ? { ok: false, statusCode: 400, reason: "invalid_scope" } : job.start());
   route("post", "/stop", req => Object.keys(req.body || {}).length ? { ok: false, statusCode: 400, reason: "invalid_scope" } : job.stop());

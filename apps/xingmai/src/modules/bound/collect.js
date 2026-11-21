@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { URLSearchParams } from "node:url";
 import { API_ORIGIN, MASTERS, ORIGIN, PAGE_SIZE, accessCodes, reports } from "./catalog.js";
@@ -6,7 +6,9 @@ import { listSheetHeads, readState, replaceMasters, writeMaster, writeSheet, wri
 import { collectScopes, shanghaiToday } from "./time.js";
 import { createPasswordAuth } from "./password-login.js";
 import { isSingleShopRequest } from "./probe-target.js";
-import { shopDayRequest } from "./shop-day-contract.js";
+import { shopDayRequest, validShopDay } from "./shop-day-contract.js";
+import { visibleShops, BATCH_DATE } from "./shop-batch.js";
+import { setTimeout as delay } from "node:timers/promises";
 
 const QUIET_MODULES = new Set(["hp", "team"]);
 const QUIET_MASTERS = new Set(["goods", "teams", "members"]);
@@ -163,6 +165,31 @@ export async function requestShopDayReport(input, onRequest = () => {}) {
   return requestScopedRead(spec, onRequest);
 }
 
+let batchShops = new Set(), batchOwner = "", batchLastRequest = 0;
+const ownerOf = current => current.passwordIdentity?.userId ? createHash("sha256").update(JSON.stringify(current.passwordIdentity)).digest("hex") : "";
+export async function requestVisibleShops() {
+  const current = await session(), owner = ownerOf(current);
+  if (collectionStatus().batchEnabled || !owner || current.provider !== "PASSWORD") return { ok: false, statusCode: 409, reason: "server_login_required" };
+  const response = await requestScopedRead({ method: "get", path: "/v2/channel/getAllChannelList", access: "", referer: ORIGIN + "/workTable/channelOverview" });
+  if (response.blocked) return { ok: false, statusCode: 409, reason: response.blocked };
+  if (response.httpStatus !== 200 || response.payload?.code !== 0) return { ok: false, statusCode: 502, reason: "shop_discovery_failed" };
+  if (ownerOf(await session()) !== owner) return { ok: false, statusCode: 409, reason: "identity_changed" };
+  const shops = visibleShops(response.payload.data);
+  if (!shops) return { ok: false, statusCode: 502, reason: "shop_list_unverified", shape: Array.isArray(response.payload.data) ? { array: true, firstKeys: Object.keys(response.payload.data[0] || {}) } : { keys: Object.keys(response.payload.data || {}) } };
+  batchShops = new Set(shops.map(s => s.platform + ":" + s.shopId)); batchOwner = owner;
+  return { ok: true, shops, owner };
+}
+export async function requestBatchShopDayReport(input, onRequest, scope, owner) {
+  if (!validShopDay(scope) || scope.date !== BATCH_DATE || owner !== batchOwner || !batchShops.has(scope.platform + ":" + scope.shopId) || collectionStatus().batchEnabled) return { blocked: "invalid_scope" };
+  if (ownerOf(await session()) !== owner) return { blocked: "identity_changed" };
+  const spec = shopDayRequest(input, scope, 200);
+  if (!spec) return { blocked: "invalid_scope" };
+  const wait = Math.max(0, batchLastRequest + 1500 - Date.now());
+  if (wait) await delay(wait);
+  batchLastRequest = Date.now();
+  return requestScopedRead({ ...spec, ownerHash: owner }, onRequest);
+}
+
 async function requestScopedRead(spec, onRequest = () => {}) {
   if (scopedReadBusy) return { blocked: "collector_busy" };
   scopedReadBusy = true;
@@ -172,16 +199,18 @@ async function requestScopedRead(spec, onRequest = () => {}) {
 
 async function performScopedRead(spec, onRequest) {
   let current = await session();
+  if (spec.ownerHash && ownerOf(current) !== spec.ownerHash) return { blocked: "identity_changed" };
   if (passwordAuth.status().busy) return { blocked: "login_busy" };
   const canRefresh = current.provider === "PASSWORD" && passwordAuth.status().autoReloginReady;
   if (!["logged_in", "collecting"].includes(current.phase) || (!Object.keys(current.cookies || {}).length && !canRefresh)) {
     return { blocked: "server_login_required" };
   }
-  if (Array.isArray(current.allowed) && !current.allowed.includes(spec.access)) {
+  if (spec.access && Array.isArray(current.allowed) && !current.allowed.includes(spec.access)) {
     return { blocked: "permission_denied" };
   }
   const send = async () => {
-    if (Array.isArray(current.allowed) && !current.allowed.includes(spec.access)) return { blocked: "permission_denied" };
+    if (spec.ownerHash && ownerOf(current) !== spec.ownerHash) return { blocked: "identity_changed" };
+    if (spec.access && Array.isArray(current.allowed) && !current.allowed.includes(spec.access)) return { blocked: "permission_denied" };
     onRequest();
     return callUpstream(current, {
       ...spec,

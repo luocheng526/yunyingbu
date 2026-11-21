@@ -54,7 +54,7 @@ function columns(rows, keys) {
   return (keys || Object.keys(names).filter(key => rows.some(row => row[key] != null))).map(columnKey => ({ columnKey, columnName: names[columnKey] || columnKey }));
 }
 
-export function createSavedData({ collector, readSheets = listSheets, readHeads = listSheetHeads, readRun = async () => null }) {
+export function createSavedData({ collector, readSheets = listSheets, readHeads = listSheetHeads, readRun = async () => null, scopedCollector = () => null, readScopes = async () => [] }) {
   let optionsCache;
   const cache = new Map();
   async function options() {
@@ -68,7 +68,9 @@ export function createSavedData({ collector, readSheets = listSheets, readHeads 
       if (!/^\d{1,24}$/.test(String(row.shopId)) || !/^[A-Z]{2,8}$/.test(row.platform || "") || day(row.date) !== sheet.startOn || !row.shopName || row.sumLine) continue;
       shops.set(`${row.platform}:${row.shopId}`, { platform: row.platform, shopId: String(row.shopId), shopName: String(row.shopName) });
     }
-    const value = { ok: true, shops: [...shops.values()], dates: [...new Set([...dates, SHOP_DAY.date])].sort(), startOn: START_ON, defaultScope: SHOP_DAY };
+    const archivedScopes = await readScopes();
+    for (const scope of archivedScopes) shops.set(scope.platform + ":" + scope.shopId, { platform: scope.platform, shopId: scope.shopId, shopName: scope.shopName });
+    const value = { ok: true, shops: [...shops.values()], dates: [...new Set([...dates, SHOP_DAY.date, ...archivedScopes.map(s => s.date)])].sort(), startOn: START_ON, defaultScope: SHOP_DAY };
     optionsCache = { at: Date.now(), value }; return value;
   }
   async function bundle(scope) {
@@ -159,8 +161,9 @@ export function createSavedData({ collector, readSheets = listSheets, readHeads 
     if (query.trendDays != null) input.trendDays = Number(query.trendDays);
     if (!DAY_REPORTS.some(r => r.id === input.reportId) || !Number.isSafeInteger(input.page) || input.page < 1 || input.columnKey && (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(input.columnKey) || ["constructor", "prototype"].includes(input.columnKey))) return { ok: false, statusCode: 400, reason: "invalid_report" };
     const fixed = scope.platform === SHOP_DAY.platform && scope.shopId === SHOP_DAY.shopId && scope.from === SHOP_DAY.date && scope.to === SHOP_DAY.date;
-    if (fixed) {
-      const existing = await collector.getRecord(input);
+    const archiveCollector = scope.from === scope.to ? fixed ? collector : scopedCollector(scope) : null;
+    if (archiveCollector) {
+      const existing = await archiveCollector.getRecord(input);
       if (good(existing)) return { ok: true, record: existing };
     }
     const found = /^(shop_goods|shop_spu)_period$/.test(input.reportId) ? await period(scope, input) : input.reportId === "key_graph" && input.page === 1 ? await graph(scope) : await baseRecord(scope, input);
@@ -177,15 +180,19 @@ export function createSavedData({ collector, readSheets = listSheets, readHeads 
       const status = await collector.status(); delete status.directory;
       return { ...status, runtime: "server", unified: true, scope, collectionScope: SHOP_DAY, fourPageRun: await readRun() };
     }
+    const archiveCollector = scope.from === scope.to ? scopedCollector(scope) : null;
+    const archived = archiveCollector ? await archiveCollector.status() : null;
     const reports = [];
     for (const report of DAY_REPORTS.filter(r => !r.manual)) {
+      const prior = archived?.reports.find(r => r.id === report.id);
+      if (prior?.pages.length) { reports.push(prior); continue; }
       const result = await record({ ...scope, reportId: report.id });
       const r = result.record;
       reports.push({ id: report.id, label: report.label, product: !!report.product, status: r?.status || "not_collected", pages: r ? [{ page: 1, status: r.status, matchedRows: r.rows.length, completeness: r.completeness }] : [] });
     }
     const goods = (await baseRecord(scope, { reportId: "shop_goods_page" }))?.rows || [];
     return { ok: true, runtime: "server", unified: true, scope, collectionScope: SHOP_DAY, selected: null, reports,
-      inventory: { complete: false, items: goods.map(r => ({ goodsId: String(r.goodsId), spuid: String(r.spuid || ""), goodsName: r.goodsName || "", gmv: r.gmv })) }, exclusions: [], run: null };
+      inventory: archived?.inventory.complete ? archived.inventory : { complete: false, items: goods.map(r => ({ goodsId: String(r.goodsId), spuid: String(r.spuid || ""), goodsName: r.goodsName || "", gmv: r.gmv })) }, exclusions: [], run: null };
   }
   return { options, manifest, record };
 }
