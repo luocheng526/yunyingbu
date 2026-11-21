@@ -195,7 +195,6 @@
     var serial = 0;
     var editors = [].slice.call(form.querySelectorAll("[data-rich-editor]"));
     var message = form.querySelector("[data-rich-message]");
-    var clipboardReads = 0;
     function sayRich(text) { message.textContent = text || ""; }
     function sayEditor(editor, text, error) {
       var node = editor.parentElement.querySelector("[data-editor-message]");
@@ -208,6 +207,9 @@
       function belongs(range) { return range && editor.contains(range.startContainer) && editor.contains(range.endContainer); }
       var range = belongs(preferred) ? preferred : belongs(current) ? current : belongs(editor._wtRange) ? editor._wtRange : null;
       if (!range) { range = document.createRange(); range.selectNodeContents(editor); range.collapse(false); }
+      var container = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+      var image = container && container.closest("[data-inline-key]");
+      if (image && editor.contains(image)) { range = document.createRange(); range.setStartAfter(image); range.collapse(true); }
       editor.focus();
       selection.removeAllRanges(); selection.addRange(range);
       return range;
@@ -225,10 +227,17 @@
         range.deleteContents(); range.insertNode(content); range.setStartAfter(tail); range.collapse(true);
         var selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
       }
+      if (html) {
+        // Some browsers leave the inserted non-editable image selected. Always put the caret after it.
+        var image = editor.querySelector('[data-inline-key="' + marker + '"]');
+        if (!image) throw new Error("图片未能插入正文");
+        range = document.createRange(); range.setStartAfter(image.nextSibling || image); range.collapse(true);
+        var afterSelection = window.getSelection(); afterSelection.removeAllRanges(); afterSelection.addRange(range);
+      }
       editor._wtRange = window.getSelection().getRangeAt(0).cloneRange();
     }
     function clipboardImage(file, hint) {
-      if (!file) return null;
+      if (!file || !file.size) return null;
       var type = String(file.type || hint || "").toLowerCase();
       type = { "image/x-png": "image/png", "image/jpg": "image/jpeg", "image/x-ms-bmp": "image/bmp" }[type] || type;
       if (!type || type === "application/octet-stream") {
@@ -249,51 +258,72 @@
         sayEditor(editor, "请粘贴 PNG、JPG、GIF、WebP 或 BMP 图片。", true); return;
       }
       if (text) insertAtCaret(editor, text, false);
+      var remaining = files.length;
+      sayEditor(editor, "正在插入截图，请稍候…", false);
       files.forEach(function (file) {
         var key = "inline-" + (++serial);
         var extension = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/bmp": "bmp" }[file.type.toLowerCase()];
         entries[key] = { file: new File([file], key + "." + extension, { type: file.type }), ready: false };
-        insertAtCaret(editor, '<span class="wt-inline-image" contenteditable="false" data-inline-key="' + key + '"><img alt="正文图片，点击放大" data-wt-zoom role="button" tabindex="0"><button type="button" data-inline-remove aria-label="移除正文图片">移除图片</button></span><span>\u200b</span>', true, key);
+        insertAtCaret(editor, '<span class="wt-inline-image" contenteditable="false" data-inline-key="' + key + '"><img alt="正在读取截图" draggable="false" data-wt-zoom role="button" tabindex="0"><button type="button" data-inline-remove aria-label="移除正文图片">移除图片</button></span><span>\u200b</span>', true, key);
         var reader = new FileReader();
         reader.onload = function () {
           entries[key].ready = true;
           entries[key].src = reader.result;
           var node = editor.querySelector('[data-inline-key="' + key + '"] img');
-          if (node) node.src = reader.result;
+          if (node) { node.src = reader.result; node.alt = "正文图片，点击放大"; }
+          remaining -= 1;
+          if (!remaining && node && editor.isConnected) sayEditor(editor, "截图已插入正文，可继续打字、点击放大或移除。", false);
         };
         reader.onerror = function () { sayEditor(editor, "图片读取失败，请移除后重新粘贴。", true); };
         reader.readAsDataURL(file);
       });
       sayRich("");
-      sayEditor(editor, "已在正文插入 " + files.length + " 张图片，可继续打字或点击图片放大。", false);
     }
-    async function readScreenshot(editor, preferredRange) {
-      if (editor._wtClipboardReading) return;
+    function beginPaste(editor) {
+      editor._wtClipboardReading = false;
+      editor._wtPasteAttempt = (editor._wtPasteAttempt || 0) + 1;
+      return editor._wtPasteAttempt;
+    }
+    async function readScreenshot(editor, preferredRange, attempt) {
+      if (attempt == null) attempt = beginPaste(editor);
       if (!navigator.clipboard || !navigator.clipboard.read) {
         sayEditor(editor, "浏览器不支持直接读取截图，请重新截图后点击正文按 Ctrl+V。", true); return;
       }
       var range = editorRange(editor, preferredRange).cloneRange();
-      editor._wtClipboardReading = true; clipboardReads += 1;
+      editor._wtClipboardReading = true;
       sayEditor(editor, "正在读取截图；如浏览器询问，请允许访问剪贴板。", false);
-      var timeout;
+      var timeout, finished = false;
       try {
-        var items = await Promise.race([
-          navigator.clipboard.read(),
-          new Promise(function (_, reject) { timeout = setTimeout(function () { reject(new Error("clipboard-timeout")); }, 12000); })
-        ]);
-        var files = [];
-        for (var i = 0; i < items.length; i += 1) {
-          var type = items[i].types.indexOf("image/png") >= 0 ? "image/png" : items[i].types.find(function (value) { return /^image\/(jpeg|gif|webp|bmp)$/.test(value); });
-          if (type) { var file = clipboardImage(await items[i].getType(type), type); if (file) files.push(file); }
-        }
-        if (!editor.isConnected) return;
+        var deadline = new Promise(function (_, reject) { timeout = setTimeout(function () { reject(new Error("clipboard-timeout")); }, 12000); });
+        var files = await Promise.race([(async function () {
+          // Screenshot tools can take a moment to finish owning/writing the Windows clipboard.
+          for (var round = 0; round < 4; round += 1) {
+            if (round) await new Promise(function (resolve) { setTimeout(resolve, 150 * round); });
+            if (finished || attempt !== editor._wtPasteAttempt || !editor.isConnected) return [];
+            try {
+              var items = await navigator.clipboard.read();
+              var images = [];
+              for (var i = 0; i < items.length; i += 1) {
+                var type = items[i].types.indexOf("image/png") >= 0 ? "image/png" : items[i].types.find(function (value) { return /^image\/(jpeg|gif|webp|bmp)$/.test(value); });
+                if (type) { var file = clipboardImage(await items[i].getType(type), type); if (file && file.size) images.push(file); }
+              }
+              if (images.length) return images;
+            } catch (err) {
+              if (err.name === "NotAllowedError" || err.name === "SecurityError" || round === 3) throw err;
+            }
+          }
+          return [];
+        })(), deadline]);
+        if (!editor.isConnected || attempt !== editor._wtPasteAttempt) return;
         if (!files.length) { sayEditor(editor, "剪贴板中没有可读取的截图，请在截图工具中点击“复制”，再粘贴。", true); return; }
         editorRange(editor, range);
         insertImages(editor, files, "");
       } catch (_) {
-        if (editor.isConnected) sayEditor(editor, "未能读取截图。请点击“粘贴截图”并允许剪贴板访问，或重新截图后按 Ctrl+V。", true);
+        if (editor.isConnected && attempt === editor._wtPasteAttempt) sayEditor(editor, "未能读取截图。请点击“粘贴截图”并允许剪贴板访问，或重新截图后按 Ctrl+V。", true);
       } finally {
-        clearTimeout(timeout); editor._wtClipboardReading = false; clipboardReads -= 1;
+        finished = true;
+        clearTimeout(timeout);
+        if (attempt === editor._wtPasteAttempt) editor._wtClipboardReading = false;
       }
     }
     function serialize(editor, uploadKeys, attachmentCount) {
@@ -327,7 +357,7 @@
       return { nodes: nodes, text: plain };
     }
     form._wtRichPayload = function () {
-      if (clipboardReads) throw new Error("正在读取剪贴板图片，请稍候再发布");
+      if (editors.some(function (editor) { return editor._wtClipboardReading; })) throw new Error("正在读取剪贴板图片，请稍候再发布");
       var attachments = form.querySelector('[name="files"]')._wtFiles;
       var keys = referenced();
       var files = attachments.concat(form._wtInlineFiles());
@@ -358,26 +388,39 @@
         event.preventDefault();
         var data = event.clipboardData;
         if (form.querySelector('[type="submit"]').disabled) return;
+        var attempt = beginPaste(editor);
         var files = [].slice.call((data && data.items) || []).filter(function (item) { return item.kind === "file"; }).map(function (item) { return clipboardImage(item.getAsFile(), item.type); }).filter(Boolean);
         if (!files.length) files = [].slice.call((data && data.files) || []).map(function (file) { return clipboardImage(file); }).filter(Boolean);
         var text = data ? data.getData("text/plain") : "";
         try {
           if (files.length) insertImages(editor, files, text);
           else if (text) { insertAtCaret(editor, text, false); sayEditor(editor, "", false); }
-          else readScreenshot(editor);
+          else readScreenshot(editor, null, attempt);
         } catch (_) { sayEditor(editor, "截图未能插入，请点击正文后重新粘贴。", true); }
       });
       // Browser-dropped HTML must never create arbitrary elements in the editor.
       editor.addEventListener("drop", function (event) { event.preventDefault(); sayRich("请复制图片后在正文中粘贴。"); });
+      editor.addEventListener("mousedown", function (event) {
+        if (event.target.closest("[data-inline-key]")) { event.preventDefault(); event.stopPropagation(); }
+      });
       editor.addEventListener("click", function (event) {
         var remove = event.target.closest("[data-inline-remove]");
         if (!remove || form.querySelector('[type="submit"]').disabled) return;
+        event.preventDefault(); event.stopPropagation();
         var image = remove.closest("[data-inline-key]");
         editor.focus();
         var range = document.createRange(); range.selectNode(image);
         var selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-        document.execCommand("delete", false);
+        try { document.execCommand("delete", false); } catch (_) { /* Check actual DOM below, not the command's reported result. */ }
+        if (editor.contains(image)) {
+          // contenteditable=false images are not consistently deleted by execCommand in Chrome variants.
+          range = document.createRange(); range.setStartBefore(image); range.collapse(true);
+          image.remove();
+        } else if (selection.rangeCount) range = selection.getRangeAt(0).cloneRange();
+        range.collapse(true); selection.removeAllRanges(); selection.addRange(range);
+        editor._wtRange = range.cloneRange();
         sayRich("");
+        sayEditor(editor, "图片已移除，可以继续输入或粘贴。", false);
       });
       editor.addEventListener("input", function () {
         editor.querySelectorAll("[data-inline-key] img").forEach(function (img) {
