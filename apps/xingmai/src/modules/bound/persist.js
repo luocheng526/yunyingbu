@@ -305,10 +305,11 @@ export async function readMarks(keys) {
   } else {
     const list = [...wanted];
     const marks = [];
-    for (const rowKey of list) {
+    for (let offset = 0; offset < list.length; offset += 200) {
+      const batch = list.slice(offset, offset + 200);
       const [found] = await query(
-        "SELECT row_key, follow_text, tag_text, target_text FROM bound_mark WHERE row_key = ?",
-        [rowKey]
+        "SELECT row_key, follow_text, tag_text, target_text FROM bound_mark WHERE row_key IN (" + batch.map(() => "?").join(",") + ")",
+        batch
       );
       found.forEach((row) => {
         marks.push({

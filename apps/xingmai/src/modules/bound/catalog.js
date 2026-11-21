@@ -1,3 +1,5 @@
+import { SHOP_TABLE_COLUMNS } from "./table-columns.js";
+
 export const START_ON = "2026-09-01";
 export const PAGE_SIZE = 50;
 export const ORIGIN = "https://hejun.ecbis.cn";
@@ -440,6 +442,7 @@ export function publicCatalog() {
     erp: false,
     label: "爬虫，非 ERP",
     startOn: START_ON,
+    shopTableColumns: SHOP_TABLE_COLUMNS,
     note: "版式对齐边界 BI 工作台的渠道、商品和我的。货品、团队不进菜单，也不采集。数字只读本库，不读星脉 ERP。",
     modules: MODULES.filter((item) => item.id === "channel" || item.id === "goods" || item.id === "mine").map((item) => ({
       ...item,

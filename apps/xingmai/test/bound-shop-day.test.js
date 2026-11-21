@@ -296,6 +296,14 @@ test("无会话不发请求，本地新入口继承跨站保护且不接受任�
     const result = await (await fetch(`${base}/api/bound/shop-day/select-product`, { method: "POST", headers, body: JSON.stringify({ goodsId: "other" }) })).json();
     assert.equal(result.reason, "invalid_scope");
     assert.equal((await (await fetch(`${base}/api/bound/shop-day`)).json()).reports.length, DAY_REPORTS.filter(r => !r.manual).length);
+    const mark = { keys: ['JD:16501691:goods:10225590259558'], from: '2026-10-03', field: 'tag', value: '本地测试标签' };
+    assert.equal((await fetch(base + '/api/bound/shop-day/annotations', { method: 'POST', headers: { ...headers, Origin: 'https://foreign.example' }, body: JSON.stringify(mark) })).status, 403);
+    const write = await (await fetch(base + '/api/bound/shop-day/annotations', { method: 'POST', headers, body: JSON.stringify(mark) })).json();
+    assert.equal(write.ok, true);
+    const read = await (await fetch(base + '/api/bound/shop-day/annotations?from=2026-10-03&keys=' + encodeURIComponent(mark.keys[0]))).json();
+    assert.equal(read.marks[mark.keys[0]].tag, '本地测试标签');
+    assert.equal((await fetch(base + '/api/bound/shop-day/saved/overview?from=2026-08-31')).status, 400);
+    assert.equal((await fetch(base + '/api/bound/shop-day/saved/options')).status, 200);
     assert.equal(calls, 0);
   } finally { await new Promise(resolve => server.close(resolve)); resetBoundStore(); }
 }));

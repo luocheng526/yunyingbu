@@ -5,6 +5,8 @@ import { createShopDayCollector } from "./shop-day.js";
 import { createFourPageJob } from "./four-page-job.js";
 import { requestShopDayReport, collectionStatus } from "./collect.js";
 import { createArchiveImport } from "./archive-import.js";
+import { createAnnotations } from "./annotations.js";
+import { createSavedOverview } from "./saved-overview.js";
 import { createSavedData } from "./saved-data.js";
 
 export function defaultArchiveDirectory() {
@@ -20,6 +22,8 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
   const router = Router();
   const collector = createShopDayCollector({ directory, request });
   const job = createFourPageJob({ directory, collector });
+  const annotations = createAnnotations();
+  const savedOverview = createSavedOverview();
   const saved = createSavedData({ collector, readRun: () => job.status() });
   const importer = createArchiveImport({ directory, blocked: async () =>
     (await job.status())?.status === "running" || collector.isBusy() });
@@ -40,6 +44,9 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
   });
   route("get", "/", async () => { const data = await collector.status(); delete data.directory; return { ...data, archiveMode: "single_shop", runtime: "server", fourPageRun: await job.status() }; });
   route("get", "/four-pages", () => collector.fourPageStatus());
+  route("get", "/annotations", req => annotations.get(req.query));
+  route("post", "/annotations", req => annotations.save(req.body));
+  route("get", "/saved/overview", req => savedOverview(req.query));
   route("get", "/saved/options", () => saved.options());
   route("get", "/saved", req => saved.manifest(req.query));
   route("get", "/saved/report", req => saved.record(req.query));

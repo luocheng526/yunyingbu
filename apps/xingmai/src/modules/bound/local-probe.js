@@ -5,6 +5,9 @@ import { readFile } from "node:fs/promises";
 import { dbMode } from "../profile/auth.js";
 import { boundRouter } from "./router.js";
 import { collectionStatus, requestShopDayReport } from "./collect.js";
+import { createAnnotations } from "./annotations.js";
+import { createSavedData } from "./saved-data.js";
+import { createSavedOverview } from "./saved-overview.js";
 import { createShopDayCollector } from "./shop-day.js";
 import { saveProbeRecord, runSingleProbe } from "./probe.js";
 import { findProbeTarget } from "./probe-target.js";
@@ -37,6 +40,17 @@ export function createLocalProbeApp({ archiveDirectory = process.env.BOUND_DAY_A
   app.use(express.json({ limit: "8kb" }));
   if (archiveDirectory) {
     const collector = createShopDayCollector({ directory: archiveDirectory, request: requestShopDayReport });
+    const saved = createSavedData({ collector, readRun: () => collector.runStatus() });
+    const overview = createSavedOverview(), annotations = createAnnotations();
+    const localRoute = (method, path, action) => app[method](path, async (req, res, next) => {
+      try { const result = await action(req); res.status(result.statusCode || 200).json(result); } catch (error) { next(error); }
+    });
+    localRoute('get', '/api/bound/shop-day/saved/options', () => saved.options());
+    localRoute('get', '/api/bound/shop-day/saved', async req => ({ ...await saved.manifest(req.query), runtime: 'local' }));
+    localRoute('get', '/api/bound/shop-day/saved/report', req => saved.record(req.query));
+    localRoute('get', '/api/bound/shop-day/saved/overview', req => overview(req.query));
+    localRoute('get', '/api/bound/shop-day/annotations', req => annotations.get(req.query));
+    localRoute('post', '/api/bound/shop-day/annotations', req => annotations.save(req.body));
     app.get("/api/bound/shop-day", async (_req, res, next) => {
       try { res.json(await collector.status()); } catch (error) { next(error); }
     });

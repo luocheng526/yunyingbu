@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import { createAnnotations } from "../src/modules/bound/annotations.js";
 import { publicCatalog } from "../src/modules/bound/catalog.js";
 
 const source = readFileSync(new URL("../public/shared/modules/bound.js", import.meta.url), "utf8");
@@ -30,7 +31,8 @@ function fixture() {
     product_area: [record("product_area", [{ province: "浙江", isProv: true, sumLine: true, gmv: "100" }, { province: "浙江", city: "杭州", gmv: "100" }])]
   };
 }
-async function harness({ records = fixture(), failedPage = false, search = "", inventory, products = {}, cardRecords = {}, extras = {}, run, saved } = {}) {
+async function harness({ records = fixture(), failedPage = false, search = "", inventory, products = {}, cardRecords = {}, extras = {}, run, saved, overview, marks = new Map(), annotationFailure = false, storage = new Map() } = {}) {
+  const annotationApi = createAnnotations({ read: async keys => keys.filter(k => marks.has(k)).map(k => ({ rowKey:k, ...marks.get(k) })), write: async (k,v) => { marks.set(k,v); } });
   const calls = [];
   const downloads = [], blobs = [];
   class LocalURL extends URL {}
@@ -40,16 +42,22 @@ async function harness({ records = fixture(), failedPage = false, search = "", i
   const reply = (body, ok = true) => Promise.resolve({ ok, json: async () => structuredClone(body) });
   const manifest = { ok: true, scope, selected, inventory, run, reports: Object.entries(records).map(([id, pages]) => ({ id, label: id, product: id.startsWith("product_"), pages: pages.map(r => ({ page: r.page, status: r.status })) })) };
   const context = vm.createContext({
-    window: { location: { hostname: "127.0.0.1", search } }, Date, Intl, URL: LocalURL, URLSearchParams, Blob,
+    window: { location: { hostname: "127.0.0.1", search }, localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) } }, Date, Intl, URL: LocalURL, URLSearchParams, Blob,
     document: { getElementById: () => null, createElement: tag => tag === 'a' ? { click() { downloads.push(this.download); } } : {}, head: { appendChild() {} } },
     setInterval: () => 1, clearInterval() {},
     fetch(url, options = {}) {
       calls.push({ url, options });
+      if (url.startsWith("/api/bound/shop-day/annotations")) {
+        if (annotationFailure) return reply({ok:false},false);
+        const input = options.method === 'POST' ? JSON.parse(options.body) : Object.fromEntries(new URL(url,'http://localhost').searchParams);
+        return (options.method === 'POST' ? annotationApi.save(input) : annotationApi.get(input)).then(body=>({ok:body.ok,json:async()=>body}));
+      }
       if (url === "/api/bound") return reply({ ok: true });
       if (url === "/api/bound/catalog") return reply(publicCatalog());
       if (url === "/api/bound/link") return reply({ phase: "not_logged_in", collection: { batchEnabled: false } });
       if (url === "/api/bound/progress") return reply({ items: [] });
       if (url.startsWith("/api/bound/collect/probe")) return reply({ target: { ...scope, metric: "广告花费" }, targets: [] });
+      if (url.startsWith("/api/bound/shop-day/saved/overview?")) return overview ? reply(overview) : reply({}, false);
       if (url === "/api/bound/shop-day/saved/options") return saved ? reply(saved.options) : reply({}, false);
       if (url.startsWith("/api/bound/shop-day/saved?")) {
         const p = new URL(url, "http://localhost").searchParams;
@@ -82,8 +90,9 @@ async function harness({ records = fixture(), failedPage = false, search = "", i
     await settle();
   };
   const change = async (act, value, attrs = {}) => { root.change({ target: { value, checked: attrs.checked, getAttribute: name => name === "data-act" ? act : attrs[name] } }); await settle(); };
+  const input = async (act, value) => { root.input({ target: { value, getAttribute: name => name === 'data-act' ? act : null } }); await settle(); };
   await settle();
-  return { root, calls, click, change, blobs, downloads };
+  return { root, calls, click, change, input, blobs, downloads };
 }
 
 
@@ -219,7 +228,7 @@ test('SPU 周期直接展示专用接口数值，缺日不造零，导出和展�
 test('渠道总览明确单店范围，缺少店铺列表时不冒充全账号总览', async () => {
   const h = await harness();
   await h.click({ 'data-act': 'page', 'data-page': 'channelOverview' });
-  assert.match(h.root.innerHTML, /全账号渠道汇总和店铺分组尚未采集/);
+  assert.match(h.root.innerHTML, /当前总览范围/);
   await h.click({ 'data-act': 'tab', 'data-tab': 'qdzl_dp' });
   assert.match(h.root.innerHTML, /这张表尚未采集/);
   assert.equal(h.calls.some(c => c.url.includes('channelOverViewList') || c.options.method === 'POST'), false);
@@ -367,7 +376,9 @@ test("来源比例大于1仍按比例显示，嵌套费用不覆盖主指标且�
   const h = await harness({ records });
   assert.match(h.root.innerHTML, /150.00%/);
   assert.match(h.root.innerHTML, /23,181/);
-  assert.doesNotMatch(h.root.innerHTML, /9999999|<img src=x/);
+  assert.doesNotMatch(h.root.innerHTML, /<img src=x/);
+  assert.match(h.root.innerHTML, /<summary>[\s\S]*?23,181[\s\S]*?<\/summary>/);
+  assert.match(h.root.innerHTML, /来源明细<\/strong>[\s\S]*?<b>9999999<\/b>/);
   assert.match(h.root.innerHTML, /&lt;img/);
 });
 
@@ -379,7 +390,7 @@ test("商品表按业务顺序展示图片、上架日期和独立全店汇总�
   const h = await harness({ records });
   await h.click({ "data-act": "page", "data-page": "productOverview" });
   const header = h.root.innerHTML.match(/<thead>[\s\S]*?<\/thead>/)[0];
-  const keys = [...header.matchAll(/data-key="([^"]+)"/g)].map(match => match[1]);
+  const keys = [...header.matchAll(/data-act="sort" data-key="([^"]+)"/g)].map(match => match[1]);
   assert.deepEqual(keys.slice(0, 13), ["goodsName", "shopName", "onSaleTime", "gmv", "netGmv", "sales", "refund", "refundRatio", "netHpCost", "netHpCostRatio", "tghf", "tghfXseZb", "profit"]);
   assert.match(header, /销售件数\(支付\)/);
   assert.match(header, /SPU（未采集）/);
@@ -548,4 +559,244 @@ test("推广图表使用实际花费列，未知数值显示缺失，不转换�
   assert.match(h.root.innerHTML, /花费 · 当前页记录/);
   assert.match(h.root.innerHTML, /63.44/);
   assert.match(h.root.innerHTML, /计划乙<\/span><i style="width:0%;"><\/i><b>—<\/b>/);
+});
+
+
+test('店铺表头完整保留27列及顺序；过滤、列移动、刷新偏好不会改写采集值', async () => {
+  const storage = new Map();
+  const shops = record('channel_shop_table', [{ ...scope, gmv: '23181', tghf: '9607', refundRatio: '0.1022', profit: '6395' }]);
+  const args = { extras: { channel_shop_table: [shops] }, storage };
+  const h = await harness(args);
+  await h.click({ 'data-act': 'page', 'data-page': 'channelOverview' });
+  const headers = () => [...h.root.innerHTML.match(/<thead>[\s\S]*?<\/thead>/)[0].matchAll(/data-act="sort" data-key="([^"]+)"/g)].map(m => m[1]);
+  assert.deepEqual(headers(), publicCatalog().shopTableColumns.filter(c => !c.defaultHidden).map(c => c.columnKey));
+  assert.equal(headers().length, 26); // The user's selected view hides category ranking.
+  await h.click({ 'data-act': 'archive-filter', 'data-key': 'refundRatio' });
+  await h.change('archive-filter-op', 'gte');
+  await h.change('archive-filter-value', '11');
+  assert.match(h.root.innerHTML, /没有匹配的记录/);
+  assert.match(h.root.innerHTML, /23,181/); // Cards retain shop/date scope.
+  await h.change('archive-filter-value', '10');
+  assert.match(h.root.innerHTML, /当前表 1 条/);
+  await h.click({ 'data-act': 'archive-columns' });
+  await h.change('archive-column', '', { 'data-key': 'wyj', checked: false });
+  await h.click({ 'data-act': 'archive-column-move', 'data-key': 'gmv', 'data-delta': '-1' });
+  assert.ok(headers().indexOf('gmv') < headers().indexOf('ssxse'));
+  assert.equal(headers().includes('wyj'), false);
+  const reloaded = await harness(args);
+  await reloaded.click({ 'data-act': 'page', 'data-page': 'channelOverview' });
+  const header = reloaded.root.innerHTML.match(/<thead>[\s\S]*?<\/thead>/)[0];
+  assert.doesNotMatch(header, /data-key="wyj"/);
+  assert.match(header, /无效单金额\(标注\)/);
+  assert.equal(h.calls.some(c => c.options.method === 'POST'), false);
+  assert.equal(shops.rows[0].tghf, '9607');
+});
+
+test('店铺周期使用独立日报，重复与缺失日留空，CSV与页面保留相同数值', async () => {
+  const records = fixture();
+  const r = records.channel_operating[0];
+  r.response.payload.data = [r.response.payload.data, { columnInfo: columns, columnData: [
+    { ...r.rows[0] }, { date: '2026/10/02', gmv: '88', netGmv: '-5' },
+    { date: '2026/10/01', gmv: '90' }, { date: '2026/10/01', gmv: '91' },
+    { date: '2026/09/30', shopId: 'wrong', gmv: '999999' },
+    { date: '2026/08/31', gmv: '888888' }
+  ] }];
+  const h = await harness({ records, extras: { channel_shop_table: [record('channel_shop_table', [{ ...scope, gmv: '23181' }])] } });
+  await h.click({ 'data-act': 'page', 'data-page': 'channelOverview' });
+  await h.click({ 'data-act': 'chip', 'data-key': 'view', 'data-value': 'period' });
+  assert.match(h.root.innerHTML, /2026\/10\/02/);
+  assert.match(h.root.innerHTML, /未采集/);
+  assert.doesNotMatch(h.root.innerHTML, /999,999|888,888/);
+  await h.click({ 'data-act': 'archive-export' });
+  const csv = await h.blobs.at(-1).text();
+  assert.match(csv, /2026-10-02.*已采集.*88/);
+  assert.match(csv, /2026-10-01.*未采集/);
+  assert.doesNotMatch(csv, /999999|888888/);
+  assert.equal(h.calls.some(c => c.options.method === 'POST'), false);
+});
+
+test('不同表格的表头筛选互不串用，卡片设置可折叠并刷新恢复', async () => {
+  const storage = new Map(), h = await harness({ storage });
+  await h.click({ 'data-act': 'archive-filter', 'data-key': 'gmv' });
+  await h.change('archive-filter-op', 'gt');
+  await h.change('archive-filter-value', '50000');
+  assert.match(h.root.innerHTML, /没有匹配的记录/);
+  await h.click({ 'data-act': 'page', 'data-page': 'productOverview' });
+  assert.match(h.root.innerHTML, /当前表 170 条/);
+  await h.click({ 'data-act': 'page', 'data-page': 'channelAnalysis' });
+  await h.click({ 'data-act': 'archive-card-settings' });
+  await h.change('archive-card-visible', '', { 'data-key': 'zdyFyAll', checked: false });
+  const reloaded = await harness({ storage });
+  assert.doesNotMatch(reloaded.root.innerHTML, /<article><span>自定义费用/);
+  await reloaded.click({ 'data-act': 'archive-metrics-fold' });
+  assert.doesNotMatch(reloaded.root.innerHTML, /bd-compact-grid/);
+});
+
+
+test('输入筛选值后直接完成也会应用条件，不依赖浏览器先触发change', async () => {
+  const h = await harness();
+  await h.click({ 'data-act': 'archive-filter', 'data-key': 'gmv' });
+  await h.change('archive-filter-op', 'gt');
+  await h.input('archive-filter-value', '50000');
+  await h.click({ 'data-act': 'archive-filter-close' });
+  assert.match(h.root.innerHTML, /没有匹配的记录/);
+  assert.match(h.root.innerHTML, /aria-label="筛选支付金额\(支付\)"/);
+  await h.click({ 'data-act': 'archive-filter', 'data-key': 'gmv' });
+  await h.click({ 'data-act': 'archive-filter-clear' });
+  assert.match(h.root.innerHTML, /当前表 1 条/);
+});
+
+test('选中项按实体隔离，可跨页筛选导出；切换店铺日期页签清空选择', async () => {
+  const h = await harness();
+  await h.click({ 'data-act': 'page', 'data-page': 'productOverview' });
+  assert.doesNotMatch(h.root.innerHTML, /默认视窗|个人视窗/);
+  await h.change('archive-row-select', '', { 'data-id': 'JD:16501691:goods:90000000000000', checked: true });
+  await h.click({ 'data-act': 'page-no', 'data-delta': '1' });
+  await h.change('archive-row-select', '', { 'data-id': 'JD:16501691:goods:90000000000050', checked: true });
+  assert.match(h.root.innerHTML, /已选 2 项/);
+  await h.click({ 'data-act': 'archive-export-selected' });
+  const csv = await h.blobs.at(-1).text();
+  assert.equal(csv.split('\r\n').length, 3);
+  assert.match(csv, /商品0/); assert.match(csv, /商品50/);
+  await h.click({ 'data-act': 'archive-only-selected' });
+  assert.match(h.root.innerHTML, /当前表 2 条/);
+  await h.click({ 'data-act': 'page', 'data-page': 'channelAnalysis' });
+  await h.click({ 'data-act': 'tab', 'data-tab': 'qdfx_goods' });
+  assert.match(h.root.innerHTML, /已选 0 项/);
+  assert.match(h.root.innerHTML, /当前表 170 条/);
+  assert.equal(h.calls.some(c => c.options.method === 'POST'), false);
+});
+
+test('经营趋势补齐缺失日，不把缺日连成连续实测；比例卡保持接口口径', async () => {
+  const records = fixture(), r = records.channel_operating[0];
+  r.rows[0].refundRatio = '0.1022'; r.rows[0].realTimeGmv = null;
+  r.response.payload.data = [r.response.payload.data, { columnInfo: columns, columnData: [
+    { date: '2026/10/01', gmv: '99' }, { ...r.rows[0] }
+  ] }];
+  const h = await harness({ records });
+  assert.match(h.root.innerHTML, /10.22%/);
+  assert.match(h.root.innerHTML, /2026-10-02<\/td><td>未采集/);
+  assert.match(h.root.innerHTML, /实时销售指数<\/span><strong>—/);
+  assert.doesNotMatch(h.root.innerHTML, /默认视窗/);
+  await h.click({ 'data-act': 'archive-operating-metric', 'data-key': 'netGmv' });
+  assert.match(h.root.innerHTML, /netGmv经营趋势/);
+  assert.equal(h.calls.some(c => c.options.method === 'POST'), false);
+});
+
+test('渠道详情商品周期读取同店原档案并支持周期导出；有效类目不包含未知值', async () => {
+  const records = fixture();
+  records.shop_goods_page[0].rows[1].catePathName = '电器>清洁';
+  const p = records.shop_goods_page[0].rows[1];
+  const extra = record('shop_goods_period', [{ ...p, platform: 'JD' }], 1, { trendDays: 7, total: 1, periods: [{ goodsId: p.goodsId, rows: [{ ...p, date: '2026/10/03', netGmv: '70' }] }] });
+  const h = await harness({ records, extras: { 'shop_goods_period:7': [extra] } });
+  await h.click({ 'data-act': 'tab', 'data-tab': 'qdfx_goods' });
+  await h.change('archive-valid-category', '', { checked: true });
+  assert.match(h.root.innerHTML, /当前表 1 条/);
+  await h.click({ 'data-act': 'chip', 'data-key': 'view', 'data-value': 'period' });
+  assert.match(h.root.innerHTML, /data-period-date="2026-10-03"/);
+  await h.click({ 'data-act': 'archive-export' });
+  assert.match(await h.blobs.at(-1).text(), /2026-10-03.*已采集/);
+  assert.equal(h.calls.some(c => c.options.method === 'POST'), false);
+});
+
+test('总览在同一页面展示历史渠道和店铺；渠道筛选、店铺钻取保留范围', async () => {
+  const accountScope = { ...scope, shopId: '', platform: 'all', shopName: '全部已存店铺', from: scope.date, to: scope.date };
+  const savedRecord = (id, rows, names) => record(id, rows, 1, { scope: accountScope, source: {updatedAt: '2026-11-20'}, response: {payload:{data:{columnInfo:names.map(([columnKey,columnName])=>({columnKey,columnName})),columnData:rows}}} });
+  const overview = {ok:true,scope:accountScope,records:{
+    saved_channels:savedRecord('saved_channels',[{platform:'all',gmv:'840561'},{platform:'JD',gmv:'829241'},{platform:'TM',gmv:'11320'}],[['platform','渠道'],['gmv','支付金额(支付)']]),
+    saved_shops:savedRecord('saved_shops',[{...scope,gmv:'23181'},{shopId:'55',platform:'TM',shopName:'天猫店',gmv:'100'}],[['shopName','店铺'],['platform','渠道'],['gmv','支付金额(支付)']])
+  }};
+  const h = await harness({saved:savedFixture(),overview});
+  await h.click({'data-act':'page','data-page':'channelOverview'});
+  await h.change('saved-shop','__all__');
+  assert.match(h.root.innerHTML,/渠道列表/); assert.match(h.root.innerHTML,/店铺列表/);
+  assert.match(h.root.innerHTML,/840,561/); assert.match(h.root.innerHTML,/当前表 2 条/);
+  await h.click({'data-act':'archive-channel-filter','data-platform':'JD'});
+  assert.match(h.root.innerHTML,/当前表 1 条/);
+  assert.match(h.root.innerHTML,/840,561/);
+  await h.click({'data-act':'archive-shop-detail','data-platform':'JD','data-shop-id':scope.shopId});
+  assert.match(h.root.innerHTML,/23,181/); assert.doesNotMatch(h.root.innerHTML,/840,561/);
+  assert.equal(h.calls.some(c=>c.options.method==='POST'),false);
+});
+
+test('批量标签和跟进保存可回读、可筛选；日期目标有达成率且不覆盖采集值', async () => {
+  const marks = new Map(), h = await harness({ marks });
+  await h.click({'data-act':'page','data-page':'productOverview'});
+  const id = 'JD:16501691:goods:90000000000000';
+  await h.change('archive-row-select','',{'data-id':id,checked:true});
+  await h.click({'data-act':'archive-annotation-open','data-field':'tag'});
+  await h.input('archive-annotation-value','重点<店>');
+  await h.click({'data-act':'archive-annotation-save'});
+  assert.match(h.root.innerHTML,/重点&lt;店&gt;/);
+  await h.change('archive-tag-filter','重点<店>');
+  assert.match(h.root.innerHTML,/当前表 1 条/);
+  await h.click({'data-act':'archive-annotation-open','data-field':'follow'});
+  await h.input('archive-annotation-value','明天复查费用');
+  await h.click({'data-act':'archive-annotation-save'});
+  await h.change('archive-flag','follow');
+  assert.match(h.root.innerHTML,/当前表 1 条/);
+  await h.click({'data-act':'archive-annotation-open','data-field':'target'});
+  await h.change('archive-target-metric','gmv');
+  await h.input('archive-annotation-value','200');
+  await h.click({'data-act':'archive-annotation-save'});
+  assert.match(h.root.innerHTML,/达成率 50.00%/);
+  const fresh = await harness({marks});
+  await fresh.click({'data-act':'page','data-page':'productOverview'});
+  assert.match(fresh.root.innerHTML,/重点&lt;店&gt;/);
+  assert.match(fresh.root.innerHTML,/明天复查费用/);
+  assert.match(fresh.root.innerHTML,/达成率 50.00%/);
+  assert.match(fresh.root.innerHTML,/23,181/);
+  assert.equal(h.calls.filter(c=>c.options.method==='POST').every(c=>c.url==='/api/bound/shop-day/annotations'),true);
+});
+
+test('标注接口不可用时显示状态并禁止保存，不把本地输入冒充已保存',async()=>{
+  const h=await harness({annotationFailure:true});
+  await h.click({'data-act':'page','data-page':'productOverview'});
+  await h.click({'data-act':'archive-select-page'});
+  await h.click({'data-act':'archive-annotation-open','data-field':'tag'});
+  assert.match(h.root.innerHTML,/标注服务暂不可用/);
+  await h.input('archive-annotation-value','未保存标签');
+  await h.click({'data-act':'archive-annotation-save'});
+  assert.equal(h.calls.some(c=>c.options.method==='POST'),false);
+  assert.doesNotMatch(h.root.innerHTML,/bd-annotation-tag">未保存标签/);
+});
+
+test('历史分组可以展开店铺，展开不改变分组合计且能收回',async()=>{
+  const sc={...scope,shopId:'',platform:'all',shopName:'全部已存店铺',from:scope.date,to:scope.date};
+  const row={groupId:'1',shopName:'组A',platform:'all',gmv:'100',shopList:[{...scope,shopName:'组内店铺',gmv:'99'}]};
+  const overview={ok:true,scope:sc,records:{saved_groups:record('saved_groups',[row],1,{scope:sc,response:{payload:{data:{columnInfo:[{columnKey:'shopName',columnName:'店铺分组'},{columnKey:'gmv',columnName:'支付金额(支付)'}],columnData:[row]}}}})}};
+  const h=await harness({saved:savedFixture(),overview});
+  await h.click({'data-act':'page','data-page':'channelOverview'});
+  await h.change('saved-shop','__all__');
+  await h.click({'data-act':'tab','data-tab':'qdzl_fz'});
+  assert.match(h.root.innerHTML,/组A（1 店）/);
+  assert.doesNotMatch(h.root.innerHTML,/组内店铺/);
+  await h.click({'data-act':'archive-group-toggle','data-key':'1'});
+  assert.match(h.root.innerHTML,/组内店铺/);assert.match(h.root.innerHTML,/当前表 1 条/);
+  await h.click({'data-act':'archive-group-toggle','data-key':'1'});
+  assert.doesNotMatch(h.root.innerHTML,/组内店铺/);
+});
+
+
+test('历史总览经营趋势和店铺周期使用各自原表，7/15天切换与导出不混店',async()=>{
+  const accountScope={...scope,shopId:'',platform:'all',shopName:'全部已存店铺',from:scope.date,to:scope.date};
+  const cols=[{columnKey:'shopName',columnName:'店铺'},{columnKey:'gmv',columnName:'支付金额(支付)'}];
+  const rec=(id,rows)=>record(id,rows,1,{scope:accountScope,source:{},response:{payload:{data:{columnInfo:cols,columnData:rows}}}});
+  const current={...scope,gmv:'23181'}, second={platform:'TM',shopId:'55',shopName:'天猫店',gmv:'100'};
+  const op=rec('saved_operating',[{platform:'All',date:scope.date,gmv:'840561'}]);
+  op.response.payload.data=[op.response.payload.data,{columnInfo:[{columnKey:'gmv',columnName:'支付金额(支付)'}],columnData:[...op.rows,{platform:'All',date:'2026/10/02',gmv:'700000'}]}];
+  const overview={ok:true,scope:accountScope,records:{saved_channels:rec('saved_channels',[{platform:'all',gmv:'840561'}]),
+    saved_shops:rec('saved_shops',[current,second]),saved_operating:op,
+    saved_shop_period:rec('saved_shop_period',[current,{...current,date:'2026-10-02',gmv:'88'},
+      {...second,date:scope.date},{...second,date:'2026-10-02',gmv:'99'}])}};
+  const h=await harness({saved:savedFixture(),overview});
+  await h.click({'data-act':'page','data-page':'channelOverview'});await h.change('saved-shop','__all__');
+  await h.click({'data-act':'chip','data-key':'view','data-value':'period'});
+  assert.match(h.root.innerHTML,/7天/);assert.match(h.root.innerHTML,/15天/);assert.match(h.root.innerHTML,/天猫店/);
+  await h.click({'data-act':'archive-export'});const csv=await h.blobs.at(-1).text();
+  assert.match(csv,/RASW.*2026-10-02.*已采集.*88/);assert.match(csv,/天猫店.*2026-10-02.*已采集.*99/);
+  assert.match(csv,/2026-10-01.*未采集/);assert.equal(csv.split('\r\n').length,15);
+  await h.click({'data-act':'tab','data-tab':'qdzl_jy'});
+  assert.match(h.root.innerHTML,/经营趋势/);assert.match(h.root.innerHTML,/700,000/);assert.match(h.root.innerHTML,/840,561/);
+  assert.doesNotMatch(h.root.innerHTML,/视窗/);
 });

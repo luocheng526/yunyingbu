@@ -2,11 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createSavedData, legacyRows, savedScope } from "../src/modules/bound/saved-data.js";
 import { SHOP_DAY } from "../src/modules/bound/shop-day-contract.js";
+import { SHOP_TABLE_COLUMNS } from "../src/modules/bound/table-columns.js";
 
 const date = "2026-11-18";
 const scope = { ...SHOP_DAY, date, from: date, to: date };
 const row = (extra = {}) => ({ shopId: SHOP_DAY.shopId, shopName: SHOP_DAY.shopName, platform: "JD", date, gmv: "23181", netGmv: "20760", tghf: "9607", profit: "6395", ...extra });
 const sheet = (reportId, rows, extra = {}) => ({ reportId, dim: "all", startOn: date, endOn: date, pageNo: 1, status: "done", payload: { raw: { data: { columnInfo: [], columnData: rows } } }, ...extra });
+
+test('旧库店铺表保留旧站完整表头，未保存的字段留空而不是补零', async () => {
+  const { saved } = setup([sheet('qdfx_dplb', [row({ invalidGmv: '51', wyj: '0' })])]);
+  const result = await saved.record({ ...scope, reportId: 'channel_shop_table' });
+  assert.deepEqual(result.record.response.payload.data.columnInfo, SHOP_TABLE_COLUMNS);
+  assert.equal(result.record.rows[0].invalidGmv, '51');
+  assert.equal(result.record.rows[0].wyj, '0');
+  assert.equal(result.record.rows[0].leaders, undefined);
+});
 function setup(sheets, verified = null) {
   const queries = [];
   const saved = createSavedData({

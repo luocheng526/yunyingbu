@@ -50,6 +50,11 @@
     archiveFlag: "",
     archiveProfit: "",
     archiveColumnsHidden: {},
+    archiveColumnOrder: {},
+    archiveFilters: {},
+    archiveCardHidden: {},
+    archiveFilterKey: "",
+    archiveCardsFolded: false,
     archivePageSize: 50,
     archiveSummary: "all",
     archivePromotion: "",
@@ -57,11 +62,39 @@
     archivePeriodDays: 7,
     archiveKeyMetric: "gmv",
     archiveTrendFolded: false,
-    archiveRefreshBusy: false
+    archiveRefreshBusy: false,
+    archiveSelectedRows: {},
+    archiveAccountOverview: false,
+    archiveOverviewCache: {},
+    archiveChannelFilter: "",
+    archiveAnnotations: {},
+    archiveAnnotationMode: "",
+    archiveAnnotationDraft: "",
+    archiveTargetMetric: "gmv",
+    archiveAnnotationBusy: false,
+    archiveTagFilter: "",
+    archiveOnlySelected: false,
+    archiveValidCategory: false,
+    archiveOperatingMetric: "gmv",
+    archiveOperatingExpanded: false
   };
   var active = 0;
   var loadRevision = 0;
   var archivePromise = null, archiveKey = "", archiveRevision = 0, savedOptionsPromise = null;
+  // Only display preferences, never BI credentials or collected rows.
+  function saveArchiveDisplay() {
+    try { window.localStorage.setItem('bound.display.v1', JSON.stringify({ columns: state.archiveColumnsHidden, order: state.archiveColumnOrder, cards: state.archiveCardHidden })); } catch { /* Private browsing may disable storage. */ }
+  }
+  try {
+    var display = JSON.parse(window.localStorage.getItem('bound.display.v1') || '{}');
+    [['columns', 'archiveColumnsHidden'], ['order', 'archiveColumnOrder'], ['cards', 'archiveCardHidden']].forEach(function (entry) {
+      if (!display[entry[0]] || typeof display[entry[0]] !== 'object' || Array.isArray(display[entry[0]])) return;
+      Object.keys(display[entry[0]]).filter(function (key) { return /^[A-Za-z][A-Za-z0-9_]*$/.test(key) && !['constructor', 'prototype'].includes(key); }).forEach(function (key) {
+        var value = display[entry[0]][key];
+        if (Array.isArray(value)) state[entry[1]][key] = value.filter(function (v) { return typeof v === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,100}$/.test(v); }).slice(0, 200);
+      });
+    });
+  } catch { /* Corrupt preferences must not prevent the data page from opening. */ }
   function savedUrl(path, query, archive) {
     var scope = archive && archive.scope;
     var saved = archive ? archive.unified : state.savedOptions;
@@ -189,7 +222,24 @@
     }));
     archive.products[selected.goodsId] = records;
   }
+  function fillSavedOverview(root) {
+    if (!state.localArchive || state.page !== 'channelOverview' || !state.archiveAccountOverview) return;
+    var key = state.from + ':' + state.to, token = active;
+    if (state.archiveOverviewCache[key]) return;
+    state.archiveOverviewCache[key] = { status: 'loading', records: {} };
+    fetch('/api/bound/shop-day/saved/overview?from=' + encodeURIComponent(state.from) + '&to=' + encodeURIComponent(state.to)).then(async function (r) {
+      if (!r.ok) throw Error('unavailable');
+      var data = await r.json();
+      if (!data.ok || !data.scope || data.scope.from + ':' + data.scope.to !== key) throw Error('scope_mismatch');
+      state.archiveOverviewCache[key] = { status: 'ready', records: data.records };
+    }).catch(function () { state.archiveOverviewCache[key] = { status: 'missing', records: {} }; }).finally(function () { if (token === active) paint(root); });
+  }
   function archiveRecords(id) {
+    if (/^saved_/.test(id)) {
+      var saved = state.archiveOverviewCache[state.from + ':' + state.to];
+      var report = saved && saved.records[id];
+      return report && report.status === 'received' ? [report] : [];
+    }
     if (["key_graph", "key_shops", "key_goods", "channel_shop_table", "shop_goods_period", "shop_spu_period"].includes(id)) {
       var extra = state.localArchive.extras[archiveExtraKey(id)];
       return extra && extra.status === 'ready' ? extra.records : [];
@@ -208,7 +258,8 @@
   function fillArchiveExtras(root) {
     var archive = state.localArchive, token = active;
     if (!archive) return;
-    var ids = state.page === 'channelOverview' ? ['channel_shop_table'] : state.page === 'channelAnalysisNew' ? ['key_graph'] : state.page === 'productOverview' && state.view === 'period' ? [state.dim === 'spu' ? 'shop_spu_period' : 'shop_goods_period'] : [];
+    var ids = ['channelOverview', 'channelAnalysis'].includes(state.page) ? ['channel_shop_table'] : state.page === 'channelAnalysisNew' ? ['key_graph'] : ['productOverview', 'channelAnalysis'].includes(state.page) && state.view === 'period' ? [state.page === 'productOverview' && state.dim === 'spu' ? 'shop_spu_period' : 'shop_goods_period'] : [];
+    if (state.page === 'channelAnalysis' && state.view === 'period') ids.push('shop_goods_period');
     if (state.page === 'channelAnalysisNew' && archiveRecords('key_graph').length) ids.push(state.tab === 'qd_gjzbfx_dpck' ? 'key_shops' : 'key_goods');
     ids.forEach(function (id) {
       var key = archiveExtraKey(id);
@@ -286,6 +337,9 @@
     tables = Array.isArray(tables) ? tables : [tables];
     var table = explicitTable || tables.filter(function (item) { return item && Array.isArray(item.columnInfo); }).pop();
     var info = table ? table.columnInfo.slice() : [];
+    if (id === 'channel_shop_table' && state.catalog.shopTableColumns) {
+      info = state.catalog.shopTableColumns.map(function (c) { return Object.assign({}, info.find(function (s) { return s.columnKey === c.columnKey; }), c); });
+    }
     if (['channel_shop_table', 'key_shops'].includes(id) && !info.some(function (c) { return c.columnKey === 'shopName'; })) info.unshift({ columnKey: 'shopName', columnName: '店铺' });
     if (id === "product_promotion") {
       var nameKey = rows.some(function (r) { return r.planName != null; }) ? "planName" : "name";
@@ -307,19 +361,13 @@
       }).concat(rest);
     }
     if (id === "product_skus" && !info.some(function (c) { return c.columnKey === "skuId"; })) info.unshift({ columnKey: "skuId", columnName: "SKU ID" });
-    if (id === "channel_operating") info = info.concat([
-      { columnKey: "tghf", columnName: "推广花费(支付预估)" },
-      { columnKey: "thtkje", columnName: "退款金额" },
-      { columnKey: "jhpcb", columnName: "净货品成本(支付)" },
-      { columnKey: "deliverCost", columnName: "发货费用(支付)" }
-    ]);
-    return info.filter(function (column) { return column.columnKey !== "seeGoods"; }).map(function (column) {
+    return info.filter(function (column, index) { return column.columnKey !== "seeGoods" && info.findIndex(function (c) { return c.columnKey === column.columnKey; }) === index; }).map(function (column) {
       var key = column.columnKey;
       var style = {};
       try { style = JSON.parse(column.styleRule || "{}"); } catch { /* metadata is optional */ }
       var identifier = /id$|code$|date|hour|time$|name$|province|city|platform|leaders/i.test(key);
       var numeric = !identifier && (style.isNumberCell === true || rows.some(function (row) { return row[key] != null && /^-?\d+(\.\d+)?$/.test(String(row[key])); }));
-      return { key: key, label: column.columnName, on: true, numeric: numeric, rate: !!(style.renderAttr && style.renderAttr.formatType === "percent") || /率|占比|同比|环比/.test(column.columnName), sourceRatio: true, sourceValue: true, note: column.note || "", aliases: [] };
+      return { key: key, label: column.columnName, on: true, defaultHidden: !!column.defaultHidden || id === 'channel_shop_table' && key === 'tx_lmcjpm', numeric: numeric, rate: !!(style.renderAttr && style.renderAttr.formatType === "percent") || /率|占比|同比|环比/.test(column.columnName), sourceRatio: true, sourceValue: true, note: column.note || "", aliases: [] };
     });
   }
 
@@ -345,22 +393,94 @@
     var groups = record && record.response.payload.data;
     return Array.isArray(groups) ? groups.filter(function (g) { return g.extensibleTableWrapper && Array.isArray(g.extensibleTableWrapper.columnData); }) : [];
   }
+
+
+  function annotationScopeKey() { return state.from + ':' + state.to; }
+  function archiveAnnotation(row, reportId) {
+    var cache = state.archiveAnnotations[annotationScopeKey()] || {};
+    return cache[archiveRowIdentity(row, reportId)] || {};
+  }
+  function fillArchiveAnnotations(root) {
+    var data = state.viewData;
+    if (!data || !data.localArchive || !data.allRows) return;
+    var keys = data.allRows.map(function (r) { return archiveRowIdentity(r, data.reportId); }).filter(Boolean);
+    var scopeKey = annotationScopeKey(), cache = state.archiveAnnotations[scopeKey] || (state.archiveAnnotations[scopeKey] = {});
+    keys = Array.from(new Set(keys)).filter(function (id) { return !cache[id]; });
+    var token = active;
+    for (var offset = 0; offset < keys.length; offset += 50) {
+      (function (batch) {
+        batch.forEach(function (id) { cache[id] = { loading: true }; });
+        fetch('/api/bound/shop-day/annotations?from=' + encodeURIComponent(state.from) + '&to=' + encodeURIComponent(state.to) + '&keys=' + encodeURIComponent(batch.join(','))).then(async function (r) {
+          if (!r.ok) throw Error('unavailable');
+          var result = await r.json(); if (!result.ok || !result.marks) throw Error('unavailable');
+          batch.forEach(function (id) { cache[id] = Object.assign({ ready: true }, result.marks[id] || {}); });
+        }).catch(function () { batch.forEach(function (id) { cache[id] = { unavailable: true }; }); }).finally(function () { if (active === token && annotationScopeKey() === scopeKey) paint(root); });
+      })(keys.slice(offset, offset + 50));
+    }
+  }
+  function renderAnnotation(row, reportId) {
+    var mark = archiveAnnotation(row, reportId), text = '';
+    if (mark.tag) text += '<small class="bd-annotation-tag">' + esc(mark.tag) + '</small>';
+    if (mark.follow) text += '<details class="bd-row-follow"><summary>跟进</summary><p>' + esc(mark.follow) + '</p></details>';
+    if (mark.target && Number.isFinite(Number(mark.target.value))) {
+      var value = row[mark.target.metric], ratio = value != null && value !== '' && Number.isFinite(Number(value)) ? Number(value) / mark.target.value * 100 : null;
+      var column = state.viewData.columns.find(function (c) { return c.key === mark.target.metric; });
+      text += '<small class="bd-annotation-target">' + esc(column ? column.label : mark.target.metric) + ' 目标 ' + formatCell(mark.target.value, column || { numeric: true }) + ' · 达成率 ' + (ratio == null ? '—' : ratio.toFixed(2) + '%') + '</small>';
+    }
+    return text;
+  }
+  function renderAnnotationEditor(data) {
+    if (state.panel !== 'archive-annotation' || !state.archiveAnnotationMode) return '';
+    var field = state.archiveAnnotationMode, keys = data.allRows.filter(function (r) { return state.archiveSelectedRows[archiveRowIdentity(r, data.reportId)]; }).map(function (r) { return archiveRowIdentity(r, data.reportId); });
+    var cache = state.archiveAnnotations[annotationScopeKey()] || {};
+    var ready = keys.length > 0 && keys.length <= 100 && keys.every(function (id) { return cache[id] && cache[id].ready; });
+    var columns = data.columns.filter(function (c) { return c.numeric; });
+    var metric = columns.find(function (c) { return c.key === state.archiveTargetMetric; }) || columns[0];
+    if (metric) state.archiveTargetMetric = metric.key;
+    return '<section class="bd-filter-panel" role="group" aria-label="批量' + { tag:'打标',follow:'跟进',target:'目标' }[field] + '"><strong>已选 ' + keys.length + ' 项</strong><span>保存在本系统' + (field === 'target' ? ' · ' + esc(state.from) + ' 至 ' + esc(state.to) : '') + '</span>' +
+      (field === 'target' ? '<select data-act="archive-target-metric" aria-label="目标指标">' + columns.map(function (c) { return '<option value="' + esc(c.key) + '"' + (metric && metric.key === c.key ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join('') + '</select>' : '') +
+      '<input data-act="archive-annotation-value" aria-label="' + {tag:'标签内容',follow:'跟进内容',target:'目标值'}[field] + '" value="' + esc(state.archiveAnnotationDraft) + '" maxlength="' + (field === 'follow' ? 500 : 128) + '" type="' + (field === 'target' ? 'number' : 'text') + '"' + (field === 'target' ? ' min="0" step="any"' : '') + '>' +
+      (field === 'target' && metric && metric.rate ? '<small>按百分数输入，例如 20 表示 20%</small>' : '') +
+      '<button type="button" data-act="archive-annotation-save"' + (!ready || state.archiveAnnotationBusy ? ' disabled' : '') + '>' + (state.archiveAnnotationBusy ? '正在保存' : '保存') + '</button><button type="button" data-act="archive-annotation-clear"' + (!ready || state.archiveAnnotationBusy ? ' disabled' : '') + '>清除所选项此字段</button><button type="button" data-act="archive-annotation-close">取消</button>' +
+      (!ready ? '<p>标注服务暂不可用，或选择超过 100 项。已采数据仍可查看。</p>' : '') + '</section>';
+  }
+
+  function archiveRowIdentity(row, reportId) {
+    var scope = state.localArchive.scope;
+    var kind = reportId === 'shop_spu_page' ? 'spu' : row.goodsId ? 'goods' : row.shopId ? 'shop' : '';
+    var id = kind === 'spu' ? row.spuid : kind === 'goods' ? row.goodsId : kind === 'shop' ? row.shopId : '';
+    return kind && id ? [row.platform || scope.platform, row.shopId || scope.shopId, kind, id].join(':') : '';
+  }
+  function archiveSelectionCell(row, reportId) {
+    var id = archiveRowIdentity(row, reportId);
+    return id ? '<label class="bd-row-select"><input type="checkbox" data-act="archive-row-select" data-id="' + esc(id) + '" aria-label="选择' + esc(row.goodsName || row.shopName || id) + '"' + (state.archiveSelectedRows[id] ? ' checked' : '') + '></label>' : '';
+  }
+  function archiveSelectionToolbar(data) {
+    if (!data.goods && !['channel_shop_table', 'saved_shops', 'key_goods', 'key_shops'].includes(data.reportId)) return '';
+    var count = data.allRows.filter(function (r) { return state.archiveSelectedRows[archiveRowIdentity(r, data.reportId)]; }).length;
+    return '<div class="bd-selection-tools" role="group" aria-label="表格操作"><strong>表格操作</strong><button type="button" data-act="archive-select-page">选择当前页</button><button type="button" data-act="archive-clear-selection">清空选择</button><span>已选 ' + count + ' 项</span><button type="button" data-act="archive-only-selected"' + (!count && !state.archiveOnlySelected ? ' disabled' : '') + '>' + (state.archiveOnlySelected ? '显示全部记录' : '按选中项筛选') + '</button><button type="button" data-act="archive-export-selected"' + (!count ? ' disabled' : '') + '>导出选中项</button>' + ['tag', 'follow', 'target'].map(function (field) { return '<button type="button" data-act="archive-annotation-open" data-field="' + field + '"' + (!count || count > 100 ? ' disabled' : '') + '>' + { tag: '打标', follow: '跟进', target: '目标' }[field] + '</button>'; }).join('') + '<label>标签 <select data-act="archive-tag-filter" aria-label="标签筛选"><option value="">全部标签</option>' + Array.from(new Set(data.allRows.map(function (r) { return archiveAnnotation(r, data.reportId).tag; }).filter(Boolean))).sort().map(function (tag) { return '<option value="' + esc(tag) + '"' + (state.archiveTagFilter === tag ? ' selected' : '') + '>' + esc(tag) + '</option>'; }).join('') + '</select></label></div>' + renderAnnotationEditor(data);
+  }
+
   function buildArchiveView() {
+    var selectionScope = [state.page, state.tab, state.dim, state.archiveAccountOverview, state.savedShopKey, state.from, state.to].join('|');
+    if (state.archiveSelectionScope !== selectionScope) { state.archiveSelectionScope = selectionScope; state.archiveSelectedRows = {}; state.archiveOnlySelected = false; state.archiveTagFilter = ''; }
     var archive = state.localArchive;
-    var scope = archive.scope;
+    var account = state.page === 'channelOverview' && state.archiveAccountOverview;
+    var scope = account ? { from: state.from, to: state.to, date: state.to, platform: 'all', shopId: '', shopName: '全部已存店铺' } : archive.scope;
     var meta = pageMeta() || { id: state.page, label: "边界数据中心" };
     var tabsByPage = {
-      channelOverview: [["qdzl_jy", "单店经营概况", "channel_operating"], ["qdzl_dp", "店铺列表", "channel_shop_table"], ["qdzl_pl", "品类分布", "channel_category"]],
-      channelAnalysis: [["qdfx_jy", "经营数据", "channel_operating"], ["qdfx_rx", "商品明细", "shop_goods_page"], ["qdfx_pl", "品类分析", "channel_category"], ["qdfx_bqfx", "标签分析", "channel_labels"], ["qdfx_area", "销售地域分析", "channel_area"], ["qdfx_hour", "销售时段分析", "channel_hour"]],
+      channelOverview: [["qdzl_dp", "店铺列表", "channel_shop_table"], ["qdzl_jy", "经营数据", "channel_operating"], ["qdzl_pl", "品类分析", "channel_category"], ["qdzl_rx", "热销商品", "channel_goods"]],
+      channelAnalysis: [["qdfx_jy", "经营数据", "channel_operating"], ["qdfx_dplb", "店铺列表", "channel_shop_table"], ["qdfx_goods", "商品详情", "shop_goods_page"], ["qdfx_rx", "热销商品", "channel_goods"], ["qdfx_pl", "品类分析", "channel_category"], ["qdfx_bqfx", "标签分析", "channel_labels"], ["qdfx_area", "销售地域分析", "channel_area"], ["qdfx_hour", "销售时段分析", "channel_hour"]],
       productOverview: [["sp_zl_list", "商品列表", state.dim === "spu" ? "shop_spu_page" : "shop_goods_page"]],
       channelAnalysisNew: [["qd_gjzbfx_ljck", "按链接查看", "key_goods"], ["qd_gjzbfx_dpck", "按店铺查看", "key_shops"]],
       productPanorama: [["spqj_zl", "总览数据", "product_overview"], ["spqj_sku", "SKU销售分析", "product_skus"], ["spqj_area", "销售地域分析", "product_area"], ["spqj_hour", "销售时段分析", "product_hour"]],
       productOperation: [["spyy_zl", "运营总览", "product_operation"], ["spyy_tg", "推广分析", "product_promotion"], ["spyy_sku", "SKU分析", "product_operation_skus"], ["spyy_area", "销售地域分析", "product_operation_area"], ["spyy_hour", "销售时段分析", "product_operation_hour"]]
     };
+    if (account) tabsByPage.channelOverview = [["qdzl_lb", "渠道列表", "saved_shops"], ["qdzl_fz", "店铺分组", "saved_groups"], ["qdzl_jy", "经营数据", "saved_operating"], ["qdzl_pl", "品类分析", "saved_category"], ["qdzl_rx", "热销商品", "saved_hotgoods"]];
     var choices = tabsByPage[state.page] || [];
     var choice = choices.find(function (tab) { return tab[0] === state.tab; }) || choices[0];
     var id = choice && choice[2];
-    var validRange = state.from === (scope.from || scope.date) && state.to === (scope.to || scope.date) && (!state.shop || state.shop === scope.shopName);
+    var validRange = state.from === (scope.from || scope.date) && state.to === (scope.to || scope.date) && (account || !state.shop || state.shop === scope.shopName);
     var available = !!id && archiveRecords(id).length > 0;
     var partial = available && archiveRecords(id).some(function (r) { return r.completeness === "partial"; });
     // Province rows are marked sumLine by BI, but belong to the province view.
@@ -368,6 +488,10 @@
     if (state.page === 'channelAnalysisNew') rows = rows.map(function (row) {
       var copy = Object.assign({}, row);
       (Array.isArray(row.cells) ? row.cells : []).forEach(function (cell) { if (/^[A-Za-z][A-Za-z0-9_]*$/.test(cell.column) && !['constructor', 'prototype'].includes(cell.column)) copy[cell.column] = cell.value; });
+      if (id === 'key_goods' && !copy.goodsUrl) {
+        var images = archiveRows('shop_goods_page').filter(function (item) { return !item.sumLine && String(item.goodsId) === String(copy.goodsId) && String(item.shopId) === String(copy.shopId) && item.platform === copy.platform; });
+        if (images.length === 1) copy.goodsUrl = images[0].goodsUrl;
+      }
       return copy;
     });
     var product = ["productPanorama", "productOperation"].includes(state.page);
@@ -389,18 +513,37 @@
     }
     if (region) rows = rows.filter(function (row) { return state.area === "city" ? row.isProv !== true : row.isProv === true; });
     var columns = archiveColumns(id, rows, explicitTable);
+    var order = state.archiveColumnOrder[id] || [];
+    if (order.length) columns.sort(function (a, b) { var x = order.indexOf(a.key), y = order.indexOf(b.key); return (x < 0 ? 999 : x) - (y < 0 ? 999 : y); });
     var allRows = rows.slice(), categoryOptions = [];
+    if (account && id === 'saved_shops' && state.archiveChannelFilter) rows = rows.filter(function (r) { return r.platform === state.archiveChannelFilter; });
     var classifications = goods && validRange && complete ? archiveRows(id === "shop_spu_page" ? "shop_cards_spu" : "shop_cards_sku") : [];
     var unavailableCard = false;
-    if (goods) {
+    if (goods || id === 'key_goods') {
       categoryOptions = Array.from(new Set(rows.map(function (r) { return r.catePathName; }).filter(Boolean))).sort();
       var card = classifications.find(function (c) { return String(c.id) === state.archiveCard; });
       var cardArchive = archive.cardRecords[(id === 'shop_spu_page' ? 'spu:' : 'sku:') + state.archiveCard];
       if (card) { var members = cardArchive && cardArchive.verified ? cardArchive.rows : archiveCardRows(card, rows); unavailableCard = members === null; rows = members || []; }
       if (state.archiveCategory) rows = rows.filter(function (r) { return r.catePathName === state.archiveCategory; });
-      if (state.archiveFlag) rows = rows.filter(function (r) { return r[state.archiveFlag] === true || Number(r[state.archiveFlag]) > 0; });
-      if (state.archiveProfit) rows = rows.filter(function (r) { return r.profit != null && Number.isFinite(Number(r.profit)) && (state.archiveProfit === "loss" ? Number(r.profit) < 0 : Number(r.profit) >= 0); });
+      if (state.archiveFlag) rows = rows.filter(function (r) { return state.archiveFlag === 'follow' ? !!archiveAnnotation(r, id).follow : r[state.archiveFlag] === true || Number(r[state.archiveFlag]) > 0; });
     }
+    if (state.archiveTagFilter) rows = rows.filter(function (r) { return archiveAnnotation(r, id).tag === state.archiveTagFilter; });
+    if (state.archiveOnlySelected) rows = rows.filter(function (r) { return !!state.archiveSelectedRows[archiveRowIdentity(r, id)]; });
+    if (goods && state.archiveValidCategory) rows = rows.filter(function (r) { return typeof r.catePathName === 'string' && r.catePathName.trim() && !['--', '未分类', '无类目'].includes(r.catePathName.trim()); });
+    if (state.archiveProfit) rows = rows.filter(function (r) { return r.profit != null && r.profit !== '' && Number.isFinite(Number(r.profit)) && (state.archiveProfit === "loss" ? Number(r.profit) < 0 : Number(r.profit) >= 0); });
+    var filters = state.archiveFilters[id] || {};
+    rows = rows.filter(function (row) { return columns.every(function (column) {
+      var rule = filters[column.key]; if (!rule || rule.value === '') return true;
+      var value = row[column.key];
+      if (value == null || value === '') return false;
+      if (column.numeric) {
+        var a = Number(value), b = Number(rule.value) / (column.rate ? 100 : 1);
+        if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+        return rule.op === 'gt' ? a > b : rule.op === 'lt' ? a < b : rule.op === 'gte' ? a >= b : rule.op === 'lte' ? a <= b : rule.op === 'ne' ? a !== b : a === b;
+      }
+      var text = String(value).toLowerCase(), query = String(rule.value).toLowerCase();
+      return rule.op === 'eq' ? text === query : rule.op === 'ne' ? text !== query : text.includes(query);
+    }); });
     var q = state.q.trim().toLowerCase();
     if (q) rows = rows.filter(function (row) {
       return (goods ? columns.concat([{ key: "goodsId" }, { key: "spuid" }]) : columns).some(function (column) { return typeof row[column.key] !== "object" && String(row[column.key] == null ? "" : row[column.key]).toLowerCase().indexOf(q) >= 0; });
@@ -416,22 +559,32 @@
     state.pageNo = Math.min(Math.max(1, state.pageNo), Math.max(1, Math.ceil(total / pageSize)));
     var metricReport = product ? (state.page === "productOperation" ? "product_operation" : "product_overview") : (state.page === "productOverview" ? (state.dim === "spu" ? "shop_spu_total" : "shop_goods_total") : "channel_operating");
     var metricRow = validRange && id && state.page !== 'channelAnalysisNew' ? archiveRows(metricReport)[0] : null;
+    if (account) metricRow = archiveRows('saved_operating')[0] || archiveRows('saved_channels').find(function (r) { return String(r.platform).toLowerCase() === 'all'; }) || null;
     // A partial goods response is never promoted to a shop total.
     if (state.page === "productOverview" && !complete) metricRow = null;
     var cardDefinitions = [
       ["gmv", "支付金额(支付)"], ["netGmv", "净销售额(支付)"], ["tghf", "推广花费(支付预估)"],
-      ["profit", product ? "商品利润(支付预估)" : (state.page === "productOverview" ? "商品合计利润（未扣店铺自定义费用）" : "店铺利润（已扣自定义费用）")],
-      [product || state.page === "productOverview" ? "refund" : "thtkje", "退款金额"],
-      [product || state.page === "productOverview" ? "netHpCost" : "jhpcb", "净货品成本(支付)"],
-      ["ptCost", "平台花费(支付预估)"], ["deliverCost", "发货费用(支付)"],
-      [product || state.page === "productOverview" ? "sales" : "zdyFyAll", product || state.page === "productOverview" ? "销售件数(支付)" : "自定义费用"]
+      ["profit", product ? "商品利润(支付预估)" : "商品合计利润（未扣店铺自定义费用）"],
+      ["refund", "退款金额"], ["netHpCost", "净货品成本(支付)"],
+      ["ptCost", "平台花费(支付预估)"], ["deliverCost", "发货费用(支付)"], ["sales", "销售件数(支付)"]
+    ];
+    if (!product && state.page !== 'productOverview') cardDefinitions = [
+      ["realTimeGmv", "实时销售指数"], ["gmv", "支付金额(支付)"], ["netGmv", "净销售额(支付)"],
+      ["jhpcb", "净货品成本(支付)"], ["netHpCostRatio", "净货品成本占比(支付)"], ["thtkje", "退款金额"],
+      ["refundRatio", "退款率(按金额)"], ["tghf", "推广花费(支付预估)"], ["tghfXseZb", "推广花费销售额占比(支付预估)"],
+      ["deliverCost", "发货费用(支付)"], ["fhfyZfZb", "发货费用占比(支付)"], ["profit", "利润(支付预估)"],
+      ["gxh_59276bdb52297387", "大毛利率"], ["gxh_5c0f6bdb52296da6ff08652f4ed898844f30ff09", "小毛利润(支付预估)"],
+      ["gxh_5c0f6bdb52297387", "小毛利率"], ["ptCost", "平台花费(支付预估)"], ["zdyFyAll", "自定义费用"], ["otherCost", "其他费用(支付)"]
     ];
     var cards = metricRow ? cardDefinitions.map(function (entry) {
-      return { key: entry[0], label: entry[1], value: metricRow[entry[0]], on: true, sourceValue: true, note: entry[0] === "tghf" ? "保留来源表值；支付预估口径" : "来源表原值" };
+      var key = entry[0], aliases = { jhpcb: 'netHpCost', thtkje: 'refund' };
+      var value = metricRow[key] == null && aliases[key] ? metricRow[aliases[key]] : metricRow[key];
+      return { key: key, label: entry[1], value: value, on: true, sourceValue: true, rate: /率|占比/.test(entry[1]), sourceRatio: true,
+        note: key === 'realTimeGmv' ? '实时指标，不按所选日期累加；未保存时留空' : key === 'profit' && !product && state.page !== 'productOverview' ? '店铺利润已扣自定义费用' : '保留来源表值' };
     }) : [];
-    var message = !validRange ? "当前选择范围未采集。已保存的数据仅覆盖 " + scope.date + "，未采数据不计为 0。" : !id ? "这个页面本轮尚未采集。请查看渠道详情、商品总览或商品全景分析。" : !available ? "这张表尚未采集或档案读取失败。采集完成后点击刷新已采数据。" : !complete ? "商品分页不完整，暂不显示商品合计指标。" : partial ? "以下为已保存的部分明细，不代表全部记录。" : unavailableCard ? "已取得此卡片的数量与规则，但分类明细尚未核验，暂不显示商品列表。选择“全部”可返回。" : total === 0 ? (q || state.archiveCard || state.archiveCategory || state.archiveFlag || state.archiveProfit ? "没有匹配的记录。" : "接口已采集完成，返回 0 条记录。") : "";
+    var message = !validRange ? "当前选择范围未采集。已保存的数据仅覆盖 " + scope.date + "，未采数据不计为 0。" : !id ? "这个页面本轮尚未采集。请查看渠道详情、商品总览或商品全景分析。" : !available ? "这张表尚未采集或档案读取失败。采集完成后点击刷新已采数据。" : !complete ? "商品分页不完整，暂不显示商品合计指标。" : partial ? "以下为已保存的部分明细，不代表全部记录。" : unavailableCard ? "已取得此卡片的数量与规则，但分类明细尚未核验，暂不显示商品列表。选择“全部”可返回。" : total === 0 ? (q || state.archiveCard || state.archiveCategory || state.archiveFlag || state.archiveProfit || Object.values(filters).some(function (f) { return f.value !== ""; }) ? "没有匹配的记录。" : "接口已采集完成，返回 0 条记录。") : "";
     return {
-      localArchive: true, page: { id: meta.id, label: meta.label, ops: [] },
+      localArchive: true, account: account, page: { id: meta.id, label: meta.label, ops: [] },
       tabs: choices.map(function (tab) { return { id: tab[0], label: tab[1] }; }),
       tab: choice ? { id: choice[0], label: choice[1] } : null,
       range: { from: state.from, to: state.to }, daysType: state.daysType,
@@ -439,16 +592,16 @@
       classifications: classifications, categoryOptions: categoryOptions, allRows: allRows, filteredRows: rows,
       promotionGroups: promotionGroups, selectedPromotion: selectedPromotion,
       promotionSummary: selectedPromotion && selectedPromotion.extensibleTableWrapper.columnData.find(function (r) { return r.sumLine; }),
-      reportId: id, complete: complete, partial: partial, message: message,
+      reportId: id, complete: complete, partial: partial, message: message, noMatches: message === "没有匹配的记录。",
       goodsSummary: goods && validRange && complete && available ? (state.archiveCard ? cardArchive && cardArchive.verified && cardArchive.summary : archiveRows(id === "shop_spu_page" ? "shop_spu_total" : "shop_goods_total")[0]) : null,
       coverage: { status: validRange && available ? "ready" : "missing" },
-      cardStatus: "ready", cards: cards, channelCount: 1, shopCount: 1, shops: [scope.shopName],
-      columns: columns.map(function (c) { c.on = !(state.archiveColumnsHidden[id] || []).includes(c.key); return c; }), total: total, pageNo: state.pageNo, pageSize: pageSize,
+      cardStatus: "ready", cards: cards, channelCount: account ? archiveRows('saved_channels').filter(function (r) { return String(r.platform).toLowerCase() !== 'all'; }).length : 1, shopCount: account ? archiveRows('saved_shops').length : 1, shops: [scope.shopName],
+      columns: columns.map(function (c) { c.on = state.archiveColumnsHidden[id] ? !state.archiveColumnsHidden[id].includes(c.key) : !c.defaultHidden; return c; }), total: total, pageNo: state.pageNo, pageSize: pageSize,
       rows: rows.slice((state.pageNo - 1) * pageSize, state.pageNo * pageSize).map(function (row, index) {
         var metrics = {};
         Object.keys(row).forEach(function (key) { if (row[key] == null || typeof row[key] !== "object") metrics[key] = row[key]; });
         metrics.payAmount = row.gmv;
-        return { key: String(row.goodsId || row.spuid || index), name: row.goodsName || row.planName || row.name || row.date || row.cateName || (region && state.area === "city" ? row.city : row.province) || row.hour, shop: scope.shopName, platform: row.platform, metrics: metrics, raw: row };
+        return { key: String(row.goodsId || row.spuid || row.shopId || index), name: row.goodsName || row.shopName || row.planName || row.name || row.date || row.cateName || (region && state.area === "city" ? row.city : row.province) || row.hour, shop: scope.shopName, platform: row.platform, metrics: metrics, raw: row };
       })
     };
   }
@@ -464,8 +617,8 @@
     } catch { return ""; }
   }
 
-  function archivePeriodDates() {
-    var end = Date.parse(state.localArchive.scope.date + 'T00:00:00Z');
+  function archivePeriodDates(endDate) {
+    var end = Date.parse((endDate || state.localArchive.scope.date) + 'T00:00:00Z');
     return Array.from({ length: state.archivePeriodDays }, function (_, i) { return new Date(end - i * 86400000).toISOString().slice(0, 10); }).filter(function (date) { return date >= DATA_START; });
   }
   function inspectArchivePeriod(record, goodsId, scope) {
@@ -487,7 +640,7 @@
   }
   function fillArchivePeriods(root) {
     var data = state.viewData, archive = state.localArchive, token = active;
-    if (!archive || state.page !== 'productOverview' || state.view !== 'period' || !data || data.message || data.reportId !== 'shop_goods_page') return;
+    if (!archive || !['productOverview', 'channelAnalysis'].includes(state.page) || state.view !== 'period' || !data || data.message || data.reportId !== 'shop_goods_page') return;
     if (archiveRecords('shop_goods_period').length) return;
     var queue = data.rows.map(function (row) { return String(row.metrics.goodsId); }).filter(function (id) { return !archive.periods[id]; });
     if (!queue.length) return;
@@ -570,10 +723,10 @@
         if (summary) return '<strong>汇总：' + (state.archiveSummary === "page" ? '当前页' : state.archiveCard ? '当前分类全部' : '全店全部') + '</strong><small class="bd-product-id">' + (state.archiveSummary === "page" ? '展示值相加，可能有取整差异' : '包含零销量商品 · 不随搜索变化') + '</small>';
         var src = archiveProductImage(metrics.goodsUrl);
         var expandable = isSpu && !metrics.goodsId;
-        return '<div class="bd-product-cell">' + (expandable ? '<button type="button" class="bd-expand" data-act="expand" data-key="spu-' + esc(metrics.spuid) + '" aria-expanded="' + !!state.open['spu-' + metrics.spuid] + '" aria-label="展开 SPU 商品链接">' + (state.open['spu-' + metrics.spuid] ? '⌄' : '›') + '</button>' : '') + '<span class="bd-product-thumb"><span>暂无图</span>' +
+        return archiveSelectionCell(metrics, data.reportId) + '<div class="bd-product-cell">' + (expandable ? '<button type="button" class="bd-expand" data-act="expand" data-key="spu-' + esc(metrics.spuid) + '" aria-expanded="' + !!state.open['spu-' + metrics.spuid] + '" aria-label="展开 SPU 商品链接">' + (state.open['spu-' + metrics.spuid] ? '⌄' : '›') + '</button>' : '') + '<span class="bd-product-thumb"><span>暂无图</span>' +
           (src ? '<img src="' + esc(src) + '" alt="' + esc(metrics.goodsName || "商品缩略图") + '" width="32" height="32" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') + '</span>' +
           '<div class="bd-product-caption"><button type="button" class="bd-product-name" data-act="' + (expandable ? 'expand' : 'archive-product') + '" data-key="spu-' + esc(metrics.spuid) + '" data-goods-id="' + esc(metrics.goodsId) + '" title="' + esc(value) + '">' + esc(value || "未命名商品") + '</button>' +
-          '<small class="bd-product-id" title="商品 ID：' + esc(metrics.goodsId) + '；SPU ID：' + esc(metrics.spuid) + '">ID ' + esc(metrics.goodsId || "—") + ' · SPU ' + esc(metrics.spuid || "—") + '</small></div></div>';
+          '<small class="bd-product-id" title="商品 ID：' + esc(metrics.goodsId) + '；SPU ID：' + esc(metrics.spuid) + '">ID ' + esc(metrics.goodsId || "—") + ' · SPU ' + esc(metrics.spuid || "—") + '</small>' + renderAnnotation(metrics, data.reportId) + '</div></div>';
       }
       if (column.key === "shopName") return summary ? "" : '<span class="bd-product-shop" title="' + esc(value || data.scope.shopName) + '">' + esc(value || data.scope.shopName) + '</span>';
       if (column.key === "onSaleTime") return summary ? "" : '<span title="' + esc(value) + '">' + esc(value ? String(value).split(" ")[0].replace(/-/g, "/") : "—") + '</span>';
@@ -594,7 +747,7 @@
     var header = '<thead><tr>' + columns.map(function (column, index) {
       var mark = state.sortKey === column.key ? (state.sortDir === "asc" ? " ↑" : " ↓") : "";
       var label = index === 0 ? '商品 <span class="bd-product-dim">' + (isSpu ? '<b>SPU</b> · SKU' : (archiveRecords('shop_spu_page').length ? 'SPU · <b>SKU</b>' : 'SPU（未采集） · <b>SKU</b>')) + '</span>' : esc(column.label);
-      return '<th scope="col"' + (state.sortKey === column.key ? ' aria-sort="' + (state.sortDir === "asc" ? "ascending" : "descending") + '"' : '') + '><button type="button" data-act="sort" data-key="' + esc(column.key) + '" title="' + esc(column.note || column.label) + '">' + label + mark + '</button></th>';
+      return index ? archiveHeader(column) : '<th scope="col"><button type="button" data-act="sort" data-key="' + esc(column.key) + '">' + label + mark + '</button></th>';
     }).join("") + '</tr></thead>';
     var summaryMetrics = data.goodsSummary;
     if (state.archiveSummary === "page" && summaryMetrics) {
@@ -620,7 +773,7 @@
 
   function renderArchiveClassifications(data) {
     if (data.page.id === 'channelAnalysisNew') return renderArchiveIndicators(data);
-    if (data.page.id !== "productOverview" || !data.classifications.length) return renderCards(data);
+    if (data.page.id !== "productOverview" || !data.classifications.length) return renderArchiveCompactCards(data);
     var cards = state.archiveCardsExpanded ? data.classifications : data.classifications.slice(0, 4);
     return '<section class="bd-block"><h2>综合指标 <small>商品分类</small></h2><div class="bd-classifications"><button type="button" data-act="archive-card" data-id="" class="bd-class-card' + (!state.archiveCard ? ' is-on' : '') + '"><span>全部</span><strong>' + data.allRows.length + '</strong><small>' + (data.reportId === "shop_spu_page" ? 'SPU' : '商品链接') + '</small></button>' + cards.map(function (c) {
       var rules = archiveCardRules(c).map(function (r) { return (r.columnName || r.columnKey) + ' ' + ({ lt: '<', lte: '≤', gt: '>', gte: '≥', eq: '=' }[r.calculation] || r.calculation) + ' ' + r.calculatedValue + (r.compareType === 'time' ? '（对比期）' : ''); }).join('；');
@@ -661,18 +814,111 @@
     return '<section class="bd-block"><h2>关键指标 <small>点击指标联动趋势和明细</small></h2><div class="bd-classifications">' + cards + '</div><button type="button" data-act="archive-trend-fold">' + (state.archiveTrendFolded ? '展开指标趋势' : '收起指标趋势') + '</button>' + (state.archiveTrendFolded ? '' : '<h3>' + esc(selected && selected.columnName) + '</h3><p class="bd-status">蓝色：本期 · 灰色：去年同期；同比和环比保留来源值。</p>' + chart + table) + '</section>';
   }
 
+  function archiveHeader(column) {
+    var sorted = state.sortKey === column.key;
+    var rule = (state.archiveFilters[state.viewData.reportId] || {})[column.key];
+    return '<th scope="col"' + (sorted ? ' aria-sort="' + (state.sortDir === 'asc' ? 'ascending' : 'descending') + '"' : '') + '><span class="bd-column-heading"><button type="button" data-act="sort" data-key="' + esc(column.key) + '" title="' + esc(column.note || column.label) + '">' + esc(column.label) + (sorted ? state.sortDir === 'asc' ? ' ↑' : ' ↓' : '') + '</button><button type="button" class="bd-filter-toggle' + (rule && rule.value !== '' ? ' is-on' : '') + '" data-act="archive-filter" data-key="' + esc(column.key) + '" aria-label="筛选' + esc(column.label) + '">⌄</button></span></th>';
+  }
+  function renderArchiveFilter(data) {
+    if (state.panel !== 'archive-filter') return '';
+    var column = data.columns.find(function (c) { return c.key === state.archiveFilterKey; });
+    if (!column) return '';
+    var rule = (state.archiveFilters[data.reportId] || {})[column.key] || { op: column.numeric ? 'eq' : 'contains', value: '' };
+    var operators = column.numeric ? [['eq', '等于'], ['ne', '不等于'], ['gt', '大于'], ['gte', '大于等于'], ['lt', '小于'], ['lte', '小于等于']] : [['contains', '包含'], ['eq', '等于'], ['ne', '不等于']];
+    return '<div class="bd-filter-panel" role="group" aria-label="表头筛选"><strong>' + esc(column.label) + '</strong><select data-act="archive-filter-op" aria-label="比较方式">' + operators.map(function (op) { return '<option value="' + op[0] + '"' + (op[0] === rule.op ? ' selected' : '') + '>' + op[1] + '</option>'; }).join('') + '</select><input data-act="archive-filter-value" aria-label="筛选值" type="' + (column.numeric ? 'number' : 'text') + '" step="any" value="' + esc(rule.value) + '" placeholder="' + (column.rate ? '百分数，如 20 表示 20%' : '输入筛选值') + '"><button type="button" data-act="archive-filter-clear">清除此列</button><button type="button" data-act="archive-filter-close">完成</button><small>仅筛选已保存的记录；上方指标保持所选店铺、日期口径。</small></div>';
+  }
+  function renderArchiveCompactCards(data) {
+    if (!data.cards.length) return '';
+    var hidden = state.archiveCardHidden[state.page] || [];
+    return '<section class="bd-block bd-compact-metrics"><div class="bd-section-heading"><strong>' + esc(cardTitle(state.page)) + '</strong><span>渠道 ' + data.channelCount + ' 个 · 店铺 ' + data.shopCount + ' 个</span><button type="button" data-act="archive-card-settings">卡片设置</button><button type="button" data-act="archive-metrics-fold">' + (state.archiveCardsFolded ? '展开指标' : '收起指标') + '</button></div>' +
+      (state.panel === 'archive-card-settings' ? '<div class="bd-archive-columns">' + data.cards.map(function (card) { return '<label><input type="checkbox" data-act="archive-card-visible" data-key="' + esc(card.key) + '"' + (hidden.includes(card.key) ? '' : ' checked') + '>' + esc(card.label) + '</label>'; }).join('') + '</div>' : '') +
+      (state.archiveCardsFolded ? '' : '<div class="bd-compact-grid">' + data.cards.filter(function (card) { return !hidden.includes(card.key); }).map(function (card) { return '<article title="' + esc(card.note) + '"><span>' + esc(card.label) + '</span><strong>' + (card.value == null ? '—' : formatCell(card.value, { numeric: true, rate: card.rate, sourceRatio: true })) + '</strong></article>'; }).join('') + '</div>') + '</section>';
+  }
+  function archiveShopPeriodRows(reportId) {
+    var record = archiveRecords(reportId || 'channel_operating')[0], source = record && record.response.payload.data;
+    var table = Array.isArray(source) && source.length > 1 ? source[1] : null;
+    var rows = table && Array.isArray(table.columnData) ? table.columnData : [];
+    var result = {};
+    var scope = reportId === 'saved_operating' ? { shopId: '', platform: 'all', date: state.to } : state.localArchive.scope;
+    rows.filter(function (row) { return !row.sumLine && (row.shopId == null || String(row.shopId) === scope.shopId) && (row.platform == null || row.platform === 'All' || row.platform === scope.platform); }).forEach(function (row) {
+      var date = String(row.date || '').replace(/\//g, '-');
+      if (date >= DATA_START && date <= scope.date && /^\d{4}-\d{2}-\d{2}$/.test(date)) result[date] = Object.hasOwn(result, date) ? null : row;
+    });
+    var anchor = record && record.rows[0];
+    if (result[scope.date] && anchor && ['gmv', 'netGmv', 'profit'].some(function (key) { return anchor[key] != null && result[scope.date][key] != null && Number(anchor[key]) !== Number(result[scope.date][key]); })) result = {};
+    return { rows: result, table: table };
+  }
+  function savedShopPeriodRows(data) {
+    var daily = {};
+    archiveRows('saved_shop_period').forEach(function (row) { daily[[row.platform, row.shopId, String(row.date || '').replace(/\//g, '-')].join(':')] = row; });
+    return data.rows.flatMap(function (shop) {
+      return archivePeriodDates(data.scope.date).map(function (date) {
+        var row = daily[[shop.raw.platform, shop.raw.shopId, date].join(':')];
+        return Object.assign({}, row || {}, { shopName: shop.raw.shopName, platform: shop.raw.platform, shopId: shop.raw.shopId, date: date, coverage: row ? '已采集' : '未采集' });
+      });
+    });
+  }
+  function renderSavedShopPeriod(data) {
+    var columns = archiveDisplayColumns(data).filter(function (c) { return c.on && c.key !== 'shopName'; }), dates = archivePeriodDates(data.scope.date);
+    return '<p class="bd-status">按已保存店铺日报展示；缺失日期留空，不从其它店铺或日期补值。</p><div class="bd-scroll"><table class="bd-table bd-source-table"><thead><tr><th>店铺</th><th>时间范围</th>' + columns.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '</tr></thead><tbody>' + savedShopPeriodRows(data).map(function (row, index) {
+      return '<tr>' + (index % dates.length ? '' : '<td rowspan="' + dates.length + '"><button type="button" data-act="archive-shop-detail" data-platform="' + esc(row.platform) + '" data-shop-id="' + esc(row.shopId) + '">' + esc(row.shopName) + '</button></td>') + '<td>' + esc(row.date.replace(/-/g, '/')) + '</td>' + columns.map(function (c) { return '<td>' + (row.coverage === '已采集' ? formatCell(row[c.key], c) : '未采集') + '</td>'; }).join('') + '</tr>';
+    }).join('') + '</tbody></table></div>';
+  }
+  function renderArchiveShopPeriod(data) {
+    var source = archiveShopPeriodRows(), dates = archivePeriodDates();
+    var columns = archiveDisplayColumns(data).filter(function (c) { return c.on; });
+    // The shop trend endpoint has its own headers; absent shop-list metrics are not inferred.
+    return '<p class="bd-status">店铺周期按经营趋势原表展示，指标名称以该表为准；缺失日期不计为 0。</p><div class="bd-scroll"><table class="bd-table bd-source-table"><thead><tr><th>店铺</th><th>时间范围</th>' + columns.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '</tr></thead><tbody>' + dates.map(function (date, index) {
+      var row = source.rows[date];
+      return '<tr>' + (index ? '' : '<td rowspan="' + dates.length + '">' + esc(data.scope.shopName) + '</td>') + '<td>' + date.replace(/-/g, '/') + '</td>' + columns.map(function (c) { return '<td>' + (row ? formatCell(row[c.key], c) : '未采集') + '</td>'; }).join('') + '</tr>';
+    }).join('') + '</tbody></table></div>';
+  }
+
+  function renderArchiveOperatingTrend(data) {
+    if (!['channel_operating', 'saved_operating'].includes(data.reportId)) return '';
+    var source = archiveShopPeriodRows(data.reportId), columns = archiveColumns(data.reportId, Object.values(source.rows).filter(Boolean), source.table).filter(function (c) { return c.numeric; });
+    if (!columns.length || !Object.keys(source.rows).length) return '<p class="bd-status">经营趋势尚未保存；下表保留所选日期数据。</p>';
+    var selected = columns.find(function (c) { return c.key === state.archiveOperatingMetric; }) || columns[0];
+    var days = Object.keys(source.rows).sort(), entries = [];
+    for (var day = days[0]; day <= days.at(-1); day = new Date(Date.parse(day) + 86400000).toISOString().slice(0, 10)) entries.push({ date: day, row: source.rows[day] });
+    var values = entries.map(function (p) { return p.row && p.row[selected.key]; }).filter(function (v) { return v != null && v !== '' && Number.isFinite(Number(v)); }).map(Number);
+    var min = Math.min(0, ...values), max = Math.max(1, ...values), span = max - min, path = '', paths = [];
+    var points = entries.map(function (p, index) {
+      var value = p.row && p.row[selected.key];
+      if (value == null || value === '' || !Number.isFinite(Number(value))) { if (path) paths.push(path); path = ''; return ''; }
+      var x = 50 + index * 700 / Math.max(1, entries.length - 1), y = 180 - (Number(value) - min) / span * 150;
+      path += (path ? ' L' : 'M') + x + ',' + y;
+      return '<circle cx="' + x + '" cy="' + y + '" r="4" fill="#376bed"><title>' + esc(p.date + ' ' + selected.label + ' ' + formatCell(value, selected).replace(/<[^>]*>/g, '')) + '</title></circle>';
+    }).join('');
+    if (path) paths.push(path);
+    var shown = state.archiveOperatingExpanded ? columns : columns.slice(0, 5);
+    return '<section class="bd-operating-trend" aria-label="经营趋势"><div class="bd-chips">' + shown.map(function (c) { return '<button type="button" data-act="archive-operating-metric" data-key="' + esc(c.key) + '" class="' + (c.key === selected.key ? 'is-on' : '') + '">' + esc(c.label) + '</button>'; }).join('') + '<button type="button" data-act="archive-operating-expand">' + (state.archiveOperatingExpanded ? '收起指标' : '展开全部指标') + '</button></div><h3>' + esc(selected.label) + ' · 经营趋势</h3><svg viewBox="0 0 800 220" role="img" aria-label="' + esc(selected.label) + '经营趋势" style="width:100%;max-height:250px"><path d="M50,20 V180 H750" fill="none" stroke="#ccd4e0"/>' + paths.map(function (d) { return '<path d="' + d + '" fill="none" stroke="#376bed" stroke-width="2"/>'; }).join('') + points + '<text x="50" y="208" font-size="12" fill="currentColor">' + esc(entries[0].date) + '</text><text x="750" y="208" text-anchor="end" font-size="12" fill="currentColor">' + esc(entries.at(-1).date) + '</text></svg><details><summary>查看趋势数值</summary><table class="bd-table"><thead><tr><th>日期</th><th>' + esc(selected.label) + '</th></tr></thead><tbody>' + entries.map(function (p) { return '<tr><td>' + esc(p.date) + '</td><td>' + (p.row ? formatCell(p.row[selected.key], selected) : '未采集') + '</td></tr>'; }).join('') + '</tbody></table></details></section>';
+  }
+
+  function archiveDisplayId(data) { return state.view === 'period' && data.reportId === 'channel_shop_table' ? 'channel_shop_period' : data.reportId; }
+  function archiveDisplayColumns(data) {
+    if (state.view !== 'period') return data.columns;
+    if (data.goods) return archivePeriodColumns(data);
+    if (data.reportId !== 'channel_shop_table') return data.columns;
+    var source = archiveShopPeriodRows(), id = archiveDisplayId(data), order = state.archiveColumnOrder[id] || [], hidden = state.archiveColumnsHidden[id] || [];
+    var columns = archiveColumns('channel_operating', Object.values(source.rows).filter(Boolean), source.table).filter(function (c) { return c.key !== 'date'; });
+    if (order.length) columns.sort(function (a, b) { return (order.indexOf(a.key) < 0 ? 999 : order.indexOf(a.key)) - (order.indexOf(b.key) < 0 ? 999 : order.indexOf(b.key)); });
+    return columns.map(function (c) { c.on = !hidden.includes(c.key); return c; });
+  }
   function renderArchiveControls(data) {
-    var goods = data.goods;
-    var period = state.page === 'productOverview' && state.view === 'period';
-    var columns = period ? archivePeriodColumns(data) : data.columns;
+    var goods = data.goods || data.reportId === 'key_goods';
+    var period = state.view === 'period';
+    var shopPeriod = ['channel_shop_table', 'saved_shops'].includes(data.reportId);
+    var columns = archiveDisplayColumns(data);
     var category = goods ? '<select data-act="archive-category" aria-label="品类"><option value="">全部品类</option>' + data.categoryOptions.map(function (c) { return '<option value="' + esc(c) + '"' + (state.archiveCategory === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select>' : '';
-    return '<div class="bd-tools bd-archive-tools"><input data-act="q" value="' + esc(state.q) + '" placeholder="搜索商品 / SPU ID / SKU ID / 地域">' + category +
-      (goods ? '<select data-act="archive-flag" aria-label="任务筛选"><option value="">全部商品</option>' + [['hasUnread', '跟进'], ['hasTodo', '待办'], ['hasTask', '有任务']].map(function (x) { return '<option value="' + x[0] + '"' + (state.archiveFlag === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select><select data-act="archive-profit" aria-label="盈亏筛选"><option value="">全部盈亏（显示值）</option><option value="profit"' + (state.archiveProfit === 'profit' ? ' selected' : '') + '>盈利及持平（显示值）</option><option value="loss"' + (state.archiveProfit === 'loss' ? ' selected' : '') + '>亏损（显示值）</option></select>' : '') +
-      '<button type="button" data-act="archive-reset">重置筛选</button>' + chips(goods ? (state.page === 'productOverview' ? [['list', '列表'], ['period', '周期'], ['gallery', '大图']] : [['list', '列表'], ['gallery', '大图']]) : [['list', '列表'], ['chart', '图表']], 'view') +
+    return archiveSelectionToolbar(data) + '<div class="bd-tools bd-archive-tools"><input data-act="q" value="' + esc(state.q) + '" placeholder="搜索商品 / SPU ID / SKU ID / 地域">' + category +
+      (goods ? '<label><input type="checkbox" data-act="archive-valid-category"' + (state.archiveValidCategory ? ' checked' : '') + '>有效类目</label><select data-act="archive-flag" aria-label="任务筛选"><option value="">全部商品</option>' + [['follow', '本系统跟进'], ['hasUnread', '旧站跟进'], ['hasTodo', '待办'], ['hasTask', '有任务']].map(function (x) { return '<option value="' + x[0] + '"' + (state.archiveFlag === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select><select data-act="archive-profit" aria-label="盈亏筛选"><option value="">全部盈亏（显示值）</option><option value="profit"' + (state.archiveProfit === 'profit' ? ' selected' : '') + '>盈利及持平（显示值）</option><option value="loss"' + (state.archiveProfit === 'loss' ? ' selected' : '') + '>亏损（显示值）</option></select>' : '') +
+      (!goods ? '<select data-act="archive-profit" aria-label="盈亏筛选"><option value="">全部盈亏</option><option value="profit"' + (state.archiveProfit === 'profit' ? ' selected' : '') + '>盈利及持平</option><option value="loss"' + (state.archiveProfit === 'loss' ? ' selected' : '') + '>亏损</option></select>' : '') +
+      '<button type="button" data-act="archive-reset">重置筛选</button>' + chips(goods ? (data.goods ? [['list', '列表'], ['period', '周期'], ['gallery', '大图']] : [['list', '列表'], ['gallery', '大图']]) : shopPeriod ? [['list', '列表'], ['period', '周期'], ['chart', '图表']] : [['list', '列表'], ['chart', '图表']], 'view') +
       (period ? '<div class="bd-period-days" role="group" aria-label="周期天数">' + [7, 15].map(function (n) { return '<label><input type="radio" name="bound-period-days" data-act="archive-period-days" value="' + n + '"' + (state.archivePeriodDays === n ? ' checked' : '') + '>' + n + '天</label>'; }).join('') + '</div>' : '') +
       (state.view === 'chart' ? '<select data-act="archive-chart-metric" aria-label="图表指标">' + data.columns.filter(function (c) { return c.numeric; }).map(function (c) { return '<option value="' + esc(c.key) + '"' + (archiveChartColumn(data).key === c.key ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join('') + '</select>' : '') +
-      '<button type="button" data-act="archive-columns">表格设置</button><button type="button" data-act="archive-export"' + (data.message && !data.partial || period && (data.reportId === 'shop_spu_page' && !archiveRecords('shop_spu_period').length || archivePeriodPending(data)) ? ' disabled' : '') + '>' + (period ? '导出本页周期' : '导出当前筛选') + '</button></div>' +
-      (state.panel === 'archive-columns' ? '<div class="bd-archive-columns"><strong>显示字段</strong>' + columns.map(function (c) { return '<label><input type="checkbox" data-act="archive-column" data-key="' + esc(c.key) + '"' + (c.on ? ' checked' : '') + (c.key === 'goodsName' ? ' disabled' : '') + '> ' + esc(c.label) + '</label>'; }).join('') + '<button type="button" data-act="archive-columns-reset">恢复全部字段</button></div>' : '');
+      '<button type="button" data-act="archive-columns">更多</button><button type="button" data-act="archive-export"' + (data.message && !data.partial || period && goods && (data.reportId === 'shop_spu_page' && !archiveRecords('shop_spu_period').length || archivePeriodPending(data)) ? ' disabled' : '') + '>' + (period ? '导出本页周期' : '导出当前筛选') + '</button></div>' + renderArchiveFilter(data) +
+      (state.panel === 'archive-columns' ? '<div class="bd-archive-columns"><strong>显示字段及顺序</strong>' + columns.map(function (c, index) { return '<span class="bd-column-option"><label><input type="checkbox" data-act="archive-column" data-key="' + esc(c.key) + '"' + (c.on ? ' checked' : '') + (['goodsName', 'shopName'].includes(c.key) ? ' disabled' : '') + '> ' + esc(c.label) + '</label><button type="button" data-act="archive-column-move" data-key="' + esc(c.key) + '" data-delta="-1" aria-label="前移' + esc(c.label) + '"' + (index < 2 ? ' disabled' : '') + '>←</button><button type="button" data-act="archive-column-move" data-key="' + esc(c.key) + '" data-delta="1" aria-label="后移' + esc(c.label) + '"' + (!index || index === columns.length - 1 ? ' disabled' : '') + '>→</button></span>'; }).join('') + '<button type="button" data-act="archive-columns-reset">恢复旧站表头</button></div>' : '');
   }
 
   function renderArchiveGallery(data) {
@@ -705,9 +951,32 @@
     }).join('') + '</div>';
   }
   function renderArchiveTable(data) {
-    if (!data.promotionSummary) return renderTable(data);
-    var metrics = Object.assign({}, data.promotionSummary, { planName: '合计（本类型全部计划）' });
-    return renderTable(data, [{ key: 'promotion-sum', name: '合计（本类型全部计划）', shop: data.scope.shopName, metrics: metrics }].concat(data.rows));
+    var columns = data.columns.filter(function (c) { return c.on; });
+    var rows = data.rows;
+    if (data.reportId === 'saved_groups') rows = rows.flatMap(function (r) { return [r].concat(state.open['group-' + r.raw.groupId] ? (r.raw.shopList || []).map(function (s) { return { metrics:s,raw:s,groupChild:true }; }) : []); });
+    if (data.promotionSummary) rows = [{ metrics: Object.assign({}, data.promotionSummary, { planName: '合计（本类型全部计划）' }) }].concat(rows);
+    return '<div class="bd-scroll" tabindex="0" role="region" aria-label="数据表，可横向滚动"><table class="bd-table bd-source-table"><thead><tr>' + columns.map(archiveHeader).join('') + '</tr></thead><tbody>' + rows.map(function (row) {
+      return '<tr>' + columns.map(function (column) {
+        var value = row.metrics[column.key], shown = formatCell(value, column);
+        if (column.key === 'shopName') shown = archiveSelectionCell(row.raw || row.metrics, data.reportId) + '<button type="button" class="bd-product-name" data-act="archive-shop-detail" data-shop-id="' + esc(row.raw && row.raw.shopId) + '" data-platform="' + esc(row.raw && row.raw.platform) + '">' + esc(value || data.scope.shopName) + '</button>' + renderAnnotation(row.raw || row.metrics, data.reportId);
+        if (column.key === 'platform') shown = channelDot(value) + esc({ JD: '京东', TM: '天猫', TMALL: '天猫', DY: '抖音', DOUYIN: '抖音', all: '全渠道' }[value] || value || '—');
+        if (data.reportId === 'saved_groups' && column.key === 'shopName' && !row.groupChild) shown = '<button type="button" data-act="archive-group-toggle" data-key="' + esc(row.raw.groupId) + '" aria-expanded="' + !!state.open['group-' + row.raw.groupId] + '">' + (state.open['group-' + row.raw.groupId] ? '⌄ ' : '› ') + esc(value) + '（' + (row.raw.shopList || []).length + ' 店）</button>';
+        var detailKey = { gmv: 'lstGmv', refund: 'lstRefund', netHpCost: 'lstNetHpCost', saleCost: 'lstSaleCost', deliverCost: 'lstDeliverCost', ptCost: 'lstPthf', otherCost: 'lstOtherCost', zdyFyAll: 'lstZdyFyAll' }[column.key];
+        var detail = row.raw && row.raw[detailKey];
+        if (Array.isArray(detail) && detail.length) shown = '<details class="bd-metric-detail"><summary>' + shown + '</summary><div><strong>' + esc(column.label) + ' · 来源明细</strong>' + detail.map(function (d) { return '<p><span>' + esc(d.name || d.code) + '</span><b>' + esc(d.originCost == null ? d.cost : d.originCost) + '</b></p>'; }).join('') + '</div></details>';
+        return '<td>' + shown + '</td>';
+      }).join('') + '</tr>';
+    }).join('') + '</tbody></table></div>';
+  }
+
+
+  function renderSavedChannels() {
+    var record = archiveRecords('saved_channels')[0];
+    if (!record) return '<section class="bd-block"><h2>渠道列表</h2><p class="bd-miss">所选日期的渠道原表尚未保存，不能由店铺行推算。</p></section>';
+    var columns = archiveColumns('saved_channels', record.rows);
+    return '<section class="bd-block"><h2>渠道列表</h2><p class="bd-status">点击渠道筛选下方店铺；汇总指标保持全部已存店铺范围。' + (record.source.updatedAt ? '采集时间：' + esc(record.source.updatedAt) : '') + '</p><div class="bd-scroll"><table class="bd-table bd-source-table"><thead><tr>' + columns.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '</tr></thead><tbody>' + record.rows.map(function (r) {
+      return '<tr>' + columns.map(function (c) { return '<td>' + (c.key === 'platform' ? '<button type="button" data-act="archive-channel-filter" data-platform="' + esc(String(r.platform).toLowerCase() === 'all' ? '' : r.platform) + '">' + esc({all:'全渠道', All:'全渠道', JD:'京东', TM:'天猫', TMALL:'天猫', DY:'抖音', DOUYIN:'抖音'}[r.platform] || r.platform) + '</button>' : formatCell(r[c.key], c)) + '</td>'; }).join('') + '</tr>';
+    }).join('') + '</tbody></table></div></section>';
   }
 
   function renderArchiveMain(data) {
@@ -718,20 +987,22 @@
       ? "商品合计取完整分页对应的全部合计，包含零销量但有花费或退款的商品。利润未扣店铺自定义费用；金额保留来源表的显示精度，不将逐行取整金额相加。"
       : selected ? "仅展示这件商品在所选日期的已采结果。金额保留来源表显示精度。"
       : "上方指标取店铺经营表，店铺利润已扣自定义费用。商品、品类等明细表利润口径不同，不能直接替代店铺利润。推广花费为支付预估口径。";
+    if (data.account) explanation = '按所选日期读取历史渠道汇总和店铺原表；不将店铺取整值重新相加。旧站后续重算可能与采集时不同。';
     var provenance = archiveRecords(data.page.id === 'channelAnalysisNew' ? 'key_graph' : data.page.id === 'productOverview' ? data.reportId : 'channel_operating')[0];
-    if (provenance && provenance.source) explanation = provenance.source.note + "。保留来源表金额精度与指标口径。";
+    if (!data.account && provenance && provenance.source) explanation = provenance.source.note + "。保留来源表金额精度与指标口径。";
     if (data.page.id === 'productOverview' && !data.complete) explanation = "展示已保存的商品明细；分页未核齐时不显示全店商品合计或分类数量。";
-    var shopPicker = state.savedOptions ? '<label>店铺 <select data-act="saved-shop" aria-label="选择店铺">' + state.savedOptions.shops.map(function (s) { return '<option value="' + esc(s.platform + ':' + s.shopId) + '"' + (s.shopId === scope.shopId && s.platform === scope.platform ? ' selected' : '') + '>' + esc(s.shopName) + '</option>'; }).join('') + '</select></label>' : '';
+    var shopPicker = state.savedOptions ? '<label>店铺 <select data-act="saved-shop" aria-label="选择店铺">' + (state.page === 'channelOverview' ? '<option value="__all__"' + (data.account ? ' selected' : '') + '>全部已存店铺</option>' : '') + state.savedOptions.shops.map(function (s) { return '<option value="' + esc(s.platform + ':' + s.shopId) + '"' + (!data.account && s.shopId === scope.shopId && s.platform === scope.platform ? ' selected' : '') + '>' + esc(s.shopName) + '</option>'; }).join('') + '</select></label>' : '';
     var inventory = state.localArchive.inventory;
     var selectProduct = selected ? '<section class="bd-block"><label>选择商品 <select data-act="archive-select-product" aria-label="选择商品">' + ((inventory && inventory.items) || [selected]).map(function (p) { return '<option value="' + esc(p.goodsId) + '"' + (String(p.goodsId) === String(selected.goodsId) ? ' selected' : '') + '>' + esc(p.goodsName + ' · ' + p.goodsId) + '</option>'; }).join('') + '</select></label><p>商品 ID：' + esc(selected.goodsId) + '</p><button type="button" class="bd-plain" data-act="page" data-page="' + (data.page.id === 'productOperation' ? 'productPanorama' : 'productOperation') + '">' + (data.page.id === 'productOperation' ? '查看商品全景' : '查看商品运营分析') + '</button></section>' : '';
     var dim = data.page.id === 'productOverview' ? chips([['spu', 'SPU'], ['sku', 'SKU']], 'dim') : '';
-    var report = '<section class="bd-block"><h2>' + esc(data.tab ? data.tab.label : "采集范围") + '</h2>' + dim +
+    var channelSection = data.account && data.tab.id === 'qdzl_lb' ? renderSavedChannels() : '';
+    var report = '<section class="bd-block"><h2>' + esc(data.account && data.tab.id === 'qdzl_lb' ? '店铺列表' : data.tab ? data.tab.label : "采集范围") + '</h2>' + dim +
       (data.region ? chips([["province", "按省份"], ["city", "按城市"]], "area") + '<p class="bd-status">省份汇总和城市明细分开展示，避免重复计算。</p>' : "") +
       (data.promotionGroups.length ? '<div class="bd-chips">' + data.promotionGroups.map(function (g) { return '<button type="button" data-act="archive-promotion" data-key="' + esc(g.promoteKey) + '" class="' + (g === data.selectedPromotion ? 'is-on' : '') + '">' + esc(g.promoteName) + '</button>'; }).join('') + '</div><p>' + (data.selectedPromotion.promoteKey === 'wxd' ? '无效单费用见下表，与推广花费口径不同。' : '本推广类型花费：' + formatCell(data.selectedPromotion.sumCost, { numeric: true })) + '</p>' : '') +
-      renderArchiveControls(data) +
+      renderArchiveOperatingTrend(data) + renderArchiveControls(data) +
       (data.goods && state.view !== 'period' ? '<div class="bd-summary-switch">汇总：' + chips([['all', '全部'], ['page', '当前页']], 'archiveSummary') + '</div>' : '') +
       (data.message ? '<p class="bd-miss">' + esc(data.message) + '</p>' : '') +
-      (data.message && !(data.partial && data.rows.length) ? '' : data.goods ? (state.view === 'period' && state.page === 'productOverview' ? renderArchivePeriod(data) : state.view === 'gallery' ? renderArchiveGallery(data) : renderArchiveGoodsTable(data)) : state.view === 'chart' ? renderArchiveChart(data) : renderArchiveTable(data)) +
+      (data.message && !data.noMatches && !(data.partial && data.rows.length) ? '' : data.goods || data.reportId === 'key_goods' ? (state.view === 'period' ? renderArchivePeriod(data) : state.view === 'gallery' ? renderArchiveGallery(data) : renderArchiveGoodsTable(data)) : state.view === 'chart' ? renderArchiveChart(data) : state.view === 'period' && ['channel_shop_table', 'saved_shops'].includes(data.reportId) ? (data.rows.length ? (data.account ? renderSavedShopPeriod(data) : renderArchiveShopPeriod(data)) : '') : renderArchiveTable(data)) +
       (data.goods && state.view !== 'period' ? '<p class="bd-status">当前为 ' + (data.reportId === 'shop_spu_page' ? 'SPU 汇总，点击箭头展开商品链接' : 'SKU 商品链接明细') + '。销售件数按接口原口径展示，不等同于销售单数。左右滚动可查看全部指标。</p>' : '') +
       '<div class="bd-sum">当前表 ' + esc(data.total) + ' 条' + (data.goods && data.complete && data.coverage.status === "ready" ? ' · 全店商品分页已收齐' : '') + ' · 表格筛选不改变上方指标范围</div>' +
       '<div class="bd-pager"><select data-act="archive-page-size" aria-label="每页条数">' + [20, 50, 100].map(function (n) { return '<option value="' + n + '"' + (data.pageSize === n ? ' selected' : '') + '>' + n + ' 条/页</option>'; }).join('') + '</select><button type="button" data-act="page-no" data-delta="-1"' + (data.pageNo <= 1 ? " disabled" : "") + '>上一页</button><span>第 ' + data.pageNo + ' / ' + Math.max(1, Math.ceil(data.total / data.pageSize)) + ' 页</span><button type="button" data-act="page-no" data-delta="1"' + (data.pageNo * data.pageSize >= data.total ? " disabled" : "") + '>下一页</button></div></section>';
@@ -740,9 +1011,9 @@
       '<div class="bd-archive-progress"><span data-archive-progress>' + esc(archiveRunText()) + '</span><button type="button" data-act="archive-refresh"' + (state.archiveRefreshBusy ? ' disabled' : '') + '>' + (state.archiveRefreshBusy ? '正在刷新…' : '刷新已采数据') + '</button></div>' + selectProduct +
       (state.error ? '<p class="bd-banner" role="alert">' + esc(state.error) + '</p>' : '') +
       (state.localArchive.failures.length ? '<p class="bd-banner">部分档案读取失败：' + esc(state.localArchive.failures.join("、")) + '</p>' : '') +
-      (data.page.id === 'channelOverview' ? '<p class="bd-banner">当前总览范围：' + esc(scope.platform) + ' · ' + esc(scope.shopName) + ' · ' + esc(scope.date) + '。全账号渠道汇总和店铺分组尚未采集。</p>' : '') +
+      (data.page.id === 'channelOverview' && !data.account ? '<p class="bd-banner">当前总览范围：' + esc(scope.platform) + ' · ' + esc(scope.shopName) + ' · ' + esc(scope.date) + '。可在店铺选择中切换“全部已存店铺”，查看历史渠道汇总。</p>' : '') +
       renderArchiveClassifications(data) + '<p class="bd-status">' + esc(explanation) + '</p>' +
-      '<div class="bd-tabs">' + tabs + '</div>' + report + '</section>';
+      '<div class="bd-tabs">' + tabs + '</div>' + channelSection + report + '</section>';
   }
   var timer = 0;
   var detach = function () {};
@@ -852,6 +1123,9 @@
       ".bd-table th,.bd-table td{padding:8px 10px;border-bottom:1px solid #f0f2f5;text-align:right;white-space:nowrap;}",
       ".bd-table th:first-child,.bd-table td:first-child,.bd-table th:nth-child(2),.bd-table td:nth-child(2){text-align:left;}",
       ".bd-table th{background:#fafafa;color:#3b6cff;font-weight:500;}",
+      ".bd-source-table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0}.bd-source-table th{position:sticky;top:0;z-index:2;background:var(--xm-table-header,#eef3ff);color:var(--xm-text,#17243b)}.bd-source-table th:first-child,.bd-source-table td:first-child{position:sticky;left:0;min-width:180px;max-width:260px;z-index:1;background:var(--xm-card,#fff);white-space:normal}.bd-source-table th:first-child{z-index:3;background:var(--xm-table-header,#eef3ff)}.bd-source-table tbody tr:nth-child(even) td{background:var(--xm-table-stripe,#f7f8fa)}.bd-source-table tbody tr:hover td{background:var(--xm-hover,#edf5ff)}.bd-source-table td{height:40px}.bd-column-heading{display:flex;align-items:center;justify-content:flex-end;gap:3px}.bd-column-heading>button:first-child{text-decoration:underline dotted;text-underline-offset:4px}.bd-filter-toggle{font-size:12px!important;min-width:18px;padding:2px!important}.bd-filter-toggle.is-on{color:var(--xm-primary,#3971ed);background:#e6eeff!important}",
+      ".bd-filter-panel{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px;background:var(--xm-card,#fff);border:1px solid var(--xm-border,#dee6f5);margin:8px 0}.bd-filter-panel small{width:100%;color:var(--xm-text-secondary,#8590a1)}.bd-filter-panel input,.bd-archive-tools input{height:30px;padding:0 8px;border:1px solid var(--xm-border,#dee6f5);border-radius:4px;background:var(--xm-card,#fff);color:inherit}.bd-filter-panel button,.bd-column-option button,.bd-section-heading button{padding:4px 8px;border:1px solid var(--xm-border,#dee6f5);border-radius:4px;background:var(--xm-card,#fff);color:inherit;cursor:pointer}.bd-column-option{display:flex;gap:3px;align-items:center;border-bottom:1px solid var(--xm-border,#eee);padding:5px}.bd-column-option button:disabled{opacity:.3;cursor:default}",
+      ".bd-annotation-tag{display:inline-block;background:#e9f0ff;color:#376bed;border-radius:3px;padding:1px 5px;margin:3px}.bd-annotation-target{display:block;white-space:normal;color:var(--xm-text-secondary,#69768a)}.bd-row-follow{white-space:normal}.bd-row-follow p{max-width:260px}.bd-selection-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 12px}.bd-row-select{float:left;margin:8px 6px 0 0}.bd-operating-trend{margin-bottom:20px}.bd-operating-trend details{margin-bottom:14px}.bd-section-heading{display:flex;align-items:center;gap:12px;margin-bottom:14px}.bd-section-heading>span{flex:1;color:var(--xm-text-secondary,#8590a1);font-size:12px}.bd-compact-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0}.bd-compact-grid article{padding:12px 16px;border-right:1px solid var(--xm-border,#edf0f6)}.bd-compact-grid article>span{display:block;font-size:12px;color:var(--xm-text-secondary,#7c8798);min-height:20px}.bd-compact-grid article>strong{font-size:23px;line-height:1.6}.bd-compact-metrics{padding:16px!important}.bd-archive-tools{gap:6px}.bd-source-table .bd-metric-detail>div{white-space:normal;min-width:260px}.bd-source-table th button,.bd-product-table th button{border:0;background:transparent;color:inherit;font:inherit;cursor:pointer}",
       ".bd-table th button{border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;}",
       ".bd-table tr.bd-total td{font-weight:650;background:#fafafa;}",
       ".bd-product-scroll{max-height:65vh;border:1px solid var(--xm-border,#e5e7eb);border-radius:5px;margin-top:10px;}",
@@ -1975,7 +2249,7 @@
     var profileOnly = data.page.id === "personalCenter" || data.page.id === "myProjects";
     var tableBlock = profileOnly ? "" : '<div class="bd-tools">' +
       (ops.indexOf("dim") >= 0 ? '<button type="button" data-act="dim" data-dim="spu" class="' + (state.dim === "spu" ? "is-on" : "") + '">SPU</button><button type="button" data-act="dim" data-dim="sku" class="' + (state.dim === "sku" ? "is-on" : "") + '">SKU</button>' : "") +
-      (channelPage ? '<button type="button" data-act="panel" data-panel="cards">目标</button><button type="button" data-act="view" data-view="list" class="' + (state.view === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="view" data-view="chart" class="' + (state.view === "chart" ? "is-on" : "") + '">图表</button><button type="button" data-act="panel" data-panel="columns">默认视窗</button>' : "") +
+      (channelPage ? '<button type="button" data-act="panel" data-panel="cards">目标</button><button type="button" data-act="view" data-view="list" class="' + (state.view === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="view" data-view="chart" class="' + (state.view === "chart" ? "is-on" : "") + '">图表</button><button type="button" data-act="panel" data-panel="columns">更多</button>' : "") +
       (ops.indexOf("views") >= 0 ? '<button type="button" data-act="view" data-view="list" class="' + (state.view === "list" ? "is-on" : "") + '">列表</button><button type="button" data-act="view" data-view="period" class="' + (state.view === "period" ? "is-on" : "") + '">周期</button><button type="button" data-act="view" data-view="gallery" class="' + (state.view === "gallery" ? "is-on" : "") + '">大图</button>' : "") +
       (ops.indexOf("export") >= 0 ? '<a href="/api/bound/export?' + esc(queryString()) + '">' + (data.page.id === "productStock" ? "导出表格数据" : "导出") + "</a>" : "") +
       (data.page.id === "productOverview" ? '<button type="button" data-act="panel" data-panel="columns">自定义数据字段</button><button type="button" data-act="panel" data-panel="batch" data-field="follow">设置跟进</button><button type="button" data-act="panel" data-panel="batch" data-field="target">设置目标</button><button type="button" data-act="panel" data-panel="batch" data-field="tag">批量打标</button>' : "") +
@@ -2016,16 +2290,20 @@
 
   function paint(root) {
     if (state.localArchive && state.page !== "link") state.viewData = buildArchiveView();
-    var focus = root.querySelector && root.querySelector("[data-act='q']");
+    var focus = document.activeElement;
+    var focusAct = focus && focus.getAttribute && focus.getAttribute('data-act');
+    if (!['q', 'archive-filter-value'].includes(focusAct) || !root.contains || !root.contains(focus)) focus = null;
     var start = focus ? focus.selectionStart : null;
     render(root);
     fillArchiveExtras(root);
+    fillSavedOverview(root);
+    fillArchiveAnnotations(root);
     fillArchivePeriods(root);
-    if (start != null && root.querySelector) {
-      var next = root.querySelector("[data-act='q']");
+    if (focus && root.querySelector) {
+      var next = root.querySelector("[data-act='" + focusAct + "']");
       if (next) {
         next.focus();
-        if (next.setSelectionRange) {
+        if (start != null && next.setSelectionRange) {
           next.setSelectionRange(start, start);
         }
       }
@@ -2119,6 +2397,49 @@
       }
       var act = node.getAttribute("data-act");
       if (state.localArchive && act.indexOf("archive-") === 0) {
+        if (act === 'archive-annotation-open') { state.archiveAnnotationMode = node.getAttribute('data-field'); state.archiveAnnotationDraft = ''; state.panel = 'archive-annotation'; paint(root); return; }
+        if (act === 'archive-annotation-close') { state.panel = ''; paint(root); return; }
+        if (act === 'archive-annotation-save' || act === 'archive-annotation-clear') {
+          if (state.archiveAnnotationBusy) return;
+          var annoData = state.viewData, annoScope = annotationScopeKey(), annoCache = state.archiveAnnotations[annoScope] || {};
+          var annoKeys = annoData.allRows.map(function (r) { return archiveRowIdentity(r, annoData.reportId); }).filter(function (id) { return state.archiveSelectedRows[id]; });
+          if (!annoKeys.length || annoKeys.length > 100 || annoKeys.some(function (id) { return !annoCache[id] || !annoCache[id].ready; })) return;
+          var annoValue = act === 'archive-annotation-clear' ? '' : state.archiveAnnotationDraft, annoField = state.archiveAnnotationMode;
+          if (annoField === 'target') {
+            var annoColumn = annoData.columns.find(function (c) { return c.key === state.archiveTargetMetric; });
+            annoValue = act === 'archive-annotation-clear' ? null : { metric: state.archiveTargetMetric, value: Number(annoValue) / (annoColumn && annoColumn.rate ? 100 : 1) };
+            if (annoValue && (!Number.isFinite(annoValue.value) || annoValue.value <= 0)) { state.error = '目标值需大于 0。'; paint(root); return; }
+          }
+          state.archiveAnnotationBusy = true; state.error = ''; paint(root);
+          fetch('/api/bound/shop-day/annotations', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ keys: annoKeys, from: state.from, to: state.to, field: annoField, value: annoValue }) }).then(async function (r) {
+            var result = await r.json(); if (!r.ok || !result.ok) throw Error('save_failed');
+            Object.keys(result.marks).forEach(function (id) { annoCache[id] = Object.assign({ready:true},result.marks[id]); if (annoField !== 'target') Object.keys(state.archiveAnnotations).forEach(function (k) { if (state.archiveAnnotations[k][id]) state.archiveAnnotations[k][id][annoField] = result.marks[id][annoField]; }); });
+            if (annotationScopeKey() === annoScope) state.panel = '';
+          }).catch(function () { state.error = '保存未完成，请刷新读取后核对；未修改旧站数据。'; }).finally(function () { state.archiveAnnotationBusy = false; if (token === active) paint(root); });
+          return;
+        }
+        if (act === 'archive-select-page') { state.viewData.rows.forEach(function (r) { var id = archiveRowIdentity(r.raw, state.viewData.reportId); if (id) state.archiveSelectedRows[id] = true; }); paint(root); return; }
+        if (act === 'archive-clear-selection') { state.archiveSelectedRows = {}; state.archiveOnlySelected = false; paint(root); return; }
+        if (act === 'archive-only-selected') { state.archiveOnlySelected = !state.archiveOnlySelected; state.pageNo = 1; paint(root); return; }
+        if (act === 'archive-operating-expand') { state.archiveOperatingExpanded = !state.archiveOperatingExpanded; paint(root); return; }
+        if (act === 'archive-operating-metric') { state.archiveOperatingMetric = node.getAttribute('data-key'); paint(root); return; }
+        if (act === 'archive-group-toggle') { var groupKey = 'group-' + node.getAttribute('data-key'); state.open[groupKey] = !state.open[groupKey]; paint(root); return; }
+        if (act === 'archive-channel-filter') { state.archiveChannelFilter = node.getAttribute('data-platform') || ''; state.pageNo = 1; paint(root); return; }
+        if (act === 'archive-shop-detail') {
+          var shopKey = node.getAttribute('data-platform') + ':' + node.getAttribute('data-shop-id');
+          var pickedArchiveShop = state.savedOptions && state.savedOptions.shops.find(function (s) { return s.platform + ':' + s.shopId === shopKey; });
+          if (pickedArchiveShop) { state.savedShopKey = shopKey; state.shop = pickedArchiveShop.shopName; }
+          state.archiveAccountOverview = false; state.page = 'channelAnalysis'; state.tab = 'qdfx_jy'; state.view = 'list'; state.q = state.sortKey = ''; state.pageNo = 1; load(root, token); return; }
+        if (act === 'archive-filter') { state.archiveFilterKey = node.getAttribute('data-key'); state.panel = 'archive-filter'; paint(root); return; }
+        if (act === 'archive-filter-close') { state.panel = ''; paint(root); return; }
+        if (act === 'archive-filter-clear') { delete (state.archiveFilters[state.viewData.reportId] || {})[state.archiveFilterKey]; state.pageNo = 1; paint(root); return; }
+        if (act === 'archive-metrics-fold') { state.archiveCardsFolded = !state.archiveCardsFolded; paint(root); return; }
+        if (act === 'archive-card-settings') { state.panel = state.panel === act ? '' : act; paint(root); return; }
+        if (act === 'archive-column-move') {
+          var order = archiveDisplayColumns(state.viewData).map(function (c) { return c.key; }), current = order.indexOf(node.getAttribute('data-key')), moveTarget = current + Number(node.getAttribute('data-delta'));
+          if (current > 0 && moveTarget > 0 && moveTarget < order.length) { order.splice(moveTarget, 0, order.splice(current, 1)[0]); state.archiveColumnOrder[archiveDisplayId(state.viewData)] = order; saveArchiveDisplay(); paint(root); }
+          return;
+        }
         if (act === 'archive-job-start' || act === 'archive-job-stop') {
           if (state.localArchive.runtime !== 'server') return;
           fetch('/api/bound/shop-day/' + (act === 'archive-job-start' ? 'four-pages/start' : 'stop'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(async function (r) {
@@ -2138,23 +2459,35 @@
           state.error = "";
           state.archiveRefreshBusy = true;
           paint(root);
+          state.archiveOverviewCache = {}; state.archiveAnnotations = {};
           readLocalArchive(true).then(readArchiveProduct).then(readArchiveCard).finally(function () { state.archiveRefreshBusy = false; if (token === active) paint(root); });
           return;
         }
         if (act === "archive-card") { state.archiveCard = node.getAttribute("data-id") || ""; state.pageNo = 1; paint(root); readArchiveCard().then(function () { if (token === active) paint(root); }); return; }
         if (act === "archive-cards-expand") { state.archiveCardsExpanded = !state.archiveCardsExpanded; paint(root); return; }
         if (act === "archive-columns") { state.panel = state.panel === "archive-columns" ? "" : "archive-columns"; paint(root); return; }
-        if (act === "archive-columns-reset") { state.archiveColumnsHidden[state.viewData.reportId] = []; paint(root); return; }
+        if (act === "archive-columns-reset") { delete state.archiveColumnsHidden[archiveDisplayId(state.viewData)]; state.archiveColumnOrder[archiveDisplayId(state.viewData)] = []; saveArchiveDisplay(); paint(root); return; }
         if (act === "archive-reset") {
           state.q = state.archiveCard = state.archiveCategory = state.archiveFlag = state.archiveProfit = state.sortKey = "";
+          state.archiveOnlySelected = state.archiveValidCategory = false; state.archiveTagFilter = '';
+          state.archiveFilters[state.viewData.reportId] = {};
           state.pageNo = 1; paint(root); return;
         }
         if (act === "archive-promotion") { state.archivePromotion = node.getAttribute("data-key"); state.q = state.sortKey = ""; state.pageNo = 1; paint(root); return; }
         if (act === "archive-gallery-spu") { state.view = "list"; state.open['spu-' + node.getAttribute('data-spuid')] = true; paint(root); return; }
-        if (act === "archive-export") {
+        if (act === "archive-export" || act === "archive-export-selected") {
           var data = state.viewData, columns = data.columns.filter(function (c) { return c.on; });
-          var exportRows = data.filteredRows;
-          var periodExport = state.page === 'productOverview' && state.view === 'period';
+          var exportRows = act === 'archive-export-selected' ? data.allRows.filter(function (r) { return state.archiveSelectedRows[archiveRowIdentity(r, data.reportId)]; }) : data.filteredRows;
+          var periodExport = act !== 'archive-export-selected' && data.goods && state.view === 'period';
+          if (act !== 'archive-export-selected' && state.view === 'period' && data.reportId === 'channel_shop_table') {
+            var shopPeriod = archiveShopPeriodRows();
+            columns = [{ key: 'shopName', label: '店铺' }, { key: 'date', label: '时间范围' }, { key: 'coverage', label: '数据状态' }].concat(archiveDisplayColumns(data).filter(function (c) { return c.on; }));
+            exportRows = archivePeriodDates().map(function (date) { return Object.assign({}, shopPeriod.rows[date], { shopName: data.scope.shopName, date: date, coverage: shopPeriod.rows[date] ? '已采集' : '未采集' }); });
+          }
+          if (act !== 'archive-export-selected' && state.view === 'period' && data.reportId === 'saved_shops') {
+            columns = [{ key: 'shopName', label: '店铺' }, { key: 'date', label: '时间范围' }, { key: 'coverage', label: '数据状态' }].concat(archiveDisplayColumns(data).filter(function (c) { return c.on && c.key !== 'shopName'; }));
+            exportRows = savedShopPeriodRows(data);
+          }
           if (periodExport) {
             if (data.message && !data.partial || data.reportId === 'shop_spu_page' && !archiveRecords('shop_spu_period').length || archivePeriodPending(data)) return;
             columns = [{ key: 'goodsId', label: '商品 ID' }, { key: 'spuid', label: 'SPU ID' }, { key: 'date', label: '时间范围' }, { key: 'coverage', label: '数据状态' }].concat(archivePeriodColumns(data).filter(function (c) { return c.on; }));
@@ -2439,11 +2772,33 @@
       }
       var act = node.getAttribute("data-act");
       if (act === "saved-shop" && state.savedOptions) {
+        if (node.value === '__all__' && state.page === 'channelOverview') { state.archiveAccountOverview = true; state.tab = ''; state.pageNo = 1; state.q = state.sortKey = ''; paint(root); return; }
+        state.archiveAccountOverview = false;
         var shop = state.savedOptions.shops.find(function (s) { return s.platform + ":" + s.shopId === node.value; });
         if (shop) { state.savedShopKey = node.value; state.shop = shop.shopName; state.pageNo = 1; load(root, token); }
         return;
       }
       if (state.localArchive) {
+        if (act === 'archive-annotation-value') { state.archiveAnnotationDraft = node.value; return; }
+        if (act === 'archive-target-metric') { state.archiveTargetMetric = node.value; paint(root); return; }
+        if (act === 'archive-tag-filter') { state.archiveTagFilter = node.value; state.pageNo = 1; paint(root); return; }
+        if (act === 'archive-row-select') { var selectedId = node.getAttribute('data-id'); if (state.viewData.allRows.some(function (r) { return archiveRowIdentity(r, state.viewData.reportId) === selectedId; })) { if (node.checked) state.archiveSelectedRows[selectedId] = true; else delete state.archiveSelectedRows[selectedId]; } paint(root); return; }
+        if (act === 'archive-valid-category') { state.archiveValidCategory = !!node.checked; state.pageNo = 1; paint(root); return; }
+
+        if (act === 'archive-filter-op' || act === 'archive-filter-value') {
+          var reportId = state.viewData.reportId, column = state.viewData.columns.find(function (c) { return c.key === state.archiveFilterKey; });
+          if (!column) return;
+          var filters = state.archiveFilters[reportId] || (state.archiveFilters[reportId] = {}), rule = filters[column.key] || { op: column.numeric ? 'eq' : 'contains', value: '' };
+          if (act === 'archive-filter-op' && ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'contains'].includes(node.value)) rule.op = node.value;
+          if (act === 'archive-filter-value') rule.value = String(node.value).slice(0, 200);
+          filters[column.key] = rule; state.pageNo = 1; paint(root); return;
+        }
+        if (act === 'archive-card-visible') {
+          var cardKey = node.getAttribute('data-key'), cardHidden = state.archiveCardHidden[state.page] || [];
+          if (!state.viewData.cards.some(function (c) { return c.key === cardKey; })) return;
+          state.archiveCardHidden[state.page] = node.checked ? cardHidden.filter(function (k) { return k !== cardKey; }) : Array.from(new Set(cardHidden.concat(cardKey)));
+          saveArchiveDisplay(); paint(root); return;
+        }
         if (act === 'archive-period-days') {
           if ([7, 15].includes(Number(node.value))) state.archivePeriodDays = Number(node.value);
           paint(root); return;
@@ -2455,16 +2810,17 @@
         }
         if (act === "archive-category" || act === "archive-flag" || act === "archive-profit" || act === "archive-page-size") {
           if (act === "archive-category") state.archiveCategory = node.value;
-          if (act === "archive-flag" && ["", "hasTask", "hasTodo", "hasUnread"].includes(node.value)) state.archiveFlag = node.value;
+          if (act === "archive-flag" && ["", "follow", "hasTask", "hasTodo", "hasUnread"].includes(node.value)) state.archiveFlag = node.value;
           if (act === "archive-profit" && ["", "profit", "loss"].includes(node.value)) state.archiveProfit = node.value;
           if (act === "archive-page-size" && [20, 50, 100].includes(Number(node.value))) state.archivePageSize = Number(node.value);
           state.pageNo = 1; paint(root); return;
         }
         if (act === "archive-column") {
-          var id = state.viewData.reportId, key = node.getAttribute("data-key");
-          if (key === "goodsName") return;
-          var hidden = state.archiveColumnsHidden[id] || [];
+          var id = archiveDisplayId(state.viewData), key = node.getAttribute("data-key");
+          if (['goodsName', 'shopName'].includes(key)) return;
+          var hidden = state.archiveColumnsHidden[id] || archiveDisplayColumns(state.viewData).filter(function (c) { return !c.on; }).map(function (c) { return c.key; });
           state.archiveColumnsHidden[id] = node.checked ? hidden.filter(function (k) { return k !== key; }) : Array.from(new Set(hidden.concat(key)));
+          saveArchiveDisplay();
           paint(root); return;
         }
         if (act === "archive-chart-metric") { state.archiveChartMetric = node.value; paint(root); return; }
@@ -2538,7 +2894,16 @@
     root.addEventListener("click", onClick);
     root.addEventListener("change", onChange);
     function onArchiveSearch(event) {
-      if (state.localArchive && event.target.getAttribute && event.target.getAttribute("data-act") === "q") onChange(event);
+      if (!state.localArchive || !event.target.getAttribute) return;
+      var act = event.target.getAttribute('data-act');
+      if (act === 'q' || act === 'archive-annotation-value') onChange(event);
+      if (act === 'archive-filter-value') {
+        var column = state.viewData.columns.find(function (c) { return c.key === state.archiveFilterKey; });
+        if (!column) return;
+        var filters = state.archiveFilters[state.viewData.reportId] || (state.archiveFilters[state.viewData.reportId] = {});
+        var rule = filters[column.key] || { op: column.numeric ? 'eq' : 'contains' };
+        rule.value = event.target.value; filters[column.key] = rule;
+      }
     }
     root.addEventListener("input", onArchiveSearch);
     function onProductImageError(event) {

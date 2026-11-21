@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { SHOP_DAY, DAY_REPORTS } from "./shop-day-contract.js";
 import { START_ON } from "./catalog.js";
 import { listSheetHeads, listSheets } from "./persist.js";
+import { SHOP_TABLE_COLUMNS } from "./table-columns.js";
 
 const good = r => r && ["received", "empty"].includes(r.status);
 const day = value => String(value || "").replaceAll("/", "-");
@@ -104,7 +105,7 @@ export function createSavedData({ collector, readSheets = listSheets, readHeads 
       if (input.columnKey && !rows.some(row => Object.hasOwn(row, input.columnKey) && row[input.columnKey] != null && typeof row[input.columnKey] !== "object")) continue;
       if (input.reportId === "shop_spu_page" && (rows.some(r => !r.spuid || r.spuid === "--") || new Set(rows.map(r => String(r.spuid))).size !== rows.length)) continue;
       const knownComplete = shopLevel;
-      const metadata = columns(rows, ["key_shops", "key_goods"].includes(input.reportId) && input.columnKey ? [input.reportId === "key_shops" ? "shopName" : "goodsName", input.columnKey] : undefined);
+      const metadata = input.reportId === "channel_shop_table" ? SHOP_TABLE_COLUMNS : columns(rows, ["key_shops", "key_goods"].includes(input.reportId) && input.columnKey ? [input.reportId === "key_shops" ? "shopName" : "goodsName", input.columnKey] : undefined);
       return { reportId: input.reportId, scope, page: 1, status: "received", rows, dataHash: hash(rows),
         total: rows.length, matchedRows: rows.length, completeness: knownComplete ? "scoped_row" : "partial", ...(input.columnKey ? { columnKey: input.columnKey } : {}),
         source: { kind: "legacy_database", reportId: sourceId, dim, pages: found.map(s => s.pageNo), note: knownComplete ? "已按店铺、平台、日期匹配旧库原始记录" : "旧库已保存的明细，尚不能确认是否包含全部记录" },
