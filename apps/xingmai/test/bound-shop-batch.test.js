@@ -20,6 +20,7 @@ test("可见店铺只接受来源列表的明确平台和店铺身份；不接�
   assert.deepEqual(visibleShops([{ value: "JD", label: "京东", shopList: [{ value: "200", label: "第二店" }] }]), [second]);
   assert.equal(visibleShops([{ platform: "JD", shopId: "../secret" }]), null);
   assert.equal(visibleShops([{ shopId: "200" }]), null);
+  assert.equal(visibleShops([{ value: "JD", shopList: Array.from({ length: 853 }, (_, i) => ({ shopId: String(i + 1), shopName: "店铺" + i })) }]).length, 853);
   assert.equal(validShopDay({ ...second, date: "2026-08-31" }), false);
   assert.equal(shopDayRequest({ reportId: "channel_operating" }, { ...second, date: "2026-02-30" }), null);
 });

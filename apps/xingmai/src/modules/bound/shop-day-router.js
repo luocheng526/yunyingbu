@@ -32,7 +32,14 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
     }
     return readers.get(key);
   }
-  const batch = createShopBatch({ directory, discover,
+  const batch = createShopBatch({ directory, discover: async () => {
+    const source = await discover();
+    if (!source.ok) return source;
+    const known = new Set((await saved.options()).shops.map(s => s.platform + ":" + s.shopId));
+    const rank = s => s.platform === "JD" && s.shopId === "16501691" ? 2 : known.has(s.platform + ":" + s.shopId) ? 1 : 0;
+    source.shops.sort((a, b) => rank(b) - rank(a));
+    return source;
+  },
     blocked: async () => collector.isBusy() || job.busy() || importer.busy(),
     makeJob: (scope, owner) => createFourPageJob({ directory, scope, collector: createShopDayCollector({ directory, scope, retryFailures: true, maxPages: 200,
       request: (input, onRequest) => batchRequest(input, onRequest, scope, owner) }) }) });

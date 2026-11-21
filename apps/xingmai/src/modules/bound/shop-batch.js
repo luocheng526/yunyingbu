@@ -26,7 +26,7 @@ export function visibleShops(data) {
     for (const key of ["data", "list", "rows", "records", "children", "shops", "shopList", "channelList"]) visit(value[key], platform, depth + 1);
   }
   visit(data);
-  return invalid || !found.size || found.size > 500 ? null : [...found.values()];
+  return invalid || !found.size || found.size > 2000 ? null : [...found.values()];
 }
 
 export function createShopBatch({ directory, discover, makeJob, blocked = async () => false }) {
@@ -48,7 +48,10 @@ export function createShopBatch({ directory, discover, makeJob, blocked = async 
     if (!run) return null;
     delete run.owner;
     if (!active && run.status === "running") run.status = "interrupted";
-    if (currentJob) run.currentRun = await currentJob.status();
+    if (currentJob) {
+      run.currentRun = await currentJob.status();
+      run.requests += run.currentRun?.requests || 0; run.cached += run.currentRun?.cached || 0;
+    }
     return run;
   }
   async function start() {
