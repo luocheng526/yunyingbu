@@ -91,6 +91,53 @@ test("暂停等待当前请求完成，保留待采店铺", async () => {
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
+test("按已核实店铺ID缩小队列，跨重启保留范围，已有其他店铺档案仍可见且恢复全量时不重采", async () => {
+  const directory = await temp();
+  const third = { ...second, shopId: "300", shopName: "同名旧店" };
+  const visited = [];
+  const config = { directory, discover: async () => ({ ok: true, owner: "one", shops: [SHOP_DAY, second, third] }), makeJob: scope => ({
+    start: async () => { visited.push(scope.shopId); return { ok: true }; }, status: async () => null, stop() {},
+    wait: async () => ({ status: "complete", done: 1, total: 1, requests: 1 })
+  }) };
+  try {
+    let batch = createShopBatch(config);
+    await batch.start(); await batch.wait();
+    const selection = { label: "首页实时（新版）", shopKeys: ["JD:" + second.shopId] };
+    assert.equal((await batch.start({ selection })).ok, true);
+    let state = await batch.wait();
+    assert.equal(state.total, 1); assert.equal(state.done, 1); assert.equal(state.deferredShops.length, 2);
+    assert.equal((await batch.scopes()).length, 3);
+    assert.equal(visited.length, 3);
+    batch = createShopBatch(config);
+    await batch.start(); state = await batch.wait();
+    assert.deepEqual(state.selection, selection);
+    assert.deepEqual(state.shops.map(s => s.scope.shopId), [second.shopId]);
+    await batch.start({ selection: null }); state = await batch.wait();
+    assert.equal(state.total, 3); assert.equal(state.done, 3); assert.equal(state.deferredShops.length, 0);
+    assert.equal(visited.length, 3);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("选定店铺独立采集，未知ID、重复ID、日期和畸形范围不启动任务或改变已存队列", async () => {
+  const directory = await temp(); const visited = [];
+  try {
+    const batch = createShopBatch({ directory, discover: async () => ({ ok: true, owner: "one", shops: [SHOP_DAY, second] }), makeJob: scope => ({
+      start: async () => { visited.push(scope.shopId); return { ok: true }; }, status: async () => null, stop() {},
+      wait: async () => ({ status: "complete", done: 1, total: 1, requests: 1 })
+    }) });
+    await batch.start({ selection: { label: "首页实时（新版）", shopKeys: ["JD:200"] } });
+    const before = await batch.wait();
+    assert.deepEqual(visited, ["200"]);
+    for (const input of [[], { date: "2026-08-31" }, { selection: {} }, { selection: { label: "test", shopKeys: [] } },
+      { selection: { label: "test", shopKeys: ["JD:999"] } }, { selection: { label: "test", shopKeys: ["JD:200", "JD:200"] } },
+      { selection: { label: "test", shopKeys: ["TM:200"] } }, { selection: { label: "test", shopKeys: ["JD:../../secret"] } }]) {
+      assert.equal((await batch.start(input)).reason, "invalid_scope");
+      assert.deepEqual(await batch.status(), before);
+    }
+    assert.deepEqual(visited, ["200"]);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test("大店采集支持十页以后，分页总数和商品唯一性仍受校验", async () => {
   const directory = await temp();
   try {

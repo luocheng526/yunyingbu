@@ -6,6 +6,24 @@ import { SHOP_DAY, validShopDay } from "./shop-day-contract.js";
 export const BATCH_DATE = SHOP_DAY.date;
 const fatal = new Set(["server_login_required", "login_expired", "login_busy", "session_changed", "login_conflict", "account_disabled", "device_restricted", "identity_changed", "permission_denied", "local_archive_error"]);
 const copy = value => JSON.parse(JSON.stringify(value));
+const shopKey = scope => scope.platform + ":" + scope.shopId;
+
+// A selection only narrows the upstream account's verified shop list. It never
+// grants access to an arbitrary client-supplied shop or changes the collection date.
+function resolveSelection(input, previous, shops) {
+  if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => key !== "selection")) return null;
+  const selection = Object.hasOwn(input, "selection") ? input.selection : previous?.selection || null;
+  if (selection === null) return { selection: null, keys: null };
+  if (!selection || typeof selection !== "object" || Array.isArray(selection)
+    || Object.keys(selection).some(key => !["label", "shopKeys"].includes(key))
+    || typeof selection.label !== "string" || !selection.label.trim() || selection.label.length > 80
+    || !Array.isArray(selection.shopKeys) || !selection.shopKeys.length || selection.shopKeys.length > 2000) return null;
+  const available = new Set(shops.map(shopKey));
+  if (selection.shopKeys.some(key => typeof key !== "string" || !available.has(key))) return null;
+  const keys = new Set(selection.shopKeys);
+  if (keys.size !== selection.shopKeys.length) return null;
+  return { selection: { label: selection.label.trim(), shopKeys: [...keys] }, keys };
+}
 
 // The list must come from the current account's official shop selector, never from client-supplied IDs.
 export function visibleShops(data) {
@@ -54,7 +72,7 @@ export function createShopBatch({ directory, discover, makeJob, blocked = async 
     }
     return run;
   }
-  async function start() {
+  async function start(input = {}) {
     if (active) return { ok: false, statusCode: 409, reason: "collector_busy" };
     active = true; stopping = false;
     try {
@@ -63,12 +81,20 @@ export function createShopBatch({ directory, discover, makeJob, blocked = async 
       if (!source.ok) { active = false; return source; }
       const previous = await read();
       if (previous && previous.owner !== source.owner) { active = false; return { ok: false, statusCode: 409, reason: "identity_changed" }; }
-      const old = new Map((previous?.shops || []).map(s => [s.scope.platform + ":" + s.scope.shopId, s]));
-      const shops = source.shops.map(scope => {
-        const prior = old.get(scope.platform + ":" + scope.shopId);
+      const picked = resolveSelection(input, previous, source.shops);
+      if (!picked) { active = false; return { ok: false, statusCode: 400, reason: "invalid_scope" }; }
+      const old = new Map([...(previous?.deferredShops || []), ...(previous?.shops || [])].map(s => [shopKey(s.scope), s]));
+      const selected = source.shops.filter(scope => !picked.keys || picked.keys.has(shopKey(scope)));
+      const selectedKeys = new Set(selected.map(shopKey));
+      const deferred = new Map(old);
+      source.shops.forEach(scope => { if (!deferred.has(shopKey(scope))) deferred.set(shopKey(scope), { scope, status: "queued", attempts: 0 }); });
+      selectedKeys.forEach(key => deferred.delete(key));
+      const shops = selected.map(scope => {
+        const prior = old.get(shopKey(scope));
         return prior?.status === "complete" ? { ...prior, scope } : { scope, status: "queued", attempts: prior?.attempts || 0 };
       });
       running = { id: previous?.id || randomUUID(), owner: source.owner, date: BATCH_DATE, status: "running", shops,
+        selection: picked.selection, availableTotal: source.shops.length, deferredShops: [...deferred.values()],
         total: shops.length, done: shops.filter(s => s.status === "complete").length, failed: 0,
         requests: previous?.requests || 0, cached: previous?.cached || 0, startedAt: previous?.startedAt || new Date().toISOString(), resumedAt: new Date().toISOString(), current: null, reason: null };
       await save();
@@ -102,5 +128,5 @@ export function createShopBatch({ directory, discover, makeJob, blocked = async 
   }
   return { start, status, busy: () => active, wait: async () => { await settled; return status(); },
     stop: () => { stopping = true; if (currentJob) currentJob.stop(); return { ok: true, stopping: active }; },
-    scopes: async () => (await status())?.shops.map(s => s.scope) || [] };
+    scopes: async () => { const run = await status(); return [...(run?.shops || []), ...(run?.deferredShops || [])].map(s => s.scope); } };
 }

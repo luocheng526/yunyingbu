@@ -82,7 +82,7 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
   });
   route("post", "/collect", async req => job.busy() ? { ok: false, statusCode: 409, reason: "collector_busy" } : collector.collect(req.body));
   route("get", "/batch", async () => ({ ok: true, run: await batch.status() }));
-  route("post", "/batch/start", req => Object.keys(req.body || {}).length ? { ok: false, statusCode: 400, reason: "invalid_scope" } : batch.start());
+  route("post", "/batch/start", req => batch.start(req.body || {}));
   route("post", "/batch/stop", req => Object.keys(req.body || {}).length ? { ok: false, statusCode: 400, reason: "invalid_scope" } : batch.stop());
   route("get", "/run", async () => ({ ok: true, run: await job.status() }));
   route("post", "/four-pages/start", req => Object.keys(req.body || {}).length ? { ok: false, statusCode: 400, reason: "invalid_scope" } : job.start());
