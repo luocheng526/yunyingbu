@@ -2722,6 +2722,10 @@ export async function openDesk({ store, loginName, password, reveal, onStep, sig
         }, 12000);
       })
     ]);
+    // The startup deadline must not kill a browser that is already showing the
+    // login page while Jingdong is still loading or verifying its response.
+    clearTimeout(launchTimer);
+    launchTimer = null;
     if (!desk || ticket !== openTicket || launchTimedOut || linked.aborted) {
       if (desk && desk !== current) {
         discard(desk);

@@ -116,3 +116,42 @@ test("cancelling recovery during the readiness wait prevents a later submission"
   assert.equal(result.submitted, false);
   assert.equal(result.clicks.length, 0);
 });
+
+function openDeskFixture(stall) {
+  const timers = new Map();
+  let signal, stopped = 0;
+  const desk = { ws: {} };
+  const context = { current: null, openTicket: 0, loginVisible: false, shotCache: {}, lastLaunchNote: "",
+    AbortController, AbortSignal, console: { error() {} }, LOGIN_URL: "https://passport.shop.jd.com/",
+    acquireDesk: async (_store, _ticket, linked) => { signal = linked; return stall ? new Promise(() => {}) : desk; },
+    deskUsable: () => true, discard: () => {}, stopCurrent: () => {},
+    stopBooting: () => { stopped++; }, browserStartFailure: () => "startup timeout",
+    browserAbortError: () => Object.assign(new Error("aborted"), { code: "browser" }),
+    watchPlatformLimits: () => ({ stop() {} }), send: async () => {},
+    setTimeout: (fn, ms) => { const id = {}; timers.set(id, { fn, ms }); if (stall) queueMicrotask(fn); return id; },
+    clearTimeout: id => timers.delete(id),
+    finishOpen: async () => {
+      // Simulate passing the startup deadline while the existing page is slow.
+      for (const timer of timers.values()) if (timer.ms === 12000) timer.fn();
+      assert.equal(signal.aborted, false);
+      return { status: "verify" };
+    } };
+  const open = source.slice(source.indexOf("export async function openDesk("), source.indexOf("export function launchNote("))
+    .replace("export async", "async");
+  return { run: () => vm.runInNewContext(open + '\nopenDesk({store:"fixture",loginName:"fixture",password:"fixture-secret"})', context),
+    stopped: () => stopped, remaining: () => timers.size };
+}
+
+test("startup timeout is cleared before waiting for the already-open login page", async () => {
+  const fixture = openDeskFixture(false);
+  assert.equal((await fixture.run()).status, "verify");
+  assert.equal(fixture.stopped(), 0);
+  assert.equal(fixture.remaining(), 0);
+});
+
+test("a browser that never starts still has a bounded startup deadline", async () => {
+  const fixture = openDeskFixture(true);
+  assert.equal((await fixture.run()).status, "login");
+  assert.equal(fixture.stopped(), 1);
+  assert.equal(fixture.remaining(), 0);
+});

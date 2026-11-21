@@ -65,7 +65,7 @@ test("a shop logs in on the server and maps 京麦成交 plus 京准通花费、
   assert.equal(started.records[0].password, undefined);
   await gate;
   const view = await collector.board("cookie");
-  assert.equal(view.runtimeMark, "0.1.1327-home-login-ready");
+  assert.equal(view.runtimeMark, "0.1.1328-home-collection-cadence");
   assert.equal(logins, 1);
   assert.equal(view.running, false);
   assert.equal(view.records[0].liveAmount, 3009);
@@ -672,6 +672,56 @@ test("live2 schedule starts without a saved browser login", () => {
   assert.equal(starts, 1);
   assert.equal(LIVE2_INTERVAL_MS, 10 * 60 * 1000);
   assert.deepEqual(waits, [0]);
+});
+
+test("single-shop refreshes preserve the next full collection deadline", () => {
+  const timers = [], cleared = [], hooks = {};
+  armLive2Schedule({ env: {}, argv: [], gate: {}, hooks,
+    setTimeout: (fn, ms) => { const timer = { fn, ms }; timers.push(timer); return timer; },
+    clearTimeout: timer => cleared.push(timer), startRound: async () => ({ started: true }) });
+  hooks.onRoundDone(Date.now(), "");
+  const fullTimer = timers.at(-1), count = timers.length, clears = cleared.length;
+  for (const shop of ["A", "B", "C"]) hooks.onRoundDone(Date.now(), shop);
+  assert.equal(timers.length, count);
+  assert.equal(timers.at(-1), fullTimer);
+  assert.equal(cleared.length, clears);
+  assert.ok(fullTimer.ms > LIVE2_INTERVAL_MS - 1000);
+});
+
+for (const finishDuringStart of [false, true]) {
+  test(`a due full round waits for one-shop completion without losing its timer (race=${finishDuringStart})`, async () => {
+    const timers = [], hooks = {};
+    let busy = true, starts = 0;
+    armLive2Schedule({ env: {}, argv: [], gate: {}, hooks, bootMs: 0,
+      setTimeout: (fn, ms) => { const timer = { fn, ms }; timers.push(timer); return timer; },
+      clearTimeout: () => {}, startRound: async () => {
+        starts++;
+        if (busy) {
+          if (finishDuringStart) { busy = false; hooks.onRoundDone(Date.now(), "A"); }
+          return { started: false, running: true };
+        }
+        return { started: true, running: true };
+      } });
+    await timers[0].fn();
+    if (!finishDuringStart) { busy = false; hooks.onRoundDone(Date.now(), "A"); }
+    assert.equal(timers.at(-1).ms, 0);
+    assert.equal(timers.length, 2);
+    await timers.at(-1).fn();
+    assert.equal(starts, 2);
+    hooks.onRoundDone(Date.now(), "");
+    assert.ok(timers.at(-1).ms > LIVE2_INTERVAL_MS - 1000);
+  });
+}
+
+test("collector completion identifies single-shop jobs separately from full rounds", async () => {
+  let pending;
+  const scopes = [];
+  const collector = createLive2Collector({ storePath: "", loadOrg: async () => [],
+    listSessions: async () => [], listSamples: async () => [],
+    onRoundDone: (_began, only) => scopes.push(only), track: task => { pending = task; } });
+  await collector.start("", "A"); await pending;
+  await collector.start("", ""); await pending;
+  assert.deepEqual(scopes, ["A", ""]);
 });
 
 test("live2 schedule starts one round and does not stack a second while it runs", async () => {

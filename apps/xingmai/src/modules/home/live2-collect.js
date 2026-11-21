@@ -28,7 +28,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1327-home-login-ready";
+export const LIVE2_RUNTIME_MARK = "0.1.1328-home-collection-cadence";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
@@ -980,7 +980,7 @@ export function createLive2Collector(deps = {}) {
       });
       running = false;
       if (typeof deps.onRoundDone === "function") {
-        deps.onRoundDone(began);
+        deps.onRoundDone(began, only || "");
       }
     });
     if (deps.track) {
@@ -998,9 +998,9 @@ export function createLive2Collector(deps = {}) {
 const live2Hooks = { onRoundDone: null };
 const collector = createLive2Collector({
   ...homeCollectionGate(),
-  onRoundDone: function (began) {
+  onRoundDone: function (began, only) {
     if (typeof live2Hooks.onRoundDone === "function") {
-      live2Hooks.onRoundDone(began);
+      live2Hooks.onRoundDone(began, only);
     }
   }
 });
@@ -1024,45 +1024,62 @@ export function armLive2Schedule(deps = {}) {
   const clearTimer = deps.clearTimeout || clearTimeout;
   const hooks = deps.hooks || live2Hooks;
   let timer = 0;
+  let waitingForFullRound = false;
 
-  function plan(began) {
+  function schedule(wait) {
     if (timer) {
       clearTimer(timer);
     }
-    const origin = Number(began) || Date.now();
-    const wait = Math.max(0, LIVE2_INTERVAL_MS - (Date.now() - origin));
     timer = setTimer(run, wait);
     if (timer && typeof timer.unref === "function") {
       timer.unref();
     }
   }
 
+  function plan(began) {
+    const origin = Number(began) || Date.now();
+    schedule(Math.max(0, LIVE2_INTERVAL_MS - (Date.now() - origin)));
+  }
+
   async function run() {
+    timer = 0;
+    // Mark before awaiting: the single-shop job can finish while startRound is
+    // returning its busy response. Its completion must not lose this due round.
+    waitingForFullRound = true;
     const begun = Date.now();
     const cookie = readCookie();
     try {
       const view = await startRound(cookie);
       if (view && view.started === true) {
+        waitingForFullRound = false;
         return;
       }
       if (view && view.started === false) {
         return;
       }
+      waitingForFullRound = false;
       plan(begun);
     } catch (error) {
+      waitingForFullRound = false;
       console.error("live2 tick", error && error.statusCode ? error.statusCode : "failed");
       plan(begun);
     }
   }
 
-  hooks.onRoundDone = function (began) {
+  hooks.onRoundDone = function (began, only) {
+    if (only) {
+      // A one-shop refresh must not move everybody else's ten-minute deadline.
+      if (waitingForFullRound) {
+        waitingForFullRound = false;
+        schedule(0);
+      }
+      return;
+    }
+    waitingForFullRound = false;
     plan(began || Date.now());
   };
   const bootMs = deps.bootMs == null ? 8000 : deps.bootMs;
-  const boot = setTimer(run, bootMs);
-  if (boot && typeof boot.unref === "function") {
-    boot.unref();
-  }
+  schedule(bootMs);
   return { started: true };
 }
 
