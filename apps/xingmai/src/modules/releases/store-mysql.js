@@ -91,7 +91,9 @@ export function createMysqlStore({ now, pool } = {}) {
     return metadataReady;
   }
   const db = () => ({ query: async (...args) => {
-    await ensureMetadataColumns();
+    // Read-only queue/history requests must not run DDL or become unavailable
+    // if the database temporarily refuses the additive migration.
+    if (/^(?:INSERT INTO|UPDATE) release_tickets/i.test(String(args[0]).trim())) await ensureMetadataColumns();
     return rawDb().query(...args);
   } });
   let lock = null;

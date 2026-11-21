@@ -103,9 +103,13 @@ test("旧表只补缺失列，并发重复加列可恢复，真实迁移错误�
   assert.equal(shows, 2);
 });
 
-test("旧单无引用时保持为空，不推测或改写旧单来源和文件路径", async () => {
-  const { mapTicketRow } = await loadStore();
+test("旧单无引用时保持为空，读取不执行迁移或改写来源和路径", async () => {
+  const { mapTicketRow, createMysqlStore } = await loadStore();
   const old = mapTicketRow({ id: "rel-old", files: '["public/shared/modules/bound.js"]', status: "queued" });
   assert.equal(old.gitRef, ""); assert.equal(old.repository, "");
   assert.equal(old.files[0], "public/shared/modules/bound.js");
+  const pool = memoryMysql(); pool.denyMigration = true;
+  pool.rows.set("rel-old", { id: "rel-old", files: '["public/shared/modules/bound.js"]', status: "queued" });
+  assert.equal((await createMysqlStore({ pool }).get("rel-old")).gitRef, "");
+  assert.equal(pool.calls.some(sql => /SHOW COLUMNS|ALTER TABLE/.test(sql)), false);
 });
