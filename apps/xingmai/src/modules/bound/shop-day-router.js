@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { createShopDayCollector } from "./shop-day.js";
 import { createFourPageJob } from "./four-page-job.js";
 import { requestShopDayReport, collectionStatus } from "./collect.js";
+import { createArchiveImport } from "./archive-import.js";
 
 export function defaultArchiveDirectory() {
   return process.env.BOUND_DAY_ARCHIVE_DIR || (process.platform === "win32"
@@ -17,6 +18,8 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
   const router = Router();
   const collector = createShopDayCollector({ directory, request });
   const job = createFourPageJob({ directory, collector });
+  const importer = createArchiveImport({ directory, blocked: async () =>
+    (await job.status())?.status === "running" || collector.isBusy() });
   router.use((req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     if (collectionStatus().batchEnabled) return res.status(409).json({ ok: false, reason: "pause_legacy_batch_first" });
@@ -24,6 +27,7 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
       let sameOrigin = true;
       try { if (req.headers.origin) sameOrigin = new URL(req.headers.origin).host === req.headers.host; } catch { sameOrigin = false; }
       if (!sameOrigin || req.headers["sec-fetch-site"] === "cross-site" || !req.is("application/json")) return res.status(403).json({ ok: false, reason: "same_origin_required" });
+      if (req.path !== "/import" && importer.busy()) return res.status(409).json({ ok: false, reason: "archive_import_in_progress" });
     }
     next();
   });
@@ -33,6 +37,7 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
   });
   route("get", "/", async () => { const data = await collector.status(); delete data.directory; return { ...data, archiveMode: "single_shop", runtime: "server", fourPageRun: await job.status() }; });
   route("get", "/four-pages", () => collector.fourPageStatus());
+  route("post", "/import", req => importer.accept(req.body));
   route("get", "/report", async req => {
     const input = { reportId: req.query.reportId, page: Number(req.query.page || 1) };
     for (const key of ["goodsId", "cardId", "categoryPath", "planId", "promoteKey", "columnKey"]) if (req.query[key] !== undefined) input[key] = req.query[key];

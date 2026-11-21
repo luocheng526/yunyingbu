@@ -322,5 +322,5 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500 }
     })();
     return { ok: true, run };
   }
-  return { collect, selectProduct, status, fourPageStatus, getRecord, inventory, startAll, stopAll, runStatus };
+  return { collect, selectProduct, status, fourPageStatus, getRecord, inventory, startAll, stopAll, runStatus, isBusy: () => busy || runActive };
 }
