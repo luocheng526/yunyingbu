@@ -28,7 +28,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1328-home-collection-cadence";
+export const LIVE2_RUNTIME_MARK = "0.1.1329-home-limited-recovery";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
@@ -636,7 +636,13 @@ export function createLive2Collector(deps = {}) {
     let jar = prior.length && (!expired || client.fetchAccountIdentity) ? prior : (!expired && jars.get(shop.store)?.cookies) || null;
     // The browser must check/recover an expired session even when the legacy
     // account endpoint only returns a tolerated 601 response.
-    if (expired && client.recoverBrowserSession) jar = null;
+    // After an explicit browser limit, retry the native browser only after its
+    // durable hold expires. Do not precede that probe with legacy identity,
+    // trade and summary requests. The browser still verifies the actual shop
+    // ID; its verified deal is reused below, without a second trade request.
+    const retryLimited = base.platformSessionVersion === phase.sessionVersion &&
+      (base.platformLimited || Number(base.platformFailures) > 0);
+    if ((expired || retryLimited) && client.recoverBrowserSession) jar = null;
     let verified = false;
     if (jar && client.fetchAccountIdentity) {
       try {
@@ -696,6 +702,10 @@ export function createLive2Collector(deps = {}) {
         shop.password = "";
         if (phase.closed || phase.superseded) return null;
         if (error.code === "platform_limited") return holdPlatform(shop, phase, base, error);
+        // A fresh identity/login/network failure must not retain the previous
+        // platform-limit label and hide the action now required by this shop.
+        base.platformLimited = false;
+        base.platformRetryAt = 0;
         const authFailed = silentLoginFailed(error);
         const reason = String((error && error.message) || "登录没有完成").slice(0, 200);
         if (error.loginAttempted) base.passwordAttemptedVersion = phase.sessionVersion;

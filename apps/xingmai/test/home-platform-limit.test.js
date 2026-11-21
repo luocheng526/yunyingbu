@@ -9,6 +9,7 @@ import { jingmaiAccessLimit } from "../src/modules/home/jingmai.js";
 import { fetchHome } from "../src/modules/home/jingmai-client.js";
 import { createLive2Collector } from "../src/modules/home/live2-collect.js";
 import { patchHomeClientSource } from "../src/modules/home/router.js";
+import { getSession, listSessions, resetJingmaiStore, saveSession, sessionVersionOf } from "../src/modules/home/jingmai-store.js";
 
 test("the served homepage labels a deferred store as platform-limited without a relogin button", () => {
   const page = patchHomeClientSource(fs.readFileSync(new URL("../public/shared/modules/home.js", import.meta.url), "utf8"));
@@ -123,3 +124,60 @@ test("a limited store retains its data and cookies, backs off across restarts, a
   rows = await round(); a = rows.find(r => r.shop === "A");
   assert.equal(calls.A, 3); assert.equal(a.online, true); assert.equal(a.platformLimited, undefined);
 });
+
+for (const outcome of ["success", "platform_limited", "identity", "login", "network"]) {
+  test(`after cooldown a limited shop verifies its native browser before legacy requests (${outcome})`, async () => {
+    await resetJingmaiStore();
+    const cookies = value => [{ name: "thor", value, domain: ".jd.com", path: "/" }];
+    for (const store of ["A", "B"]) await saveSession(store, { cookies: cookies(store), authState: "ok", enabled: true, shopId: store });
+    const version = sessionVersionOf(await getSession("A"));
+    let time = 1000, pending, recoveries = 0;
+    const requests = [];
+    const collector = createLive2Collector({
+      storePath: "", concurrency: 1, clock: () => time, now: () => "2026/11/21 11:34:00",
+      published: [{ shop: "A", platformLimited: true, platformSessionVersion: version, platformRetryAt: 2000,
+        platformFailures: 3, liveAmount: 72, paidAmount: 4, capturedAt: "2026/11/21 11:30:00" }],
+      loadOrg: async () => ["A", "B"].map(store => ({ store, shopId: store, enabled: true, login: "fixture", password: "secret-fixture" })),
+      listSessions, listSamples: async () => [], track: task => { pending = task; },
+      client: {
+        fetchAccountIdentity: async jar => { requests.push("identity:" + jar[0].value); return { shopId: jar[0].value }; },
+        recoverBrowserSession: async (jar, signal, expected) => {
+          recoveries++;
+          assert.equal(jar[0].value, "A"); assert.equal(signal.aborted, false);
+          assert.equal(expected.requireIdentity, true); assert.equal(expected.shopId, "A");
+          if (outcome !== "success") throw Object.assign(new Error(outcome === "login" ? "京东要求安全验证" : outcome), { code: outcome, needsHuman: outcome === "login" });
+          return { cookies: cookies("A-renewed"), deal: { dealAmount: 100 } };
+        },
+        fetchHome: async (jar, _signal, expected) => {
+          requests.push("metrics:" + jar[0].value);
+          if (expected.store === "A") { assert.equal(jar[0].value, "A-renewed"); assert.equal(expected.browserDeal.dealAmount, 100); }
+          else assert.equal(expected.browserDeal, undefined);
+          return { dealAmount: 100, paidAmount: 5 };
+        }
+      }
+    });
+    const round = async () => { await collector.start(""); await pending; return (await collector.board("")).records; };
+    await round();
+    assert.equal(recoveries, 0); assert.deepEqual(requests, ["identity:B", "metrics:B"]);
+    time = 2000; requests.length = 0;
+    const rows = await round(), a = rows.find(row => row.shop === "A");
+    assert.equal(recoveries, 1);
+    assert.ok(!requests.includes("identity:A"));
+    assert.equal(rows.find(row => row.shop === "B").online, true);
+    if (outcome === "success") {
+      assert.equal(a.online, true); assert.equal(a.platformLimited, undefined);
+      assert.equal(a.liveAmount, 100); assert.equal((await getSession("A")).cookies[0].value, "A-renewed");
+    } else {
+      assert.ok(!requests.some(value => value.startsWith("metrics:A")));
+      assert.equal(a.liveAmount, 72); assert.equal((await getSession("A")).cookies[0].value, "A");
+      if (outcome === "platform_limited") { assert.equal(a.platformLimited, true); assert.equal(a.platformRetryAt, time + 60 * 60000); }
+      else { assert.equal(a.platformLimited, false); assert.equal(a.loginExpired, outcome === "login"); }
+      if (outcome === "network") {
+        requests.length = 0; time += 10 * 60000;
+        await round();
+        assert.equal(recoveries, 2);
+        assert.ok(!requests.includes("identity:A"), "a transient browser failure must not resume rejected legacy preflights");
+      }
+    }
+  });
+}
