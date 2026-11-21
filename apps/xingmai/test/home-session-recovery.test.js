@@ -120,6 +120,7 @@ test("login cooldowns persist, skip all identity calls, preserve data, and relea
 
 test("healthy shops run first and expired shops recover in bounded batches without starvation", async () => {
   let time = Date.parse("2026-11-21T09:00:00+08:00"), pending;
+  const firstRoundStarted = time;
   const order = [], names = ["A", "B", "C", "D", "E", "healthy"];
   const sessions = names.map(store => ({ store, sessionGen: 1, authState: store === "healthy" ? "ok" : "login_expired", cookies: jar(store) }));
   const c = createLive2Collector({ storePath: "", concurrency: 1, clock: () => time, now: () => "2026/11/21 09:00:00",
@@ -127,29 +128,35 @@ test("healthy shops run first and expired shops recover in bounded batches witho
     loadOrg: async () => names.map(store => ({ store, enabled: true, login: "fixture", password: "secret-fixture" })),
     listSessions: async () => sessions, listSamples: async () => [], claimOwner: async () => ({ ok: true }), saveSample: async () => ({ saved: true }),
     track: task => { pending = task; }, client: {
-      fetchHome: async () => { order.push("healthy"); return { dealAmount: 100, paidAmount: 10 }; },
+      fetchHome: async () => { time += 30000; order.push("healthy"); return { dealAmount: 100, paidAmount: 10 }; },
       recoverBrowserSession: async (_jar, _signal, expected) => { order.push(expected.store);
+        time += 20000;
         throw Object.assign(new Error("需要验证码"), { code: "login", needsHuman: true, loginAttempted: true }); }
     }
   });
   await c.start(""); await pending; assert.deepEqual(order, ["healthy", "A", "B", "C"]);
   const waiting = (await c.board("")).records.find(r=>r.shop==="D");
   assert.match(waiting.offlineReason, /分批恢复/); assert.equal(waiting.liveAmount, 50);
-  time += 10*60000; order.length=0;
+  assert.equal(waiting.loginRetryAt, firstRoundStarted + 10*60000);
+  // The scheduler measures ten minutes from round start. Recovery attempts make
+  // the first round longer than the next; waiting shops still need their turn.
+  time = firstRoundStarted + 10*60000; order.length=0;
   await c.start(""); await pending; assert.deepEqual(order, ["healthy", "D", "E"]);
 });
 
 test("newly expired sessions also share the per-round password limit", async () => {
   const names=["A","B","C","D","E"], logins=[];
+  const firstRoundStarted = Date.parse("2026-11-21T09:00:00+08:00");
+  let time = firstRoundStarted;
   let pending;
-  const c=createLive2Collector({storePath:"", concurrency:3, now:()=>"2026/11/21 09:00:00",
+  const c=createLive2Collector({storePath:"", concurrency:3, clock:()=>time, now:()=>"2026/11/21 09:00:00",
     loadOrg:async()=>names.map(store=>({store,enabled:true,login:"fixture",password:"fixture"})),
     listSessions:async()=>names.map(store=>({store,authState:"ok",sessionGen:1,cookies:jar(store)})),
     listSamples:async()=>[],claimOwner:async()=>({ok:true}),saveSample:async()=>({saved:true}),track:task=>{pending=task;},
     client:{fetchAccountIdentity:async()=>{throw Object.assign(new Error("expired"),{code:"login"});},
       recoverBrowserSession:(cookies,signal,hint)=>recoverBrowserSession(cookies,signal,hint,{
         readDeal:async()=>{throw Object.assign(new Error("登录页"),{code:"login"});},
-        relogin:async(_signal,expected)=>{logins.push(expected.store);throw Object.assign(new Error("需要验证码"),{code:"login",needsHuman:true});}
+        relogin:async(_signal,expected)=>{time+=20000;logins.push(expected.store);throw Object.assign(new Error("需要验证码"),{code:"login",needsHuman:true});}
       }),fetchHome:async()=>assert.fail("no verified session")}
   });
   await c.start("");await pending;
@@ -157,5 +164,6 @@ test("newly expired sessions also share the per-round password limit", async () 
   const rows=(await c.board("")).records;
   assert.equal(rows.filter(r=>r.loginNeedsHuman).length,3);
   assert.equal(rows.filter(r=>/分批恢复/.test(r.offlineReason)).length,2);
+  assert.ok(rows.filter(r=>/分批恢复/.test(r.offlineReason)).every(r=>r.loginRetryAt === firstRoundStarted + 10*60000));
   assert.ok(rows.every(r=>r.loginExpired));
 });

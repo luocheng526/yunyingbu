@@ -28,7 +28,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1324-home-session-recovery";
+export const LIVE2_RUNTIME_MARK = "0.1.1325-home-recovery-batches";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
@@ -400,7 +400,8 @@ export function createLive2Collector(deps = {}) {
     const attempts = previous && previous.version === phase.sessionVersion ? previous.attempts + 1 : 1;
     loginRetries.set(shop.store, {
       version: phase.sessionVersion, attempts, reason,
-      until: clock() + (error.recoveryDeferred ? 10 : Math.min(60, 15 * 2 ** (attempts - 1))) * 60 * 1000
+      until: error.recoveryDeferred ? phase.nextRecoveryBatchAt
+        : clock() + Math.min(60, 15 * 2 ** (attempts - 1)) * 60 * 1000
     });
     phase.loginState = {
       checkedAt: now(), loginSessionVersion: phase.sessionVersion, loginFailures: attempts,
@@ -619,7 +620,7 @@ export function createLive2Collector(deps = {}) {
     const expired = isLoginExpiredSession(saved);
     if (expired && client.recoverBrowserSession) {
       if (recoverySlots <= 0) return { ...base, loginExpired: true, online: false, offline: false,
-        loginSessionVersion: phase.sessionVersion, loginRetryAt: clock() + LIVE2_INTERVAL_MS,
+        loginSessionVersion: phase.sessionVersion, loginRetryAt: phase.nextRecoveryBatchAt,
         offlineReason: "登录失效，等待下一轮分批恢复" };
       recoverySlots--;
       phase.recoverySlot = true;
@@ -854,6 +855,10 @@ export function createLive2Collector(deps = {}) {
   }
 
   async function run(shops, only) {
+    // Queue capacity is per round. A shop that has not attempted recovery must
+    // become eligible at the next scheduled start, not ten minutes after it was
+    // skipped near the end of a slower round. Real login failures keep backoff.
+    const nextRecoveryBatchAt = clock() + LIVE2_INTERVAL_MS;
     recoverySlots = Math.max(1, Math.floor(Number(deps.recoveryLimit) || 3));
     const targets = (shops || []).filter(function (shop) {
       return shop && shop.store && (!only || shop.store === only);
@@ -871,7 +876,7 @@ export function createLive2Collector(deps = {}) {
       inflight.add(shop.store);
       const phase = {
         dealMs: 0, adsMs: 0, saveMs: 0, dealMarked: false, closed: false,
-        superseded: false, sessionVersion: null, controller: new globalThis.AbortController()
+        superseded: false, sessionVersion: null, nextRecoveryBatchAt, controller: new globalThis.AbortController()
       };
       const shopStart = Date.now();
       let timer = 0;
