@@ -16,7 +16,7 @@ import {
   beijingParts,
   withDeadline
 } from "./jingmai.js";
-import { readHomeDeal, readJztOverview } from "./jingmai-desk.js";
+import { readHomeDeal, readJztOverview, reloginHomeSession } from "./jingmai-desk.js";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
@@ -1211,14 +1211,32 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
   throw jingmaiError("network", "京麦没有返回数据");
 }
 
+export async function recoverBrowserSession(cookies, signal, expected = {}, deps = {}) {
+  const readDeal = deps.readDeal || readHomeDeal;
+  const relogin = deps.relogin || reloginHomeSession;
+  let jar = (cookies || []).map(cookie => ({ ...cookie }));
+  // Credentials are only supplied to the normal browser login, never to metrics.
+  const { credentials, ...hint } = expected;
+  let deal;
+  try {
+    deal = await readDeal(jar, signal, { ...hint, requireIdentity: true });
+  } catch (error) {
+    if (error.code !== "login" || !credentials?.loginName || !credentials?.password || signal?.aborted) throw error;
+    try {
+      jar = await relogin(signal, hint, credentials);
+      deal = await readDeal(jar, signal, { ...hint, requireIdentity: true });
+    } catch (failed) {
+      failed.loginAttempted = true;
+      throw failed;
+    }
+  }
+  if (!deal || !jar.length) throw jingmaiError("login", "服务器登录需要验证，请打开这家店的登录窗口");
+  return { cookies: jar, deal };
+}
+
 export const jingmaiClient = {
   login: loginShop,
-  recoverBrowserSession: async function (cookies, signal, expected) {
-    const jar = (cookies || []).map(cookie => ({ ...cookie }));
-    const deal = await readHomeDeal(jar, signal, { ...expected, requireIdentity: true });
-    if (!deal || !jar.length) throw jingmaiError("login", "服务器登录需要验证，请打开这家店的登录窗口");
-    return { cookies: jar, deal };
-  },
+  recoverBrowserSession,
   fetchHome: fetchHome,
   fetchAccountIdentity: fetchAccountIdentity,
   startQr: startQrLogin,

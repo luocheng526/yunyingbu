@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { EventEmitter } from "node:events";
+import { recoverPasswordSession } from "../src/modules/home/session-recovery.js";
 import { assertPageShopIdentity, cookieParams, pageShopIdentity, sessionReady } from "../src/modules/home/jingmai-desk.js";
 import { fetchHome } from "../src/modules/home/jingmai-client.js";
 import { extractShopDeal, homeDealUnavailable, shopDealUnavailable, parseHomeCard } from "../src/modules/home/jingmai.js";
@@ -19,10 +20,35 @@ const readBrowser = extract("async function readHomeDealNow", "export async func
 const readCookies = extract("async function readCookies", "function hasSession");
 const jar = value => [{ name: "thor", value, domain: ".jd.com", path: "/", secure: true }];
 
-async function browserCase({ resident = "resident-new", saved = "database-old", name = "本店旗舰店", pageId = "", merchantId = "", unavailable = false, lateRedirect = false, response = null, limits = {} } = {}) {
+test("the real relogin adapter accepts only the bound native shop ID and closes its own browser", async () => {
+  for (const actualId of ["1", "2"]) {
+    const chrome = new EventEmitter(); chrome.exitCode = null;
+    let submitted = 0, closed = 0, stopped = 0;
+    const context = {
+      URL, setTimeout, clearTimeout, expected: { store: "本店旗舰店", shopId: "1" },
+      credentials: { loginName: "fixture", password: "fixture" }, signal: new AbortController().signal,
+      profileIdentity: () => ({ key: "p_fixture", ephemeral: false }), isForbiddenLegacyProfileKey: () => false,
+      launchChrome: async () => ({ chrome, ws: {} }), send: async () => {}, LOGIN_URL: "https://passport.shop.jd.com/login",
+      watchPlatformLimits: () => ({ read: () => ({}), stop: () => { stopped++; } }), recoverPasswordSession,
+      readLoginPage: async () => submitted ? { href: "https://shop.jd.com/jdm/home" }
+        : { href: "https://passport.shop.jd.com/login", accountVisible: true, passwordVisible: true },
+      fillAndSubmit: async () => { submitted++; return true; }, sleepSignal: async () => {},
+      readCookies: async () => jar("renewed"), sessionReady, assertPageShopIdentity,
+      readShopBaseIdentity: async () => ({ shopName: "本店旗舰店", shopId: actualId }),
+      discard: () => { closed++; chrome.exitCode=0; chrome.emit("exit"); }
+    };
+    const result = vm.runInNewContext(extract("async function reloginHomeNow", "export function reloginHomeSession") +
+      "\nreloginHomeNow(signal, expected, credentials, () => true)", context);
+    if (actualId === "1") assert.equal((await result)[0].value,"renewed");
+    else await assert.rejects(result, e => e.code === "identity");
+    assert.equal(submitted, 1); assert.equal(closed, 1); assert.equal(stopped, 1);
+  }
+});
+
+async function browserCase({ resident = "resident-new", saved = "database-old", name = "本店旗舰店", pageId = "", merchantId = "", unavailable = false, lateRedirect = false, loading = false, response = null, limits = {} } = {}) {
   const input = saved ? jar(saved) : [];
   let browserJar = resident ? jar(resident) : [], href = "about:blank";
-  const commands = [], cookieReads = [];
+  const commands = [], cookieReads = [], waits = [];
   let locationReads = 0;
   const context = vm.createContext({
     input, signal: new AbortController().signal, expected: { store: "本店旗舰店", shopId: "1", requireIdentity: true },
@@ -43,7 +69,7 @@ async function browserCase({ resident = "resident-new", saved = "database-old", 
       }
       return {};
     },
-    sleepSignal: async () => {}, waitDomContentLoaded: async () => {}, evaluate: async () => {
+    sleepSignal: async ms => { waits.push(ms); }, waitDomContentLoaded: async () => {}, evaluate: async () => {
       locationReads++;
       return lateRedirect && locationReads > 1 ? "https://passport.shop.jd.com/login/index.action/jdm" : href;
     },
@@ -51,10 +77,10 @@ async function browserCase({ resident = "resident-new", saved = "database-old", 
     readShopBaseIdentity: async () => ({ shopName: name, shopId: pageId, merchantId }), assertPageShopIdentity, cookieParams,
     normalizeCookie: x => x, hasSession: x => x.some(c => c.name === "thor"),
     parseHomeCard, homeDealUnavailable, shopDealUnavailable, extractShopDeal,
-    homeCardText: async () => response ? "正在加载中..." : "经营数据\n成交金额\n" + (unavailable ? "—" : "100") + "\n成交单量\n1\n成交客户数\n1"
+    homeCardText: async () => response || loading ? "正在加载中..." : "经营数据\n成交金额\n" + (unavailable ? "—" : "100") + "\n成交单量\n1\n成交客户数\n1"
   });
   const outcome = vm.runInContext(readCookies + "\n" + readBrowser + "\nreadHomeDealNow(input, signal, expected)", context);
-  return { outcome, input, commands, cookieReads };
+  return { outcome, input, commands, cookieReads, waits };
 }
 
 const tradeResponse = value => ({ code: 200, data: { refreshTime: "2026-11-21 00:02:00", modules: [{
@@ -144,6 +170,13 @@ test("an expired browser profile falls back once to a saved human session", asyn
 test("a late login-page redirect is an authentication failure, not missing sales", async () => {
   const run = await browserCase({ lateRedirect: true });
   await assert.rejects(run.outcome, e => e.code === "login" && /登录页/.test(e.message));
+  assert.equal(run.input[0].value, "database-old");
+});
+
+test("a late redirect with no trade response fails promptly instead of waiting for the response timeout", async () => {
+  const run = await browserCase({ loading: true, lateRedirect: true });
+  await assert.rejects(run.outcome, e => e.code === "login");
+  assert.ok(run.waits.reduce((a,b)=>a+b,0) <= 1300);
   assert.equal(run.input[0].value, "database-old");
 });
 

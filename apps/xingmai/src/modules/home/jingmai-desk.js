@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
+import { recoverPasswordSession } from "./session-recovery.js";
 import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, homeDealUnavailable, shopDealUnavailable, jingmaiAccessLimit, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
 
 const LOGIN_URL =
@@ -3819,12 +3820,17 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
         throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
       }
       await sleepSignal(1000, signal);
-      const limited = accessWatch && accessWatch.read().deal;
-      if (limited) throw Object.assign(new Error(limited), { code: "platform_limited" });
+      await assertSessionPage();
       card = parseHomeCard(await homeCardText(ws));
     }
     if (card) {
       return await finishMetrics(card);
+    }
+    // A client-side redirect can happen after DOMContentLoaded. Keep checking
+    // while waiting for metrics instead of spending 25 seconds on a login page.
+    while (!networkDone) {
+      await assertSessionPage();
+      await sleepSignal(500, signal);
     }
     const body = lateBody || (await pending);
     if (settled) {
@@ -3950,6 +3956,64 @@ export async function readJztOverview(cookies, signal, expected) {
       discard(desk);
     }
   }
+}
+
+async function reloginHomeNow(signal, expected, credentials, allowed) {
+  const identity = profileIdentity({ store: expected.store, shopId: expected.shopId });
+  if (!identity.key || identity.ephemeral || isForbiddenLegacyProfileKey(identity.key)) {
+    throw Object.assign(new Error("店铺登录档案尚未绑定，请在服务器登录窗口处理"), { code: "login", needsHuman: true });
+  }
+  let desk, watch;
+  const close = () => { if (desk) discard(desk); };
+  try {
+    desk = await launchChrome(signal, { ephemeral: false, profileKey: identity.key, identity,
+      store: expected.store, shopId: expected.shopId });
+    signal?.addEventListener("abort", close, { once: true });
+    await send(desk.ws, "Page.enable");
+    await send(desk.ws, "Network.enable");
+    watch = watchPlatformLimits(desk.ws);
+    await send(desk.ws, "Page.navigate", { url: LOGIN_URL }, undefined, 8000);
+    return await recoverPasswordSession({
+      allowed,
+      page: () => readLoginPage(desk.ws),
+      limit: () => { const value = watch.read(); return value.deal || value.identity; },
+      submit: (name, password) => fillAndSubmit(desk.ws, name, password),
+      sleep: sleepSignal,
+      verifiedSession: async page => {
+        const url = new URL(page.href || "about:blank");
+        if (url.protocol !== "https:" || url.hostname !== "shop.jd.com") return null;
+        const cookies = await readCookies(desk.ws);
+        if (!sessionReady(page.href, cookies)) return null;
+        const actual = await readShopBaseIdentity(desk.ws);
+        if (!actual.shopId) return null;
+        assertPageShopIdentity({ ...expected, requireIdentity: true }, actual.shopName, actual);
+        return cookies;
+      }
+    }, credentials, signal);
+  } finally {
+    watch?.stop();
+    signal?.removeEventListener("abort", close);
+    if (desk) {
+      const exited = new Promise(resolve => {
+        if (!desk.chrome || desk.chrome.exitCode != null) { resolve(); return; }
+        const timer = setTimeout(resolve, 3500);
+        desk.chrome.once("exit", () => { clearTimeout(timer); resolve(); });
+      });
+      discard(desk);
+      await exited;
+    }
+  }
+}
+
+export function reloginHomeSession(signal, expected, credentials) {
+  // Share the same browser queue; never take over the human login desk.
+  const job = dealQueue.then(() => withDeadline(inner => {
+    if (inner?.aborted || signal?.aborted) throw Object.assign(new Error("采集已取消"), { code: "timeout" });
+    if (expected.canRecover && !expected.canRecover()) throw Object.assign(new Error("采集已取消"), { code: "timeout" });
+    return reloginHomeNow(inner || signal, normalizeDealExpected(expected), credentials, expected.canRecover);
+  }, 40000, "自动登录超时", signal));
+  dealQueue = job.catch(() => null);
+  return job;
 }
 
 export function readHomeDeal(cookies, signal, shopKeyOrExpected) {

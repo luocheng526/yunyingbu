@@ -28,7 +28,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1323-home-platform-backoff";
+export const LIVE2_RUNTIME_MARK = "0.1.1324-home-session-recovery";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
@@ -156,6 +156,7 @@ export function createLive2Collector(deps = {}) {
   let timings = emptyTimings();
   let running = false;
   let lastError = "";
+  let recoverySlots = 0;
   const loadOrg = deps.loadOrg || readOrgShops;
   const loadBackgroundOrg = deps.loadBackgroundOrg || readServerOrgShops;
   const ensureSession = deps.ensureSession || ensureCollectSession;
@@ -390,15 +391,24 @@ export function createLive2Collector(deps = {}) {
     }
   }
 
-  async function markExpiredLogin(shop, reason, phase) {
+  async function markExpiredLogin(shop, reason, phase, error = {}) {
     if (inactive(shop, phase)) return;
     jars.delete(shop.store);
-    const previous = loginRetries.get(shop.store);
+    const prior = published.get(shop.store) || {};
+    const previous = loginRetries.get(shop.store) || (prior.loginSessionVersion === phase.sessionVersion
+      ? { attempts: Number(prior.loginFailures) || 0, version: phase.sessionVersion } : null);
     const attempts = previous && previous.version === phase.sessionVersion ? previous.attempts + 1 : 1;
     loginRetries.set(shop.store, {
       version: phase.sessionVersion, attempts, reason,
       until: clock() + Math.min(60, 15 * 2 ** (attempts - 1)) * 60 * 1000
     });
+    phase.loginState = {
+      checkedAt: now(), loginSessionVersion: phase.sessionVersion, loginFailures: attempts,
+      loginNeedsHuman: error.needsHuman === true || error.loginAttempted === true,
+      loginRetryAt: loginRetries.get(shop.store).until,
+      platformLimited: false, platformRetryAt: 0,
+      ...(error.loginAttempted ? { passwordAttemptedVersion: phase.sessionVersion } : {})
+    };
     try {
       const marked = await markAuth(shop.store, "login_expired", reason || "登录已失效，请重新登录", writeOptions(shop, phase));
       rejectedWrite(marked, phase);
@@ -421,6 +431,8 @@ export function createLive2Collector(deps = {}) {
       pendingCollect: false, pendingUpdate: false, partialData: false, dataUnavailable: false,
       platformLimited: true, platformRetryAt: clock() + minutes * 60000,
       platformFailures: attempts, platformSessionVersion: phase.sessionVersion,
+      ...(error.loginAttempted ? { passwordAttemptedVersion: phase.sessionVersion } : {}),
+      checkedAt: now(),
       offlineReason: reason };
   }
 
@@ -565,10 +577,16 @@ export function createLive2Collector(deps = {}) {
     return row;
   }
 
-  function markLoggedOut(shop, draft, samples, reason) {
+  function markLoggedOut(shop, draft, samples, reason, state = {}) {
     const kept = keepNumbers(shop, draft, samples) || blankFor(shop);
-    const patched = publicRecord(Object.assign({}, kept, {
+    const retry = Object.fromEntries(["checkedAt", "loginSessionVersion", "loginFailures", "loginNeedsHuman",
+      "loginRetryAt", "platformLimited", "platformRetryAt", "passwordAttemptedVersion"]
+      .filter(key => key in state).map(key => [key, state[key]]));
+    const patched = publicRecord(Object.assign({}, kept, retry, {
       loginExpired: true,
+      partialData: false,
+      platformLimited: false,
+      platformRetryAt: 0,
       online: false,
       pendingUpdate: false,
       pendingCollect: false,
@@ -589,12 +607,24 @@ export function createLive2Collector(deps = {}) {
     if (phase.closed || (saved && saved.enabled === false)) return null;
     phase.sessionVersion = sessionVersionOf(saved) || "g:0";
     if (inactive(shop, phase)) return null;
+    // Check durable holds before identity/network requests. A verified human
+    // login changes sessionVersion, so it immediately releases the old hold.
+    if (base.loginSessionVersion === phase.sessionVersion &&
+      (base.loginNeedsHuman || Number(base.loginRetryAt) > clock())) {
+      return { ...base, online: false, offline: false, loginExpired: true, partialData: false };
+    }
     if (base.platformLimited && base.platformSessionVersion === phase.sessionVersion && Number(base.platformRetryAt) > clock()) {
       return { ...base, online: false, offline: true, loginExpired: false, partialData: false };
     }
+    const expired = isLoginExpiredSession(saved);
+    if (expired && client.recoverBrowserSession) {
+      if (recoverySlots <= 0) return { ...base, loginExpired: true, online: false, offline: false,
+        loginSessionVersion: phase.sessionVersion, loginRetryAt: clock() + LIVE2_INTERVAL_MS,
+        offlineReason: "登录失效，等待下一轮分批恢复" };
+      recoverySlots--;
+    }
     const claimed = await claimOwner(shop.store, COLLECTOR_OWNER_HOME);
     if (!claimed || !claimed.ok || inactive(shop, phase)) return null;
-    const expired = isLoginExpiredSession(saved);
     const prior = saved && Array.isArray(saved.cookies) ? saved.cookies : [];
     const cached = jars.get(shop.store);
     if (expired || (cached && cached.version !== phase.sessionVersion)) {
@@ -602,6 +632,9 @@ export function createLive2Collector(deps = {}) {
     }
     // Durable state wins over a process cache, including after an external re-login.
     let jar = prior.length && (!expired || client.fetchAccountIdentity) ? prior : (!expired && jars.get(shop.store)?.cookies) || null;
+    // The browser must check/recover an expired session even when the legacy
+    // account endpoint only returns a tolerated 601 response.
+    if (expired && client.recoverBrowserSession) jar = null;
     let verified = false;
     if (jar && client.fetchAccountIdentity) {
       try {
@@ -636,7 +669,10 @@ export function createLive2Collector(deps = {}) {
         if (client.recoverBrowserSession) {
           const recovered = await client.recoverBrowserSession(prior, phase.controller.signal, {
             store: shop.store, shopId: shop.shopId, merchantId: shop.merchantId,
-            ambiguousMerchant: shop.ambiguousMerchant, requireIdentity: true
+            ambiguousMerchant: shop.ambiguousMerchant, requireIdentity: true,
+            canRecover: () => !inactive(shop, phase),
+            credentials: base.passwordAttemptedVersion !== phase.sessionVersion && shop.login && shop.password
+              ? { loginName: shop.login, password: shop.password } : undefined
           });
           jar = recovered.cookies;
           phase.browserDeal = recovered.deal;
@@ -652,13 +688,15 @@ export function createLive2Collector(deps = {}) {
         if (error.code === "platform_limited") return holdPlatform(shop, phase, base, error);
         const authFailed = silentLoginFailed(error);
         const reason = String((error && error.message) || "登录没有完成").slice(0, 200);
-        if (authFailed) await markExpiredLogin(shop, reason, phase);
+        if (error.loginAttempted) base.passwordAttemptedVersion = phase.sessionVersion;
+        if (authFailed) await markExpiredLogin(shop, reason, phase, error);
         else await markCollectFail(shop, reason, phase);
         base.pendingCollect = false;
         base.loginExpired = authFailed;
         base.offline = !authFailed;
         base.online = false;
         base.offlineReason = reason;
+        Object.assign(base, phase.loginState || {});
         return base;
       }
     }
@@ -670,6 +708,7 @@ export function createLive2Collector(deps = {}) {
       base.offline = false;
       base.online = false;
       base.offlineReason = "登录没有完成";
+      Object.assign(base, phase.loginState || {});
       return base;
     }
     try {
@@ -742,7 +781,7 @@ export function createLive2Collector(deps = {}) {
       const decision = collectAuthDecision(error);
       if (decision.authState === "login_expired") {
         const reason = String(error.message || decision.authMessage).slice(0, 200);
-        await markExpiredLogin(shop, reason, phase);
+        await markExpiredLogin(shop, reason, phase, error);
         const failed = previous ? Object.assign({}, previous) : base;
         failed.pendingCollect = false;
         failed.loginExpired = true;
@@ -750,6 +789,7 @@ export function createLive2Collector(deps = {}) {
         failed.online = false;
         failed.pendingUpdate = false;
         failed.offlineReason = reason;
+        Object.assign(failed, phase.loginState || {});
         return failed;
       }
       const reason = phase.storageError ? phase.storageError.message : decision.authMessage || String((error && error.message) || "采集超时");
@@ -805,9 +845,10 @@ export function createLive2Collector(deps = {}) {
   }
 
   async function run(shops, only) {
+    recoverySlots = Math.max(1, Math.floor(Number(deps.recoveryLimit) || 3));
     const targets = (shops || []).filter(function (shop) {
       return shop && shop.store && (!only || shop.store === only);
-    });
+    }).sort((a, b) => Number(Boolean(published.get(a.store)?.loginExpired)) - Number(Boolean(published.get(b.store)?.loginExpired)));
     const samples = await loadSampleMap();
     adoptSamples(samples);
     const draft = new Map(published);
@@ -834,7 +875,7 @@ export function createLive2Collector(deps = {}) {
           return row;
         }
         if (row && row.loginExpired) {
-          markLoggedOut(shop, draft, samples, row.offlineReason);
+          markLoggedOut(shop, draft, samples, row.offlineReason, row);
           return row;
         }
         if (!hasNumbers(row) && !row.offline && !row.dataUnavailable) {
