@@ -7,6 +7,7 @@ import { dirname, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
 import { recoverPasswordSession } from "./session-recovery.js";
+import { nativeMerchantMatches, watchNativeAccount } from "./browser-identity.js";
 import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, homeDealUnavailable, shopDealUnavailable, jingmaiAccessLimit, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
 
 const LOGIN_URL =
@@ -1438,6 +1439,7 @@ function discard(desk) {
     desk.accessWatch.stop();
     desk.accessWatch = null;
   }
+  if (desk.accountWatch) { desk.accountWatch.stop(); desk.accountWatch = null; }
   if (current === desk) {
     stopCurrent();
     return;
@@ -2555,13 +2557,20 @@ async function fillLoginOnDesk(ws, loginName, password) {
 async function verifiedDeskSession(desk, cookies, href) {
   if (!sessionReady(href, cookies)) return null;
   const identity = await readShopBaseIdentity(desk.ws);
-  if ((desk.shopId && !identity.shopId) || (!identity.shopId && !identity.shopName)) {
+  const accountMerchant = desk.accountWatch?.read() || "";
+  const nativeMatch = nativeMerchantMatches(desk, identity, accountMerchant);
+  if (accountMerchant && desk.merchantId && accountMerchant !== String(desk.merchantId).trim()) {
+    return { status: "login", message: "京麦当前账号商家身份不符，未保存数据" };
+  }
+  if (!nativeMatch && ((desk.shopId && !identity.shopId) || (!identity.shopId && !identity.shopName))) {
     const limited = desk.accessWatch && desk.accessWatch.read().identity;
     if (limited) return { status: "login", message: limited + "；店铺身份尚未核验，保留原登录档案" };
     return { status: "verify", message: "已进入京麦，正在等待店铺身份信息", href: String(href || "") };
   }
   try {
-    assertPageShopIdentity({ store: desk.store, shopId: desk.shopId, requireIdentity: true }, identity.shopName, identity);
+    assertPageShopIdentity({ store: desk.store, shopId: desk.shopId, merchantId: desk.merchantId,
+      ambiguousMerchant: desk.ambiguousMerchant, requireIdentity: true }, identity.shopName,
+      { ...identity, ...(nativeMatch ? { venderId: accountMerchant } : {}) });
   } catch (error) {
     return { status: "login", message: String(error.message || "登录店铺不一致") };
   }
@@ -2684,7 +2693,7 @@ async function finishOpen(desk, loginName, password, ticket, manual) {
   }
 }
 
-export async function openDesk({ store, loginName, password, reveal, onStep, signal, shopId, manual } = {}) {
+export async function openDesk({ store, loginName, password, reveal, onStep, signal, shopId, merchantId, ambiguousMerchant, manual } = {}) {
   if (manual !== true && current && current.human && deskUsable(current)) {
     return { status: "busy", humanBusy: true, message: "登录窗口正开着" };
   }
@@ -2737,6 +2746,10 @@ export async function openDesk({ store, loginName, password, reveal, onStep, sig
     }
     step("正在打开登录页");
     lastLaunchNote = "正在打开京麦登录页";
+    desk.merchantId = String(merchantId || "").trim();
+    desk.ambiguousMerchant = ambiguousMerchant === true;
+    if (desk.accountWatch) desk.accountWatch.stop();
+    desk.accountWatch = watchNativeAccount(desk.ws, send);
     if (desk.accessWatch) desk.accessWatch.stop();
     desk.accessWatch = watchPlatformLimits(desk.ws);
     try {
@@ -3735,7 +3748,9 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
   let settled = false;
   let vaneWatch = null;
   let accessWatch = null;
+  let accountWatch = null;
   const killOwn = function () {
+    if (accountWatch) { accountWatch.stop(); accountWatch = null; }
     if (accessWatch) { accessWatch.stop(); accessWatch = null; }
     if (vaneWatch) {
       try {
@@ -3794,6 +3809,7 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
     });
     vaneWatch = watchVaneIdentity(ws);
     accessWatch = watchPlatformLimits(ws);
+    accountWatch = watchNativeAccount(ws, send);
     const jar = cookieParams(cookies);
     // The persistent browser can have a newer session than the database.
     const resident = usePersist ? await readCookies(ws) : [];
@@ -3838,13 +3854,22 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
       await assertSessionPage();
       let identity = await readShopBaseIdentity(ws);
       for (let attempt = 0; expected.shopId && !identity.shopId && attempt < 6; attempt++) {
-        const limited = accessWatch && accessWatch.read().identity;
-        if (limited) throw Object.assign(new Error(limited), { code: "platform_limited" });
+        if (nativeMerchantMatches(expected, identity, accountWatch?.read())) break;
         await sleepSignal(500, signal);
         identity = await readShopBaseIdentity(ws);
       }
       await assertSessionPage();
-      assertPageShopIdentity({ ...expected, requireIdentity: true }, identity.shopName, { ...vaneWatch.read(), ...identity });
+      const accountMerchant = accountWatch?.read() || "";
+      if (accountMerchant && expected.merchantId && accountMerchant !== String(expected.merchantId).trim()) {
+        throw Object.assign(new Error("京麦当前账号商家身份不符，未保存数据"), { code: "identity" });
+      }
+      const nativeMatch = nativeMerchantMatches(expected, identity, accountMerchant);
+      if (expected.shopId && !identity.shopId && !nativeMatch) {
+        const limited = accessWatch && accessWatch.read().identity;
+        if (limited) throw Object.assign(new Error(limited), { code: "platform_limited" });
+      }
+      assertPageShopIdentity({ ...expected, requireIdentity: true }, identity.shopName,
+        { ...vaneWatch.read(), ...identity, ...(nativeMatch ? { venderId: accountMerchant } : {}) });
       const renewed = await readCookies(ws);
       if (hasSession(renewed) && Array.isArray(cookies)) {
         cookies.splice(0, cookies.length, ...renewed);
@@ -4001,7 +4026,7 @@ async function reloginHomeNow(signal, expected, credentials, allowed) {
   if (!identity.key || identity.ephemeral || isForbiddenLegacyProfileKey(identity.key)) {
     throw Object.assign(new Error("店铺登录档案尚未绑定，请在服务器登录窗口处理"), { code: "login", needsHuman: true });
   }
-  let desk, watch;
+  let desk, watch, identityWaitingAt = 0;
   const close = () => { if (desk) discard(desk); };
   try {
     desk = await launchChrome(signal, { ephemeral: false, profileKey: identity.key, identity,
@@ -4010,11 +4035,14 @@ async function reloginHomeNow(signal, expected, credentials, allowed) {
     await send(desk.ws, "Page.enable");
     await send(desk.ws, "Network.enable");
     watch = watchPlatformLimits(desk.ws);
+    desk.accountWatch = watchNativeAccount(desk.ws, send);
     await send(desk.ws, "Page.navigate", { url: LOGIN_URL }, undefined, 8000);
     return await recoverPasswordSession({
       allowed,
       page: () => readLoginPage(desk.ws),
-      limit: () => { const value = watch.read(); return value.deal || value.identity; },
+      // Identity-card failure is evaluated together with the current account
+      // proof below. A trade restriction always stops recovery immediately.
+      limit: () => watch.read().deal,
       submit: (name, password) => fillAndSubmit(desk.ws, name, password, signal),
       sleep: sleepSignal,
       verifiedSession: async page => {
@@ -4023,8 +4051,20 @@ async function reloginHomeNow(signal, expected, credentials, allowed) {
         const cookies = await readCookies(desk.ws);
         if (!sessionReady(page.href, cookies)) return null;
         const actual = await readShopBaseIdentity(desk.ws);
-        if (!actual.shopId) return null;
-        assertPageShopIdentity({ ...expected, requireIdentity: true }, actual.shopName, actual);
+        const accountMerchant = desk.accountWatch.read();
+        if (accountMerchant && expected.merchantId && accountMerchant !== String(expected.merchantId).trim()) {
+          throw Object.assign(new Error("京麦当前账号商家身份不符，未保存数据"), { code: "identity" });
+        }
+        const nativeMatch = nativeMerchantMatches(expected, actual, accountMerchant);
+        if (!actual.shopId && !nativeMatch) {
+          if (!identityWaitingAt) identityWaitingAt = Date.now();
+          if (watch.read().identity && Date.now() - identityWaitingAt >= 3000) {
+            throw Object.assign(new Error(watch.read().identity), { code: "platform_limited" });
+          }
+          return null;
+        }
+        assertPageShopIdentity({ ...expected, requireIdentity: true }, actual.shopName,
+          { ...actual, ...(nativeMatch ? { venderId: accountMerchant } : {}) });
         return cookies;
       }
     }, credentials, signal);

@@ -127,7 +127,7 @@ function openDeskFixture(stall) {
     deskUsable: () => true, discard: () => {}, stopCurrent: () => {},
     stopBooting: () => { stopped++; }, browserStartFailure: () => "startup timeout",
     browserAbortError: () => Object.assign(new Error("aborted"), { code: "browser" }),
-    watchPlatformLimits: () => ({ stop() {} }), send: async () => {},
+    watchPlatformLimits: () => ({ stop() {} }), watchNativeAccount: () => ({ stop() {} }), send: async () => {},
     setTimeout: (fn, ms) => { const id = {}; timers.set(id, { fn, ms }); if (stall) queueMicrotask(fn); return id; },
     clearTimeout: id => timers.delete(id),
     finishOpen: async () => {

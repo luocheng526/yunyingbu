@@ -259,6 +259,7 @@ function rememberOrg(shops) {
       password: shop.password,
       shopId: String(shop.shopId || ""),
       merchantId: String(shop.merchantId || ""),
+      ambiguousMerchant: shop.ambiguousMerchant === true,
       team: String(shop.team || ""),
       manager: String(shop.manager || "")
     });
@@ -325,6 +326,9 @@ export async function loadOrgShops(cookie, fetchImpl = fetch) {
     .filter(function (store) {
       return store.store;
     });
+  for (const shop of mapped) {
+    shop.ambiguousMerchant = Boolean(shop.merchantId && mapped.filter(other => other.merchantId === shop.merchantId).length > 1);
+  }
   rememberOrg(mapped);
   return mapped;
 }
@@ -593,6 +597,7 @@ async function rememberLogin(store, cookies, expected) {
         store: store,
         shopId: shopId,
         merchantId: String((wanted && wanted.merchantId) || ""),
+        ambiguousMerchant: wanted.ambiguousMerchant === true,
         shopName: store
       });
       const now = beijingParts();
@@ -741,6 +746,8 @@ async function startQueued(shop, epoch) {
       store: shop.store,
       shopId: shop.shopId || "",
       loginName: shop.login,
+      merchantId: shop.merchantId || "",
+      ambiguousMerchant: shop.ambiguousMerchant === true,
       password: shop.password,
       reveal: true,
       manual: shop.manual === true,
@@ -788,7 +795,8 @@ async function startQueued(shop, epoch) {
   if (opened.status === "ok") {
     return finishDeskSession(shop.store, opened, {
       shopId: shop.shopId || "",
-      merchantId: shop.merchantId || ""
+      merchantId: shop.merchantId || "",
+      ambiguousMerchant: shop.ambiguousMerchant === true
     }, epoch == null ? loginEpoch : epoch);
   }
   if (opened.status === "code" || opened.needCode) {
@@ -873,6 +881,7 @@ async function queueShops(shops, epoch) {
       password: shop.password,
       shopId: shop.shopId || "",
       merchantId: shop.merchantId || "",
+      ambiguousMerchant: shop.ambiguousMerchant === true,
       manual: shop.manual === true
     };
     shop.login = "";
@@ -999,6 +1008,7 @@ export async function beginRelogin(store, cookie, options) {
     password: shop.password,
     shopId: shop.shopId || "",
     merchantId: shop.merchantId || "",
+    ambiguousMerchant: shop.ambiguousMerchant === true,
     // live2 点重新登录也会自动点立即登录；需要滑块时画面留着等人拖。
     manual: false
   };
@@ -1252,7 +1262,8 @@ export async function reloginState(store) {
     const cached = orgCache.get(name);
     return finishDeskSession(name, state, {
       shopId: (cached && cached.shopId) || "",
-      merchantId: (cached && cached.merchantId) || ""
+      merchantId: (cached && cached.merchantId) || "",
+      ambiguousMerchant: cached?.ambiguousMerchant === true
     }, epoch);
   }
   if (state.status === "missing") {
