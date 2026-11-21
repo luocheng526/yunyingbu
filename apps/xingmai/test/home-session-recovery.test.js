@@ -12,6 +12,48 @@ const jar = value => [{ name: "thor", value }];
 const form = { href: "https://passport.shop.jd.com/login/index.action/jdm", accountVisible: true, passwordVisible: true, text: "账号登录 密码登录 短信登录" };
 const credentials = { loginName: "fixture", password: "secret-fixture" };
 
+for (const explicitChallenge of [false, true]) {
+test(`old post-login read holds can recheck saved credentials but actual challenges stay held (${explicitChallenge})`, async () => {
+  let time = Date.parse("2026-11-21T22:00:00+08:00"), pending, reads = 0;
+  const reason = explicitChallenge ? "京东要求验证或拒绝自动登录，请在服务器登录窗口处理" : "服务器浏览器已返回京东登录页，请重新登录或完成验证";
+  const c = createLive2Collector({ storePath: "", concurrency: 1, clock: () => time, now: () => "2026/11/21 22:16:00",
+    published: [{ shop: "A", liveAmount: 72, paidAmount: 4, loginExpired: true, loginNeedsHuman: true,
+      loginSessionVersion: "g:1", passwordAttemptedVersion: "g:1", loginFailures: 1,
+      loginRetryAt: time + 15 * 60000, offlineReason: reason }],
+    loadOrg: async () => [{ store: "A", shopId: "1", enabled: true, login: "fixture", password: "fixture" }],
+    listSessions: async () => [{ store: "A", shopId: "1", authState: "login_expired", sessionGen: 1, cookies: jar("saved") }],
+    listSamples: async () => [], claimOwner: async () => ({ ok: true }), saveSample: async () => ({ saved: true }),
+    markAuth: async () => {}, track: task => { pending = task; }, client: {
+      recoverBrowserSession: async (_cookies, _signal, hint) => { reads++; assert.equal(hint.credentials, undefined); return { cookies: jar("verified"), deal: { dealAmount: 100 } }; },
+      fetchHome: async (_cookies, _signal, hint) => { assert.equal(hint.browserDeal.dealAmount, 100); return { dealAmount: 100, paidAmount: 5 }; }
+    }
+  });
+  await c.start(""); await pending; assert.equal(reads, 0, "must respect the original cooldown");
+  time += 16 * 60000;
+  await c.start(""); await pending;
+  assert.equal(reads, explicitChallenge ? 0 : 1);
+  const row = (await c.board("")).records[0];
+  assert.equal(row.loginExpired, explicitChallenge);
+  if (!explicitChallenge) assert.equal(row.liveAmount, 100);
+});
+}
+
+test("a failed metrics read after verified login is not evidence of a human challenge", async () => {
+  let pending;
+  const c = createLive2Collector({ storePath: "", now: () => "2026/11/21 22:16:00",
+    loadOrg: async () => [{ store: "A", shopId: "1", enabled: true, login: "fixture", password: "fixture" }],
+    listSessions: async () => [{ store: "A", shopId: "1", authState: "login_expired", sessionGen: 1, cookies: jar("saved") }],
+    listSamples: async () => [], claimOwner: async () => ({ ok: true }), markAuth: async () => {}, track: task => { pending = task; },
+    client: { recoverBrowserSession: async () => { throw Object.assign(new Error("服务器浏览器已返回京东登录页，请重新登录或完成验证"), { code: "login", loginAttempted: true }); } }
+  });
+  await c.start(""); await pending;
+  const row = (await c.board("")).records[0];
+  assert.equal(row.loginExpired, true);
+  assert.equal(row.loginNeedsHuman, false);
+  assert.equal(row.passwordAttemptedVersion, "g:1");
+  assert.ok(row.loginRetryAt > 0);
+});
+
 test("ordinary password recovery submits once and waits for verified shop identity", async () => {
   let submitted = 0, verified = 0, reads = 0;
   const cookies = await recoverPasswordSession({

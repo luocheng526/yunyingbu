@@ -3785,7 +3785,7 @@ export function assertPageShopIdentity(expected, pageName, vane) {
   }
 }
 
-async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
+async function readHomeDealNow(cookies, signal, shopKeyOrExpected, savedOnly = false) {
   if (signal && signal.aborted) {
     throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
   }
@@ -3796,6 +3796,7 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
   let vaneWatch = null;
   let accessWatch = null;
   let accountWatch = null;
+  let usedResident = false;
   const killOwn = function () {
     if (accountWatch) { accountWatch.stop(); accountWatch = null; }
     if (accessWatch) { accessWatch.stop(); accessWatch = null; }
@@ -3859,8 +3860,8 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
     accountWatch = watchNativeAccount(ws, send);
     const jar = cookieParams(cookies);
     // The persistent browser can have a newer session than the database.
-    const resident = usePersist ? await readCookies(ws) : [];
-    let usedResident = hasSession(resident);
+    const resident = usePersist && !savedOnly ? await readCookies(ws) : [];
+    usedResident = hasSession(resident);
     if (!usedResident && jar.length) {
       await send(ws, "Network.setCookies", { cookies: jar });
     }
@@ -3984,6 +3985,20 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected) {
     throw error;
   } catch (error) {
     settled = true;
+    // Client-side redirects can arrive after DOMContentLoaded. Apply the same
+    // one-time saved-session fallback used for an immediate redirect. Close
+    // this browser first so the retry has fresh identity/network listeners.
+    if (error?.code === "login" && usedResident && !savedOnly && cookieParams(cookies).length && !signal?.aborted) {
+      const chrome = desk?.chrome;
+      const closed = chrome && chrome.exitCode == null ? new Promise(resolve => {
+        const timer = setTimeout(resolve, 3500);
+        chrome.once("exit", () => { clearTimeout(timer); resolve(); });
+      }) : Promise.resolve();
+      killOwn();
+      await closed;
+      if (chrome && chrome.exitCode == null) throw Object.assign(new Error("服务器浏览器尚未退出，请稍后重试"), { code: "network" });
+      return await readHomeDealNow(cookies, signal, shopKeyOrExpected, true);
+    }
     if (error && (error.code === "timeout" || error.name === "AbortError")) {
       throw Object.assign(new Error("采集超时"), { code: "timeout", name: "AbortError" });
     }

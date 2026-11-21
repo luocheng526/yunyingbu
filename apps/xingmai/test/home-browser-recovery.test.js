@@ -75,7 +75,8 @@ async function browserCase({ resident = "resident-new", saved = "database-old", 
     sleepSignal: async ms => { waits.push(ms); if (refreshStarted && ms === 500) accountReady = true; }, waitDomContentLoaded: async () => {}, evaluate: async () => {
       locationReads++;
       if (refreshDuringIdentityCheck && identityReads > 0 && !refreshStarted) { refreshStarted = true; accountReady = false; }
-      return lateRedirect && locationReads > 1 ? "https://passport.shop.jd.com/login/index.action/jdm" : href;
+      return lateRedirect && locationReads > 1 && (lateRedirect !== "resident-only" || !commands.includes("Network.setCookies"))
+        ? "https://passport.shop.jd.com/login/index.action/jdm" : href;
     },
     readShopBaseName: async () => name,
     readShopBaseIdentity: async () => { identityReads++; return { shopName: name, shopId: pageId, merchantId }; }, assertPageShopIdentity, cookieParams,
@@ -259,14 +260,22 @@ test("an expired browser profile falls back once to a saved human session", asyn
 
 test("a late login-page redirect is an authentication failure, not missing sales", async () => {
   const run = await browserCase({ lateRedirect: true });
-  await assert.rejects(run.outcome, e => e.code === "login" && /登录页/.test(e.message));
+  await assert.rejects(run.outcome, e => e.code === "login");
   assert.equal(run.input[0].value, "database-old");
+});
+
+test("a late resident-session redirect still tries the saved session once before declaring login expired", async () => {
+  const run = await browserCase({ resident: "stale-resident", saved: "human-new", lateRedirect: "resident-only", pageId: "1" });
+  assert.equal((await run.outcome).dealAmount, 100);
+  assert.equal(run.commands.filter(command => command === "Network.setCookies").length, 1);
+  assert.equal(run.input[0].value, "browser-renewed");
 });
 
 test("a late redirect with no trade response fails promptly instead of waiting for the response timeout", async () => {
   const run = await browserCase({ loading: true, lateRedirect: true });
   await assert.rejects(run.outcome, e => e.code === "login");
-  assert.ok(run.waits.reduce((a,b)=>a+b,0) <= 1300);
+  assert.ok(run.waits.reduce((a,b)=>a+b,0) <= 2600);
+  assert.equal(run.commands.filter(command => command === "Network.setCookies").length, 1);
   assert.equal(run.input[0].value, "database-old");
 });
 

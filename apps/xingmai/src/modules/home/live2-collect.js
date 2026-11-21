@@ -15,6 +15,7 @@ import { beijingParts, collectAuthDecision, displayStamp, isMissingDealFieldErro
 import { homeCollectionGate } from "./jingmai-runner.js";
 import { normalizeOrgShops, readServerOrgShops } from "./org-roster.js";
 import { blankLive2Record, live2RecordFromMetrics } from "./live2.js";
+import { createLive2SalesTrends } from "./live2-sales-trend.js";
 
 function workerCount() {
   const value = Number(process.env.LIVE2_CONCURRENCY);
@@ -28,7 +29,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1332-home-native-cadence";
+export const LIVE2_RUNTIME_MARK = "0.1.1346-home-session-recheck";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
@@ -171,6 +172,7 @@ export function createLive2Collector(deps = {}) {
   const samplesOf = deps.listSamples || listSamples;
   const client = deps.client || jingmaiClient;
   const now = deps.now || stampNow;
+  const enrichSalesTrends = createLive2SalesTrends({ listSamples: samplesOf, now, clock });
   const file = deps.storePath === undefined ? defaultStorePath() : String(deps.storePath || "");
   const budget = deps.shopBudgetMs == null ? shopBudgetMs() : Number(deps.shopBudgetMs);
   const widthOf = deps.concurrency == null ? workerCount : function () { return deps.concurrency; };
@@ -291,7 +293,10 @@ export function createLive2Collector(deps = {}) {
     shops.forEach(function (shop) {
       shop.password = "";
     });
-    return boardFrom(shops, Date.now() - started);
+    const result = boardFrom(shops, Date.now() - started);
+    result.records = await enrichSalesTrends(result.records);
+    result.timings.apiMs = Date.now() - started;
+    return result;
   }
 
   function writeOptions(shop, phase) {
@@ -405,7 +410,7 @@ export function createLive2Collector(deps = {}) {
     });
     phase.loginState = {
       checkedAt: now(), loginSessionVersion: phase.sessionVersion, loginFailures: attempts,
-      loginNeedsHuman: error.needsHuman === true || error.loginAttempted === true,
+      loginNeedsHuman: error.needsHuman === true,
       loginRetryAt: loginRetries.get(shop.store).until,
       platformLimited: false, platformRetryAt: 0,
       ...(error.loginAttempted ? { passwordAttemptedVersion: phase.sessionVersion } : {})
@@ -463,6 +468,10 @@ export function createLive2Collector(deps = {}) {
   function rowFromSample(shop, sample) {
     const row = live2RecordFromMetrics(shop, {
       dealAmount: sample.dealAmount,
+      dealRate: sample.dealRate,
+      yesterdayAmount: sample.yesterdayAmount,
+      dealRateLabel: sample.dealRateLabel,
+      platformUpdatedAt: sample.platformUpdatedAt,
       paidAmount: sample.paidAmount,
       paidRoi: sample.paidRoi,
       paidDeal: sample.paidDeal
@@ -611,6 +620,13 @@ export function createLive2Collector(deps = {}) {
     if (phase.closed || (saved && saved.enabled === false)) return null;
     phase.sessionVersion = sessionVersionOf(saved) || "g:0";
     if (inactive(shop, phase)) return null;
+    // Older versions treated a failed read AFTER verified login as a challenge.
+    // Recheck its saved session after the existing cooldown, without resubmitting
+    // credentials. Explicit verification challenges retain their manual hold.
+    if (base.loginNeedsHuman && base.passwordAttemptedVersion === phase.sessionVersion &&
+        base.offlineReason === "服务器浏览器已返回京东登录页，请重新登录或完成验证") {
+      base.loginNeedsHuman = false;
+    }
     // Check durable holds before identity/network requests. A verified human
     // login changes sessionVersion, so it immediately releases the old hold.
     if (base.loginSessionVersion === phase.sessionVersion &&
@@ -1011,6 +1027,7 @@ export function createLive2Collector(deps = {}) {
     const view = boardFrom(shops);
     view.running = true;
     view.started = true;
+    if (!background) view.records = await enrichSalesTrends(view.records);
     return view;
   }
 
