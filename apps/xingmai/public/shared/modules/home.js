@@ -215,6 +215,22 @@
       "</span></div>"
     );
   }
+  function hourlyRange(hour) {
+    var h = String(hour).padStart(2, "0");
+    return h + ":00–" + h + ":59";
+  }
+  function hourlyCompareTipHtml(hour, yesterday, today, options) {
+    options = options || {};
+    function value(n, estimated) {
+      n = asNum(n);
+      if (n == null) return "—";
+      return (estimated ? "≈ " : "") + (options.unit === "rate" ? (n * 100).toFixed(2) + "%" : salesTrendMoney(n));
+    }
+    return '<b>' + hourlyRange(hour) + '</b><div class="xm-hm-line-caption">' + escapeHtml(options.label || "累计成交金额") + '</div>' +
+      '<div class="xm-hm-line-row"><span><i class="is-yest"></i>昨天</span><em>' + value(yesterday, options.estimated) + '</em></div>' +
+      '<div class="xm-hm-line-row"><span><i class="is-today"></i>今天</span><em>' + value(today, false) + '</em></div>' +
+      (options.note ? '<div class="xm-hm-line-caption xm-hm-hour-note">' + escapeHtml(options.note) + '</div>' : '');
+  }
   function calMonthHtml(ym, opts, side) {
     var first = parseYmd(ym + "-01");
     var pad = (first.getUTCDay() + 6) % 7;
@@ -292,6 +308,10 @@
   var teamsRefreshing = false;
   var liveRefreshing = false;
   var live2Poll = 0;
+  var shopSalesTipEl = null;
+  var shopSalesTipAnchor = null;
+  var shopSalesTipTimer = 0;
+  var shopSalesTipTrend = null;
   var deskTimer = 0;
   function viewStore(kind) {
     return viewKey === "team" || viewKey === "chief"
@@ -2287,7 +2307,7 @@
             '" y="' +
             (height - 5) +
             '" text-anchor="middle" fill="#8c8c8c" font-size="8">' +
-            h +
+            (chart && chart.hourStart === 0 ? h - 1 : h) +
             "</text>"
         );
       }
@@ -2346,7 +2366,7 @@
   function hoursAttr(hours) {
     return Number(hours) === 48 || Number(hours) === 24 ? ' data-hours="' + hours + '"' : "";
   }
-  function liveChartHtml(chart) {
+  function liveChartHtml(chart, hourlyHover) {
     var delta = chart && chart.delta;
     var hasDelta = delta != null && delta !== "";
     var n = hasDelta ? Number(delta) || 0 : 0;
@@ -2356,6 +2376,7 @@
     if (Number(line.hours) !== 48) {
       line.hours = 24;
     }
+    if (hourlyHover) line.hourStart = 0;
     var trendCls = !hasDelta ? "" : n > 0 ? " is-up" : n < 0 ? " is-down" : "";
     var trendText = !hasDelta
       ? "环比 —"
@@ -2370,6 +2391,8 @@
       '"' +
       (unit ? ' data-unit="' + unit + '"' : "") +
       hoursAttr(line.hours) +
+      (hourlyHover ? ' data-hourly-values="' + escapeHtml(JSON.stringify({ yesterday: line.yesterday, today: line.today, unit: unit,
+        label: unit === "rate" ? "实时费比" : kind === "spend" ? "累计推广花费" : "累计成交金额" })) + '"' : '') +
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml((chart && chart.label) || "实时指标") +
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
@@ -2593,6 +2616,12 @@
     return fiveMinuteStamp(latest);
   }
   function liveLinkOf(row) {
+    /* home channel health */
+    if (row && row.dataUnavailable && !row.loginExpired && !row.offline) return { label: "平台缺数", kind: "warn" };
+    if (row && row.partialData && !row.loginExpired && !row.offline) {
+      if (row.dealFailed) return { label: "成交异常", kind: "warn" };
+      if (row.adsFailed) return { label: "广告异常", kind: "ads" };
+    }
     if (typeof liveScope !== "undefined" && liveScope === "live2") {
       if (row && row.platformLimited === true && !row.loginExpired) {
         return { label: "平台限制", kind: "warn" };
@@ -2651,6 +2680,7 @@
       return "<td>" + escapeHtml(shop) + "</td>";
     }
     if (key === "liveAmount") {
+      if (liveScope === "live2") return live2SalesCellHtml(row);
       return '<td class="xm-hm-num">' + escapeHtml(row.liveAmount == null ? "—" : row.liveAmount) + "</td>";
     }
     if (key === "paidAmount") {
@@ -3011,8 +3041,17 @@
       ".xm-hm-legs i.is-today{background:#ffa39e}" +
       ".xm-hm-line{display:block;width:100%;height:180px;margin-top:8px}" +
       ".xm-hm-chart[data-hours] .xm-hm-line{cursor:crosshair}" +
-      ".xm-hm-line-tip{position:fixed;z-index:20;display:none;box-sizing:border-box;min-width:168px;padding:8px 10px;background:#1f1f1f;color:#fff;border-radius:6px;font-size:12px;line-height:1.5;pointer-events:none}" +
+      ".xm-hm-line-tip{position:fixed;z-index:1001;display:none;box-sizing:border-box;min-width:168px;max-width:calc(100vw - 16px);padding:8px 10px;background:#1f1f1f;color:#fff;border-radius:6px;font-size:12px;line-height:1.5;pointer-events:none}" +
       ".xm-hm-line-tip.is-on{display:block}" +
+      ".xm-hm-line-caption{color:#c0c4cc;font-size:11px}.xm-hm-hour-note{margin-top:6px;max-width:210px}" +
+      ".xm-hm-shop-sales{display:inline-flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px 6px;max-width:100%;border:0;background:transparent;color:inherit;font:inherit;padding:4px 0;cursor:pointer;font-variant-numeric:tabular-nums}" +
+      ".xm-hm-shop-sales:focus-visible{outline:2px solid #1677ff;outline-offset:3px;border-radius:3px}" +
+      ".xm-hm-sales-delta{font-size:11px;color:var(--xm-muted,#738096);white-space:nowrap}.xm-hm-sales-delta.is-up{color:#f5222d}.xm-hm-sales-delta.is-down{color:#389e0d}" +
+      ".xm-hm-sales-tip{position:fixed;z-index:1000;box-sizing:border-box;width:400px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;padding:16px;background:var(--xm-card,#fff);color:var(--xm-ink,#253047);border:1px solid var(--xm-line,#e3e9f2);border-radius:10px;box-shadow:0 8px 32px #14294326;font:12px/1.5 sans-serif}.xm-hm-sales-tip[hidden]{display:none}" +
+      ".xm-hm-sales-tip-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}.xm-hm-sales-tip-head strong{font-size:13px;overflow-wrap:anywhere}.xm-hm-sales-legend{display:flex;gap:10px;color:var(--xm-muted,#738096);flex-shrink:0}.xm-hm-sales-legend i{display:inline-block;width:8px;height:8px;margin-right:5px;border-radius:50%;background:#91caff}.xm-hm-sales-legend span+span i{background:#ffa39e}" +
+      ".xm-hm-sales-caption{margin-top:12px;color:var(--xm-muted,#738096)}.xm-hm-sales-total{font-size:25px;line-height:1.4;font-weight:700;color:#1677ff;font-variant-numeric:tabular-nums}.xm-hm-sales-baseline{color:var(--xm-muted,#738096)}.xm-hm-sales-note{display:flex;gap:8px;flex-wrap:wrap;margin-top:3px;color:var(--xm-muted,#738096);font-size:11px}" +
+      ".xm-hm-sales-svg{display:block;width:100%;height:auto;margin-top:10px;color:var(--xm-muted,#738096);cursor:crosshair}.xm-hm-sales-empty{padding:42px 0;text-align:center;color:var(--xm-muted,#738096)}.xm-hm-sales-foot{font-size:10px;color:var(--xm-muted,#738096);margin-top:4px}" +
+      "html[data-theme=dark] .xm-hm-sales-delta.is-up{color:#ff7875}html[data-theme=dark] .xm-hm-sales-delta.is-down{color:#95de64}" +
       ".xm-hm-line-tip b{display:block;margin:0 0 6px;font-size:13px}" +
       ".xm-hm-line-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:4px}" +
       ".xm-hm-line-row i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}" +
@@ -3360,6 +3399,7 @@
         team: row.team || hit.team || "",
         manager: row.manager || hit.manager || "",
         liveAmount: hit.liveAmount == null ? null : fmtMoney(hit.liveAmount),
+        salesTrend: hit.salesTrend || null,
         paidAmount: hit.paidAmount == null ? null : fmtMoney(hit.paidAmount),
         roi: hit.roi == null ? null : asNum(hit.roi).toFixed(2),
         paidDeal: hit.paidDeal == null ? null : fmtMoney(hit.paidDeal),
@@ -3384,6 +3424,76 @@
         pendingCollect: false
       };
     });
+  }
+  function salesTrendDelta(trend) {
+    if (!trend || trend.status === "unavailable") return { text: "对比暂不可用", cls: "" };
+    if (trend.status === "no-current") return { text: "暂无今日数据", cls: "" };
+    if (trend.status === "no-platform-compare") return { text: "京麦未返回对比", cls: "" };
+    if (trend.status === "invalid-platform-compare") return { text: "京麦对比异常", cls: "" };
+    if (trend.status === "zero-baseline") return { text: "昨日同期为0", cls: "" };
+    var n = asNum(trend.change);
+    if (n == null) return { text: "京麦未返回对比", cls: "" };
+    return { text: (n > 0 ? "↑" : n < 0 ? "↓" : "") + Math.abs(n).toFixed(2) + "%", cls: n > 0 ? " is-up" : n < 0 ? " is-down" : "" };
+  }
+  function live2SalesCellHtml(row) {
+    var delta = salesTrendDelta(row.salesTrend);
+    return '<td class="xm-hm-num"><button type="button" class="xm-hm-shop-sales" data-shop-sales="' + escapeHtml(row.shop) +
+      '" aria-label="' + escapeHtml(row.shop + "，实时成交金额 " + (row.liveAmount == null ? "—" : row.liveAmount) + "，京麦较昨日 " + delta.text + "，查看趋势") +
+      '"><span>' + escapeHtml(row.liveAmount == null ? "—" : row.liveAmount) + '</span><span class="xm-hm-sales-delta' + delta.cls + '">' + delta.text + '</span></button></td>';
+  }
+  function salesTrendMoney(value) {
+    var n = asNum(value);
+    return n == null ? "—" : "¥" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function salesTrendTime(second) {
+    if (second == null) return "—";
+    return String(Math.floor(second / 3600)).padStart(2, "0") + ":" + String(Math.floor(second % 3600 / 60)).padStart(2, "0");
+  }
+  function salesTrendPointAtHour(points, hour) {
+    var latest = null;
+    (points || []).forEach(function (point) {
+      if (Math.floor(point.second / 3600) === hour && asNum(point.amount) != null && (!latest || point.second > latest.second)) latest = point;
+    });
+    return latest;
+  }
+  function salesTrendSvg(trend) {
+    var today = trend.today || [], yesterday = trend.yesterday || [];
+    if (!today.length && !yesterday.length) return '<div class="xm-hm-sales-empty">暂无成交趋势数据</div>';
+    var max = Math.max.apply(null, [1].concat(today, yesterday).map(function (point) { return point.amount || 1; }));
+    function x(point) { return (12 + point.second / 86400 * 356).toFixed(1); }
+    function y(point) { return (130 - point.amount / max * 112).toFixed(1); }
+    function line(list, color) {
+      var segments = [], segment = [];
+      list.forEach(function (point, i) {
+        if (i && point.second - list[i - 1].second > 5400) { segments.push(segment); segment = []; }
+        segment.push(point);
+      });
+      if (segment.length) segments.push(segment);
+      return segments.map(function (part) {
+        return '<polyline fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" points="' + part.map(function (p) { return x(p) + "," + y(p); }).join(" ") + '"></polyline>' +
+          part.map(function (p) { return '<circle cx="' + x(p) + '" cy="' + y(p) + '" r="2" fill="' + color + '"></circle>'; }).join("");
+      }).join("");
+    }
+    var axis = "";
+    for (var h = 0; h <= 24; h += 2) axis += '<text x="' + (12 + h / 24 * 356).toFixed(1) + '" y="151" text-anchor="middle" fill="currentColor" font-size="9">' + h + '</text>';
+    return '<svg class="xm-hm-sales-svg" viewBox="0 0 380 158" role="img" aria-label="店铺今日与昨日累计成交金额，横轴为0至24时，移动鼠标查看每小时数据">' + line(yesterday, "#91caff") + line(today, "#ffa39e") +
+      '<line class="xm-hm-line-guide" x1="0" x2="0" y1="12" y2="133" stroke="#a6b0c1" stroke-dasharray="3 3" visibility="hidden"></line>' + axis + '</svg>';
+  }
+  function shopSalesTipHtml(row) {
+    var trend = row.salesTrend || {}, delta = salesTrendDelta(row.salesTrend);
+    var note = trend.status === "unavailable" || !row.salesTrend ? "对比数据暂不可用，请稍后刷新" : trend.status === "no-current" ? "暂无今日有效成交数据" : trend.status === "no-platform-compare" ? "京麦本次未提供涨跌幅" : trend.status === "invalid-platform-compare" ? "京麦本次对比数据异常" : trend.status === "rate-only" ? "京麦较昨日；下降100%无法反算昨日金额" : "京麦较昨日";
+    var basis = trend.historyUnavailable ? "历史走势暂不可用，当前对比仍取京麦" : "蓝线按各次京麦涨跌幅反算，未采集时段不补零";
+    return '<div class="xm-hm-sales-tip-head"><strong>' + escapeHtml(row.shop) + '</strong><div class="xm-hm-sales-legend"><span><i></i>昨天</span><span><i></i>今天</span></div></div>' +
+      '<div class="xm-hm-sales-caption">实时成交金额 · 今日 ' + salesTrendTime(trend.comparedSecond) + '</div><div class="xm-hm-sales-total">' + salesTrendMoney(trend.todayAmount) + '</div>' +
+      '<div class="xm-hm-sales-baseline">昨日同期' + (trend.yesterdayEstimated ? '（反算）≈ ' : ' ') + salesTrendMoney(trend.yesterdayAmount) + '</div><div class="xm-hm-sales-note"><span class="xm-hm-sales-delta' + delta.cls + '">' + delta.text + '</span><span>' + note + '</span></div>' +
+      salesTrendSvg(trend) + '<div class="xm-hm-sales-foot">' + escapeHtml(trend.todayDate || "") + ' / ' + escapeHtml(trend.yesterdayDate || "") + ' · 移动鼠标查看每小时数据<br>' + basis + '</div>';
+  }
+  function hideShopSalesTip() {
+    window.clearTimeout(shopSalesTipTimer);
+    if (shopSalesTipEl) { shopSalesTipEl.hidden = true; hideLineTip(shopSalesTipEl); }
+    if (shopSalesTipAnchor) shopSalesTipAnchor.removeAttribute("aria-describedby");
+    shopSalesTipAnchor = null;
+    shopSalesTipTrend = null;
   }
   function live2Cards(shops, countShops, updatedAt) {
     var sums = live2Sums(shops);
@@ -3602,7 +3712,7 @@
     var scoped = live2ScopeShops(packed, state);
     var shops = filterLiveShops(packed, state);
     var charts = live2Charts(packed, scoped);
-    var trio = liveChartHtml(charts.hero) + liveChartHtml(charts.paid) + liveChartHtml(charts.fee);
+    var trio = liveChartHtml(charts.hero, true) + liveChartHtml(charts.paid, true) + liveChartHtml(charts.fee, true);
     var cards = live2Cards(scoped, shops, state && state.live2Pack && state.live2Pack.updatedAt);
     shops = sortLiveShops(feePickShops(shops, liveFeePick));
     var cardMap = {};
@@ -3639,6 +3749,7 @@
     );
   }
   function paint(root, state) {
+    hideShopSalesTip();
     var board = root.querySelector("#xm-hm");
     var allow = allowedHomeViews(state.user, state.people, state.dutyShops);
     if (state.view === "team" || state.view === "chief" || state.view === "board") {
@@ -6304,6 +6415,10 @@
       }
       function onClick(event) {
         useLiveScope(state.view);
+        if (event.target.closest && event.target.closest("[data-shop-sales]")) {
+          onShopSalesOver(event);
+          return;
+        }
         var help = event.target.closest && event.target.closest(".xm-hm-help");
         if (help) {
           return;
@@ -6635,6 +6750,64 @@
           closeCal();
         }
       }
+      function onShopSalesOver(event) {
+        var anchor = event.target.closest && event.target.closest("[data-shop-sales]");
+        if (!anchor || state.view !== "live2") return;
+        window.clearTimeout(shopSalesTipTimer);
+        if (shopSalesTipAnchor === anchor && shopSalesTipEl && !shopSalesTipEl.hidden) return;
+        var shop = anchor.getAttribute("data-shop-sales");
+        var row = ((state.live2Pack && state.live2Pack.records) || []).filter(function (item) { return item.shop === shop; })[0] || { shop: shop };
+        hideShopSalesTip();
+        if (!shopSalesTipEl) {
+          shopSalesTipEl = document.createElement("div");
+          shopSalesTipEl.id = "xm-hm-shop-sales-tip";
+          shopSalesTipEl.className = "xm-hm-sales-tip";
+          shopSalesTipEl.setAttribute("role", "tooltip");
+          shopSalesTipEl.addEventListener("mouseenter", function () { window.clearTimeout(shopSalesTipTimer); });
+          shopSalesTipEl.addEventListener("mouseleave", function () { hideShopSalesTip(); });
+          shopSalesTipEl.addEventListener("mousemove", onShopSalesMove);
+          document.body.appendChild(shopSalesTipEl);
+        }
+        shopSalesTipAnchor = anchor;
+        shopSalesTipTrend = row.salesTrend || {};
+        anchor.setAttribute("aria-describedby", shopSalesTipEl.id);
+        shopSalesTipEl.innerHTML = shopSalesTipHtml(row);
+        shopSalesTipEl.hidden = false;
+        var box = anchor.getBoundingClientRect();
+        var width = shopSalesTipEl.offsetWidth, height = shopSalesTipEl.offsetHeight;
+        var left = Math.min(Math.max(8, box.left + box.width / 2 - width / 2), window.innerWidth - width - 8);
+        var top = box.bottom + 8;
+        if (top + height > window.innerHeight - 8) top = Math.max(8, box.top - height - 8);
+        shopSalesTipEl.style.left = left + "px";
+        shopSalesTipEl.style.top = top + "px";
+      }
+      function onShopSalesMove(event) {
+        var svg = event.target.closest && event.target.closest(".xm-hm-sales-svg");
+        if (!svg || !shopSalesTipTrend) { hideLineTip(shopSalesTipEl); return; }
+        var box = svg.getBoundingClientRect();
+        var second = Math.max(0, Math.min(86399, ((event.clientX - box.left) / (box.width || 1) * 380 - 12) / 356 * 86400));
+        var hour = Math.floor(second / 3600);
+        var today = salesTrendPointAtHour(shopSalesTipTrend.today, hour);
+        var yesterday = salesTrendPointAtHour(shopSalesTipTrend.yesterday, hour);
+        var note = today ? "今日采集于 " + salesTrendTime(today.second) : hour > Math.floor(shopSalesTipTrend.comparedSecond / 3600) ? "今日尚未到该时段" : "今日该时段未采集";
+        if (yesterday) note += shopSalesTipTrend.yesterdayEstimated ? " · 昨日同期按京麦涨跌幅反算" : " · 昨日采集于 " + salesTrendTime(yesterday.second);
+        var tip = lineTipNode();
+        tip.innerHTML = hourlyCompareTipHtml(hour, yesterday && yesterday.amount, today && today.amount, { estimated: shopSalesTipTrend.yesterdayEstimated, note: note });
+        tip.classList.add("is-on");
+        placeLineTip(tip, event);
+        var guide = svg.querySelector(".xm-hm-line-guide");
+        var x = (12 + (today ? today.second : yesterday ? yesterday.second : hour * 3600) / 86400 * 356).toFixed(1);
+        guide.setAttribute("x1", x); guide.setAttribute("x2", x); guide.setAttribute("visibility", "visible");
+      }
+      function onShopSalesOut(event) {
+        var anchor = event.target.closest && event.target.closest("[data-shop-sales]");
+        if (!anchor || (event.relatedTarget && (anchor.contains(event.relatedTarget) || (shopSalesTipEl && shopSalesTipEl.contains(event.relatedTarget))))) return;
+        window.clearTimeout(shopSalesTipTimer);
+        shopSalesTipTimer = window.setTimeout(hideShopSalesTip, 150);
+      }
+      function onShopSalesDismiss(event) {
+        if (event.key === "Escape" || (event.type === "pointerdown" && !event.target.closest("[data-shop-sales],.xm-hm-sales-tip"))) hideShopSalesTip();
+      }
       function onHelpOver(event) {
         var help = helpFromEvent(event);
         if (!help) {
@@ -6681,6 +6854,23 @@
           return;
         }
         var slots = Number(chartEl.getAttribute("data-hours")) || 24;
+        var hourlyValues = chartEl.getAttribute("data-hourly-values");
+        if (hourlyValues) {
+          // Read the very series used to draw this card, including after filtering or refresh.
+          hideLineTip(root);
+          var values = JSON.parse(hourlyValues);
+          var hour = hourFromEvent(svg, event, slots);
+          var hourlyTip = lineTipNode();
+          hourlyTip.innerHTML = hourlyCompareTipHtml(hour, (values.yesterday || [])[hour], (values.today || [])[hour], values);
+          hourlyTip.classList.add("is-on");
+          placeLineTip(hourlyTip, event);
+          var hourlyGuide = svg.querySelector(".xm-hm-line-guide");
+          if (hourlyGuide) {
+            var hourlyX = hourX(hour, slots).toFixed(1);
+            hourlyGuide.setAttribute("x1", hourlyX); hourlyGuide.setAttribute("x2", hourlyX); hourlyGuide.setAttribute("visibility", "visible");
+          }
+          return;
+        }
         var pack = (state.shownLive || state.live) || {};
         var kind = chartEl.getAttribute("data-chart");
         var src = kind === "spend" ? pack.paid || {} : kind === "fee" ? pack.fee || {} : pack.hero || {};
@@ -6727,6 +6917,7 @@
         }
       }
       function onTipScroll() {
+        hideShopSalesTip();
         hideLineTip(root);
         placeCardPop(root);
         if (!cardTipAnchor || !cardTipEl || !cardTipEl.classList.contains("is-on")) {
@@ -7315,6 +7506,12 @@
       root.addEventListener("mousemove", onLineTipMove);
       root.addEventListener("mouseleave", onLineTipLeave);
       root.addEventListener("mouseover", onHelpOver);
+      root.addEventListener("mouseover", onShopSalesOver);
+      root.addEventListener("mouseout", onShopSalesOut);
+      root.addEventListener("focusin", onShopSalesOver);
+      root.addEventListener("focusout", onShopSalesOut);
+      document.addEventListener("keydown", onShopSalesDismiss);
+      document.addEventListener("pointerdown", onShopSalesDismiss);
       root.addEventListener("mouseout", onHelpOut);
       scroller.addEventListener("scroll", onTipScroll, true);
       window.addEventListener("resize", onTipScroll);
@@ -7382,6 +7579,15 @@
         root.removeEventListener("mousemove", onLineTipMove);
         root.removeEventListener("mouseleave", onLineTipLeave);
         root.removeEventListener("mouseover", onHelpOver);
+        root.removeEventListener("mouseover", onShopSalesOver);
+        root.removeEventListener("mouseout", onShopSalesOut);
+        root.removeEventListener("focusin", onShopSalesOver);
+        root.removeEventListener("focusout", onShopSalesOut);
+        document.removeEventListener("keydown", onShopSalesDismiss);
+        document.removeEventListener("pointerdown", onShopSalesDismiss);
+        hideShopSalesTip();
+        if (shopSalesTipEl) shopSalesTipEl.remove();
+        shopSalesTipEl = null;
         root.removeEventListener("mouseout", onHelpOut);
         scroller.removeEventListener("scroll", onTipScroll, true);
         window.removeEventListener("resize", onTipScroll);
