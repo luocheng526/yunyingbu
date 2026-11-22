@@ -91,7 +91,7 @@ test("实时（新版） sits after 近七天业绩汇总 and stays independent 
   assert.match(panel, /live2Charts\(packed, scoped\)/);
   assert.match(panel, /live2Cards\(scoped, shops/);
   assert.match(homeJs, /function live2FilterHtml[\s\S]{0,280}visibleDutyTeams\(state, allShops\)/);
-  assert.match(homeJs, /xm-home-live2-yday/);
+  assert.doesNotMatch(homeJs, /xm-home-live2-yday/);
   assert.match(homeJs, /function live2Charts/);
 });
 
@@ -147,11 +147,7 @@ test("selecting a team or a shop changes the live2 totals", () => {
       pick("live2ScopeShops") +
       pick("asNum") +
       pick("live2Sums") +
-      pick("padHours") +
-      pick("shanghaiHour") +
-      pick("scaleHourList") +
-      pick("scaleLive2Day") +
-      "return {live2ScopeShops, live2Sums, scaleLive2Day, shanghaiHour};"
+      "return {live2ScopeShops, live2Sums};"
   )("live2");
   const state = {
     teams: [{ name: "韩梦凯", shops: [{ shop: "B店" }, { shop: "C店" }] }],
@@ -177,15 +173,4 @@ test("selecting a team or a shop changes the live2 totals", () => {
   const one = fns.live2Sums(fns.live2ScopeShops(shops, state));
   assert.equal(one.deal, 100);
   assert.equal(one.spend, 10);
-  const all = fns.live2Sums(shops);
-  const hour = fns.shanghaiHour();
-  const scaled = fns.scaleLive2Day(
-    { jingmaiAt: [200, 300], spendAt: [20, 40] },
-    one.deal / all.deal,
-    one.spend / all.spend,
-    one
-  );
-  assert.equal(scaled.jingmaiAt[hour], 100);
-  assert.equal(scaled.spendAt[hour], 10);
-  assert.ok(scaled.jingmaiAt[0] < all.deal);
 });

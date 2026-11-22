@@ -226,8 +226,8 @@ test("team view links to data overview and packs KPIs four-by-four", () => {
   assert.doesNotMatch(homeJs, /线：累计（23点=1-23点）/);
   assert.doesNotMatch(homeJs, /线：当天费比/);
   assert.doesNotMatch(homeJs, /xm-hm-chart-sub/);
-  assert.match(homeJs, /stroke="#91caff"/);
-  assert.match(homeJs, /stroke="#ffa39e"/);
+  assert.match(homeJs, /lines\(yest, "#91caff"\)/);
+  assert.match(homeJs, /lines\(today, "#ffa39e"\)/);
   assert.match(homeJs, /\.xm-hm-live-charts \.xm-hm-line\{[^}]*height:148px/);
   assert.match(homeJs, /function repeatHours/);
   assert.match(homeJs, /unit: src\.unit \|\| base\.unit/);
@@ -317,7 +317,8 @@ test("homepage money and rates show as rounded integers", () => {
   assert.match(homeJs, /function fmtMoney\(value\) \{\n    return fmtInt\(value\);/);
   assert.match(homeJs, /return Math\.round\(n\) \+ "%"/);
   assert.match(homeJs, /Math\.round\(Math\.abs\(n\)\)/);
-  assert.doesNotMatch(homeJs, /minimumFractionDigits: 2/);
+  const tableFormatters = homeJs.slice(homeJs.indexOf("function fmtMoney("), homeJs.indexOf("function fmtRoi("));
+  assert.doesNotMatch(tableFormatters, /minimumFractionDigits: 2/);
   assert.doesNotMatch(homeJs, /n\.toFixed\(2\) \+ "%"/);
   assert.match(homeJs, /return \(p \/ a\)\.toFixed\(2\);/);
 });

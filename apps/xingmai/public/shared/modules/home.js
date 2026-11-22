@@ -221,6 +221,8 @@
   }
   function hourlyCompareTipHtml(hour, yesterday, today, options) {
     options = options || {};
+    var coverageNote = options.coverage ? "今天已采集 " + (options.coverage.today[hour] || 0) + "/" + options.coverage.total +
+      " 家；昨天已采集 " + (options.coverage.yesterday[hour] || 0) + "/" + options.coverage.total + " 家。缺失店铺不计入，不代表零成交。" : "";
     function value(n, estimated) {
       n = asNum(n);
       if (n == null) return "—";
@@ -229,7 +231,7 @@
     return '<b>' + hourlyRange(hour) + '</b><div class="xm-hm-line-caption">' + escapeHtml(options.label || "累计成交金额") + '</div>' +
       '<div class="xm-hm-line-row"><span><i class="is-yest"></i>昨天</span><em>' + value(yesterday, options.estimated) + '</em></div>' +
       '<div class="xm-hm-line-row"><span><i class="is-today"></i>今天</span><em>' + value(today, false) + '</em></div>' +
-      (options.note ? '<div class="xm-hm-line-caption xm-hm-hour-note">' + escapeHtml(options.note) + '</div>' : '');
+      (coverageNote || options.note ? '<div class="xm-hm-line-caption xm-hm-hour-note">' + escapeHtml(coverageNote || options.note) + '</div>' : '');
   }
   function calMonthHtml(ym, opts, side) {
     var first = parseYmd(ym + "-01");
@@ -2295,6 +2297,21 @@
         })
         .join(" ");
     }
+    function lines(list, color) {
+      if (!chart || !chart.preserveGaps) return list.length ? '<polyline fill="none" stroke="' + color + '" stroke-width="2.2" points="' + pts(list) + '"></polyline>' : "";
+      var output = [], run = [];
+      function flush() {
+        if (run.length === 1) output.push('<circle cx="' + run[0][0] + '" cy="' + run[0][1] + '" r="2" fill="' + color + '"></circle>');
+        if (run.length > 1) output.push('<polyline fill="none" stroke="' + color + '" stroke-width="2.2" points="' + run.map(function (p) { return p.join(","); }).join(" ") + '"></polyline>');
+        run = [];
+      }
+      list.forEach(function (n, i) {
+        if (n == null || n === "" || !Number.isFinite(Number(n))) { flush(); return; }
+        run.push([hourX(i, slots).toFixed(1), yAt(n).toFixed(1)]);
+      });
+      flush();
+      return output.join("");
+    }
     function axis() {
       if (slots !== 24 && slots !== 48) {
         return "";
@@ -2313,16 +2330,14 @@
       }
       return out.join("");
     }
-    var yestPts = yest.length ? pts(yest) : "";
-    var todayPts = today.length ? pts(today) : "";
     return (
       '<svg class="xm-hm-line" viewBox="0 0 ' +
       width +
       " " +
       height +
       '" preserveAspectRatio="none">' +
-      (yestPts ? '<polyline fill="none" stroke="#91caff" stroke-width="2.2" points="' + yestPts + '"></polyline>' : "") +
-      (todayPts ? '<polyline fill="none" stroke="#ffa39e" stroke-width="2.2" points="' + todayPts + '"></polyline>' : "") +
+      lines(yest, "#91caff") +
+      lines(today, "#ffa39e") +
       (slots === 24 || slots === 48
         ? '<line class="xm-hm-line-guide" x1="0" y1="' +
           padTop +
@@ -2335,6 +2350,8 @@
     );
   }
   function lineChartOf(chart) {
+    if (chart && chart.serverHistory) return { yesterday: chart.yesterday, today: chart.today,
+      hours: 24, height: 128, hourStart: 0, preserveGaps: true };
     var yestHour = (chart && chart.yesterdayHour) || [];
     var todayHour = (chart && chart.todayHour) || [];
     var hasHour = yestHour.length > 2 || todayHour.length > 2;
@@ -2392,12 +2409,12 @@
       (unit ? ' data-unit="' + unit + '"' : "") +
       hoursAttr(line.hours) +
       (hourlyHover ? ' data-hourly-values="' + escapeHtml(JSON.stringify({ yesterday: line.yesterday, today: line.today, unit: unit,
-        label: unit === "rate" ? "实时费比" : kind === "spend" ? "累计推广花费" : "累计成交金额" })) + '"' : '') +
+        coverage: chart.coverage, label: unit === "rate" ? "已采集店铺费比" : kind === "spend" ? "已采集店铺累计推广花费" : "已采集店铺累计成交金额" })) + '"' : '') +
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml((chart && chart.label) || "实时指标") +
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
       escapeHtml(chart && chart.value != null && chart.value !== "" ? chart.value : "—") +
-      '</div><div class="xm-hm-yest-now">昨天 ' +
+      '</div><div class="xm-hm-yest-now">' + (chart.serverHistory ? "昨日同段 " : "昨天 ") +
       escapeHtml((chart && chart.yestText) || "—") +
       "</div>" +
       '<div class="xm-hm-trend' +
@@ -2406,6 +2423,7 @@
       trendText +
       "</div>" +
       compareLineHtml(line) +
+      (chart.serverHistory ? '<div class="xm-hm-line-caption">' + (chart.historyUnavailable ? "历史暂时读取失败，请稍后刷新" : "服务器历史 · 按已采集店铺汇总 · 悬停查看覆盖数") + '</div>' : "") +
       "</article>"
     );
   }
@@ -3400,6 +3418,7 @@
         manager: row.manager || hit.manager || "",
         liveAmount: hit.liveAmount == null ? null : fmtMoney(hit.liveAmount),
         salesTrend: hit.salesTrend || null,
+        overviewHistory: hit.overviewHistory || null,
         paidAmount: hit.paidAmount == null ? null : fmtMoney(hit.paidAmount),
         roi: hit.roi == null ? null : asNum(hit.roi).toFixed(2),
         paidDeal: hit.paidDeal == null ? null : fmtMoney(hit.paidDeal),
@@ -3532,7 +3551,6 @@
       })
       .filter(Boolean);
   }
-  var LIVE2_DAY_KEY = "xm-home-live2-yday";
   function live2Sums(records) {
     var deal = 0;
     var spend = 0;
@@ -3590,121 +3608,52 @@
       return true;
     });
   }
-  function scaleHourList(list, ratio) {
-    return padHours(list, 24).map(function (n) {
-      var v = asNum(n);
-      return v ? v * ratio : 0;
-    });
-  }
-  function scaleLive2Day(day, dealRatio, spendRatio, exact) {
-    var deal = scaleHourList(day && day.jingmaiAt, dealRatio);
-    var spend = scaleHourList(day && day.spendAt, spendRatio);
-    var fee = deal.map(function (d, i) {
-      return d ? spend[i] / d : 0;
-    });
-    if (exact) {
-      var h = shanghaiHour();
-      if (exact.deal != null) {
-        deal[h] = exact.deal;
-      }
-      if (exact.spend != null) {
-        spend[h] = exact.spend;
-      }
-      if (exact.fee != null) {
-        fee[h] = exact.fee;
-      }
-    }
-    return { jingmaiAt: deal, spendAt: spend, feeAt: fee };
-  }
-  function levelDeltas(list, slots) {
-    var src = padHours(list, 24);
-    var last = 0;
-    var out = [];
-    var i;
-    var end = slots == null ? shanghaiHour() : slots - 1;
-    for (i = 0; i <= end && i < 24; i += 1) {
-      var n = asNum(src[i]);
-      var level = n ? n : last;
-      out.push(level - last);
-      last = level;
-    }
-    return out;
-  }
-  function levelDay(list) {
-    var src = padHours(list, 24);
-    var last = 0;
-    var out = [];
-    var i;
-    for (i = 0; i < 24; i += 1) {
-      var n = asNum(src[i]);
-      if (n) {
-        last = n;
-      }
-      out.push(last);
-    }
-    return out;
-  }
-  function stampAtHour(list) {
-    var src = padHours(list, 24);
-    var i;
-    var h = shanghaiHour();
-    for (i = Math.min(h, src.length - 1); i >= 0; i -= 1) {
-      var n = asNum(src[i]);
-      if (n) {
-        return n;
-      }
-    }
-    return null;
-  }
-  function live2ChartsFrom(sums, stamps) {
-    var blank = blankLive();
-    if (!sums || (sums.deal == null && sums.spend == null)) {
-      return { hero: blank.hero, paid: blank.paid, fee: blank.fee };
-    }
-    var today = stamps && stamps.today;
-    var yest = stamps && stamps.yest;
-    if (!stamps) {
-      var kept = keepLiveDay(
-        { jingmai: sums.deal, spend: sums.spend, fee: sums.fee },
-        LIVE2_DAY_KEY
-      );
-      today = kept.todayStamps || emptyLiveDayNums();
-      yest = kept.yestStamps || emptyLiveDayNums();
-    }
-    var yestDeal = stampAtHour(yest && yest.jingmaiAt);
-    var yestSpend = stampAtHour(yest && yest.spendAt);
-    var yestFee = stampAtHour(yest && yest.feeAt);
-    var hero = spendChartOf(sums.deal, yestDeal, {
-      todaySpend: levelDeltas(today && today.jingmaiAt),
-      yesterdaySpend: yestDeal != null ? levelDeltas(yest.jingmaiAt, 24) : []
-    });
-    hero.key = "jingmai";
-    hero.label = "实时总成交金额";
-    var paid = spendChartOf(sums.spend, yestSpend, {
-      todaySpend: levelDeltas(today && today.spendAt),
-      yesterdaySpend: yestSpend != null ? levelDeltas(yest.spendAt, 24) : []
-    });
-    var fee = feeChartOf(sums.fee, yestFee, {
-      todayFee: levelDay(today && today.feeAt).slice(0, shanghaiHour() + 1),
-      yesterdayFee: yestFee != null ? levelDay(yest.feeAt) : []
-    });
-    return { hero: hero, paid: paid, fee: fee };
-  }
   function live2Charts(allRecords, scopedRecords) {
-    var allSums = live2Sums(allRecords);
-    var company = live2ChartsFrom(allSums, null);
     var pick = liveFilter();
-    if (!pick.shop && !pick.team) {
-      return company;
+    var rows = pick.shop || pick.team ? scopedRecords || [] : allRecords || [];
+    var sums = live2Sums(rows), today = live2HistoryTotals(rows, "today"), yesterday = live2HistoryTotals(rows, "yesterday");
+    var yestDeal = live2YesterdayTotal(rows, "deal"), yestSpend = live2YesterdayTotal(rows, "spend");
+    var yestFee = yestDeal > 0 && yestSpend != null ? yestSpend / yestDeal : null;
+    function card(key, label, metric, value, prior) {
+      return { key: key, label: label, value: value == null ? "—" : metric === "fee" ? fmtRate(value) : fmtMoney(value),
+        yestText: prior == null ? "—" : metric === "fee" ? fmtRate(prior) : fmtMoney(prior),
+        delta: value != null && prior != null && prior > 0 ? trendOf(value, prior) : "",
+        today: today[metric], yesterday: yesterday[metric], serverHistory: true, hours: 24,
+        historyUnavailable: rows.some(function (row) { return !row.overviewHistory || row.overviewHistory.historyUnavailable; }),
+        unit: metric === "fee" ? "rate" : "", coverage: { today: today.coverage[metric], yesterday: yesterday.coverage[metric], total: rows.length } };
     }
-    var scopeSums = live2Sums(scopedRecords || []);
-    var dealRatio = allSums.deal ? (scopeSums.deal || 0) / allSums.deal : 0;
-    var spendRatio = allSums.spend ? (scopeSums.spend || 0) / allSums.spend : 0;
-    var store = readLiveDay(LIVE2_DAY_KEY);
-    return live2ChartsFrom(scopeSums, {
-      today: scaleLive2Day(store.today, dealRatio, spendRatio, scopeSums),
-      yest: scaleLive2Day(store.yest, dealRatio, spendRatio, null)
+    return { hero: card("jingmai", "实时总成交金额", "deal", sums.deal, yestDeal),
+      paid: card("spend", "推广总花费", "spend", sums.spend, yestSpend),
+      fee: card("fee", "实时费比", "fee", sums.fee, yestFee) };
+  }
+  function live2HistoryTotals(rows, day) {
+    var result = { deal: [], spend: [], fee: [], coverage: { deal: [], spend: [], fee: [] } };
+    for (var hour = 0; hour < 24; hour++) {
+      var deal = 0, spend = 0, feeDeal = 0, feeSpend = 0, dc = 0, sc = 0, fc = 0;
+      rows.forEach(function (row) {
+        var history = row.overviewHistory && row.overviewHistory[day];
+        var d = asNum(history && history.deal && history.deal[hour]);
+        var s = asNum(history && history.spend && history.spend[hour]);
+        if (d != null) { deal += d; dc++; }
+        if (s != null) { spend += s; sc++; }
+        if (d != null && s != null) { feeDeal += d; feeSpend += s; fc++; }
+      });
+      result.deal.push(dc ? deal : null); result.spend.push(sc ? spend : null);
+      result.fee.push(fc && feeDeal > 0 ? feeSpend / feeDeal : null);
+      result.coverage.deal.push(dc); result.coverage.spend.push(sc); result.coverage.fee.push(fc);
+    }
+    return result;
+  }
+  function live2YesterdayTotal(rows, metric) {
+    var total = 0, count = 0, missing = false;
+    rows.forEach(function (row) {
+      if (asNum(metric === "deal" ? row.liveAmount : row.paidAmount) == null) return;
+      var comparison = row.overviewHistory && row.overviewHistory.comparison;
+      var value = asNum(comparison && comparison[metric]);
+      if (value == null) missing = true;
+      else { total += value; count++; }
     });
+    return count && !missing ? total : null;
   }
   function live2PanelHtml(state) {
     var roster = adaptLive2Shops(state && state.dutyShops);
