@@ -179,7 +179,7 @@ test("同一员工同一天的未交提醒只发一次", async () => {
     if (String(url).includes("accessToken")) {
       return { json: async () => ({ accessToken: "token", expireIn: 7200 }) };
     }
-    return { json: async () => ({ errcode: 0, result: {} }) };
+    return { json: async () => ({ errcode: 0, task_id: 123, processQueryKey: "test-process" }) };
   });
   try {
     await saveMembers(luocheng, { personId: 4, deptCode: "ops" });
@@ -235,7 +235,7 @@ test("通知群地址只收钉钉域名，保存后 @ 走这条地址", async ()
   }
 });
 
-test("群里 @ 对应的人成功时只发这一条，没有通知群时退回单聊再退回工作通知", async () => {
+test("个人卡片不可用时切换工作通知，两者失败才在群里 @ 对应的人", async () => {
   resetDingStore();
   process.env.DINGTALK_CLIENT_ID = "dingabc123";
   process.env.DINGTALK_CLIENT_SECRET = "secret-value-1";
@@ -250,7 +250,7 @@ test("群里 @ 对应的人成功时只发这一条，没有通知群时退回�
     if (String(url).includes("oToMessages")) {
       return { json: async () => ({ code: "invalid.chatbot", message: "无效的机器人" }) };
     }
-    return { json: async () => ({ errcode: 0, result: {} }) };
+    return { json: async () => ({ errcode: 0, task_id: 123, processQueryKey: "test-process" }) };
   });
   try {
     const channel = await sendTaskNotice("u4", "新的工作任务", "我的任务「1」，截止 2026-11-17 23:59。", "https://zx.xingmaierp.cc/work?tab=taskMine&task=abc");
@@ -261,15 +261,16 @@ test("群里 @ 对应的人成功时只发这一条，没有通知群时退回�
     process.env.DINGTALK_NOTIFY_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=test-token";
     const mentioned = [];
     setDingTransport(async (url, options) => {
+      if (String(url).includes("accessToken")) return { json: async () => ({ accessToken: "token", expireIn: 7200 }) };
+      if (!String(url).includes("/robot/send?")) return { ok: false, json: async () => ({ errcode: 88 }) };
       mentioned.push(String(url));
       const body = JSON.parse(options.body);
-      assert.equal(body.msgtype, "text");
+      assert.equal(body.msgtype, "markdown");
       assert.deepEqual(body.at.atUserIds, ["u4"]);
       assert.equal(body.at.isAtAll, false);
-      assert.match(body.text.content, /@张文静/);
-      assert.doesNotMatch(body.text.content, /@u4/);
-      assert.match(body.text.content, /工作汇报/);
-      assert.match(body.text.content, /tab=taskReview/);
+      assert.match(body.markdown.text, /@u4/);
+      assert.match(body.markdown.text, /工作汇报/);
+      assert.match(body.markdown.text, /tab=taskReview/);
       return { json: async () => ({ errcode: 0, errmsg: "ok" }) };
     });
     const popped = await sendTaskNotice("u4", "新的工作任务", "第二条单独弹窗。", "https://zx.xingmaierp.cc/work?tab=taskReview&task=abc", "去处理", "张文静");

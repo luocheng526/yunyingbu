@@ -614,7 +614,9 @@ test("发布、执行、退回、再提交、检查通过走同一条任务", as
       body: { id: "task-role-1", revision: 1, action: "start" }
     });
     assert.equal(started.data.task.status, "进行中");
-    assert.equal(notices.length, 1);
+    assert.equal(notices.length, 2);
+    assert.equal(notices[1].personId, "3");
+    assert.equal(notices[1].title, "任务已开始执行");
     const emptyResult = await json(base, "/api/work/tasks/action", {
       method: "POST",
       body: { id: "task-role-1", revision: 2, action: "submit", note: "  " }
@@ -637,10 +639,10 @@ test("发布、执行、退回、再提交、检查通过走同一条任务", as
     });
     assert.equal(repeat.status, 409);
     assert.match(repeat.data.error, /刷新/);
-    assert.equal(notices.length, 2);
-    assert.equal(notices[1].personId, "3");
-    assert.match(notices[1].url, /tab=taskReview/);
-    assert.match(notices[1].text, /截止 2026-11-17 18:00/);
+    assert.equal(notices.length, 3);
+    assert.equal(notices[2].personId, "3");
+    assert.match(notices[2].url, /tab=taskReview/);
+    assert.match(notices[2].text, /截止 2026-11-17 18:00/);
     current = zhang;
     const afterSubmit = await json(base, "/api/work/badges");
     assert.equal(afterSubmit.data.mine, 0);
@@ -694,8 +696,10 @@ test("发布、执行、退回、再提交、检查通过走同一条任务", as
       body: { id: "task-role-1", revision: pending.data.rows[0].revision, action: "approve", note: "可以了" }
     });
     assert.equal(approved.data.task.status, "已完成");
-    assert.equal(notices.filter((item) => item.title === "任务待检查").length, 2);
-    assert.equal(notices.some((item) => item.title.includes("通过")), false);
+    assert.equal(notices.filter((item) => ["任务成果已提交", "修改后的成果已重新提交"].includes(item.title)).length, 2);
+    assert.equal(notices.at(-1).title, "任务验收通过");
+    assert.equal(notices.at(-1).personId, "4");
+    assert.equal(notices.length, 6);
     const handled = pending.data.rows;
     const after = await json(base, "/api/work/tasks?queue=review");
     const done = after.data.rows[0];
@@ -839,7 +843,7 @@ test("逾期任务只计一次，新的一条单独提醒，待办排人只提�
     if (String(url).includes("accessToken")) {
       return { json: async () => ({ accessToken: "token", expireIn: 7200 }) };
     }
-    return { json: async () => ({ errcode: 0, result: {} }) };
+    return { json: async () => ({ errcode: 0, task_id: 123, processQueryKey: "test-process" }) };
   });
   try {
     await saveDingBinds(luocheng, { binds: [{ personId: 4, userid: "u4" }] }, true);

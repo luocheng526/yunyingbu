@@ -2,8 +2,9 @@
 import { randomUUID } from "node:crypto";
 import { dbMode, query, getPool } from "../profile/auth.js";
 import { access, canAssign, taskVisible, canEditTask, canReviewTask, allowedReviewers, reviewerOptions, managedRecord, taskScope } from './center-access.js';
-import { fault, copy, writeRecord, stamp } from './center-db.js';
-import { dingUserOf, sendTaskNotice, workLink } from "./dingtalk.js";
+import { fault, copy, writeRecord, records, record, ensureCenterSchema } from './center-db.js';
+import { deliverNotice } from './notice-delivery.js';
+import { taskNoticePlan, taskNoticeCurrent } from './task-notices.js';
 import { matchPerson, orgPeople } from "./store.js";
 import { parseRichContent, bindRichFiles, richPlainText } from "./rich-content.js";
 
@@ -11,7 +12,7 @@ const tasks = new Map();
 const fileBytes = new Map();
 const tails = new Map();
 let readyP = null;
-let notify = defaultNotify;
+let notify = null;
 
 const QUEUES = new Set(["published", "mine", "review", "all", "team"]);
 const ACTION_LABEL = {
@@ -66,21 +67,8 @@ function lock(id, fn) {
   return run;
 }
 
-async function defaultNotify(personId, title, text, url) {
-  const userid = dingUserOf(personId);
-  if (!userid) {
-    return false;
-  }
-  const person = (await peopleMap()).get(String(personId));
-  try {
-    return await sendTaskNotice(userid, title, text, url, "去处理", person ? taskPersonName(person) : "");
-  } catch {
-    return false;
-  }
-}
-
 export function setTaskNotifier(fn) {
-  notify = fn || defaultNotify;
+  notify = fn || null;
 }
 
 export function resetTaskStore() {
@@ -88,7 +76,7 @@ export function resetTaskStore() {
   fileBytes.clear();
   tails.clear();
   readyP = null;
-  notify = defaultNotify;
+  notify = null;
 }
 
 async function setup() {
@@ -150,8 +138,9 @@ async function meOf(user) {
 function view(task) {
   return copy(task);
 }
-async function saveTask(task, files = [], expected = 0) {
+async function saveTask(task, files = [], expected = 0, notices = []) {
   if (dbMode() === 'mysql') {
+    await ensureCenterSchema();
     const conn = await (await getPool()).getConnection();
     try {
       await conn.beginTransaction();
@@ -160,9 +149,11 @@ async function saveTask(task, files = [], expected = 0) {
       if ((old?.revision || 0) !== expected) fault('任务已经更新，请刷新后操作', 409);
       for (const file of files) await conn.query('INSERT INTO work_report_task_file (id,task_id,name,mime,bytes) VALUES (?,?,?,?,?)', [file.id, task.id, file.name, file.mime, file.bytes]);
       await conn.query('INSERT INTO work_report_task (id,body) VALUES (?,?) ON DUPLICATE KEY UPDATE body=VALUES(body)', [task.id, JSON.stringify(task)]);
+      for (const notice of notices) await conn.query('INSERT IGNORE INTO work_center_record (id,kind,revision,body) VALUES (?,?,?,?)', [notice.id, 'notice', 1, JSON.stringify(notice)]);
       await conn.commit();
     } catch (error) { await conn.rollback(); throw error; } finally { conn.release(); }
   } else if ((tasks.get(task.id)?.revision || 0) !== expected) fault('任务已经更新，请刷新后操作', 409);
+  if (dbMode() !== 'mysql') for (const notice of notices) await writeRecord('notice', notice.id, notice);
   for (const file of files) fileBytes.set(file.id, file.bytes);
   tasks.set(task.id, copy(task));
 }
@@ -215,25 +206,27 @@ function takeFiles(input) {
   return { ok: true, files };
 }
 
-async function tell(personId, title, text, url) {
-  try {
-    await writeRecord('notice', randomUUID(), { personId, title, text, url, createdAt: stamp(), readAt: null });
-    await notify(personId, title, text, url);
-  } catch {
-    /* 通知失败不回滚任务。 */
+// Failures remain in the durable outbox; they never undo a committed task.
+async function dispatchNotices(notices, ctx, options = {}) {
+  const result = { sent: 0, failed: 0, blocked: 0, skipped: 0, cancelled: 0 };
+  const activeIds = new Set(ctx.active.map(p => p.id));
+  for (const item of notices) {
+    try {
+      const current = () => reminderTasks(item.taskId).then(rows => taskNoticeCurrent(item, rows[0], activeIds, options.now));
+      if (!await current()) {
+        const row = await record(item.id);
+        if (row && !row.sentAt && (row.deliveryStatus !== 'sending' || Date.parse(row.leaseUntil || '') <= (options.now || new Date()).getTime())) await writeRecord('notice', row.id, { ...row, deliveryStatus: 'cancelled', lastError: '', nextAttemptAt: null }, row.revision);
+        result.cancelled++; continue;
+      }
+      const injected = notify ? { resolveUser: id => String(id), send: async () => notify(item.personId, item.title, item.text, item.url, item.card) } : {};
+      result[await deliverNotice(item, { ...options, ...injected, isCurrent: current })]++;
+    } catch { result.failed++; console.error('任务通知记录失败，将在下一轮重试', item.id); }
   }
+  return result;
 }
-
-function dueText(value) {
-  return String(value || "").slice(0, 16).replace("T", " ");
-}
-
-function taskPersonName(person) {
-  const username = String(person.username || "").trim().toLowerCase();
-  if (username === "罗成" || username === "luocheng") {
-    return "罗成";
-  }
-  return person.name;
+export async function retryTaskNotices(ctx, options = {}) {
+  const pending = (await records('notice')).filter(n => n.eventKind && !n.sentAt && n.deliveryStatus !== 'cancelled');
+  return dispatchNotices(pending, ctx, options);
 }
 
 export async function taskContext(user) {
@@ -349,8 +342,9 @@ export async function publishTask(user, input) {
         }
       ]
     };
-    await saveTask(task, files, 0);
-    await tell(assignee, "新的工作任务", `我的任务「${title}」，截止 ${dueText(dueAt)}。`, workLink("taskMine", id));
+    const notices = taskNoticePlan('publish', task, {}, task.events[0], ctx);
+    await saveTask(task, files, 0, notices);
+    await dispatchNotices(notices, ctx);
     return { ok: true, task: view(task) };
   });
 }
@@ -365,7 +359,7 @@ export async function actTask(user, input) {
     const action=String(input?.action||''); const note=clip(input?.note,2000); const now=shanghaiStamp();
     const terminal=['已完成','已取消'].includes(task.status); const editor=canEditTask(ctx,task);
     const actor=task.assignee===me.id; const reviewer=task.reviewer===me.id;
-    const changed={}; let stored=[]; let notice='';
+    const changed={}; let stored=[];
     const requireNote=()=>{if(!note) fault('请填写说明或原因');};
     if(action==='start') {
       if(!actor || !['待执行','已退回'].includes(task.status)) return fail('当前状态不能开始执行',403);
@@ -385,10 +379,10 @@ export async function actTask(user, input) {
       const links=Array.isArray(input?.links)?input.links:[];
       if(links.some(link=>!/^https?:\/\//i.test(String(link)))) return fail('成果链接必须使用 http 或 https');
       changed.links=links.map(link=>String(link).slice(0,1000));
-      task.status='待检查'; task.first_submitted_at ||= now; task.submitted_at=now; task.progress=100; task.blocked=false; task.returned=false; notice=task.reviewer;
+      task.status='待检查'; task.first_submitted_at ||= now; task.submitted_at=now; task.progress=100; task.blocked=false; task.returned=false;
     } else if(action==='approve' || action==='return') {
       if(!reviewer || task.status!=='待检查') return fail('只有指定验收人可以处理待验收任务',403);
-      if(action==='return') {requireNote();task.status='进行中';task.returned=true;task.return_count=(task.return_count||0)+1;notice=task.assignee;}
+      if(action==='return') {requireNote();task.status='进行中';task.returned=true;task.return_count=(task.return_count||0)+1;}
       else {task.status='已完成';task.completed_at=now;task.accepted_submission_at=task.submitted_at||'';task.returned=false;}
     } else if(action==='edit') {
       if(!editor || terminal) return fail('无权修改此任务',403); requireNote();
@@ -409,7 +403,7 @@ export async function actTask(user, input) {
         const images=(task[key+'_doc']||[]).filter(n=>n.type==='image');
         task[key+'_doc']=[{type:'text',text:task[key]},...images];
       }
-      if(changed.assignee){task.assignee_name=ctx.byId.get(task.assignee)?.name||'';task.status='待执行';task.progress=0;}
+      if(changed.assignee){task.assignee_name=ctx.byId.get(task.assignee)?.name||'';task.status='待执行';task.progress=0;task.blocked=false;task.returned=false;task.submitted_at='';}
       if(changed.reviewer)task.reviewer_name=ctx.byId.get(task.reviewer)?.name||'';
       task.original_due_at ||= original.due_at; task.delayed=task.due_at>task.original_due_at;
     } else if(action==='cancel') {
@@ -427,8 +421,9 @@ export async function actTask(user, input) {
     const labels={start:'开始执行',progress:'更新进度',submit:'提交检查',approve:'检查通过',return:'退回修改',edit:'修改任务',cancel:'取消任务',review:me.role+'复核',confirmTeam:'确认历史归属'};
     task.revision++;task.updated_at=now;
     task.events.push({id:randomUUID(),action:labels[action],actor:me.id,actor_name:me.name,at:now,note,changes:changed,files:stored.map(f=>({id:f.id,name:f.name,mime:f.mime}))});
-    await saveTask(task,stored,revision);
-    if(notice) await tell(notice,action==='submit'?'任务待检查':'任务被退回',task.title+' '+note+' 截止 '+dueText(task.due_at),workLink(action==='submit'?'taskReview':'taskMine',id));
+    const notices = taskNoticePlan(action, task, original, task.events.at(-1), ctx);
+    await saveTask(task,stored,revision,notices);
+    await dispatchNotices(notices,ctx);
     return {ok:true,task:view(task)};
   });
 }

@@ -142,7 +142,7 @@ test('scheduler uses new daily records and DingTalk transport and does not send 
     assert.equal((await runWorkReminders(at('18:30'))).sent, 1);
     assert.equal((await runWorkReminders(at('18:31'))).sent, 0);
     assert.equal(sent.length, 1); assert.deepEqual(sent[0].at.atUserIds, ['ding-test-4']);
-    assert.match(sent[0].text.content, /tab=reports/);
+    assert.match(sent[0].markdown.text, /tab=reports/);
     const status = await reminderStatus(await organizationContext()); assert.equal(status.recent[0].statusLabel, '钉钉已受理');
   } finally { delete process.env.DINGTALK_NOTIFY_WEBHOOK; setDingTransport(); }
 });

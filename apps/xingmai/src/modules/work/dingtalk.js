@@ -1,6 +1,8 @@
 /* 工作汇报的钉钉排班、请假和工作通知。密钥只读环境变量。 */
 import { dbMode, query } from "../profile/auth.js";
 
+import { cardMarkdown, legacyCard } from './notice-cards.js';
+
 const WORK_URL = "https://zx.xingmaierp.cc/work";
 
 export function workLink(tab, taskId) {
@@ -177,7 +179,7 @@ async function accessToken() {
       signal: AbortSignal.timeout(5000)
     });
     const data = await res.json();
-    if (!data.accessToken) {
+    if (res.ok === false || !data?.accessToken) {
       const error = new Error("钉钉接口失败");
       error.publicMessage = "应用凭证没有通过";
       throw error;
@@ -199,10 +201,10 @@ async function oapi(path, body) {
     signal: AbortSignal.timeout(8000)
   });
   const data = await res.json();
-  if (data.errcode) {
+  if (res.ok === false || !data || Number(data.errcode) !== 0) {
     const error = new Error("钉钉接口失败");
     error.publicMessage = error.message;
-    error.code = Number(data.errcode);
+    error.code = Number(data?.errcode);
     throw error;
   }
   return data.result === undefined ? data : data.result;
@@ -724,16 +726,6 @@ function dingFail(message, code) {
   return error;
 }
 
-function mentionText(name, title, markdown, url, button) {
-  const who = String(name || "").replace(/\s+/g, "").slice(0, 20);
-  const head = String(title || "工作任务").trim().slice(0, 40);
-  const text = String(markdown || "").replace(/\s+/g, " ").trim().slice(0, 180);
-  const link = url || WORK_URL;
-  const action = button || "去处理";
-  const at = who ? `@${who} ` : "";
-  return `工作汇报 ${at}${head}\n${text}\n${action}：${link}`.slice(0, 500);
-}
-
 function validHook(raw) {
   const text = String(raw || "").trim();
   if (!text) {
@@ -766,7 +758,7 @@ export async function saveNotifyWebhook(raw) {
   return { ok: true };
 }
 
-async function sendMention(userid, title, markdown, url, button, name) {
+async function sendMention(userid, title, markdown, url, button, name, card) {
   const hook = notifyWebhook();
   if (!hook) {
     throw dingFail("还没有可以 @ 人的通知群");
@@ -775,15 +767,15 @@ async function sendMention(userid, title, markdown, url, button, name) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      msgtype: "text",
-      text: { content: mentionText(name, title, markdown, url, button) },
+      msgtype: "markdown",
+      markdown: { title: String(title).slice(0, 64), text: cardMarkdown(card || legacyCard(title, markdown, url, button, name), userid) + `\n\n[${button || "去处理"}](${url || WORK_URL})` },
       at: { atUserIds: [String(userid)], isAtAll: false }
     }),
     signal: AbortSignal.timeout(8000)
   });
   const data = await res.json();
-  if (res.ok === false || data.errcode) {
-    throw dingFail(data.errmsg || data.message || "@ 没有发出", data.errcode);
+  if (res.ok === false || !data || Number(data.errcode) !== 0) {
+    throw dingFail("群提醒没有发出", data?.errcode);
   }
 }
 
@@ -798,17 +790,19 @@ async function sendRobotCard(userid, title, markdown, url, button, robotCode) {
     body: JSON.stringify({
       robotCode: robotCode || dingConfig().clientId,
       userIds: [String(userid)],
-      msgKey: "sampleMarkdown",
+      msgKey: "sampleActionCard",
       msgParam: JSON.stringify({
         title: String(title || "工作任务").slice(0, 64),
-        text: `${String(markdown || "").slice(0, 400)}\n\n[${button || "去处理"}](${url || WORK_URL})`
+        text: markdown,
+        singleTitle: button || "去处理",
+        singleURL: url || WORK_URL
       })
     }),
     signal: AbortSignal.timeout(8000)
   });
   const data = await res.json();
-  if (data.code || data.errcode) {
-    throw dingFail(data.message || data.errmsg || "机器人消息没有发出", data.errcode);
+  if (res.ok === false || !data || data.code || data.errcode || !data.processQueryKey) {
+    throw dingFail("机器人消息没有发出", data?.errcode);
   }
   if (Array.isArray(data.invalidStaffIdList) && data.invalidStaffIdList.length) {
     throw dingFail("钉钉没有这个接收人");
@@ -820,38 +814,38 @@ async function sendCorpCard(userid, title, markdown, url, button) {
   if (!agentId) {
     throw dingFail("待配置工作通知 AgentId");
   }
-  await oapi("/topapi/message/corpconversation/asyncsend_v2", {
+  const accepted = await oapi("/topapi/message/corpconversation/asyncsend_v2", {
     agent_id: Number(agentId) || agentId,
     userid_list: userid,
     msg: {
       msgtype: "action_card",
       action_card: {
         title: String(title || "工作任务").slice(0, 64),
-        markdown: String(markdown || "").slice(0, 500),
+        markdown: String(markdown || ""),
         single_title: button || "去处理",
         single_url: url || WORK_URL
       }
     }
   });
+  if (!accepted?.task_id) throw dingFail("工作通知未返回受理编号");
 }
 
-export async function sendTaskNotice(userid, title, markdown, url, button = "去处理", name = "") {
-  if (!userid) {
-    return false;
-  }
+export async function sendTaskNotice(userid, title, markdown, url, button = "去处理", name = "", card = null) {
+  if (!userid) return false;
+  const content = card || legacyCard(title, markdown, url, button, name);
+  const formatted = cardMarkdown(content);
+  // Private cards reach the specified employee. The configured group is a
+  // fallback with Markdown @ mentions (ActionCard does not guarantee @ alerts).
   try {
-    await sendMention(userid, title, markdown, url, button, name);
-    lastPopup = { channel: "at", error: "" };
-    return "at";
-  } catch (mentionError) {
+    await sendRobotCard(userid, title, formatted, url, button);
+    lastPopup = { channel: 'robot', error: '' }; return 'robot';
+  } catch {
     try {
-      await sendRobotCard(userid, title, markdown, url, button);
-      lastPopup = { channel: "robot", error: mentionError.publicMessage || "@ 没有发出" };
-      return "robot";
-    } catch (error) {
-      lastPopup = { channel: "work", error: error.publicMessage || "机器人消息没有发出" };
-      await sendCorpCard(userid, title, markdown, url, button);
-      return "work";
+      await sendCorpCard(userid, title, formatted, url, button);
+      lastPopup = { channel: 'work', error: '' }; return 'work';
+    } catch {
+      await sendMention(userid, title, formatted, url, button, name, content);
+      lastPopup = { channel: 'at', error: '' }; return 'at';
     }
   }
 }
@@ -870,7 +864,7 @@ export async function popupTo(userid, name = "") {
   }
   const meta = { appKey: maskId(dingConfig().clientId), agentId: currentAgentId() };
   try {
-    await sendMention(userid, "工作汇报", "右下角弹窗测试。请看电脑右下角，这一条会显示内容。", workLink("todo"), "去处理", name);
+    await sendMention(userid, "工作通知测试", "请查看本条通知；是否弹窗取决于钉钉客户端通知设置。", workLink("todo"), "去处理", name);
     lastPopup = { channel: "at", error: "" };
     return { ok: true, channel: "at", error: "", ...meta };
   } catch (error) {
