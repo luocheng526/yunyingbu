@@ -10,7 +10,7 @@ import { saveSettings } from '../src/modules/work/center.js';
 import { publishTask, actTask, setTaskNotifier, resetTaskStore, retryTaskNotices, exportTasks, importTasks } from '../src/modules/work/tasks.js';
 import { taskReminderPlan, dailyReminderPlan, runWorkReminders, reminderStatus } from '../src/modules/work/reminders.js';
 import { NOTICE_TYPES, noticeCard, cardMarkdown } from '../src/modules/work/notice-cards.js';
-import { resetDingStore, saveBinds, setDingTransport, sendTaskNotice, workLink } from '../src/modules/work/dingtalk.js';
+import { resetDingStore, saveBinds, setDingTransport, sendTaskNotice, popupTo, workLink } from '../src/modules/work/dingtalk.js';
 
 const director = { username: '罗成' }, lead = { username: '杨润泽' }, op = { username: '张文静' };
 let calls;
@@ -187,23 +187,43 @@ const sample = () => noticeCard('returned', { task: { title: '核对活动价', 
   recipientName: '张文静', event: { note: '缺少两个 SPU' }, url: workLink('taskMine', 'notice-test-task') });
 async function sendSample() { const c = sample(); return sendTaskNotice('ding-4', c.title, '', c.url, c.button, c.recipientName, c); }
 
-test('robot delivers a native single-button card privately without duplicating group or work messages', async () => {
+test('official work inbox receives the native card without duplicating robot or group messages', async () => {
   credentials(); const sent = [];
-  setDingTransport(async (url, options) => { if (url.includes('accessToken')) return api({ accessToken: 'token' }); sent.push(JSON.parse(options.body)); return api({ processQueryKey: 'accepted' }); });
-  assert.equal(await sendSample(), 'robot'); assert.equal(sent.length, 1);
-  assert.equal(sent[0].msgKey, 'sampleActionCard'); assert.deepEqual(sent[0].userIds, ['ding-4']);
-  const param = JSON.parse(sent[0].msgParam); assert.equal(param.singleTitle, '查看修改要求'); assert.match(param.singleURL, /task=notice-test-task/);
-  assert.match(param.text, /甄选未来 · 工作中心/); assert.match(param.text, /缺少两个 SPU/);
+  setDingTransport(async (url, options) => { if (url.includes('accessToken')) return api({ accessToken: 'token' }); assert.match(url, /asyncsend_v2/); sent.push(JSON.parse(options.body)); return api({ errcode: 0, task_id: 123 }); });
+  assert.equal(await sendSample(), 'work'); assert.equal(sent.length, 1);
+  assert.equal(sent[0].msg.msgtype, 'action_card'); assert.equal(sent[0].userid_list, 'ding-4');
+  const param = sent[0].msg.action_card; assert.equal(param.single_title, '查看修改要求'); assert.match(param.single_url, /task=notice-test-task/);
+  assert.match(param.markdown, /甄选未来 · 工作中心/); assert.match(param.markdown, /缺少两个 SPU/);
 });
 
-test('HTTP failure and invalid recipient cannot count as success; work fallback retains native card', async () => {
-  for (const response of [{ ok: false, json: async () => ({ processQueryKey: 'misleading' }) }, api({ processQueryKey: 'accepted', invalidStaffIdList: ['ding-4'] }), api({})]) {
+test('work notification HTTP failure, rejection and missing receipt fall back to a native robot card', async () => {
+  for (const response of [{ ok: false, json: async () => ({ errcode: 0, task_id: 123 }) }, api({ errcode: 88 }), api({ errcode: 0 })]) {
     credentials(); const sent = [];
     setDingTransport(async (url, options) => { if (url.includes('accessToken')) return api({ accessToken: 'token' });
-      sent.push(JSON.parse(options.body)); return url.includes('oToMessages') ? response : api({ errcode: 0, task_id: 123 }); });
-    assert.equal(await sendSample(), 'work'); assert.equal(sent.length, 2);
-    assert.equal(sent[1].msg.msgtype, 'action_card'); assert.equal(sent[1].msg.action_card.single_title, '查看修改要求');
+      sent.push(JSON.parse(options.body)); return url.includes('asyncsend_v2') ? response : api({ processQueryKey: 'accepted' }); });
+    assert.equal(await sendSample(), 'robot'); assert.equal(sent.length, 2);
+    assert.equal(sent[0].msg.msgtype, 'action_card'); assert.equal(sent[1].msgKey, 'sampleActionCard');
+    assert.equal(JSON.parse(sent[1].msgParam).singleTitle, '查看修改要求');
   }
+});
+
+test('test-notification action follows the same official work inbox and reports the actual channel', async () => {
+  credentials(); const urls = [];
+  setDingTransport(async url => { urls.push(url); return url.includes('accessToken') ? api({ accessToken: 'token' }) : api({ errcode: 0, task_id: 123 }); });
+  const result = await popupTo('ding-4', '张文静'); assert.equal(result.ok, true); assert.equal(result.channel, 'work');
+  assert.equal(urls.filter(url => !url.includes('accessToken')).length, 1); assert.match(urls.at(-1), /asyncsend_v2/);
+  assert.equal((await popupTo('')).ok, false); assert.equal(urls.length, 2);
+});
+
+test('robot invalid recipients cannot count as success after work notification rejection', async () => {
+  credentials(); let groupCalls = 0;
+  setDingTransport(async url => {
+    if (url.includes('accessToken')) return api({ accessToken: 'token' });
+    if (url.includes('asyncsend_v2')) return api({ errcode: 88 });
+    if (url.includes('oToMessages')) return api({ processQueryKey: 'accepted', invalidStaffIdList: ['ding-4'] });
+    groupCalls++; return api({ errcode: 0 });
+  });
+  assert.equal(await sendSample(), 'at'); assert.equal(groupCalls, 1);
 });
 
 test('group fallback preserves real targeted @ and formatted content; malformed acknowledgements are failures', async () => {

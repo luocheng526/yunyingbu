@@ -235,7 +235,7 @@ test("通知群地址只收钉钉域名，保存后 @ 走这条地址", async ()
   }
 });
 
-test("个人卡片不可用时切换工作通知，两者失败才在群里 @ 对应的人", async () => {
+test("优先工作通知，不重复发送单聊，两者失败才在群里 @ 对应的人", async () => {
   resetDingStore();
   process.env.DINGTALK_CLIENT_ID = "dingabc123";
   process.env.DINGTALK_CLIENT_SECRET = "secret-value-1";
@@ -256,7 +256,7 @@ test("个人卡片不可用时切换工作通知，两者失败才在群里 @ �
     const channel = await sendTaskNotice("u4", "新的工作任务", "我的任务「1」，截止 2026-11-17 23:59。", "https://zx.xingmaierp.cc/work?tab=taskMine&task=abc");
     assert.equal(channel, "work");
     assert.equal(urls.some((url) => url.includes("robot/ding/send")), false);
-    assert.equal(urls.some((url) => url.includes("oToMessages")), true);
+    assert.equal(urls.some((url) => url.includes("oToMessages")), false);
     assert.equal(urls.some((url) => url.includes("asyncsend_v2")), true);
     process.env.DINGTALK_NOTIFY_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=test-token";
     const mentioned = [];

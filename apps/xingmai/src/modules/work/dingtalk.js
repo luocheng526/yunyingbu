@@ -834,15 +834,15 @@ export async function sendTaskNotice(userid, title, markdown, url, button = "去
   if (!userid) return false;
   const content = card || legacyCard(title, markdown, url, button, name);
   const formatted = cardMarkdown(content);
-  // Private cards reach the specified employee. The configured group is a
-  // fallback with Markdown @ mentions (ActionCard does not guarantee @ alerts).
+  // Prefer the official enterprise Work Notifications inbox. A robot direct
+  // message, then a targeted group mention, are fallbacks for unavailable apps.
   try {
-    await sendRobotCard(userid, title, formatted, url, button);
-    lastPopup = { channel: 'robot', error: '' }; return 'robot';
+    await sendCorpCard(userid, title, formatted, url, button);
+    lastPopup = { channel: 'work', error: '' }; return 'work';
   } catch {
     try {
-      await sendCorpCard(userid, title, formatted, url, button);
-      lastPopup = { channel: 'work', error: '' }; return 'work';
+      await sendRobotCard(userid, title, formatted, url, button);
+      lastPopup = { channel: 'robot', error: '' }; return 'robot';
     } catch {
       await sendMention(userid, title, formatted, url, button, name, content);
       lastPopup = { channel: 'at', error: '' }; return 'at';
@@ -864,15 +864,14 @@ export async function popupTo(userid, name = "") {
   }
   const meta = { appKey: maskId(dingConfig().clientId), agentId: currentAgentId() };
   try {
-    await sendMention(userid, "工作通知测试", "请查看本条通知；是否弹窗取决于钉钉客户端通知设置。", workLink("todo"), "去处理", name);
-    lastPopup = { channel: "at", error: "" };
-    return { ok: true, channel: "at", error: "", ...meta };
+    const channel = await sendTaskNotice(userid, "工作通知测试", "请查看本条通知；是否弹窗取决于钉钉客户端通知设置。", workLink("todo"), "去处理", name);
+    return { ok: true, channel, error: "", ...meta };
   } catch (error) {
     return {
       ok: false,
       statusCode: 502,
       channel: "",
-      error: error.publicMessage || "@ 没有发出",
+      error: error.publicMessage || "通知没有发出",
       ...meta
     };
   }
