@@ -35,8 +35,7 @@ export function feeBound(value) {
   if (!Number.isFinite(n)) {
     return null;
   }
-  const pct = n > 0 && n <= 1 ? n * 100 : n;
-  return Math.max(0, Math.min(100, pct));
+  return Math.max(0, Math.min(100, n));
 }
 
 function cleanGoal(raw) {
@@ -68,13 +67,14 @@ export function readFeeGoals() {
         goals[shop] = goal;
       }
     });
-  } catch {
-    return goals;
+  } catch (err) {
+    if (err.code === "ENOENT") return goals;
+    throw new Error("费比设置读取失败，请稍后重试", { cause: err });
   }
   return goals;
 }
 
-export function saveFeeGoal(shop, lo, hi) {
+export function saveFeeGoal(shop, lo, hi, options = {}) {
   const name = String(shop || "").trim();
   if (!name || name === "__proto__" || name === "constructor" || name === "prototype") {
     const error = new Error("缺少店铺");
@@ -82,6 +82,9 @@ export function saveFeeGoal(shop, lo, hi) {
     throw error;
   }
   const goals = readFeeGoals();
+  // Import old browser settings only when this shop has no server value.
+  // A deliberately cleared server value also takes precedence over old data.
+  if (options.onlyIfMissing && Object.hasOwn(goals, name)) return goals;
   goals[name] = cleanGoal({ lo, hi });
   const file = resolveStorePath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -89,6 +92,12 @@ export function saveFeeGoal(shop, lo, hi) {
   Object.keys(goals).forEach((key) => {
     plain[key] = goals[key];
   });
-  fs.writeFileSync(file, JSON.stringify({ goals: plain }, null, 2));
+  const temp = file + "." + process.pid + ".tmp";
+  try {
+    fs.writeFileSync(temp, JSON.stringify({ goals: plain }, null, 2), { flush: true });
+    fs.renameSync(temp, file);
+  } finally {
+    fs.rmSync(temp, { force: true });
+  }
   return readFeeGoals();
 }

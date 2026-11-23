@@ -612,14 +612,18 @@ export function homeRouter(deps = {}) {
 
   router.get("/fee-goals", (_req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
-    res.json({ ok: true, goals: readFeeGoals() });
+    try {
+      res.json({ ok: true, goals: readFeeGoals() });
+    } catch (err) {
+      res.status(503).json({ ok: false, error: err.message });
+    }
   });
 
   router.post("/fee-goals", (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     try {
       const body = req.body || {};
-      const goals = saveFeeGoal(body.shop, body.lo, body.hi);
+      const goals = saveFeeGoal(body.shop, body.lo, body.hi, { onlyIfMissing: body.onlyIfMissing === true });
       res.json({ ok: true, goals });
     } catch (err) {
       res.status(Number(err.statusCode) || 400).json({ ok: false, error: err.message || "费比设置没有保存" });

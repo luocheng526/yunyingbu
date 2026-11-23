@@ -10,6 +10,8 @@ test("fee goal edits are stored per shop and can be cleared", () => {
   setFeeGoalStorePath(file);
   try {
     assert.equal(feeBound("34%"), 34);
+    assert.equal(feeBound("1"), 1);
+    assert.equal(feeBound("0"), 0);
     assert.equal(feeBound(""), null);
     assert.equal(Object.keys(readFeeGoals()).length, 0);
     saveFeeGoal("HYGGIR医疗保健旗舰店", 34, 40);
@@ -24,6 +26,18 @@ test("fee goal edits are stored per shop and can be cleared", () => {
     assert.equal(cleared.set, true);
     assert.equal(cleared.lo, null);
     assert.equal(cleared.hi, null);
+    saveFeeGoal("HYGGIR医疗保健旗舰店", 10, 20, { onlyIfMissing: true });
+    assert.equal(readFeeGoals()["HYGGIR医疗保健旗舰店"].lo, null);
+    saveFeeGoal("新店", 32, 38, { onlyIfMissing: true });
+    assert.equal(readFeeGoals()["新店"].lo, 32);
+    saveFeeGoal("新店", 1, 2, { onlyIfMissing: true });
+    assert.equal(readFeeGoals()["新店"].lo, 32);
+    assert.equal(fs.existsSync(file + "." + process.pid + ".tmp"), false);
+    // A damaged file must surface an error rather than erase other shops on save.
+    fs.writeFileSync(file, "{broken");
+    assert.throws(() => readFeeGoals(), /读取失败/);
+    assert.throws(() => saveFeeGoal("新店", 35, 40), /读取失败/);
+    assert.equal(fs.readFileSync(file, "utf8"), "{broken");
   } finally {
     setFeeGoalStorePath("");
     fs.rmSync(file, { force: true });

@@ -221,6 +221,8 @@
   }
   function hourlyCompareTipHtml(hour, yesterday, today, options) {
     options = options || {};
+    var coverageNote = options.coverage ? "今天已采集 " + (options.coverage.today[hour] || 0) + "/" + options.coverage.total +
+      " 家；昨天已采集 " + (options.coverage.yesterday[hour] || 0) + "/" + options.coverage.total + " 家。缺失店铺不计入，不代表零成交。" : "";
     function value(n, estimated) {
       n = asNum(n);
       if (n == null) return "—";
@@ -229,7 +231,7 @@
     return '<b>' + hourlyRange(hour) + '</b><div class="xm-hm-line-caption">' + escapeHtml(options.label || "累计成交金额") + '</div>' +
       '<div class="xm-hm-line-row"><span><i class="is-yest"></i>昨天</span><em>' + value(yesterday, options.estimated) + '</em></div>' +
       '<div class="xm-hm-line-row"><span><i class="is-today"></i>今天</span><em>' + value(today, false) + '</em></div>' +
-      (options.note ? '<div class="xm-hm-line-caption xm-hm-hour-note">' + escapeHtml(options.note) + '</div>' : '');
+      (coverageNote || options.note ? '<div class="xm-hm-line-caption xm-hm-hour-note">' + escapeHtml(coverageNote || options.note) + '</div>' : '');
   }
   function calMonthHtml(ym, opts, side) {
     var first = parseYmd(ym + "-01");
@@ -1698,6 +1700,122 @@
     return { lo: null, hi: null };
   }
   var feeGoalBook = {};
+  // Serialize writes and retain unacknowledged edits until the server confirms them.
+  function createFeeGoalSync(options) {
+    var confirmed = {};
+    var pending = Object.create(null);
+    var ready = false;
+    var busy = false;
+    var stopped = false;
+    var timer = 0;
+    var message = "正在读取服务器费比设置…";
+    var failed = false;
+    var storageKey = "xm-home-fee-pending-v1";
+    function stored() {
+      try { return JSON.parse(options.storage.getItem(storageKey) || "{}"); } catch (_err) { return {}; }
+    }
+    function persist(shop, entry, revision) {
+      try {
+        var data = stored();
+        if (entry) data[shop] = entry;
+        else if (data[shop] && data[shop].revision === revision) delete data[shop];
+        options.storage.setItem(storageKey, JSON.stringify(data));
+      } catch (_err) {}
+    }
+    Object.keys(stored() || {}).forEach(function (shop) {
+      var entry = stored()[shop];
+      if (entry && entry.revision && shop !== "__proto__" && shop !== "constructor" && shop !== "prototype") pending[shop] = entry;
+    });
+    function emit() {
+      var book = Object.assign({}, confirmed);
+      Object.keys(pending).forEach(function (shop) {
+        var entry = pending[shop];
+        if (!entry.onlyIfMissing || !book[shop]) book[shop] = { set: true, lo: entry.lo, hi: entry.hi };
+      });
+      options.changed(book, message, failed);
+    }
+    function later(delay) {
+      options.clearTimeout(timer);
+      if (!stopped) timer = options.setTimeout(flush, delay);
+    }
+    function valid(data) { return data && data.ok && data.goals && typeof data.goals === "object"; }
+    function queue(shop, lo, hi, onlyIfMissing) {
+      if (!shop || shop === "__proto__" || shop === "constructor" || shop === "prototype") return;
+      var current = pending[shop] || confirmed[shop];
+      if (current && current.lo === lo && current.hi === hi && (!pending[shop] || !pending[shop].onlyIfMissing)) { emit(); return; }
+      var entry = { lo: lo, hi: hi, onlyIfMissing: !!onlyIfMissing, revision: Date.now() + ":" + Math.random() };
+      pending[shop] = entry;
+      persist(shop, entry);
+      message = "费比设置：等待自动保存…";
+      failed = false;
+      emit();
+      later(450);
+    }
+    async function refresh() {
+      if (busy || stopped) return;
+      if (ready && Object.keys(pending).length) return flush();
+      busy = true;
+      try {
+        var data = await options.request();
+        if (!valid(data)) throw new Error("读取失败");
+        confirmed = data.goals;
+        ready = true;
+        var legacy = options.legacy();
+        Object.keys(legacy).forEach(function (shop) {
+          if (!Object.prototype.hasOwnProperty.call(confirmed, shop) && !pending[shop]) {
+            queue(shop, legacy[shop].lo, legacy[shop].hi, true);
+          }
+        });
+        message = Object.keys(pending).length ? "费比设置：正在自动同步…" : "费比设置已与服务器同步";
+        failed = false;
+      } catch (_err) {
+        message = "费比设置读取失败，正在重试；未保存的修改会保留";
+        failed = true;
+      } finally {
+        busy = false;
+        emit();
+        if (ready && Object.keys(pending).length) later(0);
+        else later(failed ? 3000 : 30000);
+      }
+    }
+    async function flush() {
+      options.clearTimeout(timer);
+      if (busy) return;
+      if (!ready) return refresh();
+      var shop = Object.keys(pending)[0];
+      if (!shop) return refresh();
+      var entry = pending[shop];
+      busy = true;
+      message = "费比设置：正在保存到服务器…";
+      failed = false;
+      emit();
+      try {
+        var data = await options.request({ shop: shop, lo: entry.lo, hi: entry.hi, onlyIfMissing: entry.onlyIfMissing });
+        if (!valid(data) || !data.goals[shop]) throw new Error("保存失败");
+        confirmed = data.goals;
+        if (pending[shop] === entry) {
+          delete pending[shop];
+          persist(shop, null, entry.revision);
+        }
+        message = Object.keys(pending).length ? "费比设置：正在保存到服务器…" : "费比设置已保存到服务器";
+      } catch (_err) {
+        message = "费比设置尚未保存到服务器，正在重试；修改已暂存本机";
+        failed = true;
+      } finally {
+        busy = false;
+        emit();
+        later(failed ? 3000 : Object.keys(pending).length ? 0 : 30000);
+      }
+    }
+    emit();
+    return {
+      start: refresh,
+      edit: queue,
+      flush: flush,
+      refresh: refresh,
+      stop: function () { stopped = true; options.clearTimeout(timer); if (Object.keys(pending).length) flush(); }
+    };
+  }
   function rememberFeeGoals(goals) {
     feeGoalBook = goals && typeof goals === "object" ? goals : {};
   }
@@ -2295,6 +2413,21 @@
         })
         .join(" ");
     }
+    function lines(list, color) {
+      if (!chart || !chart.preserveGaps) return list.length ? '<polyline fill="none" stroke="' + color + '" stroke-width="2.2" points="' + pts(list) + '"></polyline>' : "";
+      var output = [], run = [];
+      function flush() {
+        if (run.length === 1) output.push('<circle cx="' + run[0][0] + '" cy="' + run[0][1] + '" r="2" fill="' + color + '"></circle>');
+        if (run.length > 1) output.push('<polyline fill="none" stroke="' + color + '" stroke-width="2.2" points="' + run.map(function (p) { return p.join(","); }).join(" ") + '"></polyline>');
+        run = [];
+      }
+      list.forEach(function (n, i) {
+        if (n == null || n === "" || !Number.isFinite(Number(n))) { flush(); return; }
+        run.push([hourX(i, slots).toFixed(1), yAt(n).toFixed(1)]);
+      });
+      flush();
+      return output.join("");
+    }
     function axis() {
       if (slots !== 24 && slots !== 48) {
         return "";
@@ -2313,16 +2446,14 @@
       }
       return out.join("");
     }
-    var yestPts = yest.length ? pts(yest) : "";
-    var todayPts = today.length ? pts(today) : "";
     return (
       '<svg class="xm-hm-line" viewBox="0 0 ' +
       width +
       " " +
       height +
       '" preserveAspectRatio="none">' +
-      (yestPts ? '<polyline fill="none" stroke="#91caff" stroke-width="2.2" points="' + yestPts + '"></polyline>' : "") +
-      (todayPts ? '<polyline fill="none" stroke="#ffa39e" stroke-width="2.2" points="' + todayPts + '"></polyline>' : "") +
+      lines(yest, "#91caff") +
+      lines(today, "#ffa39e") +
       (slots === 24 || slots === 48
         ? '<line class="xm-hm-line-guide" x1="0" y1="' +
           padTop +
@@ -2335,6 +2466,8 @@
     );
   }
   function lineChartOf(chart) {
+    if (chart && chart.serverHistory) return { yesterday: chart.yesterday, today: chart.today,
+      hours: 24, height: 128, hourStart: 0, preserveGaps: true };
     var yestHour = (chart && chart.yesterdayHour) || [];
     var todayHour = (chart && chart.todayHour) || [];
     var hasHour = yestHour.length > 2 || todayHour.length > 2;
@@ -2392,12 +2525,12 @@
       (unit ? ' data-unit="' + unit + '"' : "") +
       hoursAttr(line.hours) +
       (hourlyHover ? ' data-hourly-values="' + escapeHtml(JSON.stringify({ yesterday: line.yesterday, today: line.today, unit: unit,
-        label: unit === "rate" ? "实时费比" : kind === "spend" ? "累计推广花费" : "累计成交金额" })) + '"' : '') +
+        coverage: chart.coverage, label: unit === "rate" ? "已采集店铺费比" : kind === "spend" ? "已采集店铺累计推广花费" : "已采集店铺累计成交金额" })) + '"' : '') +
       '><div class="xm-hm-card-head"><span>' +
       escapeHtml((chart && chart.label) || "实时指标") +
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
       escapeHtml(chart && chart.value != null && chart.value !== "" ? chart.value : "—") +
-      '</div><div class="xm-hm-yest-now">昨天 ' +
+      '</div><div class="xm-hm-yest-now">' + (chart.serverHistory ? "昨日同段 " : "昨天 ") +
       escapeHtml((chart && chart.yestText) || "—") +
       "</div>" +
       '<div class="xm-hm-trend' +
@@ -2406,6 +2539,7 @@
       trendText +
       "</div>" +
       compareLineHtml(line) +
+      (chart.serverHistory ? '<div class="xm-hm-line-caption">' + (chart.historyUnavailable ? "历史暂时读取失败，请稍后刷新" : "服务器历史 · 按已采集店铺汇总 · 悬停查看覆盖数") + '</div>' : "") +
       "</article>"
     );
   }
@@ -2616,6 +2750,12 @@
     return fiveMinuteStamp(latest);
   }
   function liveLinkOf(row) {
+    /* home channel health */
+    if (row && row.dataUnavailable && !row.loginExpired && !row.offline) return { label: "平台缺数", kind: "warn" };
+    if (row && row.partialData && !row.loginExpired && !row.offline) {
+      if (row.dealFailed) return { label: "成交异常", kind: "warn" };
+      if (row.adsFailed) return { label: "广告异常", kind: "ads" };
+    }
     if (typeof liveScope !== "undefined" && liveScope === "live2") {
       if (row && row.platformLimited === true && !row.loginExpired) {
         return { label: "平台限制", kind: "warn" };
@@ -3151,6 +3291,7 @@
       '<div class="xm-hm-body">' +
       '<section class="xm-hm-kpis-shell"><div class="xm-hm-teams-bar"><b>星脉甄选</b><button type="button" class="xm-hm-set" id="xm-hm-set">卡片设置</button></div><div class="xm-hm-sales xm-hm-live-charts" id="xm-hm-sales"></div><div class="xm-hm-kpis" id="xm-hm-kpis"></div></section>' +
       '<section class="xm-hm-teams" id="xm-hm-teams" hidden></section>' +
+      '<p class="xm-hm-note" id="xm-hm-fee-save" role="status" aria-live="polite" hidden></p>' +
       '<section class="xm-hm-live" id="xm-hm-live" hidden></section>' +
       '<section class="xm-hm-week" id="xm-hm-week" hidden></section>' +
       '<section class="xm-hm-board" id="xm-hm-board" hidden>' +
@@ -3394,6 +3535,7 @@
         manager: row.manager || hit.manager || "",
         liveAmount: hit.liveAmount == null ? null : fmtMoney(hit.liveAmount),
         salesTrend: hit.salesTrend || null,
+        overviewHistory: hit.overviewHistory || null,
         paidAmount: hit.paidAmount == null ? null : fmtMoney(hit.paidAmount),
         roi: hit.roi == null ? null : asNum(hit.roi).toFixed(2),
         paidDeal: hit.paidDeal == null ? null : fmtMoney(hit.paidDeal),
@@ -3526,7 +3668,6 @@
       })
       .filter(Boolean);
   }
-  var LIVE2_DAY_KEY = "xm-home-live2-yday";
   function live2Sums(records) {
     var deal = 0;
     var spend = 0;
@@ -3584,121 +3725,52 @@
       return true;
     });
   }
-  function scaleHourList(list, ratio) {
-    return padHours(list, 24).map(function (n) {
-      var v = asNum(n);
-      return v ? v * ratio : 0;
-    });
-  }
-  function scaleLive2Day(day, dealRatio, spendRatio, exact) {
-    var deal = scaleHourList(day && day.jingmaiAt, dealRatio);
-    var spend = scaleHourList(day && day.spendAt, spendRatio);
-    var fee = deal.map(function (d, i) {
-      return d ? spend[i] / d : 0;
-    });
-    if (exact) {
-      var h = shanghaiHour();
-      if (exact.deal != null) {
-        deal[h] = exact.deal;
-      }
-      if (exact.spend != null) {
-        spend[h] = exact.spend;
-      }
-      if (exact.fee != null) {
-        fee[h] = exact.fee;
-      }
-    }
-    return { jingmaiAt: deal, spendAt: spend, feeAt: fee };
-  }
-  function levelDeltas(list, slots) {
-    var src = padHours(list, 24);
-    var last = 0;
-    var out = [];
-    var i;
-    var end = slots == null ? shanghaiHour() : slots - 1;
-    for (i = 0; i <= end && i < 24; i += 1) {
-      var n = asNum(src[i]);
-      var level = n ? n : last;
-      out.push(level - last);
-      last = level;
-    }
-    return out;
-  }
-  function levelDay(list) {
-    var src = padHours(list, 24);
-    var last = 0;
-    var out = [];
-    var i;
-    for (i = 0; i < 24; i += 1) {
-      var n = asNum(src[i]);
-      if (n) {
-        last = n;
-      }
-      out.push(last);
-    }
-    return out;
-  }
-  function stampAtHour(list) {
-    var src = padHours(list, 24);
-    var i;
-    var h = shanghaiHour();
-    for (i = Math.min(h, src.length - 1); i >= 0; i -= 1) {
-      var n = asNum(src[i]);
-      if (n) {
-        return n;
-      }
-    }
-    return null;
-  }
-  function live2ChartsFrom(sums, stamps) {
-    var blank = blankLive();
-    if (!sums || (sums.deal == null && sums.spend == null)) {
-      return { hero: blank.hero, paid: blank.paid, fee: blank.fee };
-    }
-    var today = stamps && stamps.today;
-    var yest = stamps && stamps.yest;
-    if (!stamps) {
-      var kept = keepLiveDay(
-        { jingmai: sums.deal, spend: sums.spend, fee: sums.fee },
-        LIVE2_DAY_KEY
-      );
-      today = kept.todayStamps || emptyLiveDayNums();
-      yest = kept.yestStamps || emptyLiveDayNums();
-    }
-    var yestDeal = stampAtHour(yest && yest.jingmaiAt);
-    var yestSpend = stampAtHour(yest && yest.spendAt);
-    var yestFee = stampAtHour(yest && yest.feeAt);
-    var hero = spendChartOf(sums.deal, yestDeal, {
-      todaySpend: levelDeltas(today && today.jingmaiAt),
-      yesterdaySpend: yestDeal != null ? levelDeltas(yest.jingmaiAt, 24) : []
-    });
-    hero.key = "jingmai";
-    hero.label = "实时总成交金额";
-    var paid = spendChartOf(sums.spend, yestSpend, {
-      todaySpend: levelDeltas(today && today.spendAt),
-      yesterdaySpend: yestSpend != null ? levelDeltas(yest.spendAt, 24) : []
-    });
-    var fee = feeChartOf(sums.fee, yestFee, {
-      todayFee: levelDay(today && today.feeAt).slice(0, shanghaiHour() + 1),
-      yesterdayFee: yestFee != null ? levelDay(yest.feeAt) : []
-    });
-    return { hero: hero, paid: paid, fee: fee };
-  }
   function live2Charts(allRecords, scopedRecords) {
-    var allSums = live2Sums(allRecords);
-    var company = live2ChartsFrom(allSums, null);
     var pick = liveFilter();
-    if (!pick.shop && !pick.team) {
-      return company;
+    var rows = pick.shop || pick.team ? scopedRecords || [] : allRecords || [];
+    var sums = live2Sums(rows), today = live2HistoryTotals(rows, "today"), yesterday = live2HistoryTotals(rows, "yesterday");
+    var yestDeal = live2YesterdayTotal(rows, "deal"), yestSpend = live2YesterdayTotal(rows, "spend");
+    var yestFee = yestDeal > 0 && yestSpend != null ? yestSpend / yestDeal : null;
+    function card(key, label, metric, value, prior) {
+      return { key: key, label: label, value: value == null ? "—" : metric === "fee" ? fmtRate(value) : fmtMoney(value),
+        yestText: prior == null ? "—" : metric === "fee" ? fmtRate(prior) : fmtMoney(prior),
+        delta: value != null && prior != null && prior > 0 ? trendOf(value, prior) : "",
+        today: today[metric], yesterday: yesterday[metric], serverHistory: true, hours: 24,
+        historyUnavailable: rows.some(function (row) { return !row.overviewHistory || row.overviewHistory.historyUnavailable; }),
+        unit: metric === "fee" ? "rate" : "", coverage: { today: today.coverage[metric], yesterday: yesterday.coverage[metric], total: rows.length } };
     }
-    var scopeSums = live2Sums(scopedRecords || []);
-    var dealRatio = allSums.deal ? (scopeSums.deal || 0) / allSums.deal : 0;
-    var spendRatio = allSums.spend ? (scopeSums.spend || 0) / allSums.spend : 0;
-    var store = readLiveDay(LIVE2_DAY_KEY);
-    return live2ChartsFrom(scopeSums, {
-      today: scaleLive2Day(store.today, dealRatio, spendRatio, scopeSums),
-      yest: scaleLive2Day(store.yest, dealRatio, spendRatio, null)
+    return { hero: card("jingmai", "实时总成交金额", "deal", sums.deal, yestDeal),
+      paid: card("spend", "推广总花费", "spend", sums.spend, yestSpend),
+      fee: card("fee", "实时费比", "fee", sums.fee, yestFee) };
+  }
+  function live2HistoryTotals(rows, day) {
+    var result = { deal: [], spend: [], fee: [], coverage: { deal: [], spend: [], fee: [] } };
+    for (var hour = 0; hour < 24; hour++) {
+      var deal = 0, spend = 0, feeDeal = 0, feeSpend = 0, dc = 0, sc = 0, fc = 0;
+      rows.forEach(function (row) {
+        var history = row.overviewHistory && row.overviewHistory[day];
+        var d = asNum(history && history.deal && history.deal[hour]);
+        var s = asNum(history && history.spend && history.spend[hour]);
+        if (d != null) { deal += d; dc++; }
+        if (s != null) { spend += s; sc++; }
+        if (d != null && s != null) { feeDeal += d; feeSpend += s; fc++; }
+      });
+      result.deal.push(dc ? deal : null); result.spend.push(sc ? spend : null);
+      result.fee.push(fc && feeDeal > 0 ? feeSpend / feeDeal : null);
+      result.coverage.deal.push(dc); result.coverage.spend.push(sc); result.coverage.fee.push(fc);
+    }
+    return result;
+  }
+  function live2YesterdayTotal(rows, metric) {
+    var total = 0, count = 0, missing = false;
+    rows.forEach(function (row) {
+      if (asNum(metric === "deal" ? row.liveAmount : row.paidAmount) == null) return;
+      var comparison = row.overviewHistory && row.overviewHistory.comparison;
+      var value = asNum(comparison && comparison[metric]);
+      if (value == null) missing = true;
+      else { total += value; count++; }
     });
+    return count && !missing ? total : null;
   }
   function live2PanelHtml(state) {
     var roster = adaptLive2Shops(state && state.dutyShops);
@@ -3823,6 +3895,8 @@
       block.style.setProperty("--xm-hm-team-cols", String(Math.max(block.querySelectorAll(".xm-hm-team").length, 1)));
     });
     root.querySelector("#xm-hm-live").hidden = state.view !== "live" && state.view !== "live2";
+    var feeStatus = root.querySelector("#xm-hm-fee-save");
+    if (feeStatus) feeStatus.hidden = state.view !== "live" && state.view !== "live2";
     var weekBox = root.querySelector("#xm-hm-week");
     if (weekBox) {
       weekBox.hidden = state.view !== "week";
@@ -7426,11 +7500,47 @@
           return;
         }
       }
-      function feePair(lo, hi) {
-        return { lo: lo == null ? null : Math.round(lo), hi: hi == null ? null : Math.round(hi) };
-      }
+      var feeInputError = "";
+      var feePaintTimer = 0;
+      var feeSync = createFeeGoalSync({
+        storage: { getItem: function (key) { return localStorage.getItem(key); }, setItem: function (key, value) { localStorage.setItem(key, value); } },
+        setTimeout: function (fn, delay) { return window.setTimeout(fn, delay); },
+        clearTimeout: function (id) { window.clearTimeout(id); },
+        legacy: scrapedFeeBook,
+        request: function (body) {
+          var controller = new AbortController();
+          var timeout = window.setTimeout(function () { controller.abort(); }, 10000);
+          return fetch("/api/home/fee-goals", {
+            method: body ? "POST" : "GET",
+            credentials: "same-origin",
+            cache: "no-store",
+            keepalive: !!body,
+            signal: controller.signal,
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: body ? JSON.stringify(body) : undefined
+          }).then(function (res) {
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return res.json();
+          }).finally(function () { window.clearTimeout(timeout); });
+        },
+        changed: function (goals, message, failed) {
+          if (dead) return;
+          rememberFeeGoals(goals);
+          var status = root.querySelector("#xm-hm-fee-save");
+          if (status) {
+            status.textContent = feeInputError || message;
+            status.style.color = failed || feeInputError ? "#c53030" : "";
+          }
+          // Focus briefly leaves both inputs during a change event. Wait until
+          // the browser finishes moving focus before replacing table controls.
+          window.clearTimeout(feePaintTimer);
+          feePaintTimer = window.setTimeout(function () {
+            if (!dead && !feeInputFocused() && !feeInputError) paint(root, state);
+          }, 0);
+        }
+      });
       function commitFeeCell(cell) {
-        if (!cell || !cell.querySelector) {
+        if (!cell || !cell.querySelector || !root.contains(cell)) {
           return;
         }
         var loEl = cell.querySelector("[data-fee-lo]");
@@ -7439,25 +7549,35 @@
         if (!shop) {
           return;
         }
-        var next = feePair(parseFeeBound(loEl && loEl.value), parseFeeBound(hiEl && hiEl.value));
-        if (next.lo != null && next.hi != null && next.lo > next.hi) {
-          var swap = next.lo;
-          next.lo = next.hi;
-          next.hi = swap;
+        function inputBound(el) {
+          var value = String(el && el.value || "").trim();
+          if (!value) return null;
+          return /^\d{1,3}$/.test(value) && Number(value) <= 100 ? Number(value) : undefined;
         }
-        var cur = feePair(feeRangeOf({ shop: shop }).lo, feeRangeOf({ shop: shop }).hi);
-        if (cur.lo === next.lo && cur.hi === next.hi) {
+        var next = { lo: inputBound(loEl), hi: inputBound(hiEl) };
+        feeInputError = next.lo === undefined || next.hi === undefined
+          ? "费比请输入 0 到 100 之间的整数，修改后自动保存"
+          : next.lo != null && next.hi != null && next.lo > next.hi
+            ? "费比下限不能高于上限，调整后自动保存" : "";
+        if (feeInputError) {
+          var status = root.querySelector("#xm-hm-fee-save");
+          status.textContent = feeInputError;
+          status.style.color = "#c53030";
           return;
         }
-        feeGoalBook[shop] = { set: true, lo: next.lo, hi: next.hi };
-        paint(root, state);
-        api("/api/home/fee-goals", { shop: shop, lo: next.lo, hi: next.hi }).then(function (data) {
-          if (dead || !data || !data.goals) {
-            return;
-          }
-          rememberFeeGoals(data.goals);
-          paint(root, state);
-        });
+        feeSync.edit(shop, next.lo, next.hi);
+      }
+      function onFeeInput(event) {
+        var el = event.target;
+        if (!el || !el.matches || !el.matches("[data-fee-lo],[data-fee-hi]")) return;
+        commitFeeCell(el.closest("td"));
+        if (event.type === "change") feeSync.flush();
+      }
+      function onFeeResume() { feeSync.refresh(); }
+      function onFeePageHide() { feeSync.flush(); }
+      function onFeeVisibility() {
+        if (document.hidden) feeSync.flush();
+        else feeSync.refresh();
       }
       function onFeeFocusOut(event) {
         var el = event.target;
@@ -7470,6 +7590,7 @@
             return;
           }
           commitFeeCell(cell);
+          feeSync.flush();
         }, 0);
       }
       function onFeeKey(event) {
@@ -7491,6 +7612,12 @@
       root.addEventListener("focusout", onFeeFocusOut);
       root.addEventListener("keydown", onFeeKey);
       root.addEventListener("input", onLiveSearchInput);
+      root.addEventListener("input", onFeeInput);
+      root.addEventListener("change", onFeeInput);
+      window.addEventListener("online", onFeeResume);
+      window.addEventListener("focus", onFeeResume);
+      window.addEventListener("pagehide", onFeePageHide);
+      document.addEventListener("visibilitychange", onFeeVisibility);
       root.addEventListener("change", onChange);
       root.addEventListener("pointerdown", onCalPointerDown);
       root.addEventListener("pointerover", onCalHover);
@@ -7520,13 +7647,7 @@
       document.addEventListener("selectstart", onSortSelectStart);
       document.addEventListener("dragstart", onSortSelectStart);
       pullBoard();
-      api("/api/home/fee-goals").then(function (data) {
-        if (dead || !data || !data.ok || !data.goals) {
-          return;
-        }
-        rememberFeeGoals(data.goals);
-        paint(root, state);
-      });
+      feeSync.start();
       if (state.view === "live2") {
         refreshLive2();
       } else {
@@ -7557,6 +7678,14 @@
       }
       return function unmount() {
         dead = true;
+        window.clearTimeout(feePaintTimer);
+        feeSync.stop();
+        root.removeEventListener("input", onFeeInput);
+        root.removeEventListener("change", onFeeInput);
+        window.removeEventListener("online", onFeeResume);
+        window.removeEventListener("focus", onFeeResume);
+        window.removeEventListener("pagehide", onFeePageHide);
+        document.removeEventListener("visibilitychange", onFeeVisibility);
         clearLiveRowPicked();
         if (deskTimer) {
           window.clearInterval(deskTimer);
