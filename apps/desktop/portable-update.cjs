@@ -1,7 +1,9 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { spawn } = require('node:child_process');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
+const exec = promisify(execFile);
 
 // All paths originate in the main process. No shell interpolation of paths,
 // release notes or renderer input; JSON is passed as base64 data.
@@ -84,20 +86,25 @@ async function startReplacement(options) {
   const env = {...process.env};
   for (const key of Object.keys(env)) if (key.startsWith('PORTABLE_') || key === 'ELECTRON_RUN_AS_NODE') delete env[key];
   const exe = path.join(process.env.SystemRoot || 'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe');
-  // DETACHED_PROCESS can make Windows PowerShell exit without executing its
-  // command. An unreferenced normal child survives the GUI parent on Windows.
-  const child = spawn(exe,['-NoLogo','-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',command],{windowsHide:true,stdio:'ignore',env});
-  let failed = false, cancelled = false;
-  const cancel=()=>{cancelled=true;child.kill();};
-  child.once('error',()=>{failed=true;});
-  child.once('exit',()=>{failed=true;if(cancelled) fs.rm(config.incoming,{force:true}).catch(()=>{});}); child.unref();
+  // A short-lived Windows broker starts an independent hidden process. Direct
+  // DETACHED_PROCESS PowerShell may exit before executing, while an ordinary
+  // child may be terminated with its parent/job during an App restart.
+  const commandFile=path.join(path.dirname(config.ready),'command-'+path.basename(config.ready)+'.txt');
+  await fs.writeFile(commandFile,command,{flag:'wx'});
+  const data=Buffer.from(JSON.stringify({exe,commandFile}),'utf8').toString('base64');
+  const broker=`$ErrorActionPreference='Stop'; $data=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${data}'))|ConvertFrom-Json; $job=Start-Process -FilePath $data.exe -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',([IO.File]::ReadAllText($data.commandFile))) -WindowStyle Hidden -PassThru; [Console]::WriteLine($job.Id)`;
+  const {stdout}=await exec(exe,['-NoLogo','-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',Buffer.from(broker,'utf16le').toString('base64')],{windowsHide:true,env,timeout:15000});
+  const helperPid=Number(stdout.trim());
+  if(!Number.isSafeInteger(helperPid)||helperPid<=0)throw new Error('无法启动更新程序，请稍后重试');
+  const running=()=>{try{process.kill(helperPid,0);return true;}catch{return false;}};
+  const cancel=()=>{try{process.kill(helperPid);}catch{};fs.rm(config.incoming,{force:true}).catch(()=>{});};
   for (let i=0;i<600;i++) {
     try { if (await fs.readFile(config.ready,'utf8') === 'ready') return {config,cancel}; } catch {}
-    if (failed) break;
+    if (!running()) break;
     await new Promise(resolve=>setTimeout(resolve,100));
   }
   // Never leave a delayed helper waiting to install after reporting failure.
-  if(!failed) cancel();
+  if(running()) cancel();
   throw new Error('无法准备更新，请确认 App 所在文件夹可写，或从原网站下载新版');
 }
 module.exports = { replacementScript, makeReplacementConfig, startReplacement };
