@@ -1,4 +1,6 @@
-import { dbMode, query } from "../profile/auth.js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const CENTERS = [
   "沈子晗运营中心",
@@ -6,53 +8,1077 @@ export const CENTERS = [
   "数据中心",
   "版本发布中心",
   "个人中心",
-  "其他"
+  "其他",
+  "人员管理"
 ];
 
-export const POSTS = ["店长", "运营", "主管", "经理"];
+export const POSTS = ["店长", "运营", "主管", "经理", "储备", "助理", "总监"];
+export const PEOPLE_BOARDS = [
+  { id: "ops", name: "运营部门管理" },
+  { id: "hrTech", name: "人事和技术部门" },
+  { id: "backend", name: "后端部门" }
+];
+const BOARD_IDS = new Set(PEOPLE_BOARDS.map((row) => row.id));
+const BOARD_NAME_TO_ID = {
+  运营部门管理: "ops",
+  运营部: "ops",
+  运营: "ops",
+  人事和技术部门: "hrTech",
+  人事技术: "hrTech",
+  人事: "hrTech",
+  后端部门: "backend",
+  后端: "backend"
+};
+
+export function normalizeBoard(value) {
+  const raw = String(value || "").trim();
+  if (BOARD_IDS.has(raw)) {
+    return raw;
+  }
+  return BOARD_NAME_TO_ID[raw] || "ops";
+}
+
+export function boardOf(person) {
+  return normalizeBoard(person && person.board);
+}
+
+function knownBoard(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  if (BOARD_IDS.has(raw) || BOARD_NAME_TO_ID[raw]) {
+    return normalizeBoard(raw);
+  }
+  return "";
+}
+
+function boardFromInput(input, fallback = "ops") {
+  const item = input && typeof input === "object" ? input : {};
+  return knownBoard(item.board) || knownBoard(item.部门管理) || normalizeBoard(fallback);
+}
 export const SHOP_KINDS = ["店铺", "店群"];
+export const INITIAL_PASSWORD = "ChangeMe123!";
+
+function withLogin(person) {
+  const name = String(person.name || "").trim();
+  const username = String(person.username || name).trim() || name;
+  const password = String(person.password || INITIAL_PASSWORD).trim() || INITIAL_PASSWORD;
+  return { ...person, username, password };
+}
+
 const STATUSES = new Set(["在职", "离职"]);
-const ROLE_ALIASES = { 管理: "经理" };
 
-const PEOPLE_SELECT =
-  "SELECT id, name, role, center, status, demo, employee_no, department, manager_id FROM people ORDER BY id ASC";
-const SHOP_SELECT = "SELECT id, name, kind, pack, bundle, demo FROM people_shops ORDER BY id ASC";
-const GRANT_SELECT =
-  "SELECT id, person_id, shop_id, role, start_on, end_on, revoked FROM people_grants ORDER BY id ASC";
+const PEOPLE_SEED = [
+  { id: 1, name: "沈子晗", role: "经理", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ001", department: "沈子晗运营中心", managerId: null },
+  { id: 2, name: "韩梦凯", role: "经理", center: "韩梦凯运营中心", status: "在职", demo: true, employeeNo: "HK001", department: "韩梦凯运营中心", managerId: null },
+  { id: 3, name: "管理员", role: "经理", center: "人员管理", status: "在职", demo: true, employeeNo: "XM001", department: "人员管理", managerId: null },
+  { id: 4, name: "张文静", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ002", department: "沈子晗运营中心", managerId: 1 },
+  { id: 5, name: "陈明婧", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ003", department: "沈子晗运营中心", managerId: 1 },
+  { id: 6, name: "郭桂良", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ004", department: "沈子晗运营中心", managerId: 1 },
+  { id: 7, name: "王博", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ005", department: "沈子晗运营中心", managerId: 1 },
+  { id: 8, name: "杨润泽", role: "主管", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ006", department: "沈子晗运营中心", managerId: 1 },
+  { id: 9, name: "崔安琪", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ007", department: "沈子晗运营中心", managerId: 8 },
+  { id: 10, name: "郭哲宁", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ008", department: "沈子晗运营中心", managerId: 8 },
+  { id: 11, name: "高丽男", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ009", department: "沈子晗运营中心", managerId: 1 },
+  { id: 12, name: "栗静萱", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ010", department: "沈子晗运营中心", managerId: 1 },
+  { id: 13, name: "杨禄", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ011", department: "沈子晗运营中心", managerId: 1 },
+  { id: 14, name: "张鹏", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ012", department: "沈子晗运营中心", managerId: 1 },
+  { id: 15, name: "王梓萱", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ013", department: "沈子晗运营中心", managerId: 1 },
+  { id: 16, name: "秦怡硕", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ014", department: "沈子晗运营中心", managerId: 1 }
+];
 
-function todayShanghai() {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
+const SHOP_SEED = [
+  { id: 1, name: "RASW家居旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "", demo: true },
+  { id: 2, name: "RASW生活电器旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "", demo: true },
+  { id: 3, name: "RASW健康电器旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "", demo: true },
+  { id: 4, name: "飒望居家旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "", demo: true },
+  { id: 5, name: "SAWAAG居家布艺旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "", demo: true },
+  { id: 6, name: "RASW居家旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "杨润泽包", demo: true },
+  { id: 7, name: "飒望家居日用旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "杨润泽包", demo: true },
+  { id: 8, name: "飒望旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "杨润泽包", demo: true },
+  { id: 9, name: "RASW潮流生活旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "杨润泽包", demo: true },
+  { id: 10, name: "HYEGIIR健康器械旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "", demo: true },
+  { id: 11, name: "DIKTT个护健康旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "", demo: true },
+  { id: 12, name: "HYEGIIR医疗保健旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "", demo: true },
+  { id: 13, name: "HYEGIIR养生器械旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "", demo: true },
+  { id: 14, name: "MGXEK旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "", demo: true },
+  { id: 15, name: "SAWAAG生活日用旗舰店", kind: "店铺", pack: "沈子晗包", bundle: "", demo: true },
+  { id: 16, name: "沈子晗包", kind: "店群", pack: "沈子晗包", bundle: "", demo: true },
+  { id: 17, name: "杨润泽包", kind: "店群", pack: "杨润泽包", bundle: "", demo: true }
+];
+
+const GRANT_SEED = [
+  { id: 1, personId: 1, shopId: 16, role: "经理", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 2, personId: 8, shopId: 17, role: "主管", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 3, personId: 4, shopId: 1, role: "运营", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 4, personId: 5, shopId: 2, role: "运营", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 5, personId: 6, shopId: 3, role: "运营", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 6, personId: 7, shopId: 4, role: "运营", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 7, personId: 7, shopId: 5, role: "运营", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 8, personId: 8, shopId: 6, role: "主管", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 9, personId: 9, shopId: 7, role: "运营", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 10, personId: 8, shopId: 8, role: "主管", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 11, personId: 8, shopId: 9, role: "主管", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 12, personId: 10, shopId: 9, role: "运营", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 13, personId: 11, shopId: 10, role: "运营", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 14, personId: 12, shopId: 11, role: "运营", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 15, personId: 13, shopId: 12, role: "运营", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 16, personId: 14, shopId: 13, role: "运营", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 17, personId: 15, shopId: 14, role: "运营", startOn: "2026-01-01", endOn: "", revoked: false },
+  { id: 18, personId: 16, shopId: 15, role: "运营", startOn: "2026-01-01", endOn: "", revoked: false }
+];
+
+function clone(row) {
+  return { ...row };
 }
 
-function normalizeRole(raw) {
-  const role = typeof raw === "string" ? raw.trim() : "";
-  return ROLE_ALIASES[role] || role;
+function today() {
+  return new Date().toISOString().slice(0, 10);
 }
 
-function clonePerson(person) {
+let nextPersonId = 17;
+let nextShopId = 18;
+let nextGrantId = 19;
+let people = PEOPLE_SEED.map(clone);
+let shops = SHOP_SEED.map(clone);
+let grants = GRANT_SEED.map(clone);
+const loginFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "data", "people-logins.json");
+const rosterFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "data", "people-roster.json");
+let loginOverlay = loadLoginOverlay();
+applyLoginOverlay();
+let rosterPersistMode = "memory";
+
+function loadLoginOverlay() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(loginFile, "utf8"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch {
+    /* keep empty */
+  }
+  return {};
+}
+
+function saveLoginOverlay() {
+  try {
+    fs.mkdirSync(path.dirname(loginFile), { recursive: true });
+    fs.writeFileSync(loginFile, JSON.stringify(loginOverlay, null, 2) + "\n", "utf8");
+  } catch {
+    /* ignore missing disk */
+  }
+}
+
+function rememberLogin(person) {
+  loginOverlay[String(person.id)] = {
+    username: person.username,
+    password: person.password,
+    role: person.role
+  };
+  saveLoginOverlay();
+}
+
+function applyLoginOverlay() {
+  for (const person of people) {
+    const saved = loginOverlay[String(person.id)];
+    if (!saved) {
+      continue;
+    }
+    if (saved.username) {
+      person.username = saved.username;
+    }
+    if (saved.password) {
+      person.password = saved.password;
+    }
+    if (saved.role) {
+      person.role = saved.role;
+    }
+  }
+}
+
+export function resetPeopleStore() {
+  rosterPersistMode = "memory";
+  nextPersonId = 17;
+  nextShopId = 18;
+  nextGrantId = 19;
+  people = PEOPLE_SEED.map(clone);
+  shops = SHOP_SEED.map(clone);
+  grants = GRANT_SEED.map(clone);
+  loginOverlay = {};
+  try {
+    fs.unlinkSync(loginFile);
+  } catch {
+    /* no overlay file */
+  }
+}
+
+function runningUnderNodeTest() {
+  return Boolean(process.env.NODE_TEST_CONTEXT) || process.execArgv.includes("--test") || process.argv.includes("--test");
+}
+
+function snapshotRoster() {
   return {
-    ...person,
-    id: Number(person.id),
-    managerId: person.managerId == null || person.managerId === "" ? null : Number(person.managerId),
-    demo: Boolean(person.demo)
+    people,
+    shops,
+    grants,
+    loginOverlay,
+    nextPersonId,
+    nextShopId,
+    nextGrantId
   };
 }
 
-function cloneShop(shop) {
-  return { ...shop, id: Number(shop.id), demo: Boolean(shop.demo) };
+function applyRosterSnapshot(data) {
+  if (!data || !Array.isArray(data.people) || !data.people.length) {
+    return false;
+  }
+  people = data.people.map((row) => {
+    const next = clone(row);
+    if (next.reserve == null) {
+      next.reserve = "";
+    }
+    next.board = boardOf(next);
+    return next;
+  });
+  shops = Array.isArray(data.shops) ? data.shops.map(clone) : shops;
+  grants = Array.isArray(data.grants) ? data.grants.map(clone) : grants;
+  nextPersonId = Number(data.nextPersonId) || people.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0) + 1;
+  nextShopId = Number(data.nextShopId) || (shops.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0) + 1);
+  nextGrantId = Number(data.nextGrantId) || (grants.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0) + 1);
+  if (data.loginOverlay && typeof data.loginOverlay === "object") {
+    loginOverlay = { ...data.loginOverlay };
+    applyLoginOverlay();
+  }
+  return true;
 }
 
-function cloneGrant(grant) {
+function readRosterFile() {
+  if (runningUnderNodeTest()) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(rosterFile, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeRosterFile() {
+  if (runningUnderNodeTest()) {
+    return false;
+  }
+  try {
+    fs.mkdirSync(path.dirname(rosterFile), { recursive: true });
+    fs.writeFileSync(rosterFile, JSON.stringify(snapshotRoster()) + "\n", "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function mysqlAuth() {
+  try {
+    const auth = await import("../profile/auth.js");
+    if (typeof auth.dbMode === "function" && auth.dbMode() === "mysql" && typeof auth.query === "function") {
+      return auth;
+    }
+  } catch {
+    /* local / test has no profile auth */
+  }
+  return null;
+}
+
+async function readMysqlRoster() {
+  const auth = await mysqlAuth();
+  if (!auth) {
+    return null;
+  }
+  const { query } = auth;
+  await query(
+    "CREATE TABLE IF NOT EXISTS people_roster_board (id TINYINT NOT NULL PRIMARY KEY, payload LONGTEXT NOT NULL, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)"
+  );
+  const [boardRows] = await query("SELECT payload FROM people_roster_board WHERE id = 1");
+  const raw = boardRows && boardRows[0] ? boardRows[0].payload : "";
+  if (!raw) {
+    return null;
+  }
+  const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+  return parsed && typeof parsed === "object" ? parsed : null;
+}
+
+async function writeMysqlRoster() {
+  const auth = await mysqlAuth();
+  if (!auth) {
+    return false;
+  }
+  const { query } = auth;
+  const payload = JSON.stringify(snapshotRoster());
+  await query(
+    "CREATE TABLE IF NOT EXISTS people_roster_board (id TINYINT NOT NULL PRIMARY KEY, payload LONGTEXT NOT NULL, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)"
+  );
+  await query(
+    "INSERT INTO people_roster_board (id, payload) VALUES (1, ?) ON DUPLICATE KEY UPDATE payload = VALUES(payload)",
+    [payload]
+  );
+  return true;
+}
+
+export function peopleRosterPersistMode() {
+  return rosterPersistMode;
+}
+
+export async function hydratePeopleRoster() {
+  if (runningUnderNodeTest()) {
+    rosterPersistMode = "memory";
+    return { ok: true, mode: rosterPersistMode, people: people.length };
+  }
+  try {
+    const fromMysql = await readMysqlRoster();
+    if (applyRosterSnapshot(fromMysql)) {
+      rosterPersistMode = "mysql";
+      return { ok: true, mode: rosterPersistMode, people: people.length };
+    }
+  } catch {
+    /* fall through */
+  }
+  if (applyRosterSnapshot(readRosterFile())) {
+    rosterPersistMode = "file";
+    return { ok: true, mode: rosterPersistMode, people: people.length };
+  }
+  rosterPersistMode = "memory";
+  return { ok: true, mode: rosterPersistMode, people: people.length };
+}
+
+export async function persistPeopleRoster() {
+  if (runningUnderNodeTest()) {
+    rosterPersistMode = "memory";
+    return { ok: true, mode: rosterPersistMode };
+  }
+  try {
+    if (await writeMysqlRoster()) {
+      rosterPersistMode = "mysql";
+      writeRosterFile();
+      return { ok: true, mode: rosterPersistMode };
+    }
+  } catch {
+    /* file fallback */
+  }
+  if (writeRosterFile()) {
+    rosterPersistMode = "file";
+    return { ok: true, mode: rosterPersistMode };
+  }
+  rosterPersistMode = "memory";
+  return { ok: true, mode: rosterPersistMode };
+}
+
+function findPerson(id) {
+  return people.find((row) => row.id === Number(id));
+}
+
+function findShop(id) {
+  return shops.find((row) => row.id === Number(id));
+}
+
+function managerNameOf(person) {
+  if (!person.managerId) {
+    return "";
+  }
+  const manager = findPerson(person.managerId);
+  return manager ? manager.name : "";
+}
+
+function mapLineRole(role) {
+  const raw = String(role || "").trim();
+  if (raw === "店长") {
+    return "运营";
+  }
+  if (raw === "主管/储备") {
+    return "主管";
+  }
+  return raw;
+}
+
+function centerOfManager(name) {
+  const raw = String(name || "");
+  if (raw.includes("韩梦凯")) {
+    return "韩梦凯运营中心";
+  }
+  if (raw.includes("沈子晗")) {
+    return "沈子晗运营中心";
+  }
+  return "";
+}
+
+function roleOfStoredName(name) {
+  const who = String(name || "").trim();
+  if (!who) {
+    return "";
+  }
+  const hit = people.find((row) => row.name === who);
+  return mapLineRole(hit && hit.role);
+}
+
+function splitLeadFields(supervisor, reserve) {
+  let nextSupervisor = String(supervisor || "").trim();
+  let nextReserve = String(reserve || "").trim();
+  if (!nextReserve && nextSupervisor && (nextSupervisor === "储备" || roleOfStoredName(nextSupervisor) === "储备")) {
+    nextReserve = nextSupervisor;
+    nextSupervisor = "";
+  }
+  if (nextSupervisor === "主管/储备") {
+    nextSupervisor = "主管";
+  }
+  return { supervisor: nextSupervisor, reserve: nextReserve };
+}
+
+export function orgLineOf(person = {}) {
+  const role = mapLineRole(person.role);
+  const self = String(person.name || "").trim();
+  const line = {
+    director: self === "罗成" || role === "总监" ? self : "罗成",
+    manager: role === "经理" ? self : "",
+    supervisor: role === "主管" ? self : "",
+    reserve: role === "储备" ? self : "",
+    operator: role === "运营" ? self : "",
+    assistant: role === "助理" ? self : ""
+  };
+  let current = person.managerId ? findPerson(person.managerId) : null;
+  const seen = new Set();
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    const parentRole = mapLineRole(current.role);
+    if (parentRole === "总监" && line.director === "罗成") {
+      line.director = current.name;
+    } else if (parentRole === "经理" && !line.manager) {
+      line.manager = current.name;
+    } else if (parentRole === "主管" && !line.supervisor) {
+      line.supervisor = current.name;
+    } else if (parentRole === "储备" && !line.reserve) {
+      line.reserve = current.name;
+    } else if (parentRole === "运营" && !line.operator && role === "助理") {
+      line.operator = current.name;
+    }
+    current = current.managerId ? findPerson(current.managerId) : null;
+  }
+  if (!line.manager) {
+    line.manager = centerOfManager(person.center || person.department)
+      ? (String(person.center || person.department).includes("韩梦凯") ? "韩梦凯" : "沈子晗")
+      : role === "总监"
+        ? ""
+        : line.manager;
+  }
+  const stored = splitLeadFields(
+    pickStoredLine(person, ["supervisor"], line.supervisor),
+    pickStoredLine(person, ["reserve"], line.reserve)
+  );
   return {
-    ...grant,
-    id: Number(grant.id),
-    personId: Number(grant.personId),
-    shopId: Number(grant.shopId),
-    revoked: Boolean(grant.revoked)
+    director: pickStoredLine(person, ["director"], line.director),
+    manager: pickStoredLine(person, ["lineManager", "manager"], line.manager),
+    supervisor: stored.supervisor,
+    reserve: stored.reserve,
+    operator: pickStoredLine(person, ["operator"], line.operator),
+    assistant: pickStoredLine(person, ["assistant"], line.assistant)
   };
 }
 
-function personFromRow(row) {
+function pickStoredLine(person, keys, derived) {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(person, key) && person[key] != null) {
+      return String(person[key]);
+    }
+  }
+  return derived;
+}
+
+function stampOrgLine(person, line, options = {}) {
+  for (const key of ["director", "lineManager", "supervisor", "reserve", "operator", "assistant"]) {
+    const value = line[key];
+    if (options.skipEmpty && !String(value || "").trim()) {
+      continue;
+    }
+    person[key] = value;
+  }
+}
+
+function applyLinePatch(found, input) {
+  const aliases = [
+    "director",
+    "lineManager",
+    "supervisor",
+    "reserve",
+    "operator",
+    "assistant",
+    "manager",
+    "总监",
+    "经理",
+    "主管",
+    "储备",
+    "运营",
+    "助理",
+    "主管/储备"
+  ];
+  if (!aliases.some((key) => Object.prototype.hasOwnProperty.call(input, key))) {
+    return;
+  }
+  const current = orgLineOf(found);
+  const applied = applyOrgLine({
+    name: found.name,
+    role: found.role,
+    center: found.center,
+    department: found.department,
+    director: current.director,
+    lineManager: current.manager,
+    supervisor: current.supervisor,
+    reserve: current.reserve,
+    operator: current.operator,
+    assistant: current.assistant,
+    ...input,
+    name: found.name
+  });
+  if (applied.role) {
+    found.role = applied.role;
+  }
+  if (applied.center) {
+    found.center = applied.center;
+  }
+  if (applied.department) {
+    found.department = applied.department;
+  }
+  found.managerId = applied.managerId;
+  stampOrgLine(found, applied);
+  const forced = [
+    ["director", ["director", "总监"]],
+    ["lineManager", ["lineManager", "经理"]],
+    ["supervisor", ["supervisor", "主管"]],
+    ["reserve", ["reserve", "储备"]],
+    ["operator", ["operator", "运营"]],
+    ["assistant", ["assistant", "助理"]]
+  ];
+  for (const [field, keys] of forced) {
+    for (const key of keys) {
+      if (Object.prototype.hasOwnProperty.call(input, key)) {
+        found[field] = String(input[key] == null ? "" : input[key]).trim();
+        break;
+      }
+    }
+  }
+}
+
+function inferRoleFromLine(name, line, fallback) {
+  if (line.assistant === name) {
+    return "助理";
+  }
+  if (line.operator === name) {
+    return "运营";
+  }
+  if (line.reserve === name) {
+    return "储备";
+  }
+  if (line.supervisor === name) {
+    return "主管";
+  }
+  if (line.manager === name) {
+    return "经理";
+  }
+  if (line.director === name) {
+    return "总监";
+  }
+  return fallback || "";
+}
+
+function resolveManagerIdByName(managerName) {
+  const name = String(managerName || "").trim();
+  if (!name || name.includes("罗成")) {
+    return null;
+  }
+  const exact = people.find((row) => row.name === name);
+  if (exact) {
+    return exact.id;
+  }
+  const loose = people.find((row) => name.includes(row.name) || row.name.includes(name));
+  return loose ? loose.id : null;
+}
+
+export function applyOrgLine(input = {}) {
+  const name = String(input.name || input.姓名 || "").trim();
+  const director = String(input.director || input.总监 || "").trim() || "罗成";
+  const lineManager = String(input.lineManager || input.manager || input.经理 || "").trim();
+  const leads = splitLeadFields(
+    String(input.supervisor || input.主管 || input["主管/储备"] || "").trim(),
+    String(input.reserve || input.储备 || "").trim()
+  );
+  const supervisor = leads.supervisor;
+  const reserve = leads.reserve;
+  const operator = String(input.operator || input.运营 || "").trim();
+  const assistant = String(input.assistant || input.助理 || "").trim();
+  let role = mapLineRole(input.role || input.岗位);
+  if (!role) {
+    role = inferRoleFromLine(name, {
+      director,
+      manager: lineManager,
+      supervisor,
+      reserve,
+      operator,
+      assistant
+    });
+  }
+  const center =
+    String(input.center || input.所属中心 || "").trim() ||
+    centerOfManager(lineManager) ||
+    centerOfManager(supervisor) ||
+    centerOfManager(reserve) ||
+    "其他";
+  const department = String(input.department || input.部门 || "").trim() || center;
+  const managerName =
+    String(input.managerName || input.上级 || "").trim() ||
+    [supervisor, reserve, lineManager, director].find((item) => item && item !== name && !String(item).includes("罗成")) ||
+    "";
+  let managerId = input.managerId;
+  if (managerId === "" || managerId == null) {
+    managerId = resolveManagerIdByName(managerName);
+  } else {
+    managerId = Number(managerId);
+  }
+  return {
+    name,
+    role,
+    center,
+    department,
+    managerId,
+    director,
+    lineManager,
+    supervisor,
+    reserve,
+    operator,
+    assistant
+  };
+}
+
+function grantActive(grant, person) {
+  if (grant.revoked) {
+    return false;
+  }
+  if (person && person.status === "离职") {
+    return false;
+  }
+  if (grant.endOn && grant.endOn < today()) {
+    return false;
+  }
+  return true;
+}
+
+function expandShopNames(shop) {
+  if (!shop) {
+    return [];
+  }
+  if (shop.kind !== "店群") {
+    return [shop.name];
+  }
+  return shops
+    .filter((row) => row.kind === "店铺" && (row.pack === shop.name || row.bundle === shop.name))
+    .map((row) => row.name);
+}
+
+function visibleShopsOf(person) {
+  const names = [];
+  for (const grant of grants) {
+    if (grant.personId !== person.id || !grantActive(grant, person)) {
+      continue;
+    }
+    for (const name of expandShopNames(findShop(grant.shopId))) {
+      if (!names.includes(name)) {
+        names.push(name);
+      }
+    }
+  }
+  return names;
+}
+
+function presentPerson(person) {
+  const row = withLogin(person);
+  const line = orgLineOf(person);
+  return {
+    ...clone(row),
+    board: boardOf(person),
+    managerName: managerNameOf(person),
+    director: line.director,
+    lineManager: line.manager,
+    supervisor: line.supervisor,
+    reserve: line.reserve || "",
+    operator: line.operator,
+    assistant: line.assistant,
+    visibleShops: visibleShopsOf(person)
+  };
+}
+
+function presentGrant(grant) {
+  const person = findPerson(grant.personId);
+  const shop = findShop(grant.shopId);
+  return {
+    ...clone(grant),
+    personName: person ? person.name : "",
+    shopName: shop ? shop.name : "",
+    active: grantActive(grant, person)
+  };
+}
+
+export function listPeople() {
+  return people.map(presentPerson);
+}
+
+export function listShops() {
+  return shops.map(clone);
+}
+
+export function listGrants() {
+  return grants.map(presentGrant);
+}
+
+export function reconcilePeople() {
+  const employedNoGrant = listPeople()
+    .filter((person) => person.status === "在职" && person.visibleShops.length === 0)
+    .map((person) => ({ id: person.id, name: person.name }));
+  const grantOnLeft = listGrants()
+    .filter((grant) => {
+      const person = findPerson(grant.personId);
+      return person && person.status === "离职" && !grant.revoked;
+    })
+    .map((grant) => ({
+      personName: grant.personName,
+      shopName: grant.shopName
+    }));
+  return { employedNoGrant, grantOnLeft };
+}
+
+function applyCreatePerson(input) {
+  const line = applyOrgLine(input || {});
+  const name = line.name;
+  const role = line.role || "运营";
+  let center = line.center;
+  if (!CENTERS.includes(center)) {
+    center = centerOfManager(line.lineManager) || centerOfManager(line.supervisor) || "其他";
+  }
+  const statusRaw = typeof input.status === "string" ? input.status.trim() : typeof input.状态 === "string" ? input.状态.trim() : "在职";
+  const status = STATUSES.has(statusRaw) ? statusRaw : "在职";
+  const employeeNo = typeof input.employeeNo === "string" ? input.employeeNo.trim() : "";
+  const department = line.department || center;
+  let managerId = line.managerId;
+  if (managerId != null && !findPerson(managerId)) {
+    managerId = null;
+  }
+
+  if (!name) {
+    return { ok: false, statusCode: 400, error: "姓名为必填" };
+  }
+
+  const usernameRaw = typeof input.username === "string" ? input.username.trim() : typeof input.账号 === "string" ? input.账号.trim() : "";
+  const passwordRaw = typeof input.password === "string" ? input.password.trim() : typeof input.登录密码 === "string" ? input.登录密码.trim() : "";
+  const person = {
+    id: nextPersonId++,
+    name,
+    role,
+    center,
+    status,
+    demo: false,
+    employeeNo,
+    department,
+    managerId,
+    username: usernameRaw || name,
+    password: passwordRaw || INITIAL_PASSWORD,
+    board: boardFromInput(input, "ops")
+  };
+  stampOrgLine(person, line, { skipEmpty: true });
+  people.push(person);
+  rememberLogin(person);
+  return { ok: true, person: presentPerson(person) };
+}
+
+export async function createPerson(input) {
+  const result = applyCreatePerson(input);
+  if (result.ok) {
+    await persistPeopleRoster();
+  }
+  return result;
+}
+
+export const PEOPLE_IMPORT_HEADERS = ["姓名", "总监", "经理", "主管", "储备", "运营", "助理", "状态", "账号", "登录密码"];
+
+export async function importPeople(rows, board) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) {
+    return { ok: false, statusCode: 400, error: "请按模板导入至少一行" };
+  }
+  const importBoard = normalizeBoard(board);
+  let created = 0;
+  let updated = 0;
+  const failed = [];
+  list.forEach((raw, index) => {
+    const line = index + 2;
+    const item = raw && typeof raw === "object" ? raw : {};
+    const org = applyOrgLine(item);
+    const name = org.name;
+    const department = org.department;
+    const role = org.role || "运营";
+    const center = org.center;
+    const status = String(item.状态 || item.status || "").trim() || "在职";
+    const username = String(item.账号 || item.username || "").trim();
+    const password = String(item.登录密码 || item.password || "").trim();
+    const boardId = boardFromInput(item, importBoard);
+    if (!name) {
+      failed.push({ line, error: "姓名为必填" });
+      return;
+    }
+    let managerId = org.managerId;
+    if (managerId != null && !findPerson(managerId)) {
+      managerId = null;
+    }
+    const found = people.find((row) => String(row.name || "").trim() === name && boardOf(row) === boardId);
+    if (found) {
+      const result = applyPatchPerson(found.id, {
+        status,
+        username: username || found.username || found.name,
+        ...(password ? { password } : {})
+      });
+      if (!result.ok) {
+        failed.push({ line, error: result.error });
+        return;
+      }
+      found.name = name;
+      found.role = role;
+      found.center = center;
+      found.department = department || found.department || center;
+      found.managerId = managerId;
+      found.board = boardId;
+      stampOrgLine(found, org, { skipEmpty: true });
+      rememberLogin(withLogin(found));
+      updated += 1;
+      return;
+    }
+    const createdRow = applyCreatePerson({
+      name,
+      role,
+      center,
+      status,
+      department,
+      managerId,
+      username,
+      password,
+      board: boardId,
+      director: org.director,
+      lineManager: org.lineManager,
+      supervisor: org.supervisor,
+      reserve: org.reserve,
+      operator: org.operator,
+      assistant: org.assistant
+    });
+    if (!createdRow.ok) {
+      failed.push({ line, error: createdRow.error });
+      return;
+    }
+    created += 1;
+  });
+  await persistPeopleRoster();
+  return { ok: true, created, updated, failed, persist: rosterPersistMode };
+}
+
+function applyPatchPerson(id, input) {
+  const found = findPerson(id);
+  if (!found) {
+    return { ok: false, statusCode: 404, error: "人员不存在" };
+  }
+  if (typeof input.status === "string" && input.status.trim()) {
+    const status = input.status.trim();
+    if (!STATUSES.has(status)) {
+      return { ok: false, statusCode: 400, error: "状态仅支持在职或离职" };
+    }
+    found.status = status;
+    if (status === "离职") {
+      const endOn = today();
+      for (const grant of grants) {
+        if (grant.personId === found.id && !grant.endOn) {
+          grant.endOn = endOn;
+        }
+      }
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "username")) {
+    const username = typeof input.username === "string" ? input.username.trim() : "";
+    if (!username) {
+      return { ok: false, statusCode: 400, error: "账号不能为空" };
+    }
+    const taken = people.some(
+      (row) => row.id !== found.id && String(row.username || row.name).trim() === username
+    );
+    if (taken) {
+      return { ok: false, statusCode: 400, error: "账号已被占用" };
+    }
+    found.username = username;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "password")) {
+    const password = typeof input.password === "string" ? input.password.trim() : "";
+    if (!password) {
+      return { ok: false, statusCode: 400, error: "密码不能为空" };
+    }
+    if (password.length < 6 || password.length > 128) {
+      return { ok: false, statusCode: 400, error: "密码为 6–128 位" };
+    }
+    found.password = password;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "name") || Object.prototype.hasOwnProperty.call(input, "姓名")) {
+    const name = String(input.name || input.姓名 || "").trim();
+    if (!name) {
+      return { ok: false, statusCode: 400, error: "姓名不能为空" };
+    }
+    const taken = people.some((row) => row.id !== found.id && row.name === name);
+    if (taken) {
+      return { ok: false, statusCode: 400, error: "姓名已被占用" };
+    }
+    found.name = name;
+  }
+  if (typeof input.role === "string" && input.role.trim()) {
+    found.role = input.role.trim();
+  }
+  applyLinePatch(found, input);
+  if (
+    Object.prototype.hasOwnProperty.call(input, "username") ||
+    Object.prototype.hasOwnProperty.call(input, "password") ||
+    Object.prototype.hasOwnProperty.call(input, "role")
+  ) {
+    rememberLogin(withLogin(found));
+  }
+  return { ok: true, person: presentPerson(found) };
+}
+
+export async function patchPerson(id, input) {
+  const result = applyPatchPerson(id, input);
+  if (result.ok) {
+    await persistPeopleRoster();
+  }
+  return result;
+}
+
+export async function patchPeoplePasswords(ids, password) {
+  const next = typeof password === "string" ? password.trim() : "";
+  if (!next) {
+    return { ok: false, statusCode: 400, error: "密码不能为空" };
+  }
+  if (next.length < 6 || next.length > 128) {
+    return { ok: false, statusCode: 400, error: "密码为 6–128 位" };
+  }
+  const list = Array.isArray(ids) ? ids : [];
+  if (!list.length) {
+    return { ok: false, statusCode: 400, error: "请先勾选人员" };
+  }
+  const updated = [];
+  for (const id of list) {
+    const found = findPerson(id);
+    if (!found) {
+      continue;
+    }
+    found.password = next;
+    rememberLogin(withLogin(found));
+    updated.push(presentPerson(found));
+  }
+  if (!updated.length) {
+    return { ok: false, statusCode: 404, error: "人员不存在" };
+  }
+  await persistPeopleRoster();
+  return { ok: true, updated: updated.length, people: updated };
+}
+
+const PROTECTED_NAMES = new Set(["管理员"]);
+
+async function persistRemovedPeople(ids) {
+  try {
+    const auth = await import("../profile/auth.js");
+    if (typeof auth.dbMode !== "function" || auth.dbMode() !== "mysql" || typeof auth.query !== "function") {
+      return;
+    }
+    const { query } = auth;
+    for (const id of ids) {
+      await query("DELETE FROM people_grants WHERE person_id = ?", [id]);
+      await query("UPDATE people SET manager_id = NULL WHERE manager_id = ?", [id]);
+      await query("DELETE FROM people WHERE id = ?", [id]);
+    }
+  } catch {
+    /* keep memory delete even if disk write is missing */
+  }
+}
+
+export async function removePeople(ids) {
+  const list = [...new Set((Array.isArray(ids) ? ids : []).map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
+  if (!list.length) {
+    return { ok: false, statusCode: 400, error: "请先勾选人员" };
+  }
+  const removed = [];
+  const skipped = [];
+  for (const id of list) {
+    const found = findPerson(id);
+    if (!found) {
+      continue;
+    }
+    if (PROTECTED_NAMES.has(found.name)) {
+      skipped.push(found.name);
+      continue;
+    }
+    people = people.filter((row) => row.id !== found.id);
+    grants = grants.filter((grant) => grant.personId !== found.id);
+    people.forEach((row) => {
+      if (row.managerId === found.id) {
+        row.managerId = null;
+      }
+    });
+    delete loginOverlay[String(found.id)];
+    removed.push({ id: found.id, name: found.name });
+  }
+  if (!removed.length) {
+    return { ok: false, statusCode: skipped.length ? 400 : 404, error: skipped.length ? "管理员不能删" : "人员不存在" };
+  }
+  saveLoginOverlay();
+  await persistRemovedPeople(removed.map((row) => row.id));
+  await persistPeopleRoster();
+  return { ok: true, removed: removed.length, people: removed, skipped };
+}
+
+export function createShop(input) {
+  const name = typeof input.name === "string" ? input.name.trim() : "";
+  const kind = typeof input.kind === "string" ? input.kind.trim() : "店铺";
+  const pack = typeof input.pack === "string" ? input.pack.trim() : "";
+  const bundle = typeof input.bundle === "string" ? input.bundle.trim() : "";
+  if (!name) {
+    return { ok: false, statusCode: 400, error: "店铺名称为必填" };
+  }
+  if (!SHOP_KINDS.includes(kind)) {
+    return { ok: false, statusCode: 400, error: "类型仅支持店铺或店群" };
+  }
+  const shop = { id: nextShopId++, name, kind, pack, bundle, demo: false };
+  shops.push(shop);
+  return { ok: true, shop: clone(shop) };
+}
+
+export function createGrant(input) {
+  const person = findPerson(input.personId);
+  const shop = findShop(input.shopId);
+  const role = typeof input.role === "string" ? input.role.trim() : "运营";
+  if (!person || !shop) {
+    return { ok: false, statusCode: 400, error: "人员和店铺均为必填" };
+  }
+  const grant = {
+    id: nextGrantId++,
+    personId: person.id,
+    shopId: shop.id,
+    role: role || "运营",
+    startOn: typeof input.startOn === "string" ? input.startOn : "",
+    endOn: typeof input.endOn === "string" ? input.endOn : "",
+    revoked: false
+  };
+  grants.push(grant);
+  return { ok: true, grant: presentGrant(grant) };
+}
+
+function personFromMysqlRow(row) {
   return {
     id: Number(row.id),
     name: row.name,
@@ -60,13 +1086,16 @@ function personFromRow(row) {
     center: row.center,
     status: row.status,
     demo: Boolean(row.demo),
-    employeeNo: row.employee_no == null ? "" : String(row.employee_no),
-    department: row.department == null ? "" : String(row.department),
-    managerId: row.manager_id == null || row.manager_id === "" ? null : Number(row.manager_id)
+    employeeNo: row.employee_no || "",
+    department: row.department || "",
+    managerId: row.manager_id == null ? null : Number(row.manager_id),
+    username: row.username || row.name,
+    password: row.password || INITIAL_PASSWORD,
+    board: "ops"
   };
 }
 
-function shopFromRow(row) {
+function shopFromMysqlRow(row) {
   return {
     id: Number(row.id),
     name: row.name,
@@ -77,7 +1106,7 @@ function shopFromRow(row) {
   };
 }
 
-function grantFromRow(row) {
+function grantFromMysqlRow(row) {
   return {
     id: Number(row.id),
     personId: Number(row.person_id),
@@ -85,528 +1114,74 @@ function grantFromRow(row) {
     role: row.role,
     startOn: row.start_on || "",
     endOn: row.end_on || "",
-    revoked: Boolean(Number(row.revoked))
+    revoked: Boolean(row.revoked)
   };
 }
 
-function seedPeople() {
-  return [
-    { id: 1, name: "沈子晗", role: "经理", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ001", department: "沈子晗运营中心", managerId: null },
-    { id: 2, name: "韩梦凯", role: "经理", center: "韩梦凯运营中心", status: "在职", demo: true, employeeNo: "HK001", department: "韩梦凯运营中心", managerId: null },
-    { id: 3, name: "管理员", role: "经理", center: "人员管理", status: "在职", demo: true, employeeNo: "XM001", department: "人员管理", managerId: null },
-    { id: 4, name: "张文静", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ002", department: "沈子晗运营中心", managerId: 1 },
-    { id: 5, name: "陈明婧", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ003", department: "沈子晗运营中心", managerId: 1 },
-    { id: 6, name: "郭桂良", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ004", department: "沈子晗运营中心", managerId: 1 },
-    { id: 7, name: "王博", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ005", department: "沈子晗运营中心", managerId: 1 },
-    { id: 8, name: "杨润泽", role: "主管", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ006", department: "沈子晗运营中心", managerId: 1 },
-    { id: 9, name: "崔安琪", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ007", department: "沈子晗运营中心", managerId: 8 },
-    { id: 10, name: "郭哲宁", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ008", department: "沈子晗运营中心", managerId: 8 },
-    { id: 11, name: "高丽男", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ009", department: "沈子晗运营中心", managerId: 1 },
-    { id: 12, name: "栗静萱", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ010", department: "沈子晗运营中心", managerId: 1 },
-    { id: 13, name: "杨禄", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ011", department: "沈子晗运营中心", managerId: 1 },
-    { id: 14, name: "张鹏", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ012", department: "沈子晗运营中心", managerId: 1 },
-    { id: 15, name: "王梓萱", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ013", department: "沈子晗运营中心", managerId: 1 },
-    { id: 16, name: "秦怡硕", role: "运营", center: "沈子晗运营中心", status: "在职", demo: true, employeeNo: "SZ014", department: "沈子晗运营中心", managerId: 1 }
-  ];
-}
-
-function seedShops() {
-  const stores = [
-    ["RASW家居旗舰店", "沈子晗包", ""],
-    ["RASW生活电器旗舰店", "沈子晗包", ""],
-    ["RASW健康电器旗舰店", "沈子晗包", ""],
-    ["飒望居家旗舰店", "沈子晗包", ""],
-    ["SAWAAG居家布艺旗舰店", "沈子晗包", ""],
-    ["RASW居家旗舰店", "沈子晗包", "杨润泽包"],
-    ["飒望家居日用旗舰店", "沈子晗包", "杨润泽包"],
-    ["飒望旗舰店", "沈子晗包", "杨润泽包"],
-    ["RASW潮流生活旗舰店", "沈子晗包", "杨润泽包"],
-    ["HYEGIIR健康器械旗舰店", "沈子晗包", ""],
-    ["DIKTT个护健康旗舰店", "沈子晗包", ""],
-    ["HYEGIIR医疗保健旗舰店", "沈子晗包", ""],
-    ["HYEGIIR养生器械旗舰店", "沈子晗包", ""],
-    ["MGXEK旗舰店", "沈子晗包", ""],
-    ["SAWAAG生活日用旗舰店", "沈子晗包", ""]
-  ];
-  const shops = stores.map((item, index) => ({
-    id: index + 1,
-    name: item[0],
-    kind: "店铺",
-    pack: item[1],
-    bundle: item[2],
-    demo: true
-  }));
-  shops.push({ id: 16, name: "沈子晗包", kind: "店群", pack: "沈子晗包", bundle: "", demo: true });
-  shops.push({ id: 17, name: "杨润泽包", kind: "店群", pack: "杨润泽包", bundle: "", demo: true });
-  return shops;
-}
-
-function seedGrants() {
-  const start = "2026-01-01";
-  const rows = [
-    [1, 16, "经理"],
-    [8, 17, "主管"],
-    [4, 1, "运营"],
-    [5, 2, "运营"],
-    [6, 3, "运营"],
-    [7, 4, "运营"],
-    [7, 5, "运营"],
-    [8, 6, "主管"],
-    [9, 7, "运营"],
-    [8, 8, "主管"],
-    [8, 9, "主管"],
-    [10, 9, "运营"],
-    [11, 10, "运营"],
-    [12, 11, "运营"],
-    [13, 12, "运营"],
-    [14, 13, "运营"],
-    [15, 14, "运营"],
-    [16, 15, "运营"]
-  ];
-  return rows.map((item, index) => ({
-    id: index + 1,
-    personId: item[0],
-    shopId: item[1],
-    role: item[2],
-    startOn: start,
-    endOn: "",
-    revoked: false
-  }));
-}
-
-let nextPersonId = 17;
-let nextShopId = 18;
-let nextGrantId = 19;
-let people = seedPeople();
-let shops = seedShops();
-let grants = seedGrants();
-
-export function resetPeopleStore() {
-  people = seedPeople();
-  shops = seedShops();
-  grants = seedGrants();
-  nextPersonId = 17;
-  nextShopId = 18;
-  nextGrantId = 19;
-}
-
-async function ignoreDuplicateColumn(work) {
-  try {
-    await work();
-  } catch (err) {
-    const message = String(err && err.message ? err.message : err);
-    if (!/Duplicate column|already exists/i.test(message)) {
-      throw err;
-    }
-  }
-}
-
-export async function ensurePeopleSchema() {
-  await ignoreDuplicateColumn(() =>
-    query("ALTER TABLE people ADD COLUMN employee_no VARCHAR(32) NOT NULL DEFAULT ''")
-  );
-  await ignoreDuplicateColumn(() =>
-    query("ALTER TABLE people ADD COLUMN department VARCHAR(128) NOT NULL DEFAULT ''")
-  );
-  await ignoreDuplicateColumn(() => query("ALTER TABLE people ADD COLUMN manager_id INT NULL"));
-  await query(
-    "CREATE TABLE IF NOT EXISTS people_shops (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, name VARCHAR(128) NOT NULL, kind VARCHAR(16) NOT NULL, pack VARCHAR(64) NOT NULL DEFAULT '', bundle VARCHAR(64) NOT NULL DEFAULT '', demo TINYINT NOT NULL DEFAULT 0) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
-  );
-  await query(
-    "CREATE TABLE IF NOT EXISTS people_grants (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, person_id INT NOT NULL, shop_id INT NOT NULL, role VARCHAR(32) NOT NULL, start_on VARCHAR(16) NOT NULL DEFAULT '', end_on VARCHAR(16) NOT NULL DEFAULT '', revoked TINYINT NOT NULL DEFAULT 0) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
-  );
-}
-
-async function insertPersonRow(person) {
-  await query(
-    "INSERT INTO people (id, name, role, center, status, demo, employee_no, department, manager_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [
-      person.id,
-      person.name,
-      person.role,
-      person.center,
-      person.status,
-      person.demo ? 1 : 0,
-      person.employeeNo,
-      person.department,
-      person.managerId
-    ]
-  );
-}
-
-async function insertShopRow(shop) {
-  await query("INSERT INTO people_shops (id, name, kind, pack, bundle, demo) VALUES (?, ?, ?, ?, ?, ?)", [
-    shop.id,
-    shop.name,
-    shop.kind,
-    shop.pack,
-    shop.bundle,
-    shop.demo ? 1 : 0
-  ]);
-}
-
-async function insertGrantRow(grant) {
-  await query(
-    "INSERT INTO people_grants (id, person_id, shop_id, role, start_on, end_on, revoked) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [grant.id, grant.personId, grant.shopId, grant.role, grant.startOn, grant.endOn, grant.revoked ? 1 : 0]
-  );
-}
-
-async function loadMysqlPeople() {
-  const [rows] = await query(PEOPLE_SELECT);
-  return rows.map(personFromRow);
-}
-
-async function loadMysqlShops() {
-  const [rows] = await query(SHOP_SELECT);
-  return rows.map(shopFromRow);
-}
-
-async function loadMysqlGrants() {
-  const [rows] = await query(GRANT_SELECT);
-  return rows.map(grantFromRow);
-}
-
+/**
+ * notes-store.js 启动时会 import 这个名字。缺导出则闸门试载失败并回滚。
+ * 本仓库没有 profile/auth 时保持内存花名册；线上有 MySQL 时灌入 people / people_shops / people_grants。
+ */
 export async function hydrateFromMysql() {
-  await ensurePeopleSchema();
-  let rows = await loadMysqlPeople();
-  if (!rows.length) {
-    for (const person of seedPeople()) {
-      await insertPersonRow(person);
+  try {
+    const auth = await import("../profile/auth.js");
+    if (typeof auth.dbMode !== "function" || auth.dbMode() !== "mysql" || typeof auth.query !== "function") {
+      loginOverlay = { ...loadLoginOverlay(), ...loginOverlay };
+      applyLoginOverlay();
+      await hydratePeopleRoster();
+      const { hydrateOrgStores } = await import("./org-board.js");
+      await hydrateOrgStores();
+      const { hydrateSiteAcl } = await import("./site-acl.js");
+      await hydrateSiteAcl();
+      return { ok: true, mode: "memory" };
     }
-    rows = seedPeople();
-  } else {
-    const have = new Map(rows.map((person) => [person.name, person]));
-    for (const person of seedPeople()) {
-      const existing = have.get(person.name);
-      if (!existing) {
-        await insertPersonRow(person);
-        continue;
-      }
-      if (!existing.employeeNo) {
-        await query(
-          "UPDATE people SET role = ?, employee_no = ?, department = ?, manager_id = ? WHERE id = ?",
-          [person.role, person.employeeNo, person.department, person.managerId, existing.id]
-        );
-      }
+    const roster = await hydratePeopleRoster();
+    if (roster.mode === "mysql" || roster.mode === "file") {
+      const { hydrateOrgStores } = await import("./org-board.js");
+      const org = await hydrateOrgStores();
+      const { hydrateSiteAcl } = await import("./site-acl.js");
+      await hydrateSiteAcl();
+      return { ok: true, mode: roster.mode, people: people.length, shops: shops.length, grants: grants.length, stores: org.stores };
     }
-    rows = await loadMysqlPeople();
-  }
-  people = rows;
-  nextPersonId = people.reduce((max, person) => Math.max(max, Number(person.id) || 0), 0) + 1;
-
-  let shopRows = await loadMysqlShops();
-  if (!shopRows.length) {
-    for (const shop of seedShops()) {
-      await insertShopRow(shop);
-    }
-    shopRows = seedShops();
-  }
-  shops = shopRows;
-  nextShopId = shops.reduce((max, shop) => Math.max(max, Number(shop.id) || 0), 0) + 1;
-
-  let grantRows = await loadMysqlGrants();
-  if (!grantRows.length) {
-    for (const grant of seedGrants()) {
-      await insertGrantRow(grant);
-    }
-    grantRows = seedGrants();
-  }
-  grants = grantRows;
-  nextGrantId = grants.reduce((max, grant) => Math.max(max, Number(grant.id) || 0), 0) + 1;
-}
-
-function personById(id, list) {
-  return list.find((person) => Number(person.id) === Number(id)) || null;
-}
-
-function shopById(id, list) {
-  return list.find((shop) => Number(shop.id) === Number(id)) || null;
-}
-
-function isGrantOpen(grant, onDay) {
-  if (grant.revoked) {
-    return false;
-  }
-  if (grant.endOn && grant.endOn < onDay) {
-    return false;
-  }
-  if (grant.startOn && grant.startOn > onDay) {
-    return false;
-  }
-  return true;
-}
-
-function expandShop(shop, allShops) {
-  if (!shop) {
-    return [];
-  }
-  if (shop.kind !== "店群") {
-    return [shop];
-  }
-  return allShops.filter(
-    (item) => item.kind === "店铺" && (item.pack === shop.name || item.bundle === shop.name)
-  );
-}
-
-function decoratePeople(list, shopList, grantList) {
-  const onDay = todayShanghai();
-  const names = new Map(list.map((person) => [Number(person.id), person.name]));
-  return list.map((person) => {
-    const own = grantList.filter((grant) => Number(grant.personId) === Number(person.id) && isGrantOpen(grant, onDay));
-    const seen = new Map();
-    own.forEach((grant) => {
-      const shop = shopById(grant.shopId, shopList);
-      expandShop(shop, shopList).forEach((item) => {
-        seen.set(item.id, item.name);
-      });
-    });
-    return {
-      ...clonePerson(person),
-      managerName: person.managerId ? names.get(Number(person.managerId)) || "" : "",
-      visibleShops: [...seen.values()]
-    };
-  });
-}
-
-export async function listPeople() {
-  if (dbMode() === "mysql") {
-    const [personRows, shopRows, grantRows] = await Promise.all([
-      loadMysqlPeople(),
-      loadMysqlShops(),
-      loadMysqlGrants()
-    ]);
-    return decoratePeople(personRows, shopRows, grantRows);
-  }
-  return decoratePeople(people, shops, grants);
-}
-
-export async function listShops() {
-  if (dbMode() === "mysql") {
-    return (await loadMysqlShops()).map(cloneShop);
-  }
-  return shops.map(cloneShop);
-}
-
-export async function listGrants() {
-  const [personList, shopList, grantList] =
-    dbMode() === "mysql"
-      ? [await loadMysqlPeople(), await loadMysqlShops(), await loadMysqlGrants()]
-      : [people, shops, grants];
-  const personNames = new Map(personList.map((person) => [Number(person.id), person.name]));
-  const shopNames = new Map(shopList.map((shop) => [Number(shop.id), shop.name]));
-  const onDay = todayShanghai();
-  return grantList.map((grant) => {
-    const item = cloneGrant(grant);
-    item.personName = personNames.get(item.personId) || "";
-    item.shopName = shopNames.get(item.shopId) || "";
-    item.active = isGrantOpen(item, onDay);
-    return item;
-  });
-}
-
-function parsePersonInput(input, { requireCore }) {
-  const name = typeof input.name === "string" ? input.name.trim() : "";
-  const role = normalizeRole(input.role);
-  const center = typeof input.center === "string" ? input.center.trim() : "";
-  const statusRaw = typeof input.status === "string" ? input.status.trim() : "在职";
-  const status = statusRaw || "在职";
-  const employeeNo = typeof input.employeeNo === "string" ? input.employeeNo.trim() : typeof input.employee_no === "string" ? input.employee_no.trim() : "";
-  const department = typeof input.department === "string" ? input.department.trim() : "";
-  const managerRaw = input.managerId ?? input.manager_id;
-  const managerId = managerRaw === "" || managerRaw == null ? null : Number(managerRaw);
-
-  if (requireCore && (!name || !role || !center)) {
-    return { ok: false, statusCode: 400, error: "姓名、岗位、所属中心均为必填" };
-  }
-  if (center && !CENTERS.includes(center) && center !== "人员管理") {
-    return { ok: false, statusCode: 400, error: "所属中心不在可选列表中" };
-  }
-  if (status && !STATUSES.has(status)) {
-    return { ok: false, statusCode: 400, error: "状态仅支持在职或离职" };
-  }
-  if (managerId != null && !Number.isFinite(managerId)) {
-    return { ok: false, statusCode: 400, error: "上级不合法" };
-  }
-  return { ok: true, name, role, center, status, employeeNo, department, managerId };
-}
-
-export async function createPerson(input) {
-  const parsed = parsePersonInput(input || {}, { requireCore: true });
-  if (!parsed.ok) {
-    return parsed;
-  }
-  const person = {
-    id: nextPersonId,
-    name: parsed.name,
-    role: parsed.role,
-    center: parsed.center,
-    status: parsed.status,
-    demo: false,
-    employeeNo: parsed.employeeNo,
-    department: parsed.department || parsed.center,
-    managerId: parsed.managerId
-  };
-
-  if (dbMode() === "mysql") {
-    const [result] = await query(
-      "INSERT INTO people (name, role, center, status, demo, employee_no, department, manager_id) VALUES (?, ?, ?, ?, 0, ?, ?, ?)",
-      [person.name, person.role, person.center, person.status, person.employeeNo, person.department, person.managerId]
+    const { query } = auth;
+    const [personRows] = await query(
+      // 组织中心不接钉钉：people 只读这些列，禁止加钉钉字段，禁止同步通讯录。
+      "SELECT id, name, role, center, status, demo, employee_no, department, manager_id FROM people ORDER BY id ASC"
     );
-    person.id = Number(result.insertId);
-    return { ok: true, person: clonePerson(person) };
-  }
-
-  person.id = nextPersonId++;
-  people.push(person);
-  return { ok: true, person: clonePerson(person) };
-}
-
-async function revokeOpenGrants(personId) {
-  const onDay = todayShanghai();
-  if (dbMode() === "mysql") {
-    await query("UPDATE people_grants SET revoked = 1, end_on = CASE WHEN end_on = '' THEN ? ELSE end_on END WHERE person_id = ? AND revoked = 0", [
-      onDay,
-      personId
-    ]);
-    return;
-  }
-  grants.forEach((grant) => {
-    if (Number(grant.personId) === Number(personId) && !grant.revoked) {
-      grant.revoked = true;
-      if (!grant.endOn) {
-        grant.endOn = onDay;
-      }
+    const [shopRows] = await query("SELECT id, name, kind, pack, bundle, demo FROM people_shops ORDER BY id ASC");
+    const [grantRows] = await query(
+      "SELECT id, person_id, shop_id, role, start_on, end_on, revoked FROM people_grants ORDER BY id ASC"
+    );
+    if (personRows && personRows.length) {
+      people = personRows.map(personFromMysqlRow);
+      nextPersonId = people.reduce((max, row) => Math.max(max, row.id), 0) + 1;
     }
-  });
-}
-
-export async function updatePerson(id, input) {
-  const personId = Number(id);
-  if (!Number.isFinite(personId)) {
-    return { ok: false, statusCode: 400, error: "人员不存在" };
+    if (shopRows && shopRows.length) {
+      shops = shopRows.map(shopFromMysqlRow);
+      nextShopId = shops.reduce((max, row) => Math.max(max, row.id), 0) + 1;
+    }
+    if (grantRows && grantRows.length) {
+      grants = grantRows.map(grantFromMysqlRow);
+      nextGrantId = grants.reduce((max, row) => Math.max(max, row.id), 0) + 1;
+    }
+    loginOverlay = { ...loadLoginOverlay(), ...loginOverlay };
+    applyLoginOverlay();
+    const { hydrateOrgStores } = await import("./org-board.js");
+    const org = await hydrateOrgStores();
+    const { hydrateSiteAcl } = await import("./site-acl.js");
+    await hydrateSiteAcl();
+    return { ok: true, mode: "mysql", people: people.length, shops: shops.length, grants: grants.length, stores: org.stores };
+  } catch {
+    loginOverlay = { ...loadLoginOverlay(), ...loginOverlay };
+    applyLoginOverlay();
+    try {
+      const { hydrateOrgStores } = await import("./org-board.js");
+      await hydrateOrgStores();
+      const { hydrateSiteAcl } = await import("./site-acl.js");
+      await hydrateSiteAcl();
+    } catch {
+      /* org board stays on memory seed */
+    }
+    return { ok: true, mode: "memory" };
   }
-  const current =
-    dbMode() === "mysql"
-      ? (await loadMysqlPeople()).find((person) => person.id === personId)
-      : personById(personId, people);
-  if (!current) {
-    return { ok: false, statusCode: 404, error: "人员不存在" };
-  }
-  const leaving = current.status !== "离职" && String(input.status || "").trim() === "离职";
-  const parsed = parsePersonInput(
-    {
-      name: input.name ?? current.name,
-      role: input.role ?? current.role,
-      center: input.center ?? current.center,
-      status: input.status ?? current.status,
-      employeeNo: input.employeeNo ?? input.employee_no ?? current.employeeNo,
-      department: input.department ?? current.department,
-      managerId: input.managerId ?? input.manager_id ?? current.managerId
-    },
-    { requireCore: true }
-  );
-  if (!parsed.ok) {
-    return parsed;
-  }
-  const next = {
-    ...current,
-    name: parsed.name,
-    role: parsed.role,
-    center: parsed.center,
-    status: parsed.status,
-    employeeNo: parsed.employeeNo,
-    department: parsed.department,
-    managerId: parsed.managerId
-  };
-  if (dbMode() === "mysql") {
-    await query(
-      "UPDATE people SET name = ?, role = ?, center = ?, status = ?, employee_no = ?, department = ?, manager_id = ? WHERE id = ?",
-      [next.name, next.role, next.center, next.status, next.employeeNo, next.department, next.managerId, personId]
-    );
-  } else {
-    Object.assign(current, next);
-  }
-  if (leaving) {
-    await revokeOpenGrants(personId);
-  }
-  return { ok: true, person: clonePerson(next) };
-}
-
-export async function createShop(input) {
-  const name = typeof input.name === "string" ? input.name.trim() : "";
-  const kind = typeof input.kind === "string" ? input.kind.trim() : "店铺";
-  const pack = typeof input.pack === "string" ? input.pack.trim() : "";
-  const bundle = typeof input.bundle === "string" ? input.bundle.trim() : "";
-  if (!name) {
-    return { ok: false, statusCode: 400, error: "店铺名称必填" };
-  }
-  if (!SHOP_KINDS.includes(kind)) {
-    return { ok: false, statusCode: 400, error: "类型只支持店铺或店群" };
-  }
-  const shop = { id: nextShopId, name, kind, pack: pack || (kind === "店群" ? name : "沈子晗包"), bundle, demo: false };
-  if (dbMode() === "mysql") {
-    const [result] = await query("INSERT INTO people_shops (name, kind, pack, bundle, demo) VALUES (?, ?, ?, ?, 0)", [
-      shop.name,
-      shop.kind,
-      shop.pack,
-      shop.bundle
-    ]);
-    shop.id = Number(result.insertId);
-    return { ok: true, shop: cloneShop(shop) };
-  }
-  shop.id = nextShopId++;
-  shops.push(shop);
-  return { ok: true, shop: cloneShop(shop) };
-}
-
-export async function createGrant(input) {
-  const personId = Number(input.personId ?? input.person_id);
-  const shopId = Number(input.shopId ?? input.shop_id);
-  const role = normalizeRole(input.role) || "运营";
-  const startOn = typeof input.startOn === "string" && input.startOn.trim() ? input.startOn.trim() : todayShanghai();
-  const endOn = typeof input.endOn === "string" ? input.endOn.trim() : typeof input.end_on === "string" ? input.end_on.trim() : "";
-  if (!Number.isFinite(personId) || !Number.isFinite(shopId)) {
-    return { ok: false, statusCode: 400, error: "人和店都要选" };
-  }
-  const personList = dbMode() === "mysql" ? await loadMysqlPeople() : people;
-  const shopList = dbMode() === "mysql" ? await loadMysqlShops() : shops;
-  if (!personById(personId, personList) || !shopById(shopId, shopList)) {
-    return { ok: false, statusCode: 400, error: "人或店不存在" };
-  }
-  const grant = { id: nextGrantId, personId, shopId, role, startOn, endOn, revoked: false };
-  if (dbMode() === "mysql") {
-    const [result] = await query(
-      "INSERT INTO people_grants (person_id, shop_id, role, start_on, end_on, revoked) VALUES (?, ?, ?, ?, ?, 0)",
-      [personId, shopId, role, startOn, endOn]
-    );
-    grant.id = Number(result.insertId);
-    return { ok: true, grant: cloneGrant(grant) };
-  }
-  grant.id = nextGrantId++;
-  grants.push(grant);
-  return { ok: true, grant: cloneGrant(grant) };
-}
-
-export async function reconcileRoster() {
-  const personList = dbMode() === "mysql" ? await loadMysqlPeople() : people.map(clonePerson);
-  const shopList = dbMode() === "mysql" ? await loadMysqlShops() : shops.map(cloneShop);
-  const grantList = dbMode() === "mysql" ? await loadMysqlGrants() : grants.map(cloneGrant);
-  const onDay = todayShanghai();
-  const employedNoGrant = personList
-    .filter((person) => person.status === "在职")
-    .filter((person) => !grantList.some((grant) => Number(grant.personId) === Number(person.id) && isGrantOpen(grant, onDay)))
-    .map((person) => ({ id: person.id, name: person.name }));
-  const grantOnLeft = grantList
-    .filter((grant) => isGrantOpen(grant, onDay))
-    .filter((grant) => {
-      const person = personById(grant.personId, personList);
-      return person && person.status === "离职";
-    })
-    .map((grant) => ({
-      id: grant.id,
-      personName: personById(grant.personId, personList)?.name || "",
-      shopName: shopById(grant.shopId, shopList)?.name || ""
-    }));
-  return { employedNoGrant, grantOnLeft };
 }

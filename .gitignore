@@ -21,3 +21,8 @@ __pycache__/
 .idea/
 .vscode/
 *.swp
+
+# Local review data
+apps/xingmai/src/modules/people/data/
+apps/xingmai/.local/
+
