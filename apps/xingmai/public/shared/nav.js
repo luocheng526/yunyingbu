@@ -1,9 +1,36 @@
-/* xm-fast-shell 0.1.772-feedback — 主栏加需求与反馈 */
+/* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild 0.1.779-watermark 0.1.780-marklite 0.1.781-markwho 0.1.782-lightskin 0.1.783-navbold 0.1.784-homeloop 0.1.785-mever 0.1.787-acadleaf v0.4.18 — 个人中心脚本不进浏览器缓存 */
 (function () {
-  const ASSET_VER = "0.1.772-feedback";
+  const ASSET_VER = "0.1.787-acadleaf";
+  const origFetch = window.fetch ? window.fetch.bind(window) : null;
+  if (origFetch) {
+    window.fetch = function (input, init) {
+      const pending = origFetch(input, init);
+      const url = typeof input === "string" ? input : input && input.url ? String(input.url) : "";
+      if (url.indexOf("/api/home/summary") === -1) {
+        return pending;
+      }
+      return pending.then(function (res) {
+        return res.clone().json().then(function (data) {
+          const node = document.querySelector("[data-hm-js]");
+          const have = node ? String(node.getAttribute("data-hm-js") || "") : "";
+          if (!data || !data.stamp || !have || String(data.stamp) === have) {
+            return res;
+          }
+          data.stamp = have;
+          return new Response(JSON.stringify(data), {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          });
+        }).catch(function () {
+          return res;
+        });
+      });
+    };
+  }
   const TAB_TITLE = "星脉甄选运营中心";
   const MODULES = {
     "/home": "home",
+    "/bound": "bound",
     "/data": "data",
     "/data/overview": "data",
     "/data/shops": "data",
@@ -35,6 +62,7 @@
     "/academy/handbook": "academy",
     "/agents": "agents",
     "/work": "work",
+    "/meeting": "meeting",
     "/feedback": "feedback",
     "/releases": "releases",
     "/me": "me",
@@ -43,8 +71,7 @@
   const DATA_CHILDREN = [
     { href: "/data/overview", label: "数据总揽" },
     { href: "/data/shops", label: "店铺数据" },
-    { href: "/data/goods", label: "商品数据" },
-    { href: "/data/paid", label: "实时付费" }
+    { href: "/data/goods", label: "商品数据" }
   ];
   const SHEN_CHILDREN = [
     { href: "/shen/jingcang", label: "京仓管理" },
@@ -63,27 +90,29 @@
   ];
   const STAFF_NAV = { "/releases": 1, "/people": 1, "/hr": 1 };
   const STAFF_NAV_NAMES = { "罗成": 1, "韩梦凯": 1, "沈子晗": 1, luocheng: 1 };
-  const ACADEMY_CHILDREN = [
+  const ACADEMY_PAGES = [
     { href: "/academy/courses", label: "培训课程" },
     { href: "/academy/exams", label: "培训考试" },
     { href: "/academy/handbook", label: "运营手册" }
   ];
   const items = [
     { href: "/home", label: "首页" },
-    { href: "/data", label: "数据中心", children: DATA_CHILDREN },
+    { href: "/bound", label: "边界数据中心" },
+    { href: "/data", label: "星脉数据中心", children: DATA_CHILDREN },
     { href: "/shen", label: "沈子晗运营中心", children: SHEN_CHILDREN },
     { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
     { href: "/stores", label: "店铺维护中心" },
-    { href: "/academy", label: "甄选商学院", children: ACADEMY_CHILDREN },
+    { href: "/academy", label: "甄选商学院" },
     { href: "/agents", label: "甄选智能体" },
     { href: "/work", label: "工作汇报" },
+    { href: "/meeting", label: "月度大会" },
     { href: "/feedback", label: "需求与反馈" },
     { href: "/releases", label: "版本发布中心" },
     { href: "/people", label: "组织中心" },
     { href: "/hr", label: "智能人事" },
     { href: "/me", label: "个人中心" }
   ];
-  const labels = items.concat(DATA_CHILDREN, SHEN_CHILDREN, HAN_CHILDREN, ACADEMY_CHILDREN, [
+  const labels = items.concat(DATA_CHILDREN, SHEN_CHILDREN, HAN_CHILDREN, ACADEMY_PAGES, [
     { href: "/notices", label: "公告中心" }
   ]);
 
@@ -113,6 +142,7 @@
   let current = window.location.pathname.replace(/\/+$/, "") || "/";
   const ICO_PATH = {
     "/home": '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10.8V20h4.2v-5.2h3.6V20H18v-9.2"/>',
+    "/bound": '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/><path d="M12 5v2"/><path d="M19 12h-2"/>',
     "/data": '<path d="M5 19V10"/><path d="M10 19V6"/><path d="M15 19v-7"/><path d="M20 19V8"/>',
     "/shen": '<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 9h6"/><path d="M9 13h6"/><path d="M9 17h4"/>',
     "/han": '<path d="M8 11.5 12 5l4 6.5"/><path d="M6.5 13h11l-1.2 6H7.7z"/>',
@@ -122,6 +152,7 @@
     "/academy": '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8"/><path d="M8 11h6"/>',
     "/agents": '<rect x="6" y="8" width="12" height="10" rx="2"/><path d="M12 8V5"/><circle cx="9.5" cy="13" r="1"/><circle cx="14.5" cy="13" r="1"/><path d="M9 19v1h6v-1"/>',
     "/work": '<rect x="7" y="3.5" width="10" height="17" rx="2"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>',
+    "/meeting": '<rect x="5" y="7" width="14" height="13" rx="2"/><path d="M5 11h14"/><path d="M9 5v4"/><path d="M15 5v4"/>',
     "/feedback": '<path d="M5 6h14v9H8l-3 3V6z"/><path d="M8 10h8"/><path d="M8 13h5"/>',
     "/releases": '<path d="M12 4v10"/><path d="M8.5 7.5 12 4l3.5 3.5"/><rect x="6" y="14" width="12" height="6" rx="1"/>',
     "/me": '<circle cx="12" cy="8" r="2.6"/><path d="M6.2 18.5c.6-2.8 2.8-4.3 5.8-4.3s5.2 1.5 5.8 4.3"/>',
@@ -163,12 +194,55 @@
     return window.__xmBootUser || null;
   }
 
+  function textLooksHr(value) {
+    const text = String(value || "").trim();
+    if (!text || text.indexOf("人员管理") >= 0) {
+      return false;
+    }
+    const lower = text.toLowerCase();
+    if (lower === "hrtech" || lower === "hr") {
+      return true;
+    }
+    if (text === "人事" || text.indexOf("人事部") >= 0 || text.indexOf("人事部门") >= 0 || text.indexOf("人事和技术") >= 0) {
+      return true;
+    }
+    return /人事(专员|主管|经理|总监)$/.test(text);
+  }
+
+  function textLooksTech(value) {
+    const text = String(value || "").trim();
+    if (!text) {
+      return false;
+    }
+    const lower = text.toLowerCase();
+    return lower === "backend" || text === "技术" || text.indexOf("技术部") >= 0;
+  }
+
+  function personLooksHr(person) {
+    if (!person) {
+      return false;
+    }
+    const board = String(person.board || "").trim().toLowerCase();
+    if (board === "hrtech") {
+      return !(textLooksTech(person.department) || textLooksTech(person.center) || textLooksTech(person.role));
+    }
+    return (
+      textLooksHr(person.department) ||
+      textLooksHr(person.center) ||
+      textLooksHr(person.role) ||
+      textLooksHr(person.board)
+    );
+  }
+
   function isHrDesk(user) {
     const who = user || currentStaffUser();
     if (!who || canSeeStaffNav(who)) {
       return false;
     }
-    return String(who.desk || "") === "hr";
+    if (String(who.desk || "") === "hr") {
+      return true;
+    }
+    return personLooksHr(who);
   }
 
   function deskHome(user) {
@@ -209,6 +283,9 @@
     const key = normalize(href);
     if (key === "/people") {
       return current === "/people" || current === "/notices";
+    }
+    if (key === "/academy") {
+      return current === "/academy" || current.indexOf("/academy/") === 0;
     }
     return current === key;
   }
@@ -289,11 +366,13 @@
       .join("");
     return (
       '<div class="xm-menu-group' +
-      (open ? " is-open" : "") +
+      (open ? " is-open is-current" : "") +
       '" data-xm-group="' +
       item.href +
       '">' +
-      '<button type="button" class="xm-menu-item xm-menu-parent" aria-expanded="' +
+      '<button type="button" class="xm-menu-item xm-menu-parent' +
+      (open ? " is-active" : "") +
+      '" aria-expanded="' +
       (open ? "true" : "false") +
       '">' +
       ico(item.href) +
@@ -333,6 +412,86 @@
       return user.trim();
     }
     return String(user.displayName || user.name || user.username || "").trim();
+  }
+
+  const WATERMARK_CELLS = 80;
+  let loginMark = "";
+
+  function accountLabel(user) {
+    if (!user || typeof user !== "object") {
+      return "";
+    }
+    return String(user.displayName || user.username || "").trim();
+  }
+
+  function lockLoginMark(user) {
+    if (loginMark) {
+      return loginMark;
+    }
+    const boot = accountLabel(currentStaffUser()) || accountLabel(bootUser()) || accountLabel(user);
+    if (boot) {
+      loginMark = boot;
+      return loginMark;
+    }
+    const shown = document.getElementById("xm-username");
+    const text = shown ? String(shown.textContent || "").trim() : "";
+    if (text && text !== "用户") {
+      loginMark = text;
+    }
+    return loginMark;
+  }
+
+  function watermarkText(user) {
+    const name = lockLoginMark(user);
+    return name ? "甄选：" + name : "";
+  }
+
+  function clearWatermark() {
+    const layers = document.querySelectorAll(".xm-watermark");
+    Array.prototype.forEach.call(layers, function (layer) {
+      layer.remove();
+    });
+  }
+
+  function paintWatermark(user) {
+    const label = watermarkText(user);
+    if (!label || !document.body) {
+      return;
+    }
+    const nameEl = document.getElementById("xm-username");
+    if (nameEl && loginMark && nameEl.textContent !== loginMark) {
+      nameEl.textContent = loginMark;
+    }
+    const layers = document.querySelectorAll(".xm-watermark");
+    let layer = layers.length ? layers[0] : null;
+    for (let i = 1; i < layers.length; i += 1) {
+      layers[i].remove();
+    }
+    if (
+      layer &&
+      layer.getAttribute("data-xm-watermark") === label &&
+      layer.querySelectorAll(".xm-watermark-sheet span").length >= WATERMARK_CELLS
+    ) {
+      if (layer.parentNode !== document.body || layer !== document.body.lastElementChild) {
+        document.body.appendChild(layer);
+      }
+      return;
+    }
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.className = "xm-watermark";
+      layer.setAttribute("aria-hidden", "true");
+    }
+    layer.setAttribute("data-xm-watermark", label);
+    const sheet = document.createElement("div");
+    sheet.className = "xm-watermark-sheet";
+    for (let i = 0; i < WATERMARK_CELLS; i += 1) {
+      const cell = document.createElement("span");
+      cell.textContent = label;
+      sheet.appendChild(cell);
+    }
+    layer.replaceChildren(sheet);
+    document.body.appendChild(layer);
   }
 
   function shopKey(name) {
@@ -625,6 +784,11 @@
   let centerScopePack = null;
   let centerScopePending = null;
 
+  function invalidateCenterScope() {
+    centerScopePack = null;
+    centerScopePending = null;
+  }
+
   function loadCenterScope() {
     if (centerScopePack) {
       return Promise.resolve(centerScopePack);
@@ -761,8 +925,24 @@
       '<button type="button" class="xm-menu-item xm-logout" id="xm-logout">' +
       ico("logout") +
       "<span>退出登录</span></button>" +
-      '<p class="xm-version">v0.4.27</p></nav>'
+      '<p class="xm-version">v0.4.30</p></nav>'
     );
+  }
+
+  let scopeKey = "";
+
+  function scopeSignature(user) {
+    const who = user || {};
+    const shops = Array.isArray(who.visibleShops) ? who.visibleShops.join(",") : "";
+    return [who.desk || "", who.board || "", who.department || "", who.center || "", who.role || "", shops].join("|");
+  }
+
+  function paintSider() {
+    const sider = document.querySelector(".xm-sider");
+    if (!sider) {
+      return;
+    }
+    sider.innerHTML = siderHtml();
   }
 
   function contentRoot() {
@@ -864,47 +1044,64 @@
   }
 
   const TAB_STORE = "xm-open-tabs";
+  let prefsTimer = 0;
+
+  function bootUser() {
+    return window.__xmBootUser && typeof window.__xmBootUser === "object" ? window.__xmBootUser : {};
+  }
+
+  function bootPrefs() {
+    const prefs = bootUser().prefs;
+    return prefs && typeof prefs === "object" ? prefs : {};
+  }
+
+  function persistPrefsSoon() {
+    const payload = {
+      theme: readTheme(),
+      siderCollapsed: document.documentElement.classList.contains("xm-collapsed"),
+      tabs: { hrefs: openTabs.slice(), active: current }
+    };
+    const user = bootUser();
+    if (!user.prefs || typeof user.prefs !== "object") {
+      user.prefs = {};
+    }
+    user.prefs.theme = payload.theme;
+    user.prefs.siderCollapsed = payload.siderCollapsed;
+    user.prefs.tabs = payload.tabs;
+    window.__xmBootUser = user;
+    window.clearTimeout(prefsTimer);
+    prefsTimer = window.setTimeout(function () {
+      fetch("/api/auth/prefs", {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload)
+      }).catch(function () {
+        /* keep in-memory boot prefs */
+      });
+    }, 240);
+  }
   const PARENT_HOME = {
     "/data": "/data/overview",
+    "/data/paid": "/home",
     "/shen": "/shen/product",
-    "/han": "/han/selection",
-    "/academy": "/academy/courses"
+    "/han": "/han/selection"
   };
   const unmounts = {};
   let openTabs = [];
   let tabsBooted = false;
 
-  function readTabStoreRaw() {
-    try {
-      const localRaw = localStorage.getItem(TAB_STORE);
-      if (localRaw) {
-        return localRaw;
-      }
-    } catch (_err) {
-      /* ignore */
-    }
-    try {
-      return sessionStorage.getItem(TAB_STORE);
-    } catch (_err2) {
-      return null;
-    }
-  }
-
   function readTabState() {
-    try {
-      const parsed = JSON.parse(readTabStoreRaw() || "null");
-      if (parsed && Array.isArray(parsed.hrefs)) {
-        const hrefs = parsed.hrefs.map(normalize).filter(function (href) {
-          return Boolean(MODULES[href]) && !PARENT_HOME[href];
-        });
-        const active = leafRoute(parsed.active || "");
-        return {
-          hrefs: hrefs,
-          active: MODULES[active] && !PARENT_HOME[active] ? active : ""
-        };
-      }
-    } catch (_err) {
-      /* ignore */
+    const parsed = bootPrefs().tabs;
+    if (parsed && Array.isArray(parsed.hrefs)) {
+      const hrefs = parsed.hrefs.map(normalize).filter(function (href) {
+        return Boolean(MODULES[href]) && !PARENT_HOME[href];
+      });
+      const active = leafRoute(parsed.active || "");
+      return {
+        hrefs: hrefs,
+        active: MODULES[active] && !PARENT_HOME[active] ? active : ""
+      };
     }
     return { hrefs: [], active: "" };
   }
@@ -919,23 +1116,15 @@
   }
 
   function writeOpenTabs() {
-    const payload = JSON.stringify({ hrefs: openTabs.slice(), active: current });
-    try {
-      localStorage.setItem(TAB_STORE, payload);
-    } catch (_err) {
-      /* ignore */
-    }
-    try {
-      sessionStorage.setItem(TAB_STORE, payload);
-    } catch (_err2) {
-      /* ignore */
-    }
+    persistPrefsSoon();
   }
 
   function clearOpenTabs() {
     openTabs = [];
     try {
       localStorage.removeItem(TAB_STORE);
+      localStorage.removeItem("xm-theme");
+      localStorage.removeItem("xm-sider-collapsed");
     } catch (_err) {
       /* ignore */
     }
@@ -974,6 +1163,31 @@
     return PARENT_HOME[key] || key;
   }
 
+  const MAX_OPEN_TABS = 10;
+
+  function capOpenTabs() {
+    const pin = deskHome();
+    const keep = leafRoute(current);
+    while (openTabs.length > MAX_OPEN_TABS) {
+      let dropAt = -1;
+      let drop = "";
+      for (let i = 0; i < openTabs.length; i += 1) {
+        const href = openTabs[i];
+        if (href === pin || href === keep) {
+          continue;
+        }
+        dropAt = i;
+        drop = href;
+        break;
+      }
+      if (dropAt < 0) {
+        break;
+      }
+      openTabs.splice(dropAt, 1);
+      disposePane(drop);
+    }
+  }
+
   function ensureOpenTabs() {
     if (!Array.isArray(openTabs)) {
       openTabs = [];
@@ -1006,6 +1220,7 @@
     if (!openTabs.length) {
       openTabs = [pin];
     }
+    capOpenTabs();
     writeOpenTabs();
   }
 
@@ -1030,8 +1245,8 @@
     }
     bar.hidden = false;
     bar.removeAttribute("hidden");
-    bar.style.removeProperty("display");
-    bar.style.removeProperty("visibility");
+    bar.style.setProperty("display", "flex", "important");
+    bar.style.setProperty("visibility", "visible", "important");
     delete bar.dataset.peopleHid;
     return bar;
   }
@@ -1052,6 +1267,44 @@
     const key = normalize(href || current || location.pathname);
     return key === "/people" || key === "/people/";
   }
+
+  function ensureOrgScrollCss() {
+    const css =
+      "html body:has(.xm-shell):has(.people-page) .xm-main{overflow-x:hidden!important;overflow-y:hidden!important;}" +
+      "html body:has(.xm-shell):has(.people-page) .xm-workspace{overflow-x:auto!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch;}" +
+      "html body:has(.xm-shell) .xm-topbar>.xm-tabs,html body:has(.xm-shell) .xm-topbar>.xm-tabs[hidden]{display:flex!important;visibility:visible!important;}";
+    let el = document.getElementById("xm-org-scroll-css");
+    if (!el) {
+      el = document.createElement("style");
+      el.id = "xm-org-scroll-css";
+      el.setAttribute("data-xm-org-scroll", "1");
+      el.textContent = css;
+    }
+    if (document.head) {
+      document.head.appendChild(el);
+    }
+  }
+
+  function onPeopleWheel(event) {
+    if (!isPeopleRoute() || event.defaultPrevented || event.ctrlKey) {
+      return;
+    }
+    const target = event.target;
+    if (target && target.closest && target.closest(".org-filter-pop, input, select, textarea")) {
+      return;
+    }
+    const wrap = document.querySelector(".xm-workspace");
+    if (!wrap) {
+      return;
+    }
+    const before = wrap.scrollTop;
+    wrap.scrollTop += event.deltaY;
+    if (wrap.scrollTop !== before) {
+      event.preventDefault();
+    }
+  }
+
+  document.addEventListener("wheel", onPeopleWheel, { passive: false, capture: true });
 
   function parkPeopleHosts() {
     const onPeople = isPeopleRoute();
@@ -1074,6 +1327,26 @@
       }
     });
     relaxNoticeForPeople();
+    ensureOrgScrollCss();
+    revealTabBar();
+    if (onPeople) {
+      window.setTimeout(function () {
+        ensureOrgScrollCss();
+        revealTabBar();
+        pinHomeTab();
+        if (!document.querySelector(".xm-topbar .xm-tab")) {
+          paintTabs();
+        }
+      }, 0);
+      window.setTimeout(function () {
+        ensureOrgScrollCss();
+        revealTabBar();
+        pinHomeTab();
+        if (!document.querySelector(".xm-topbar .xm-tab")) {
+          paintTabs();
+        }
+      }, 80);
+    }
   }
 
   function hideForeignPages() {
@@ -1173,6 +1446,7 @@
     if (openTabs.indexOf(key) < 0) {
       openTabs.push(key);
     }
+    capOpenTabs();
     writeOpenTabs();
     paneFor(key, true);
     paintTabs();
@@ -1266,7 +1540,7 @@
     }
     window.__xmTabsRestored = 1;
     const key = leafRoute(dest || "");
-    if (isHrDesk() && leafRoute(current) === deskHome() && key !== deskHome()) {
+    if (leafRoute(current) === deskHome() && key !== deskHome()) {
       return;
     }
     if (!key || key === current || !MODULES[key] || PARENT_HOME[key]) {
@@ -1433,11 +1707,13 @@
     const groups = document.querySelectorAll(".xm-menu-group[data-xm-group]");
     Array.prototype.forEach.call(groups, function (group) {
       const prefix = group.getAttribute("data-xm-group");
-      const open = groupOpen(prefix, current);
-      group.classList.toggle("is-open", open);
+      const on = groupOpen(prefix, current);
+      group.classList.toggle("is-current", on);
+      group.classList.toggle("is-open", on);
       const parent = group.querySelector(".xm-menu-parent");
       if (parent) {
-        parent.setAttribute("aria-expanded", open ? "true" : "false");
+        parent.classList.toggle("is-active", on);
+        parent.setAttribute("aria-expanded", on ? "true" : "false");
       }
     });
   }
@@ -1647,14 +1923,13 @@
       return;
     }
     window.__xmTabWatch = 1;
-    let queued = 0;
-    const obs = new MutationObserver(function () {
-      if (queued) {
-        return;
+    let timer = 0;
+    const kick = function () {
+      if (timer) {
+        window.clearTimeout(timer);
       }
-      queued = 1;
-      setTimeout(function () {
-        queued = 0;
+      timer = window.setTimeout(function () {
+        timer = 0;
         const bar = topbar.querySelector(".xm-tabs");
         if (!bar || !bar.querySelector(".xm-tab")) {
           paintTabs();
@@ -1663,8 +1938,14 @@
         revealTabBar();
         pinHomeTab();
       }, 0);
+    };
+    const obs = new MutationObserver(kick);
+    obs.observe(topbar, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["hidden", "style", "class", "data-people-hid"]
     });
-    obs.observe(topbar, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "style", "class"] });
   }
 
   /* xm-home-ai-diag-begin */
@@ -2564,6 +2845,7 @@
       window.setTimeout(openOrgNoticesTab, 0);
     });
     refreshQueueBadge();
+    paintWatermark(currentStaffUser() || bootUser());
   }
   window.__xmGo = go;
 
@@ -2734,20 +3016,59 @@
   }
 
   function watchNoticeMask() {
-    if (document.documentElement.getAttribute("data-xm-notice-watch") === "1") {
-      return;
-    }
     document.documentElement.setAttribute("data-xm-notice-watch", "1");
-    if (!document.body) {
-      return;
-    }
-    new MutationObserver(function () {
-      closeNoticePopup();
-    }).observe(document.body, { childList: true });
   }
 
-  function showNoticePopup() {
-    closeNoticePopup();
+  function showNoticePopup(item) {
+    if (!item || !item.id || document.getElementById("xm-notice-mask")) {
+      return;
+    }
+    try {
+      if (sessionStorage.getItem("xm-notice-popup") === item.id) {
+        return;
+      }
+    } catch (_err) {
+      /* ignore */
+    }
+    const mask = document.createElement("div");
+    mask.id = "xm-notice-mask";
+    mask.className = "xm-notice-mask";
+    mask.innerHTML =
+      '<div class="xm-notice-dialog' +
+      (item.level === "important" ? " is-important" : "") +
+      '" role="dialog" aria-labelledby="xm-notice-pop-title">' +
+      '<p class="xm-notice-kicker">登录提醒</p>' +
+      '<h2 id="xm-notice-pop-title"></h2>' +
+      '<p class="xm-notice-pop-lead"></p>' +
+      '<div class="xm-notice-pop-actions">' +
+      '<button type="button" class="xm-notice-pop-close">稍后再看</button>' +
+      '<button type="button" class="xm-notice-pop-open">查看公告</button></div></div>';
+    mask.querySelector("#xm-notice-pop-title").textContent = item.title || "公告";
+    mask.querySelector(".xm-notice-pop-lead").textContent = item.summary || item.body || "";
+    mask.querySelector(".xm-notice-pop-close").addEventListener("click", function () {
+      try {
+        sessionStorage.setItem("xm-notice-popup", item.id);
+      } catch (_err) {
+        /* ignore */
+      }
+      closeNoticePopup();
+    });
+    mask.querySelector(".xm-notice-pop-open").addEventListener("click", function () {
+      try {
+        sessionStorage.setItem("xm-notice-popup", item.id);
+      } catch (_err2) {
+        /* ignore */
+      }
+      closeNoticePopup();
+      openNotice(item.id);
+    });
+    mask.addEventListener("click", function (event) {
+      if (event.target === mask) {
+        closeNoticePopup();
+      }
+    });
+    ensureImportantNoticeCss();
+    document.body.appendChild(mask);
   }
 
   function bootNoticePopup() {
@@ -2777,12 +3098,8 @@
           return;
         }
         if (document.documentElement.classList.contains("xm-collapsed")) {
-          try {
-            localStorage.setItem("xm-sider-collapsed", "0");
-          } catch (_err) {
-            /* ignore */
-          }
           applyCollapsed(false);
+          persistPrefsSoon();
           group.classList.add("is-open");
           btn.setAttribute("aria-expanded", "true");
           return;
@@ -2854,29 +3171,29 @@
   }
 
   function readTheme() {
-    try {
-      const raw = localStorage.getItem("xm-theme");
-      if (raw === "dark" || raw === "pink" || raw === "light") {
-        return raw;
-      }
-    } catch (_err) {
-      /* ignore */
+    const raw = bootPrefs().theme;
+    if (raw === "dark" || raw === "pink" || raw === "light") {
+      return raw;
     }
     return "light";
   }
 
-  function applyTheme(theme) {
+  function applyTheme(theme, save) {
     const next = theme === "dark" || theme === "pink" ? theme : "light";
     document.documentElement.setAttribute("data-theme", next);
     document.documentElement.style.colorScheme = next === "dark" ? "dark" : "light";
-    try {
-      localStorage.setItem("xm-theme", next);
-    } catch (_err) {
-      /* ignore */
+    const user = bootUser();
+    if (!user.prefs || typeof user.prefs !== "object") {
+      user.prefs = {};
     }
+    user.prefs.theme = next;
+    window.__xmBootUser = user;
     Array.prototype.forEach.call(document.querySelectorAll("[data-xm-style]"), function (btn) {
       btn.classList.toggle("is-on", btn.getAttribute("data-xm-style") === next);
     });
+    if (save) {
+      persistPrefsSoon();
+    }
   }
 
   function tickClock() {
@@ -2968,8 +3285,15 @@
   }
 
   function rememberStaffUser(user, userLabel) {
+    const prev = window.__xmBootUser && typeof window.__xmBootUser === "object" ? window.__xmBootUser : null;
+    const locked = loginMark || (prev ? String(prev.displayName || prev.username || "").trim() : "");
     if (user && (user.username || user.displayName || user.name)) {
-      window.__xmBootUser = user;
+      const next = Object.assign({}, prev || {}, user);
+      if (locked) {
+        next.displayName = (prev && prev.displayName) || locked;
+        next.username = (prev && prev.username) || locked;
+      }
+      window.__xmBootUser = next;
       return;
     }
     if (userLabel && !window.__xmBootUser) {
@@ -2977,25 +3301,106 @@
     }
   }
 
+  function relinkSider() {
+    const collapseBtn = document.getElementById("xm-collapse");
+    if (collapseBtn && !collapseBtn.dataset.bound) {
+      collapseBtn.dataset.bound = "1";
+      collapseBtn.addEventListener("click", function () {
+        const next = !document.documentElement.classList.contains("xm-collapsed");
+        applyCollapsed(next);
+        persistPrefsSoon();
+      });
+    }
+    const logoutBtn = document.getElementById("xm-logout");
+    if (logoutBtn && !logoutBtn.dataset.bound) {
+      logoutBtn.dataset.bound = "1";
+      logoutBtn.addEventListener("click", function () {
+        clearWatermark();
+        clearOpenTabs();
+        fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { Accept: "application/json" }
+        }).finally(function () {
+          window.location.replace("/login?out=1");
+        });
+      });
+    }
+    applyCollapsed(bootPrefs().siderCollapsed === true);
+    bindBrandHome();
+    bindMenu(document);
+    pinHomeTab();
+  }
+
+  function applyScopeUser(user, force) {
+    if (!user || !(user.username || user.displayName || user.name)) {
+      return;
+    }
+    const nextUser = Object.assign({}, user);
+    if (personLooksHr(nextUser) && !canSeeStaffNav(nextUser)) {
+      nextUser.desk = "hr";
+    }
+    rememberStaffUser(nextUser);
+    paintWatermark(nextUser);
+    const next = scopeSignature(nextUser);
+    if (!force && next === scopeKey) {
+      return;
+    }
+    if (next !== scopeKey) {
+      invalidateCenterScope();
+    }
+    scopeKey = next;
+    paintSider();
+    relinkSider();
+    ensureOpenTabs();
+    paintTabs();
+    if (isHrDesk(nextUser) && !allowDeskRoute(current)) {
+      go(deskHome(nextUser));
+    }
+  }
+
+  function readScopeMe() {
+    fetch("/api/auth/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (res) {
+        if (res.status === 401) {
+          clearWatermark();
+          window.location.replace("/login");
+          return null;
+        }
+        return res.ok ? res.json() : null;
+      })
+      .then(function (payload) {
+        if (!payload) {
+          return;
+        }
+        const user = payload.user || payload;
+        applyScopeUser(user);
+      })
+      .catch(function () {
+        /* keep current sider */
+      });
+  }
+
+  function watchScope() {
+    if (window.__xmScopeWatch) {
+      return;
+    }
+    window.__xmScopeWatch = 1;
+    setInterval(function () {
+      if (document.visibilityState === "visible") {
+        readScopeMe();
+      }
+    }, 2500);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") {
+        readScopeMe();
+      }
+    });
+    window.addEventListener("focus", readScopeMe);
+  }
+
   function applyStaffNav(user) {
-    if (!user) {
-      return;
-    }
-    if (canSeeStaffNav(user)) {
-      return;
-    }
-    const releases = document.querySelector('.xm-menu a[href="/releases"]');
-    if (releases) {
-      releases.remove();
-    }
-    const peopleGroup = document.querySelector('.xm-menu-group[data-xm-group="/people"]');
-    if (peopleGroup) {
-      peopleGroup.remove();
-    }
-    const people = document.querySelector('.xm-menu a[href="/people"]');
-    if (people) {
-      people.remove();
-    }
+    applyScopeUser(user);
   }
 
   function ensureOrgNavCss() {
@@ -3060,20 +3465,8 @@
     } else {
       document.documentElement.removeAttribute("data-xm-org-pending");
     }
-    if (orgFlags.resolved || orgFlags.known) {
-      if (!orgFlags.shen) {
-        const shen = document.querySelector('.xm-menu-group[data-xm-group="/shen"]');
-        if (shen) {
-          shen.remove();
-        }
-      }
-      if (!orgFlags.han) {
-        const han = document.querySelector('.xm-menu-group[data-xm-group="/han"]');
-        if (han) {
-          han.remove();
-        }
-      }
-    }
+    paintSider();
+    relinkSider();
     const here = centerOfPath(current);
     if (orgFlags.resolved && here && !orgFlags[here] && typeof window.__xmGo === "function") {
       window.__xmGo(homeForOrg());
@@ -3113,13 +3506,18 @@
               lineManager: person.lineManager,
               director: person.director,
               managerName: person.managerName,
-              username: person.username,
-              name: person.name
+              board: person.board,
+              role: person.role,
+              visibleShops: person.visibleShops
             };
             break;
           }
         }
         const merged = Object.assign({}, user || {}, row || {});
+        if (personLooksHr(merged) && !canSeeStaffNav(merged)) {
+          merged.desk = "hr";
+        }
+        applyScopeUser(merged, true);
         if (canSeeStaffNav(merged)) {
           applyOrgNav({ shen: true, han: true, known: true, resolved: true });
           return;
@@ -3189,7 +3587,7 @@
     if (nameEl && userLabel) {
       nameEl.textContent = userLabel;
     }
-    applyTheme(readTheme());
+    applyTheme(readTheme(), false);
     startClock();
     const styleBox = document.querySelector(".xm-styles");
     if (styleBox && !styleBox.dataset.bound) {
@@ -3199,7 +3597,7 @@
         if (!btn) {
           return;
         }
-        applyTheme(btn.getAttribute("data-xm-style"));
+        applyTheme(btn.getAttribute("data-xm-style"), true);
       });
     }
     const refreshBtn = document.getElementById("xm-refresh");
@@ -3214,18 +3612,15 @@
       collapseBtn.dataset.bound = "1";
       collapseBtn.addEventListener("click", function () {
         const next = !document.documentElement.classList.contains("xm-collapsed");
-        try {
-          localStorage.setItem("xm-sider-collapsed", next ? "1" : "0");
-        } catch (_err) {
-          /* ignore */
-        }
         applyCollapsed(next);
+        persistPrefsSoon();
       });
     }
     const logoutBtn = document.getElementById("xm-logout");
     if (logoutBtn && !logoutBtn.dataset.bound) {
       logoutBtn.dataset.bound = "1";
       logoutBtn.addEventListener("click", function () {
+        clearWatermark();
         clearOpenTabs();
         fetch("/api/auth/logout", {
           method: "POST",
@@ -3236,13 +3631,10 @@
         });
       });
     }
-    try {
-      applyCollapsed(localStorage.getItem("xm-sider-collapsed") === "1");
-    } catch (_err) {
-      applyCollapsed(false);
-    }
+    applyCollapsed(bootPrefs().siderCollapsed === true);
     bindBrandHome();
     bindMenu(document);
+    paintWatermark(user || currentStaffUser() || bootUser());
     ensurePhoneChrome();
     watchHomeAiDiag();
     ensureWorkspace();
@@ -3327,28 +3719,10 @@
     const boot = window.__xmBootUser;
     if (boot && (boot.displayName || boot.username)) {
       bindChrome(boot.displayName || boot.username, boot);
-    } else {
-      fetch("/api/auth/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
-        .then(function (res) {
-          if (res.status === 401) {
-            window.location.replace("/login");
-            return null;
-          }
-          if (!res.ok) {
-            return null;
-          }
-          return res.json();
-        })
-        .then(function (payload) {
-          if (!payload) {
-            return;
-          }
-          bindChrome(payload.displayName || payload.username || "用户", payload);
-        })
-        .catch(function () {
-          /* keep painted shell */
-        });
     }
+    paintWatermark(boot);
+    watchScope();
+    readScopeMe();
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", bootCurrentModule);
     } else {
@@ -3367,3 +3741,6 @@
 
   paintNow();
 })();
+
+/* xm-glass-app-loader: appearance and installation only; business shell stays above. */
+(function(){var s=document.createElement("script");s.src="/shared/app/app-experience.js?v=glass-20261123-1";s.async=true;document.head.appendChild(s);})();
