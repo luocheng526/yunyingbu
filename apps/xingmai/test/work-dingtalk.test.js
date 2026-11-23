@@ -193,7 +193,9 @@ test("同一员工同一天的未交提醒只发一次", async () => {
     assert.equal(second.sent, 0);
     const notices = calls.filter((body) => body.includes("去填日报"));
     assert.equal(notices.length, 1);
-    assert.match(notices[0], /@张文静/);
+    const delivered = JSON.parse(notices[0]);
+    assert.equal(delivered.userid_list, 'u4');
+    assert.deepEqual(delivered.msg.oa.body.form.find(f => f.key === '接收人：'), { key: '接收人：', value: '张文静' });
     assert.doesNotMatch(notices[0], /@u4/);
     assert.match(notices[0], /zx\.xingmaierp\.cc\/work/);
   } finally {

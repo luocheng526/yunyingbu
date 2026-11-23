@@ -9,7 +9,7 @@ import { organizationContext } from '../src/modules/work/center-access.js';
 import { saveSettings } from '../src/modules/work/center.js';
 import { publishTask, actTask, setTaskNotifier, resetTaskStore, retryTaskNotices, exportTasks, importTasks } from '../src/modules/work/tasks.js';
 import { taskReminderPlan, dailyReminderPlan, runWorkReminders, reminderStatus } from '../src/modules/work/reminders.js';
-import { NOTICE_TYPES, noticeCard, cardMarkdown } from '../src/modules/work/notice-cards.js';
+import { NOTICE_TYPES, noticeCard, cardMarkdown, cardOA } from '../src/modules/work/notice-cards.js';
 import { resetDingStore, saveBinds, setDingTransport, sendTaskNotice, popupTo, workLink } from '../src/modules/work/dingtalk.js';
 
 const director = { username: '罗成' }, lead = { username: '杨润泽' }, op = { username: '张文静' };
@@ -191,9 +191,42 @@ test('official work inbox receives the native card without duplicating robot or 
   credentials(); const sent = [];
   setDingTransport(async (url, options) => { if (url.includes('accessToken')) return api({ accessToken: 'token' }); assert.match(url, /asyncsend_v2/); sent.push(JSON.parse(options.body)); return api({ errcode: 0, task_id: 123 }); });
   assert.equal(await sendSample(), 'work'); assert.equal(sent.length, 1);
-  assert.equal(sent[0].msg.msgtype, 'action_card'); assert.equal(sent[0].userid_list, 'ding-4');
-  const param = sent[0].msg.action_card; assert.equal(param.single_title, '查看修改要求'); assert.match(param.single_url, /task=notice-test-task/);
-  assert.match(param.markdown, /甄选未来 · 工作中心/); assert.match(param.markdown, /缺少两个 SPU/);
+  assert.equal(sent[0].msg.msgtype, 'oa'); assert.equal(sent[0].userid_list, 'ding-4');
+  const param = sent[0].msg.oa; assert.match(param.status_bar.status_value, /查看修改要求/); assert.match(param.message_url, /task=notice-test-task/);
+  assert.equal(param.pc_message_url, param.message_url); assert.equal(param.head.bgcolor, 'FF2563EB');
+  assert.equal(param.status_bar.status_bg, '0xFFD97706'); assert.match(param.body.content, /缺少两个 SPU/);
+  assert.deepEqual(param.body.form[0], { key: '任务：', value: '核对活动价' });
+});
+
+test('all sixteen notices send native OA fields without hiding essential facts or changing recipients', async () => {
+  credentials();const sent=[];
+  setDingTransport(async (url, options) => {
+    if(url.includes('accessToken'))return api({accessToken:'token'});
+    assert.match(url,/asyncsend_v2/);sent.push(JSON.parse(options.body));return api({errcode:0,task_id:123});
+  });
+  for(const kind of Object.keys(NOTICE_TYPES)){
+    const card=noticeCard(kind,{task:{title:'活动价格核对',publisher_name:'罗成',assignee_name:'张文静',reviewer_name:'杨润泽',
+      due_at:'2026-11-23T18:00',submitted_at:'2026-11-23T15:00',completed_at:'2026-11-23T16:00',progress:50,priority:'紧急'},
+      original:{assignee_name:'原负责人',reviewer_name:'原验收人',due_at:'2026-11-22T18:00'},
+      event:{note:'请查看最新工作记录',actor_name:'罗成',changes:{reviewer:true,criteria:true}},recipientName:'张文静',
+      date:'2026-11-23',deadline:'18:00',reviewHours:24,url:workLink(kind==='daily_missing'?'todo':'taskMine','oa-sample')});
+    assert.equal(await sendTaskNotice('ding-4',card.title,'',card.url,card.button,card.recipientName,card),'work');
+    const envelope=sent.at(-1),oa=envelope.msg.oa;
+    assert.equal(envelope.userid_list,'ding-4');assert.equal(envelope.dept_id_list,undefined);assert.notEqual(envelope.to_all_user,true);
+    assert.equal(envelope.msg.msgtype,'oa');assert.equal(oa.message_url,card.url);assert.equal(oa.pc_message_url,card.url);
+    assert.equal(oa.body.title,card.title);assert.ok(oa.body.form.length<=6);
+    for(const field of card.fields)assert.ok(oa.body.form.some(f=>f.key===field.label+'：'&&f.value===field.value),kind+': '+field.label);
+    assert.match(oa.status_bar.status_bg,/^0xFF[0-9A-F]{6}$/);assert.ok(oa.status_bar.status_value.includes(card.status));
+  }
+  assert.equal(sent.length,16);
+});
+
+test('OA text stays bounded and cannot inject HTML or mention another recipient', () => {
+  const oa=cardOA(noticeCard('blocked',{task:{title:'<img src=x> @all '+ '长'.repeat(200),progress:20},
+    event:{note:'<script> @all\n'+ '长'.repeat(300)},recipientName:'张文静',url:workLink('taskMine','sample')}));
+  const text=JSON.stringify(oa.body);assert.doesNotMatch(text,/<img|<script>|@all/);
+  assert.ok(oa.body.form.every(f=>f.value.length<=100));assert.ok(oa.body.content.split('\n').length<=3);
+  assert.match(oa.body.content,/…/);assert.match(oa.body.content,/以最新记录为准/);
 });
 
 test('work notification HTTP failure, rejection and missing receipt fall back to a native robot card', async () => {
@@ -202,7 +235,7 @@ test('work notification HTTP failure, rejection and missing receipt fall back to
     setDingTransport(async (url, options) => { if (url.includes('accessToken')) return api({ accessToken: 'token' });
       sent.push(JSON.parse(options.body)); return url.includes('asyncsend_v2') ? response : api({ processQueryKey: 'accepted' }); });
     assert.equal(await sendSample(), 'robot'); assert.equal(sent.length, 2);
-    assert.equal(sent[0].msg.msgtype, 'action_card'); assert.equal(sent[1].msgKey, 'sampleActionCard');
+    assert.equal(sent[0].msg.msgtype, 'oa'); assert.equal(sent[1].msgKey, 'sampleActionCard');
     assert.equal(JSON.parse(sent[1].msgParam).singleTitle, '查看修改要求');
   }
 });
