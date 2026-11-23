@@ -31,6 +31,18 @@ function setup(sheets, verified = null) {
   return { saved, queries };
 }
 
+test('按页面选择档案报告时不查询无关商品表，最新日期来自已完成日报', async () => {
+  const { saved, queries } = setup([sheet('qdfx_dplb', [row()])]);
+  const result = await saved.manifest({ ...scope, reports: 'channel_operating' });
+  assert.deepEqual(result.reports.map(r => r.id), ['channel_operating']);
+  assert.equal(result.reports[0].status, 'received');
+  assert.equal(queries.some(q => q.reportIds?.some(id => id !== 'qdfx_dplb')), false);
+  assert.equal((await saved.options()).latestDate, date);
+  const count = queries.length;
+  assert.equal((await saved.manifest({ ...scope, reports: 'unknown' })).statusCode, 400);
+  assert.equal(queries.length, count);
+});
+
 test("旧库的同平台同店同日行直接适配新页，不能把嵌套对象或跨年汇总串入", async () => {
   const payload = sheet("qdfx_dplb", [row(), row({ shopId: "2", gmv: "777" }), row({ platform: "TM", gmv: "888" }), row({ date: "2026-01", gmv: "999" }), row({ date: undefined }), row({ sumLine: true })]);
   payload.payload.raw.secretWrapper = { date, shopId: SHOP_DAY.shopId, gmv: "666" };

@@ -4,6 +4,44 @@ import { createSavedOverview, overviewRows, CHANNEL_TABLE_COLUMNS } from '../src
 const date = '2026-10-03';
 const sheet = (reportId, rows, extra = {}) => ({ reportId, dim: 'all', status: 'done', startOn: date, endOn: date, pageNo: 1, updatedAt: '2026-11-20', payload: { raw: { data: { columnData: rows } } }, ...extra });
 
+test('按当前页签查库，首屏不读商品/分类/周期，也不重复序列化行', async () => {
+  const calls = [];
+  const read = createSavedOverview({ readSheets: async query => { calls.push(query); return [sheet('qdzl_lb', [{ platform: 'all', date, gmv: 100 }]), sheet('qdfx_dplb', [{ platform: 'JD', shopId: '1', date, gmv: 100 }])]; } });
+  const result = await read({ from: date, reports: 'saved_channels,saved_shops' });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].reportIds, ['qdzl_lb', 'qdfx_dplb']);
+  assert.deepEqual(Object.keys(result.records), ['saved_channels', 'saved_shops']);
+  assert.equal(result.records.saved_shops.rows[0].gmv, 100);
+  assert.equal(result.records.saved_shops.response.payload.data.columnData, undefined);
+  assert.equal(result.records.saved_shops.response.payload.data.columnInfo.length > 0, true);
+});
+
+test('同一查询合并并发请求，刷新绕过缓存，不同日期和页签独立缓存', async () => {
+  let calls = 0;
+  const read = createSavedOverview({ readSheets: async () => { calls++; return []; } });
+  const query = { from: date, reports: 'saved_channels' };
+  await Promise.all([read(query), read(query), read(query)]);
+  assert.equal(calls, 1);
+  await read(query); assert.equal(calls, 1);
+  await read({ ...query, reports: 'saved_category' }); assert.equal(calls, 2);
+  await read({ ...query, from: '2026-10-04' }); assert.equal(calls, 3);
+  await read({ ...query, refresh: '1' }); assert.equal(calls, 4);
+  assert.equal((await read({ ...query, reports: '__proto__' })).statusCode, 400);
+  assert.equal(calls, 4);
+});
+
+test('指定日期范围仅汇总选中报表，完整原表和按需响应金额一致', async () => {
+  const first = '2026-10-02';
+  const rows = [sheet('qdfx_dplb', [{ platform: 'JD', shopId: '1', date, gmv: 20 }]), sheet('qdfx_dplb', [{ platform: 'JD', shopId: '1', date: first, gmv: 10 }], { startOn: first, endOn: first })];
+  const calls = [];
+  const read = createSavedOverview({ readSheets: async q => { calls.push(q); return rows; } });
+  const selected = await read({ from: first, to: date, reports: 'saved_shops' });
+  assert.equal(selected.records.saved_shops.rows[0].gmv, 30);
+  assert.equal(calls.every(q => JSON.stringify(q.reportIds) === JSON.stringify(['qdfx_dplb'])), true);
+  const full = await read({ from: first, to: date });
+  assert.deepEqual(selected.records.saved_shops.rows, full.records.saved_shops.rows);
+});
+
 test('历史总览保留原渠道合计，店铺明细不混入汇总或其它日期，不改变历史值', async () => {
   const channel = { platform: 'all', date, gmv: '840561', profit: '131090', lstCost: [{ gmv: '999999' }] };
   const sheets = [

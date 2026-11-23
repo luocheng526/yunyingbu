@@ -32,7 +32,7 @@ function fixture() {
     product_area: [record("product_area", [{ province: "浙江", isProv: true, sumLine: true, gmv: "100" }, { province: "浙江", city: "杭州", gmv: "100" }])]
   };
 }
-async function harness({ records = fixture(), failedPage = false, search = "", inventory, products = {}, cardRecords = {}, extras = {}, run, saved, overview, marks = new Map(), annotationFailure = false, storage = new Map() } = {}) {
+async function harness({ records = fixture(), failedPage = false, search = "", inventory, products = {}, cardRecords = {}, extras = {}, run, saved, overview, marks = new Map(), annotationFailure = false, storage = new Map(), startAtDefault = false } = {}) {
   const annotationApi = createAnnotations({ read: async keys => keys.filter(k => marks.has(k)).map(k => ({ rowKey:k, ...marks.get(k) })), write: async (k,v) => { marks.set(k,v); } });
   const calls = [];
   const downloads = [], blobs = [];
@@ -58,7 +58,7 @@ async function harness({ records = fixture(), failedPage = false, search = "", i
       if (url === "/api/bound/link") return reply({ phase: "not_logged_in", collection: { batchEnabled: false } });
       if (url === "/api/bound/progress") return reply({ items: [] });
       if (url.startsWith("/api/bound/collect/probe")) return reply({ target: { ...scope, metric: "广告花费" }, targets: [] });
-      if (url.startsWith("/api/bound/shop-day/saved/overview?")) { const data = typeof overview === 'function' ? overview() : overview; return data ? reply(data) : reply({}, false); }
+      if (url.startsWith("/api/bound/shop-day/saved/overview?")) { const data = typeof overview === 'function' ? overview(new URL(url, 'http://localhost').searchParams) : overview; return Promise.resolve(data).then(value => value ? reply(value) : reply({}, false)); }
       if (url === "/api/bound/shop-day/saved/options") return saved ? reply(saved.options) : reply({}, false);
       if (url.startsWith("/api/bound/shop-day/saved?")) {
         const p = new URL(url, "http://localhost").searchParams;
@@ -84,7 +84,7 @@ async function harness({ records = fixture(), failedPage = false, search = "", i
     }
   });
   vm.runInContext(source, context);
-  context.window.XmModules["/bound"].mount(root);
+  let unmount = context.window.XmModules["/bound"].mount(root);
   const settle = () => new Promise(resolve => setTimeout(resolve, 10));
   const click = async attrs => {
     root.click({ target: { closest: selector => selector === "[data-act]" ? { getAttribute: name => attrs[name] } : null } });
@@ -93,7 +93,13 @@ async function harness({ records = fixture(), failedPage = false, search = "", i
   const change = async (act, value, attrs = {}) => { root.change({ target: { value, checked: attrs.checked, getAttribute: name => name === "data-act" ? act : attrs[name] } }); await settle(); };
   const input = async (act, value) => { root.input({ target: { value, getAttribute: name => name === 'data-act' ? act : null } }); await settle(); };
   await settle();
-  return { root, calls, click, change, input, blobs, downloads };
+  if (!startAtDefault && !search) {
+    // Tests of a specific archived report navigate explicitly; entry defaults
+    // have separate assertions instead of dictating every fixture's scope.
+    if (saved) { await change('saved-shop', scope.platform + ':' + scope.shopId); await change('pick-date', scope.date); }
+    await click({ 'data-act': 'page', 'data-page': 'channelAnalysis' });
+  }
+  return { root, calls, click, change, input, blobs, downloads, remount: async () => { unmount(); unmount = context.window.XmModules['/bound'].mount(root); await settle(); } };
 }
 
 
@@ -151,6 +157,7 @@ test('全部店铺临时读取失败后重新选择可恢复，不永久缓存�
   let attempts = 0;
   const overview = { ok: true, scope: { from: scope.date, to: scope.date }, records: { saved_shops: record('saved_shops', [{ ...scope, gmv: 10 }], 1, { source: {} }) } };
   const h = await harness({ saved: savedFixture(), overview: () => ++attempts === 1 ? null : overview });
+  attempts = 0;
   await h.click({ 'data-act': 'page', 'data-page': 'channelOverview' });
   await h.change('saved-shop', '__all__');
   assert.match(h.root.innerHTML, /全部店铺数据读取失败/);
@@ -158,6 +165,60 @@ test('全部店铺临时读取失败后重新选择可恢复，不永久缓存�
   await h.change('saved-shop', '__all__');
   assert.match(h.root.innerHTML, /当前表 1 条/);
   assert.equal(attempts, 2);
+});
+
+test('每次进入默认渠道总览和最新已存日期，首屏不读取全店档案或其它页签', async () => {
+  const saved = savedFixture();
+  const latest = '2026-11-18';
+  const h = await harness({ saved, startAtDefault: true, overview: p => ({ ok: true, scope: { from: p.get('from'), to: p.get('to') }, records: {} }) });
+  assert.match(h.root.innerHTML, /data-page="channelOverview"/);
+  assert.match(h.root.innerHTML, /value="__all__" selected/);
+  assert.match(h.root.innerHTML, /data-act="pick-date"[^>]*value="2026-11-18"/);
+  assert.doesNotMatch(h.root.innerHTML, /data-act="archive-date"/);
+  assert.equal(h.calls.some(c => /saved\?|saved\/report\?/.test(c.url)), false);
+  const request = h.calls.find(c => c.url.includes('/saved/overview?'));
+  const params = new URL(request.url, 'http://localhost').searchParams;
+  assert.equal(params.get('from'), latest);
+  assert.deepEqual(params.get('reports').split(','), ['saved_channels', 'saved_shops']);
+  await h.click({ 'data-act': 'page', 'data-page': 'channelAnalysis' });
+  await h.change('pick-date', scope.date);
+  await h.remount();
+  assert.match(h.root.innerHTML, /data-page="channelOverview"/);
+  assert.match(h.root.innerHTML, /data-act="pick-date"[^>]*value="2026-11-18"/);
+});
+
+test('渠道总览按需加载页签、复用日期缓存，刷新明确绕过缓存', async () => {
+  const overview = p => {
+    const sc = { from: p.get('from'), to: p.get('to') };
+    return { ok: true, scope: sc, records: Object.fromEntries(p.get('reports').split(',').map(id => [id, record(id, [], 1, { scope: sc, source: {} })])) };
+  };
+  const h = await harness({ saved: savedFixture(), startAtDefault: true, overview });
+  const overviewCalls = () => h.calls.filter(c => c.url.includes('/saved/overview?'));
+  assert.equal(overviewCalls().length, 1);
+  await h.click({ 'data-act': 'tab', 'data-tab': 'qdzl_pl' });
+  assert.equal(new URL(overviewCalls().at(-1).url, 'http://localhost').searchParams.get('reports'), 'saved_category');
+  await h.click({ 'data-act': 'tab', 'data-tab': 'qdzl_lb' });
+  assert.equal(overviewCalls().length, 2);
+  await h.change('pick-date', '2026-11-17');
+  assert.equal(overviewCalls().length, 3);
+  await h.change('pick-date', '2026-11-18');
+  assert.equal(overviewCalls().length, 3);
+  assert.equal(h.calls.filter(c => c.url === '/api/bound/link').length, 1);
+  await h.click({ 'data-act': 'archive-refresh' });
+  assert.equal(new URL(overviewCalls().at(-1).url, 'http://localhost').searchParams.get('refresh'), '1');
+});
+
+test('快速切换日期时旧请求较晚返回不会覆盖新日期', async () => {
+  let finishOld;
+  const h = await harness({ saved: savedFixture(), startAtDefault: true, overview: p => {
+    const sc = { from: p.get('from'), to: p.get('to') };
+    const data = { ok: true, scope: sc, records: { saved_shops: record('saved_shops', [{ ...scope, date: sc.to, shopName: sc.to === '2026-11-17' ? '新日期店铺' : '旧日期店铺', gmv: 10 }], 1, { scope: sc, source: {}, response: { payload: { data: { columnInfo: [{ columnKey: 'shopName', columnName: '店铺' }] } } } }) } };
+    return sc.to === '2026-11-18' ? new Promise(resolve => { finishOld = () => resolve(data); }) : data;
+  } });
+  await h.change('pick-date', '2026-11-17');
+  assert.match(h.root.innerHTML, /新日期店铺/);
+  finishOld(); await new Promise(resolve => setTimeout(resolve, 20));
+  assert.match(h.root.innerHTML, /新日期店铺/); assert.doesNotMatch(h.root.innerHTML, /旧日期店铺/);
 });
 
 test("新页面统一读取旧库：四页、店铺日期、筛选导出都不分入口且不触发采集", async () => {

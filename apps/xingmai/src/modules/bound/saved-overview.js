@@ -55,13 +55,19 @@ export function overviewRows(payload) {
   return { rows, columns, groups };
 }
 export function createSavedOverview({ readSheets = listSheets, readScopes = async () => [], readArchived = async () => null, includePeriod = true } = {}) {
-  return async function read(query = {}) {
+  const sources = { saved_channels: 'qdzl_lb', saved_shops: 'qdfx_dplb', saved_groups: 'qdzl_fz', saved_operating: 'qdzl_jy', saved_category: 'qdzl_pl', saved_hotgoods: 'qdzl_rx', saved_shop_period: 'qdfx_dplb' };
+  const cache = new Map();
+  async function read(query = {}) {
     const from = String(query.from || ''), to = String(query.to || from);
     if (!validDay(from) || !validDay(to) || from < '2026-09-01' || to < from || Date.parse(to) - Date.parse(from) > 366 * 86400000) return { ok: false, statusCode: 400, reason: 'invalid_range' };
+    const requested = query.reports == null ? Object.keys(sources) : [...new Set(String(query.reports).split(','))];
+    if (!requested.length || requested.some(id => !Object.hasOwn(sources, id))) return { ok: false, statusCode: 400, reason: 'invalid_reports' };
+    const wanted = new Set(requested), reportIds = [...new Set(requested.map(id => sources[id]))];
     const scope = { from, to, date: to, platform: 'all', shopId: '', shopName: '全部已存店铺' };
-    const raw = await readSheets({ reportIds: ['qdzl_lb', 'qdfx_dplb', 'qdzl_fz', 'qdzl_jy', 'qdzl_pl', 'qdzl_rx'], startOn: from, endOn: to, dim: 'all' });
+    const raw = await readSheets({ reportIds, startOn: from, endOn: to, dim: 'all' });
     const sheets = raw.filter(s => s.status === 'done' && s.startOn === from && s.endOn === to && s.dim === 'all' && s.pageNo > 0);
     function report(sourceId, reportId, kind, defaultColumns) {
+      if (!wanted.has(reportId)) return { reportId, rows: [], status: 'not_saved' };
       const selected = sheets.filter(s => s.reportId === sourceId).sort((a, b) => a.pageNo - b.pageNo);
       const rows = new Map(), conflicting = new Set(), metadata = [];
       for (const sheet of selected) {
@@ -93,12 +99,12 @@ export function createSavedOverview({ readSheets = listSheets, readScopes = asyn
         response: { payload: { data: kind === 'operating' ? [responseData, responseData.history] : responseData } } };
     }
     const periodStart = new Date(Math.max(Date.parse('2026-09-01'), Date.parse(to) - 14 * 86400000)).toISOString().slice(0, 10);
-    const dailySheets = includePeriod && from === to ? await readSheets({ reportId: 'qdfx_dplb', dim: 'all', from: periodStart, to }) : [];
+    const dailySheets = includePeriod && wanted.has('saved_shop_period') ? await readSheets({ reportId: 'qdfx_dplb', dim: 'all', from: periodStart, to }) : [];
     const periodRows = unambiguous(dailySheets.filter(s => s.status === 'done' && s.dim === 'all' && s.pageNo > 0 && s.startOn === s.endOn && validDay(s.startOn) && s.startOn >= periodStart && s.endOn <= to).flatMap(s => overviewRows(s.payload).rows.filter(r => day(r.date) === s.startOn && !r.sumLine && /^[A-Z]{2,8}$/.test(r.platform || '') && /^\d{1,24}$/.test(String(r.shopId)))), r => [r.platform, r.shopId, day(r.date)].join(':'));
     const shopReport = report('qdfx_dplb', 'saved_shops', 'shop', SHOP_TABLE_COLUMNS);
     const combined = new Map(shopReport.rows.map(row => [row.platform + ':' + row.shopId, row]));
     let archiveCount = 0;
-    if (from === to) for (const item of (await readScopes()).filter(s => s.date === to)) {
+    if (from === to && wanted.has('saved_shops')) for (const item of (await readScopes()).filter(s => s.date === to)) {
       const archived = await readArchived(item, { reportId: 'channel_shop_table' });
       if (archived?.status !== 'received') continue;
       for (const row of archived.rows.filter(r => !r.sumLine && r.platform === item.platform && String(r.shopId) === item.shopId)) {
@@ -120,16 +126,17 @@ export function createSavedOverview({ readSheets = listSheets, readScopes = asyn
       saved_shop_period: { reportId: 'saved_shop_period', scope, page: 1, status: periodRows.size ? 'received' : 'not_saved', rows: [...periodRows.values()], source: { kind: 'legacy_database', reportId: 'qdfx_dplb', note: '已保存店铺日报；缺失日留空' } }
     } };
     if (from !== to) {
-      const dailySheets = (await readSheets({ reportIds: ['qdzl_lb', 'qdfx_dplb', 'qdzl_fz', 'qdzl_jy', 'qdzl_pl', 'qdzl_rx'], from, to, dim: 'all' })).filter(s => s.startOn === s.endOn && s.startOn >= from && s.endOn <= to);
+      const missingIds = requested.filter(id => id !== 'saved_shop_period' && result.records[id].status !== 'received');
+      const dailySheets = missingIds.length ? (await readSheets({ reportIds: [...new Set(missingIds.map(id => sources[id]))], from, to, dim: 'all' })).filter(s => s.startOn === s.endOn && s.startOn >= from && s.endOn <= to) : [];
       const scopes = (await readScopes()).filter(s => s.date >= from && s.date <= to);
       const dates = [...new Set([...dailySheets.map(s => s.startOn), ...scopes.map(s => s.date)])].sort();
       const collected = [];
       for (const date of dates) {
         const daily = createSavedOverview({ readSheets: async () => dailySheets.filter(s => s.startOn === date), readScopes: async () => scopes.filter(s => s.date === date), readArchived, includePeriod: false });
-        collected.push(await daily({ from: date, to: date }));
+        collected.push(await daily({ from: date, to: date, ...(query.reports != null ? { reports: query.reports } : {}) }));
       }
       for (const [id, report] of Object.entries(result.records)) {
-        if (report.status === 'received') continue; // Exact source totals retain priority.
+        if (!wanted.has(id) || report.status === 'received') continue; // Exact source totals retain priority.
         const parts = collected.map(r => r.records[id]).filter(r => r.rows.length);
         const dailyRows = parts.flatMap(r => r.rows.map(row => ({ ...row, date: r.scope.date })));
         if (!dailyRows.length) continue;
@@ -144,6 +151,31 @@ export function createSavedOverview({ readSheets = listSheets, readScopes = asyn
         report.response = { payload: { data: id === 'saved_operating' ? [table, { columnInfo, columnData: dailyRows }] : table } };
       }
     }
+    if (query.reports != null) {
+      result.records = Object.fromEntries(requested.map(id => [id, result.records[id]]));
+      // Rows already travel in record.rows. Table metadata must not serialize a
+      // second copy of every row (or a second copy of the operating history).
+      for (const record of Object.values(result.records)) {
+        const data = record.response?.payload?.data;
+        if (data) {
+          const table = Array.isArray(data) ? data[0] : data;
+          const { columnData, history, ...metadata } = table;
+          void columnData; void history;
+          record.response = { payload: { data: Array.isArray(data) ? [metadata, ...data.slice(1)] : metadata } };
+        }
+      }
+    }
     return result;
+  }
+  return async query => {
+    const key = JSON.stringify([query?.from, query?.to || query?.from, query?.reports]);
+    if (query?.refresh === '1') cache.delete(key);
+    const old = cache.get(key);
+    if (old && Date.now() - old.at < 15000) return old.value;
+    const value = read(query);
+    cache.set(key, { at: Date.now(), value });
+    if (cache.size > 6) cache.delete(cache.keys().next().value);
+    try { const result = await value; if (!result.ok) cache.delete(key); return result; }
+    catch (error) { cache.delete(key); throw error; }
   };
 }

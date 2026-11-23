@@ -88,7 +88,7 @@
   };
   var active = 0;
   var loadRevision = 0;
-  var archivePromise = null, archiveKey = "", archiveRevision = 0, savedOptionsPromise = null;
+  var archivePromise = null, archiveKey = "", archiveScopeKey = "", archiveRevision = 0, savedOptionsPromise = null;
   // Only display preferences, never BI credentials or collected rows.
   function saveArchiveDisplay() {
     try { window.localStorage.setItem('bound.display.v1', JSON.stringify({ columns: state.archiveColumnsHidden, order: state.archiveColumnOrder, cards: state.archiveCardHidden })); } catch { /* Private browsing may disable storage. */ }
@@ -129,7 +129,8 @@
         if (!options.ok || !Array.isArray(options.shops) || !options.defaultScope) return;
         if (!state.savedOptions) {
           state.savedShopKey = options.defaultScope.platform + ":" + options.defaultScope.shopId;
-          state.from = state.to = options.defaultScope.date; state.daysType = "1";
+          state.from = state.to = options.latestDate || options.dates && options.dates.slice().sort().at(-1) || options.defaultScope.date; state.daysType = "1";
+          state.archiveAccountOverview = true;
         }
         state.savedOptions = options;
       } catch { /* Standalone local harnesses can still serve fixed archived data. */ }
@@ -137,15 +138,32 @@
     await savedOptionsPromise;
   }
 
+  function visibleArchiveReports() {
+    var tab = state.tab;
+    if (state.page === 'productOverview' || state.page === 'channelAnalysis' && tab === 'qdfx_goods') return ['shop_goods_page', 'shop_spu_page', 'shop_goods_total', 'shop_spu_total', 'shop_cards_sku', 'shop_cards_spu'];
+    if (state.page === 'productPanorama') return ['shop_goods_page', 'product_overview', 'product_skus', 'product_area', 'product_hour'];
+    if (state.page === 'productOperation') return ['shop_goods_page', 'product_operation', 'product_operation_skus', 'product_operation_area', 'product_operation_hour', 'product_promotion'];
+    var report = { qdzl_pl: 'channel_category', qdzl_rx: 'channel_goods', qdfx_rx: 'channel_goods', qdfx_pl: 'channel_category', qdfx_bqfx: 'channel_labels', qdfx_area: 'channel_area', qdfx_hour: 'channel_hour' }[tab];
+    return ['channel_operating'].concat(report ? [report] : []);
+  }
+
   // The standalone loopback harness exposes archived responses. Reading them must
   // never trigger collection or put single-shop rows into the legacy daily table.
   async function readLocalArchive(refresh) {
     if (!window.location) return;
     await readSavedOptions(refresh);
-    var url = savedUrl("", ""), changed = archiveKey !== url;
+    if (state.savedOptions && state.page === 'channelOverview' && state.archiveAccountOverview) {
+      archivePromise = null; archiveKey = ''; archiveRevision++;
+      state.shop = '全部已存店铺';
+      state.localArchive = { overviewOnly: true, scope: { platform: 'all', shopId: '__all__', shopName: state.shop, from: state.from, to: state.to, date: state.to }, unified: true, collectionScope: state.savedOptions.defaultScope, runtime: 'server', records: {}, products: {}, failures: [], reports: [], extras: {}, periods: {}, cardRecords: {} };
+      return;
+    }
+    var scopeKey = savedUrl('', ''), scopeChanged = archiveScopeKey !== scopeKey;
+    var url = savedUrl('', state.savedOptions ? 'reports=' + encodeURIComponent(visibleArchiveReports().join(',')) : ''), changed = archiveKey !== url;
+    archiveScopeKey = scopeKey;
     if (refresh || changed) { archivePromise = null; archiveKey = url; archiveRevision++; }
     var revision = archiveRevision;
-    if (changed && state.savedOptions) {
+    if (scopeChanged && state.savedOptions) {
       state.archiveGoodsId = state.archiveCard = state.archiveCategory = state.archiveFlag = state.archiveProfit = state.q = state.sortKey = "";
       state.pageNo = 1; state.open = {};
     }
@@ -175,7 +193,7 @@
       }));
       if (revision !== archiveRevision) return;
       var previous = state.localArchive;
-      var products = previous && !refresh && !changed ? previous.products : {};
+      var products = previous && !refresh && !scopeChanged ? previous.products : {};
       if (manifest.selected) {
         products[String(manifest.selected.goodsId)] = {};
         manifest.reports.filter(function (r) { return r.product; }).forEach(function (r) {
@@ -190,7 +208,6 @@
         state.shop = manifest.scope.shopName;
         state.view = "list";
         state.dim = records.shop_spu_page && records.shop_spu_page.length ? "spu" : "sku";
-        if (state.page !== "link") { state.page = "channelAnalysis"; state.tab = "qdfx_jy"; }
         state.pageNo = 1;
       }
       state.shop = manifest.scope.shopName;
@@ -233,14 +250,29 @@
   function fillSavedOverview(root) {
     if (!state.localArchive || state.page !== 'channelOverview' || !state.archiveAccountOverview) return;
     var key = state.from + ':' + state.to, token = active;
-    if (state.archiveOverviewCache[key]) return;
-    state.archiveOverviewCache[key] = { status: 'loading', records: {} };
-    fetch('/api/bound/shop-day/saved/overview?from=' + encodeURIComponent(state.from) + '&to=' + encodeURIComponent(state.to)).then(async function (r) {
+    var entry = state.archiveOverviewCache[key];
+    if (!entry) {
+      entry = state.archiveOverviewCache[key] = { status: 'loading', records: {}, requested: {} };
+      var keys = Object.keys(state.archiveOverviewCache); if (keys.length > 4) delete state.archiveOverviewCache[keys[0]];
+    }
+    var main = { qdzl_fz: 'saved_groups', qdzl_jy: 'saved_operating', qdzl_pl: 'saved_category', qdzl_rx: 'saved_hotgoods' }[state.tab];
+    var needed = main ? ['saved_channels', main] : ['saved_channels', 'saved_shops'];
+    if (!main && state.view === 'period') needed.push('saved_shop_period');
+    var missing = needed.filter(function (id) { return !entry.records[id] && !entry.requested[id]; });
+    if (!missing.length) return;
+    missing.forEach(function (id) { entry.requested[id] = true; }); entry.status = 'loading';
+    var refreshQuery = state.archiveOverviewForce ? '&refresh=1' : ''; state.archiveOverviewForce = false;
+    fetch('/api/bound/shop-day/saved/overview?from=' + encodeURIComponent(state.from) + '&to=' + encodeURIComponent(state.to) + '&reports=' + encodeURIComponent(missing.join(',')) + refreshQuery).then(async function (r) {
       if (!r.ok) throw Error('unavailable');
       var data = await r.json();
       if (!data.ok || !data.scope || data.scope.from + ':' + data.scope.to !== key) throw Error('scope_mismatch');
-      state.archiveOverviewCache[key] = { status: 'ready', records: data.records };
-    }).catch(function () { state.archiveOverviewCache[key] = { status: 'missing', records: {} }; }).finally(function () { if (token === active) paint(root); });
+      Object.keys(data.records || {}).forEach(function (id) {
+        var record = data.records[id], table = record.response && record.response.payload && record.response.payload.data;
+        if (table) { var first = Array.isArray(table) ? table[0] : table; if (!first.columnData) first.columnData = record.rows; }
+        entry.records[id] = record;
+      });
+      entry.status = 'ready';
+    }).catch(function () { entry.status = 'missing'; }).finally(function () { if (token === active && state.archiveOverviewCache[key] === entry) paint(root); });
   }
   function archiveRecords(id) {
     if (/^saved_/.test(id)) {
@@ -265,7 +297,7 @@
   // These GETs read saved reports only. Navigating a page never logs in or calls BI.
   function fillArchiveExtras(root) {
     var archive = state.localArchive, token = active;
-    if (!archive) return;
+    if (!archive || archive.overviewOnly || state.page === 'channelOverview' && state.archiveAccountOverview) return;
     var ids = ['channelOverview', 'channelAnalysis'].includes(state.page) ? ['channel_shop_table'] : state.page === 'channelAnalysisNew' ? ['key_graph'] : ['productOverview', 'channelAnalysis'].includes(state.page) && state.view === 'period' ? [state.page === 'productOverview' && state.dim === 'spu' ? 'shop_spu_period' : 'shop_goods_period'] : [];
     if (state.page === 'channelAnalysis' && state.view === 'period') ids.push('shop_goods_period');
     if (state.page === 'channelAnalysisNew' && archiveRecords('key_graph').length) ids.push(state.tab === 'qd_gjzbfx_dpck' ? 'key_shops' : 'key_goods');
@@ -593,7 +625,7 @@
         note: key === 'realTimeGmv' ? '实时指标，不按所选日期累加；未保存时留空' : key === 'profit' && !product && state.page !== 'productOverview' ? '店铺利润已扣自定义费用' : '保留来源表值' };
     }) : [];
     var message = !validRange ? "当前选择范围未采集。已保存的数据仅覆盖 " + scope.date + "，未采数据不计为 0。" : !id ? "这个页面本轮尚未采集。请查看渠道详情、商品总览或商品全景分析。" : !available ? "这张表尚未采集或档案读取失败。请点击刷新已采数据重试。" : !complete ? "商品分页不完整，暂不显示商品合计指标。" : partial ? "以下为已保存的部分明细，不代表全部记录。" : unavailableCard ? "已取得此卡片的数量与规则，但分类明细尚未核验，暂不显示商品列表。选择“全部”可返回。" : total === 0 ? (q || state.archiveCard || state.archiveCategory || state.archiveFlag || state.archiveProfit || Object.values(filters).some(function (f) { return f.value !== ""; }) ? "没有匹配的记录。" : "接口已采集完成，返回 0 条记录。") : "";
-    if (account) {
+    if (account && !available) {
       var overviewState = state.archiveOverviewCache[state.from + ':' + state.to];
       if (!overviewState || overviewState.status === 'loading') message = '正在读取全部店铺数据…';
       else if (overviewState.status === 'missing') message = '全部店铺数据读取失败，请点击“刷新已采数据”重试。';
@@ -1024,7 +1056,7 @@
       '<div class="bd-sum">当前表 ' + esc(data.total) + ' 条' + (data.goods && data.complete && data.coverage.status === "ready" ? ' · 全店商品分页已收齐' : '') + ' · 表格筛选不改变上方指标范围</div>' +
       '<div class="bd-pager"><select data-act="archive-page-size" aria-label="每页条数">' + [20, 50, 100].map(function (n) { return '<option value="' + n + '"' + (data.pageSize === n ? ' selected' : '') + '>' + n + ' 条/页</option>'; }).join('') + '</select><button type="button" data-act="page-no" data-delta="-1"' + (data.pageNo <= 1 ? " disabled" : "") + '>上一页</button><span>第 ' + data.pageNo + ' / ' + Math.max(1, Math.ceil(data.total / data.pageSize)) + ' 页</span><button type="button" data-act="page-no" data-delta="1"' + (data.pageNo * data.pageSize >= data.total ? " disabled" : "") + '>下一页</button></div></section>';
     return '<section class="bd-main" data-bound-erp="false" data-local-archive="true" data-page="' + esc(data.page.id) + '">' +
-      '<header class="bd-head"><div><h1>' + esc(data.page.label) + '</h1><p class="bd-sub">' + (state.localArchive.runtime === 'server' ? '服务器' : '本机') + '已采数据 · ' + esc(scope.platform) + ' · ' + esc(scope.shopName) + '</p></div><div class="bd-filters">' + shopPicker + renderDateBar(data) + '<button type="button" data-act="archive-date">单日 ' + esc(scope.date) + '</button></div></header>' +
+      '<header class="bd-head"><div><h1>' + esc(data.page.label) + '</h1><p class="bd-sub">' + (state.localArchive.runtime === 'server' ? '服务器' : '本机') + '已采数据 · ' + esc(scope.platform) + ' · ' + esc(scope.shopName) + '</p></div><div class="bd-filters">' + shopPicker + renderDateBar(data) + '</div></header>' +
       '<div class="bd-archive-progress"><span data-archive-progress>' + esc(archiveRunText()) + '</span><button type="button" data-act="archive-refresh"' + (state.archiveRefreshBusy ? ' disabled' : '') + '>' + (state.archiveRefreshBusy ? '正在刷新…' : '刷新已采数据') + '</button></div>' + selectProduct +
       (state.error ? '<p class="bd-banner" role="alert">' + esc(state.error) + '</p>' : '') +
       (state.localArchive.failures.length ? '<p class="bd-banner">部分档案读取失败：' + esc(state.localArchive.failures.join("、")) + '</p>' : '') +
@@ -2362,13 +2394,11 @@
   async function load(root, token) {
     var revision = ++loadRevision;
     state.error = "";
-    var stamp = await fetch("/api/bound");
-    await readLocalArchive();
-    await readArchiveProduct();
+    var metadataPromise = Promise.all([state.catalog ? { ok: true } : fetch('/api/bound'), state.catalog ? null : fetch('/api/bound/catalog'), state.linkChecked && state.page !== 'link' ? null : fetch('/api/bound/link')]);
+    await readLocalArchive(); await readArchiveProduct();
+    var metadata = await metadataPromise, stamp = metadata[0], catalog = metadata[1], link = metadata[2];
     if (token !== active || revision !== loadRevision) return;
     var view = state.page === "link" || state.localArchive ? null : await fetch("/api/bound/view?" + queryString());
-    var catalog = state.catalog ? null : await fetch("/api/bound/catalog");
-    var link = await fetch("/api/bound/link");
     var progress = state.page === "link" ? await fetch("/api/bound/progress") : null;
     if (token !== active || revision !== loadRevision) {
       return;
@@ -2398,8 +2428,7 @@
       state.viewData = null;
       state.error = "这一页没有读到";
     }
-    state.admin = link.ok;
-    state.link = link.ok ? await link.json() : null;
+    if (link) { state.admin = link.ok; state.link = link.ok ? await link.json() : null; state.linkChecked = true; }
     if (state.page === "link" && state.admin) {
       try { var batchResponse = await fetch("/api/bound/shop-day/batch"); if (batchResponse.ok) state.batchRun = (await batchResponse.json()).run; } catch { /* Existing saved data remains readable. */ }
       try {
@@ -2539,7 +2568,7 @@
           state.error = "";
           state.archiveRefreshBusy = true;
           paint(root);
-          state.archiveOverviewCache = {}; state.archiveAnnotations = {};
+          state.archiveOverviewCache = {}; state.archiveOverviewForce = true; state.archiveAnnotations = {};
           readLocalArchive(true).then(readArchiveProduct).then(readArchiveCard).finally(function () { state.archiveRefreshBusy = false; if (token === active) paint(root); });
           return;
         }
@@ -3062,6 +3091,10 @@
   window.XmModules["/bound"] = {
     mount: function (root) {
       var token = ++active;
+      state.page = 'channelOverview'; state.tab = ''; state.from = state.to = state.shop = state.q = ''; state.view = 'list'; state.daysType = '1'; state.pageNo = 1;
+      state.archiveCard = state.archiveCategory = state.archiveFlag = state.archiveProfit = state.archiveChannelFilter = state.sortKey = state.panel = state.datePop = '';
+      state.localArchive = null; state.savedOptions = null; state.archiveAccountOverview = false; state.archiveOverviewCache = {}; state.linkChecked = false;
+      savedOptionsPromise = archivePromise = null; archiveKey = archiveScopeKey = ''; archiveRevision++;
       state.loginEditing = false;
       if (!state.autoReloginBusy) { state.autoReloginChoice = null; state.autoReloginMessage = ""; }
       var initialProbeDate = new URLSearchParams(window.location && window.location.search || "").get("probeDate");

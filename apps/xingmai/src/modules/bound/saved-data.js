@@ -73,22 +73,22 @@ export function createSavedData({ collector, readSheets = listSheets, readHeads 
     }
     const archivedScopes = await readScopes();
     for (const scope of archivedScopes) shops.set(scope.platform + ":" + scope.shopId, { platform: scope.platform, shopId: scope.shopId, shopName: scope.shopName });
-    const value = { ok: true, shops: [...shops.values()], dates: [...new Set([...dates, SHOP_DAY.date, ...archivedScopes.map(s => s.date)])].sort(), startOn: START_ON, defaultScope: SHOP_DAY };
+    const value = { ok: true, shops: [...shops.values()], dates: [...new Set([...dates, SHOP_DAY.date, ...archivedScopes.map(s => s.date)])].sort(), latestDate: latest || SHOP_DAY.date, startOn: START_ON, defaultScope: SHOP_DAY };
     optionsCache = { at: Date.now(), value }; return value;
   }
-  async function bundle(scope) {
-    const key = JSON.stringify([scope.from, scope.to]);
+  async function bundle(scope, reportIds = sourceIds) {
+    const key = JSON.stringify([scope.from, scope.to, reportIds]);
     const old = cache.get(key);
     if (old && Date.now() - old.at < 15000) return old.value;
-    const sheets = await readSheets({ reportIds: sourceIds, from: scope.from, to: scope.to });
+    const sheets = await readSheets({ reportIds, from: scope.from, to: scope.to });
     const value = sheets.filter(s => s.status === "done" && s.pageNo > 0);
-    cache.set(key, { at: Date.now(), value }); if (cache.size > 2) cache.delete(cache.keys().next().value);
+    cache.set(key, { at: Date.now(), value }); if (cache.size > 6) cache.delete(cache.keys().next().value);
     return value;
   }
   async function baseRecord(scope, input) {
     const mapping = mappings[input.reportId];
     if (!mapping || input.page && Number(input.page) !== 1 || ["cardId", "goodsId", "categoryPath", "planId", "promoteKey", "trendDays"].some(k => input[k] != null)) return null;
-    const sheets = await bundle(scope);
+    const sheets = await bundle(scope, mapping);
     for (const sourceId of mapping) {
       const dim = sourceId === "sp_zl_list" ? input.reportId === "shop_spu_page" ? "spu" : "sku" : "all";
       const found = sheets.filter(s => s.reportId === sourceId && s.dim === dim && s.startOn === scope.from && s.endOn === scope.to).sort((a, b) => a.pageNo - b.pageNo);
@@ -125,7 +125,7 @@ export function createSavedData({ collector, readSheets = listSheets, readHeads 
     if (prior && Date.now() - prior.at < 15000) return prior.value;
     const work = (async () => {
       const all = scope.shopId === '__all__', entries = new Map(), conflicts = new Set(), metadata = [];
-      const sheets = await bundle(scope);
+      const sheets = await bundle(scope, mappings[input.reportId]);
       const identity = row => reportIdentity(input.reportId, row);
       // Lower-priority legacy reports are read first. A report never contributes
       // twice to the same shop/entity/day; contradictory duplicates are omitted.
@@ -258,6 +258,8 @@ export function createSavedData({ collector, readSheets = listSheets, readHeads 
   }
   async function manifest(query = {}) {
     const scope = savedScope(query); if (!scope) return { ok: false, statusCode: 400, reason: "invalid_scope" };
+    const wanted = query.reports == null ? null : new Set(String(query.reports).split(','));
+    if (wanted && [...wanted].some(id => !DAY_REPORTS.some(r => r.id === id))) return { ok: false, statusCode: 400, reason: 'invalid_reports' };
     const available = await options();
     const shop = scope.shopId === '__all__' ? scope : available.shops.find(s => s.shopId === scope.shopId && s.platform === scope.platform);
     if (!shop) return { ok: false, statusCode: 400, reason: "unknown_shop" };
@@ -265,19 +267,20 @@ export function createSavedData({ collector, readSheets = listSheets, readHeads 
     const fixed = scope.platform === SHOP_DAY.platform && scope.shopId === SHOP_DAY.shopId && scope.from === SHOP_DAY.date && scope.to === SHOP_DAY.date;
     if (fixed) {
       const status = await collector.status(); delete status.directory;
+      if (wanted) status.reports = status.reports.filter(r => wanted.has(r.id));
       return { ...status, runtime: "server", unified: true, scope, collectionScope: SHOP_DAY, fourPageRun: await readRun() };
     }
     const archiveCollector = scope.from === scope.to && scope.shopId !== '__all__' ? scopedCollector(scope) : null;
     const archived = archiveCollector ? await archiveCollector.status() : null;
     const reports = [];
-    for (const report of DAY_REPORTS.filter(r => !r.manual)) {
+    for (const report of DAY_REPORTS.filter(r => !r.manual && (!wanted || wanted.has(r.id)))) {
       const prior = archived?.reports.find(r => r.id === report.id);
       if (prior?.pages.length) { reports.push(prior); continue; }
       const result = await record({ ...scope, reportId: report.id });
       const r = result.record;
       reports.push({ id: report.id, label: report.label, product: !!report.product, status: r?.status || "not_collected", pages: r ? [{ page: 1, status: r.status, matchedRows: r.rows.length, completeness: r.completeness }] : [] });
     }
-    const goods = (await baseRecord(scope, { reportId: "shop_goods_page" }))?.rows || [];
+    const goods = !wanted || wanted.has('shop_goods_page') ? (await baseRecord(scope, { reportId: "shop_goods_page" }))?.rows || [] : [];
     return { ok: true, runtime: "server", unified: true, scope, collectionScope: SHOP_DAY, selected: null, reports,
       inventory: archived?.inventory.complete ? archived.inventory : { complete: false, items: goods.map(r => ({ goodsId: String(r.goodsId), spuid: String(r.spuid || ""), goodsName: r.goodsName || "", gmv: r.gmv })) }, exclusions: [], run: null };
   }
