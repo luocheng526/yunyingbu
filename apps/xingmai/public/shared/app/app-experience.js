@@ -4,6 +4,7 @@
   if (window.__xmAppExperience) return;
   window.__xmAppExperience = true;
   var ASSET = "glass-20261123-1";
+  var WINDOWS_APP = "https://github.com/luocheng526/yunyingbu/releases/download/desktop-v0.2.0/ZhenxuanFuture-0.2.0-win-x64.exe";
   var root = document.documentElement;
   var query = new URLSearchParams(location.search);
   var standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
@@ -122,7 +123,7 @@
     ios: { label: "iPhone / iPad", steps: ["使用 Safari 打开本网站并登录。", "点分享按钮，选择“添加到主屏幕”。", "如有“作为网页 App 打开”，将它开启，再点“添加”。"] },
     android: { label: "安卓", steps: ["使用 Chrome 或支持安装应用的浏览器打开本网站并登录。", "点“立即安装”；若未出现按钮，打开浏览器菜单，选择“安装应用”或“添加到主屏幕”。", "安装后，从手机桌面打开星脉甄选。"] },
     mac: { label: "Mac", steps: ["在 macOS Sonoma 14 或更新版本中，用 Safari 打开本网站并登录。", "打开 Safari 的“文件”菜单或分享菜单，选择“添加到程序坞”。", "也可使用 Chrome / Edge 的安装应用功能。"] },
-    windows: { label: "Windows", steps: ["使用 Edge 或 Chrome 打开本网站并登录。", "点“立即安装”，或使用地址栏的安装图标；Edge 也可在菜单中选择“应用”并安装此站点。", "安装后可以从开始菜单打开，并固定到任务栏。"] }
+    windows: { label: "Windows", steps: ["点击下方“下载 Windows App”，保存到电脑。", "双击下载的 EXE 即可打开，使用原网站账号登录。", "可将左侧菜单拖入底部快捷栏，拖动排序，右键移除。Windows 11 22H2 及以上支持真实桌面玻璃效果。"] }
   };
   var selectedPlatform = platform();
 
@@ -149,11 +150,21 @@
     var status = document.createElement("p");
     status.className = "xg-install-status";
     status.setAttribute("role", "status");
-    status.textContent = isLogin ? "请先使用原网站账号登录，再完成安装。" : "与网站共用账号、权限和数据。业务操作需要联网。";
+    status.textContent = selectedPlatform === "windows" ? "Windows 独立版 · 免安装 · 与网站共用账号、权限和数据，使用时需要联网。" : (isLogin ? "请先使用原网站账号登录，再完成安装。" : "当前提供网页版 App，与网站共用账号、权限和数据。业务操作需要联网。");
     body.appendChild(status);
     var actions = document.createElement("div");
     actions.className = "xg-install-actions";
-    if (installPrompt && !isLogin && selectedPlatform === platform()) {
+    if (selectedPlatform === "windows") {
+      var download = document.createElement("a");
+      download.className = "xg-button xg-button-primary";
+      download.href = WINDOWS_APP;
+      download.target = "_blank";
+      download.rel = "noopener noreferrer";
+      download.textContent = "下载 Windows App";
+      download.style.textDecoration = "none";
+      actions.appendChild(download);
+    }
+    if (installPrompt && !isLogin && selectedPlatform === platform() && selectedPlatform !== "windows") {
       var install = makeButton("立即安装", "xg-button xg-button-primary");
       install.dataset.installNative = "1";
       install.addEventListener("click", async function () {
@@ -170,7 +181,7 @@
       });
       actions.appendChild(install);
     }
-    var preview = makeButton(enabled ? "进入 App 界面" : "体验 App 界面", "xg-button xg-button-primary");
+    var preview = makeButton(selectedPlatform === "windows" ? "预览网页版界面" : (enabled ? "进入 App 界面" : "体验 App 界面"), selectedPlatform === "windows" ? "xg-button" : "xg-button xg-button-primary");
     preview.addEventListener("click", function () { setMode(true); dialog.close(); if (isLogin) document.querySelector("#username")?.focus(); });
     actions.appendChild(preview);
     if (enabled && !standalone) {
