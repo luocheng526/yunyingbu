@@ -92,6 +92,14 @@ html.xm-glass .xm-hm-table{font-size:13px;background:#fff5}
 html.xm-glass .xm-hm-table th{background:#f0eee4;color:#63705e}
 html.xm-glass .xm-hm-table td{border-color:#84987918}
 html.xm-glass .xm-hm-note{font-size:12px;color:#74816c}
+/* Floating data must cover the dashboard underneath, including styles injected
+   by the home module after this stylesheet has loaded. */
+html.xm-glass :is(.xm-hm-sales-tip,.xm-hm-tip,.xm-hm-head-pop,.xm-hm-pop){
+  --xm-card:#fff;--xm-ink:#29362e;--xm-muted:#59685e;--xm-line:#dce3dd;
+  background:#fff;color:var(--xm-ink);border-color:var(--xm-line);
+  box-shadow:0 12px 36px #23352c26;opacity:1;
+  backdrop-filter:none;-webkit-backdrop-filter:none;
+}
 /* Shared business UI: departments, reports, people, courses, releases and profiles. */
 html.xm-glass .xm-ui-scope{
   --xm-ui-bg:transparent;--xm-ui-surface:rgba(255,255,250,.69);--xm-ui-surface-soft:rgba(239,237,226,.7);
