@@ -123,9 +123,9 @@ test("week-report route and png shot", async () => {
       body: Buffer.from("png-bytes")
     });
     const sent = await send.json();
-    assert.equal(sent.ok, true);
-    assert.equal(sent.sent, false);
-    assert.match(String(sent.error || ""), /钉钉/);
+    assert.equal(send.status, 401);
+    assert.equal(sent.ok, false);
+    assert.match(sent.error, /登录/);
   } finally {
     resetWeekStore();
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));

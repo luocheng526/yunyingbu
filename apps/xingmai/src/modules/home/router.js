@@ -1,4 +1,4 @@
-import { Router, raw } from "express";
+import { Router } from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,11 +26,13 @@ import {
   buildWeekPack,
   saveWeekCells,
   dingWebhook,
-  saveWeekShot,
   getWeekShot,
-  postDingTalk,
   readWeekStore
 } from "./week-report.js";
+
+import { registerWeekManagement } from "./week-management.js";
+import { reportRevision, publicHistoryImage } from "./week-history.js";
+import { wpsEnabled } from "./week-storage.js";
 
 const homeJsPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -744,64 +746,35 @@ export function homeRouter(deps = {}) {
     res.json({ ok: true, module: "home", stamp: HOME_JS_STAMP });
   });
 
+  async function currentWeekPack(req) {
+    if (wpsEnabled()) return buildWeekPack([]);
+    try { const live = await getHomeLocalPaid(req); return buildWeekPack(live?.records || []); }
+    catch { return buildWeekPack([]); }
+  }
   router.get("/week-report", async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
-    try {
-      const live = await getHomeLocalPaid(req);
-      return res.json(buildWeekPack((live && live.records) || []));
-    } catch {
-      return res.json(buildWeekPack([]));
-    }
+    const pack = await currentWeekPack(req);
+    res.json({ ...pack, revision: reportRevision(pack) });
   });
+  registerWeekManagement(router, { getPack: currentWeekPack });
 
   router.post("/week-report", (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "webhook")) return res.status(403).json({ ok: false, error: "请由管理员通过钉钉配置入口保存机器人" });
+    if (wpsEnabled() && req.body?.cells) {
+      return res.status(409).json({ ok: false, error: "WPS 同步数据请在原表修改" });
+    }
     const saved = saveWeekCells(req.body || {});
     return res.json({ ok: true, updatedAt: saved.updatedAt, dingReady: Boolean(saved.webhook || dingWebhook()) });
   });
 
   router.get("/week-shot/:id.png", (req, res) => {
-    const buf = getWeekShot(req.params.id);
+    const buf = getWeekShot(req.params.id) || publicHistoryImage(req.params.id);
     if (!buf) {
       return res.status(404).type("text").send("gone");
     }
     res.setHeader("Cache-Control", "public, max-age=600");
     res.type("png").send(buf);
-  });
-
-  router.post("/week-send", raw({ type: "application/octet-stream", limit: "12mb" }), async (req, res) => {
-    res.setHeader("Cache-Control", "private, no-store");
-    const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || []);
-    if (!buf.length) {
-      return res.status(400).json({ ok: false, error: "没有图片" });
-    }
-    const id = saveWeekShot(buf);
-    const host = String(req.get("x-forwarded-host") || req.get("host") || "").split(",")[0].trim();
-    const proto = String(req.get("x-forwarded-proto") || req.protocol || "https")
-      .split(",")[0]
-      .trim();
-    const picUrl = host ? `${proto}://${host}/api/home/week-shot/${id}.png` : "";
-    const hook = dingWebhook();
-    if (!hook) {
-      return res.json({
-        ok: true,
-        sent: false,
-        shot: id,
-        picUrl,
-        error: "表已出图。到本页填钉钉机器人 webhook 后再发。"
-      });
-    }
-    try {
-      const ding = await postDingTalk({
-        webhook: hook,
-        title: "近七天业绩汇总",
-        text: `甄选五倍业绩统计 ${shanghaiNow()}`,
-        picUrl
-      });
-      return res.json({ ok: ding.ok, sent: ding.ok, shot: id, picUrl, error: ding.error || "" });
-    } catch (err) {
-      return res.status(502).json({ ok: false, sent: false, shot: id, picUrl, error: err.message || "钉钉发送失败" });
-    }
   });
 
   router.get("/week-ding", (_req, res) => {

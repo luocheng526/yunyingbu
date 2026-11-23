@@ -4,9 +4,8 @@
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
-    { key: "live", label: "实时" },
     { key: "week", label: "近七天业绩汇总" },
-    { key: "live2", label: "实时（新版）" }
+    { key: "live2", label: "实时" }
   ];
   var OVERVIEW_PANES = [
     { key: "team", label: "经理团队", tone: "teal", hint: "经营团队" },
@@ -1137,6 +1136,10 @@
   }
   function weekTableHtml(pack) {
     var columns = (pack && pack.columns) || [];
+    var tableWidth = columns.reduce(function (total, col) { return total + (col.w || 70); }, 0);
+    var colGroup = '<colgroup>' + columns.map(function (col) {
+      return '<col style="width:' + (col.w || 70) + 'px" />';
+    }).join('') + '</colgroup>';
     var left = 0;
     var sticky = {};
     columns.forEach(function (col, i) {
@@ -1152,9 +1155,9 @@
         escapeHtml(col.group || "ops") +
         '"' +
         (stick != null ? ' style="position:sticky;left:' + stick + "px;z-index:2;min-width:" + (col.w || 70) + "px;width:" + (col.w || 70) + 'px"' : ' style="min-width:' + (col.w || 70) + "px;width:" + (col.w || 70) + 'px"') +
-        ">" +
+        '><div class="xm-hm-week-label" title="' + escapeHtml(col.label) + '">' +
         escapeHtml(col.label) +
-        "</th>"
+        "</div></th>"
       );
     }
     function bodyCell(teamKey, row, col) {
@@ -1164,8 +1167,8 @@
       var val = row.cells && row.cells[col.key] != null ? row.cells[col.key] : "";
       var show = col.key === "shop" ? escapeHtml(row.shop || val || "") : escapeHtml(weekCellText(val));
       var inner =
-        col.key === "shop"
-          ? show
+        pack.historical || col.key === "shop" || row.source === "wps"
+          ? '<span class="xm-hm-week-value" title="' + show + '">' + show + '</span>'
           : '<input data-week-cell="' +
             escapeHtml(teamKey) +
             "|" +
@@ -1179,19 +1182,21 @@
         '<td class="' +
         cls +
         '"' +
-        (stick != null ? ' style="position:sticky;left:' + stick + "px;z-index:1;background:inherit\"" : "") +
+        (stick != null ? ' style="position:sticky;left:' + stick + 'px;z-index:1"' : "") +
         ">" +
         inner +
         "</td>"
       );
     }
-    function footCell(kind, col, label) {
-      if (col.key === "shop") {
-        return '<td class="is-' + kind + '">' + escapeHtml(label) + "</td>";
-      }
-      return '<td class="is-' + kind + '"></td>';
+    function footCell(kind, col, label, cells) {
+      var text = escapeHtml(col.key === "shop" ? label : weekCellText(cells && cells[col.key]));
+      var stick = sticky[col.key];
+      return '<td class="is-' + kind + '"' +
+        (stick != null ? ' style="position:sticky;left:' + stick + 'px;z-index:1"' : '') +
+        '><span class="xm-hm-week-value" title="' + text + '">' + text + '</span></td>';
     }
-    var teams = ((pack && pack.teams) || []).map(function (team) {
+    var displayTeams = ((pack && pack.teams) || []).concat(pack && pack.grandSummary ? [pack.grandSummary] : []);
+    var teams = displayTeams.map(function (team) {
       var kpis = (team.kpis || [])
         .map(function (item) {
           return "<span>" + escapeHtml(item.label) + "<b>" + escapeHtml(weekCellText(item.value)) + "</b></span>";
@@ -1216,23 +1221,36 @@
             '<tr class="xm-hm-week-foot">' +
             columns
               .map(function (col) {
-                return footCell(item.kind || "fine", col, item.label);
+                return footCell(item.kind || "fine", col, item.label, item.cells);
               })
               .join("") +
             "</tr>"
           );
         })
         .join("");
+      var syncInfo = "";
+      if (team.sync) {
+        var counts = team.sync.counts;
+        syncInfo = '<div class="xm-hm-week-sync">' + escapeHtml(team.sync.status) +
+          (counts ? ' · 已同步 ' + counts.synced + '/' + counts.expected + ' 家 · 待登记 ' + counts.pending + ' 家' : '') +
+          (team.sync.fetchedAt ? ' · 读取时间 ' + escapeHtml(new Date(team.sync.fetchedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })) : '') +
+          ((team.sync.pending || []).length ? '<div>待登记：' + escapeHtml(team.sync.pending.map(function (r) { return r.shop; }).join('、')) + '</div>' : '') +
+          ((team.sync.issues || []).length ? '<details><summary>原表异常或尚未接入的图片：' + team.sync.issues.length + ' 项</summary>' +
+            team.sync.issues.map(function (i) { return '<div>' + escapeHtml(i.shop + ' / ' + i.column + '：' + i.value) + '</div>'; }).join('') + '</details>' : '') + '</div>';
+      }
+      if (team.note) syncInfo += '<div class="xm-hm-week-sync">' + escapeHtml(team.note) + '</div>';
+      var sourceSummary = (team.sourceSummary || []).length ? '<div class="xm-hm-week-summary"><b>原表汇总</b>' + team.sourceSummary.map(function (item) {
+        return '<span>' + escapeHtml(item.label) + '<strong>' + escapeHtml(weekCellText(item.value)) + '</strong></span>';
+      }).join('') + '</div>' : '';
       return (
         '<section class="xm-hm-week-team"><div class="xm-hm-week-head"><span>' +
         escapeHtml(team.totalLabel || team.label) +
         '</span><div class="xm-hm-week-kpis">' +
         kpis +
-        '</div><button type="button" class="is-ghost" data-week-add="' +
+        '</div><button type="button" class="is-ghost" ' + (team.readonly || pack.historical ? 'hidden ' : '') + 'data-week-add="' +
         escapeHtml(team.key) +
-        '">加一行</button></div><table class="xm-hm-week-table"><thead><tr>' +
-        columns.map(headCell).join("") +
-        "</tr></thead><tbody>" +
+        '">加一行</button></div>' + syncInfo + sourceSummary + '<table class="xm-hm-week-table"' + (team.isSummary ? ' data-week-grand-summary' : '') + ' style="width:' + tableWidth + 'px;min-width:' + tableWidth + 'px;max-width:' + tableWidth + 'px">' + colGroup +
+        (team.isSummary ? '' : '<thead><tr>' + columns.map(headCell).join('') + '</tr></thead>') + '<tbody>' +
         rows +
         foot +
         "</tbody></table></section>"
@@ -1241,8 +1259,8 @@
     return (
       '<div class="xm-hm-week-bar"><div><h2>' +
       escapeHtml((pack && pack.title) || "甄选五倍业绩统计") +
-      "</h2><p>表头按原五倍表。店铺和当天成交/花费先接韩梦凯实时付费、沈子晗付费中心；其余格子可手填，保存到服务器。点一键发送图片生成大图发钉钉。</p></div><span><input data-week-hook placeholder=\"钉钉机器人 webhook\" /><button type=\"button\" data-week-hook-save>保存机器人</button><button type=\"button\" data-week-send>" +
-      (weekSending ? "发送中…" : "一键发送图片") +
+      "</h2><p>" + escapeHtml(pack.note || "表头按原五倍表。店铺和当天成交/花费先接韩梦凯实时付费、沈子晗付费中心；其余格子可手填，保存到服务器。发送时保存表格和图片。") + "</p></div><span style=\"" + (pack.historical ? "display:none" : "") + "\"><button type=\"button\" data-week-wps>WPS 配置</button><button type=\"button\" data-week-ding-config>钉钉配置</button><button type=\"button\" data-week-history>历史数据</button><button type=\"button\" data-week-preview>预览图片</button><button type=\"button\" data-week-send " + (pack.source === "wps" && (pack.sync.testOnly || !pack.readyToSend) ? 'disabled title="本地测试或数据尚未完整"' : '') + ">" +
+      (weekSending ? "发送中…" : "发送图片") +
       "</button></span></div>" +
       teams.join("")
     );
@@ -1251,7 +1269,7 @@
   function drawWeekPng(pack) {
     return new Promise(function (resolve, reject) {
       var columns = (pack && pack.columns) || [];
-      var teams = (pack && pack.teams) || [];
+      var teams = ((pack && pack.teams) || []).concat(pack && pack.grandSummary ? [pack.grandSummary] : []);
       if (!columns.length) {
         reject(new Error("没有表头"));
         return;
@@ -1267,7 +1285,7 @@
       });
       var height = 8;
       teams.forEach(function (team) {
-        height += titleH + headH + ((team.rows || []).length + (team.foot || []).length) * rowH + teamGap;
+        height += titleH + ((team.sourceSummary || []).length ? rowH : 0) + (team.isSummary ? 0 : headH) + ((team.rows || []).length + (team.foot || []).length) * rowH + teamGap;
       });
       var canvas = document.createElement("canvas");
       canvas.width = Math.max(width, 800) * scale;
@@ -1316,12 +1334,24 @@
         ctx.fillStyle = "#111";
         ctx.font = 'bold 16px "Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
         ctx.textAlign = "left";
-        ctx.fillText((team.totalLabel || team.label || "") + "  " + (pack.title || ""), 10, y + titleH / 2);
+        ctx.fillText((team.totalLabel || team.label || "") + "  " + (pack.title || "") +
+          (team.isSummary ? " · 已同步 " + (team.kpis[0] && team.kpis[0].value || 0) + " 家" + (team.complete ? "" : " · " + (team.statusText || "分类汇总尚未完整")) : "") +
+          (team.sync ? " · 登记 " + (pack.registrationDate || pack.ymd) + " · " + team.sync.status +
+            (team.sync.counts ? " " + team.sync.counts.synced + "/" + team.sync.counts.expected + " 家 · 异常/图片 " + team.sync.counts.issues + " 项" : "") : ""), 10, y + titleH / 2);
         y += titleH;
+        if ((team.sourceSummary || []).length) {
+          ctx.fillStyle = "#fff6c2";
+          ctx.fillRect(0, y, width, rowH);
+          ctx.fillStyle = "#111";
+          ctx.font = '12px "Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
+          ctx.textAlign = "left";
+          ctx.fillText("原表汇总  " + team.sourceSummary.map(function (item) { return item.label + " " + weekCellText(item.value); }).join("    "), 10, y + rowH / 2);
+          y += rowH;
+        }
         var x = 0;
         ctx.font = 'bold 11px "Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
         ctx.textAlign = "center";
-        columns.forEach(function (col) {
+        if (!team.isSummary) columns.forEach(function (col) {
           var w = col.w || 70;
           ctx.fillStyle = fillHead(col.group);
           ctx.fillRect(x, y, w, headH);
@@ -1334,7 +1364,7 @@
           });
           x += w;
         });
-        y += headH;
+        if (!team.isSummary) y += headH;
         function drawWeekRow(cells, shop, kind) {
           var x0 = 0;
           columns.forEach(function (col) {
@@ -1344,7 +1374,7 @@
             if (kind === "fine") {
               bg = "#ffff00";
             } else if (kind === "noclean") {
-              bg = "#5b9bd5";
+              bg = "#00b0f0";
             } else if (kind === "clean") {
               bg = "#00b050";
             } else if (gmv === "is-up") {
@@ -1360,13 +1390,23 @@
             ctx.fillRect(x0, y, w, rowH);
             ctx.strokeStyle = "#333";
             ctx.strokeRect(x0, y, w, rowH);
-            ctx.fillStyle = bg === "#00b050" || bg === "#ff0000" || bg === "#5b9bd5" ? "#fff" : "#111";
+            ctx.fillStyle = bg === "#00b050" || bg === "#ff0000" ? "#fff" : "#111";
             ctx.font = '11px "Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
             var text = col.key === "shop" ? shop || cells.shop || (kind ? cells.label : "") : weekCellText(cells[col.key]);
             if (kind && col.key === "shop") {
               text = cells.label || "";
             }
-            ctx.fillText(String(text || ""), x0 + w / 2, y + rowH / 2);
+            var fitted = String(text == null ? "" : text);
+            if (ctx.measureText(fitted).width > w - 8) {
+              while (fitted && ctx.measureText(fitted + "…").width > w - 8) fitted = fitted.slice(0, -1);
+              fitted += "…";
+            }
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x0 + 2, y + 1, w - 4, rowH - 2);
+            ctx.clip();
+            ctx.fillText(fitted, x0 + w / 2, y + rowH / 2);
+            ctx.restore();
             x0 += w;
           });
           y += rowH;
@@ -1375,7 +1415,7 @@
           drawWeekRow(row.cells || {}, row.shop, "");
         });
         (team.foot || []).forEach(function (item) {
-          drawWeekRow({ label: item.label }, "", item.kind);
+          drawWeekRow(Object.assign({}, item.cells || {}, { label: item.label }), "", item.kind);
         });
         y += teamGap;
       });
@@ -1388,6 +1428,251 @@
       }, "image/png");
     });
   }
+  async function weekRequest(url, body) {
+    var response = await fetch(url, { credentials: "same-origin", method: body === undefined ? "GET" : "POST",
+      headers: { "Accept": "application/json", "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+    var data = await response.json();
+    if (!response.ok || data.ok === false) throw new Error(data.error || "操作失败，请重试");
+    return data;
+  }
+  function weekDialog(title) {
+    var dialog = document.createElement("dialog");
+    dialog.className = "xm-hm-week-dialog";
+    dialog.innerHTML = '<header><div><small>甄选未来 · 业绩报表</small><h2>' + escapeHtml(title) + '</h2></div><button type="button" data-dialog-close aria-label="关闭">×</button></header><div data-dialog-content></div>';
+    document.body.appendChild(dialog);
+    dialog.querySelector("[data-dialog-close]").onclick = function () { dialog.close(); };
+    dialog.addEventListener("close", function () { dialog.remove(); }, { once: true });
+    dialog.showModal();
+    return dialog;
+  }
+  function weekNotice(box, message, error) {
+    box.textContent = message;
+    box.className = "xm-hm-week-notice" + (error ? " is-error" : "");
+  }
+  var weekDingLabels = { group: "群机器人 Webhook", notice: "应用工作通知", bot: "应用机器人单聊" };
+  async function openWeekDing() {
+    var dialog = weekDialog("钉钉配置"), content = dialog.querySelector("[data-dialog-content]");
+    content.innerHTML = '<p role="status">正在读取配置…</p>';
+    try {
+      var data = await weekRequest("/api/home/week-ding/config"), config = data.config;
+      if (!dialog.isConnected) return;
+      function field(key, title, value, placeholder, password) {
+        return '<label>' + title + '<input data-ding-field="' + key + '" type="' + (password ? 'password' : 'text') + '" autocomplete="off" value="' + escapeHtml(value || '') + '" placeholder="' + escapeHtml(placeholder || '') + '" /></label>';
+      }
+      function form(channel) {
+        var c = config[channel];
+        var heading = channel === 'group' ? '发送到指定钉钉群' : channel === 'notice' ? '发送到指定员工的工作通知' : '发送到员工与机器人的单聊窗口';
+        var help = channel === 'group' ? '在钉钉群设置中添加自定义机器人，复制 Webhook；如果启用了加签或关键词，请一并填写。' :
+          channel === 'notice' ? '可使用你现有的「甄选智能人事」应用。在钉钉开发者后台打开该应用，获取 Client ID / AppKey、Client Secret / AppSecret 和 AgentId，开通工作通知权限并确认接收人在应用可见范围内。' :
+          '在钉钉开发者后台为应用开启机器人能力和单聊消息权限。接收人填写该企业内的 userId；RobotCode 可在机器人配置中查看。';
+        var fields = field('name', channel === 'group' ? '群名称（便于识别）' : '应用名称（便于识别）', c.name);
+        if (channel === 'group') {
+          fields += field('webhook', 'Webhook', '', c.hasWebhook ? '已保存；留空保留，输入可更换' : 'https://oapi.dingtalk.com/robot/send?access_token=…', true) +
+            field('secret', '加签密钥（可选）', '', c.hasSignSecret ? '已保存；留空保留' : 'SEC 开头的加签密钥', true) + field('keyword', '安全关键词（可选）', c.keyword, '填写群机器人的安全关键词') +
+            '<label class="xm-hm-week-check"><input type="checkbox" data-ding-field="clearSignSecret" />清除已保存的加签密钥</label>';
+        } else {
+          fields += '<label>应用凭据来源<select data-ding-field="source">' +
+            (channel === 'bot' ? '<option value="notice">复用「应用工作通知」的应用凭据</option>' : '') +
+            '<option value="existing">复用服务器已有应用' + (config.existing.available ? '（已检测到）' : '（尚未检测到）') + '</option><option value="manual">填写应用凭据</option></select></label>' +
+            '<div data-ding-manual class="xm-hm-week-config-grid">' + field('clientId', 'Client ID / AppKey', c.clientId, '钉钉应用的 Client ID') +
+            field('clientSecret', 'Client Secret / AppSecret', '', c.hasClientSecret ? '已保存；留空保留' : '填写对应应用密钥', true) + '</div>' +
+            '<p data-ding-reuse class="xm-hm-week-help"></p>' +
+            (channel === 'notice' ? field('agentId', 'AgentId', c.agentId, c.resolvedAgentId ? '默认使用 ' + c.resolvedAgentId : '填写应用的数字 AgentId') : field('robotCode', 'RobotCode', c.robotCode, c.resolvedRobotCode ? '默认使用 ' + c.resolvedRobotCode : '留空时使用所选应用的 Client ID')) +
+            '<label>接收人 userId<textarea data-ding-field="userIds" rows="3" placeholder="每行一位，或用逗号分隔，最多 20 位">' + escapeHtml(c.userIds.join('\n')) + '</textarea><small>填写钉钉企业通讯录中的 userId，不是姓名或手机号。工作通知与单聊分别保存接收人。</small></label>';
+        }
+        return '<section data-ding-panel="' + channel + '" hidden><h3>' + heading + '</h3><p class="xm-hm-week-help">' + help + '</p><div class="xm-hm-week-config-grid">' + fields + '</div>' +
+          '<label class="xm-hm-week-check"><input type="checkbox" data-ding-field="makeDefault"' + (config.defaultChannel === channel ? ' checked' : '') + ' />设为默认发送方式</label>' +
+          '<div class="xm-hm-week-form-actions"><button type="button" data-ding-save>保存此方式</button><button type="button" class="is-secondary" data-ding-check>检查已保存配置（不发送）</button></div><p data-ding-status role="status"></p></section>';
+      }
+      content.innerHTML = '<p class="xm-hm-week-help">三种方式独立配置。每次发送只使用选中的方式；保存配置和检查凭据都不会发送消息。密钥仅保存在服务端。</p>' +
+        '<div class="xm-hm-week-ding-tabs" role="tablist" aria-label="钉钉发送方式">' + Object.keys(weekDingLabels).map(function (key) { return '<button type="button" role="tab" aria-selected="false" data-ding-tab="' + key + '">' + weekDingLabels[key] + '</button>'; }).join('') + '</div>' +
+        Object.keys(weekDingLabels).map(form).join('') + '<p><a href="https://open-dev.dingtalk.com/" target="_blank" rel="noopener noreferrer">打开钉钉开发者后台 ↗</a></p>';
+      function sourceChange(panel) {
+        var source = panel.querySelector('[data-ding-field="source"]');
+        if (!source) return;
+        panel.querySelector('[data-ding-manual]').hidden = source.value !== 'manual';
+        var hint = panel.querySelector('[data-ding-reuse]');
+        hint.hidden = source.value === 'manual';
+        hint.textContent = source.value === 'existing' ? (config.existing.available ? '已检测到现有应用：' + config.existing.clientId : '当前服务器未检测到应用凭据，可以切换为「填写应用凭据」。') : '使用「应用工作通知」已保存的应用，单聊接收人单独填写。';
+      }
+      content.querySelectorAll('[data-ding-panel]').forEach(function (panel) {
+        var channel = panel.dataset.dingPanel, c = config[channel], source = panel.querySelector('[data-ding-field="source"]');
+        if (source) { source.value = c.source; source.onchange = function () { sourceChange(panel); }; sourceChange(panel); }
+        weekNotice(panel.querySelector('[data-ding-status]'), c.ready ? '已配置，可以在发送时选择此方式。' : '待配置：' + c.error);
+      });
+      function select(channel) {
+        content.querySelectorAll('[data-ding-panel]').forEach(function (panel) { panel.hidden = panel.dataset.dingPanel !== channel; });
+        content.querySelectorAll('[data-ding-tab]').forEach(function (button) { button.setAttribute('aria-selected', String(button.dataset.dingTab === channel)); });
+      }
+      select(config.defaultChannel);
+      content.addEventListener('click', async function (event) {
+        var button = event.target.closest('button'); if (!button) return;
+        if (button.dataset.dingTab) { select(button.dataset.dingTab); return; }
+        if (!button.hasAttribute('data-ding-save') && !button.hasAttribute('data-ding-check')) return;
+        var panel = button.closest('[data-ding-panel]'), channel = panel.dataset.dingPanel, status = panel.querySelector('[data-ding-status]');
+        button.disabled = true;
+        try {
+          if (button.hasAttribute('data-ding-save')) {
+            var input = {};
+            panel.querySelectorAll('[data-ding-field]').forEach(function (node) { input[node.dataset.dingField] = node.type === 'checkbox' ? node.checked : node.value.trim(); });
+            var saved = await weekRequest('/api/home/week-ding/config/' + channel, input); config = saved.config;
+            panel.querySelectorAll('input[type="password"]').forEach(function (node) { node.value = ''; node.placeholder = '已保存；留空保留'; });
+            var clear = panel.querySelector('[data-ding-field="clearSignSecret"]'); if (clear) clear.checked = false;
+            content.querySelectorAll('[data-ding-field="makeDefault"]').forEach(function (node) { node.checked = node.closest('[data-ding-panel]').dataset.dingPanel === config.defaultChannel; });
+            weekNotice(status, '已保存「' + weekDingLabels[channel] + '」，未发送消息。');
+          } else {
+            weekNotice(status, '正在检查已保存的配置…');
+            var checked = await weekRequest('/api/home/week-ding/check/' + channel, {}); weekNotice(status, checked.message);
+          }
+        } catch (error) { weekNotice(status, error.message, true); }
+        finally { button.disabled = false; }
+      });
+    } catch (error) { weekNotice(content, error.message, true); }
+  }
+  async function openWeekSend(pack) {
+    if (weekSending) return;
+    var snapshot = JSON.parse(JSON.stringify(pack));
+    var dialog = weekDialog('发送业绩图片'), content = dialog.querySelector('[data-dialog-content]');
+    content.innerHTML = '<p>正在读取发送方式…</p>';
+    try {
+      var data = await weekRequest('/api/home/week-ding/config'), config = data.config;
+      if (!dialog.isConnected) return;
+      content.innerHTML = '<p>选择本次接收渠道，发送时同时保存表格、Excel 和图片到历史数据。</p><div class="xm-hm-week-ding-choices">' + Object.keys(weekDingLabels).map(function (channel) {
+        var c = config[channel];
+        return '<label><input type="radio" name="week-ding-channel" value="' + channel + '"' + (channel === config.defaultChannel && c.ready ? ' checked' : '') + (!c.ready ? ' disabled' : '') + ' /><span><b>' + weekDingLabels[channel] + '</b><small>' + escapeHtml(c.ready ? (c.name + (channel === 'group' ? ' · 指定群' : ' · ' + c.userIds.length + ' 位接收人：' + c.userIds.join('、'))) : '未配置：' + c.error) + '</small></span></label>';
+      }).join('') + '</div><div class="xm-hm-week-form-actions"><button type="button" data-send-confirm>发送图片并归档</button><button type="button" class="is-secondary" data-send-config>修改配置</button></div><p data-send-status role="status"></p>';
+      content.querySelector('[data-send-config]').onclick = function () { dialog.close(); openWeekDing(); };
+      content.querySelector('[data-send-confirm]').onclick = async function () {
+        var selected = content.querySelector('input[name="week-ding-channel"]:checked'), status = content.querySelector('[data-send-status]');
+        if (!selected) { weekNotice(status, '请先选择已配置的发送方式。', true); return; }
+        if (weekSending) return;
+        weekSending = true;
+        content.querySelectorAll('button,input').forEach(function (node) { node.disabled = true; });
+        weekNotice(status, '正在生成图片并发送，请勿重复操作…');
+        try {
+          var blob = await drawWeekPng(snapshot);
+          var response = await fetch('/api/home/week-send', { method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json', 'Content-Type': 'application/octet-stream',
+            'X-Week-Revision': snapshot.revision || '', 'X-Week-Ding-Channel': selected.value, 'X-Week-Ding-Revision': config.revision }, body: blob });
+          var result = await response.json();
+          weekNotice(status, result.error || result.message || '请查看历史数据确认发送结果。', !response.ok || !result.ok || result.status === 'partial');
+          if (result.historyId) {
+            var history = document.createElement('button'); history.type = 'button'; history.textContent = '查看历史数据';
+            history.onclick = function () { dialog.close(); openWeekHistory(); }; status.after(history);
+          }
+        } catch { weekNotice(status, '本次操作未得到确认，请先查看历史记录与钉钉消息，再决定是否重试。', true); }
+        finally { weekSending = false; }
+      };
+    } catch (error) { weekNotice(content, error.message, true); }
+  }
+  async function openWeekWps(refresh) {
+    var dialog = weekDialog("WPS 账号与表格配置"), content = dialog.querySelector("[data-dialog-content]");
+    content.innerHTML = '<p role="status">正在读取配置…</p>';
+    try {
+      var data = await weekRequest("/api/home/week-wps/config"), config = data.config;
+      if (!dialog.isConnected) return;
+      function field(label, key, value, placeholder) {
+        return '<label>' + label + '<input data-wps-field="' + key + '" value="' + escapeHtml(value == null ? "" : value) + '" placeholder="' + escapeHtml(placeholder || "") + '" /></label>';
+      }
+      content.innerHTML = '<div class="xm-hm-week-account"><div><b>WPS 官方授权</b><p data-auth-status>' + escapeHtml(data.auth.message) + '</p><p>使用有两张表读取权限的 WPS 个人账号。账号备注便于识别，实际账号以授权页为准。</p></div><button type="button" data-wps-connect>连接 / 更换账号</button><a data-auth-link target="_blank" rel="noopener noreferrer" hidden>打开 WPS 授权页 ↗</a></div>' +
+        '<label class="xm-hm-week-account-label">账号备注<input data-wps-account value="' + escapeHtml(config.accountLabel) + '" placeholder="例如：运营报表专用账号" /></label><div class="xm-hm-week-config-grid">' + config.sources.map(function (s) {
+          return '<section data-wps-team="' + s.team + '"><h3>' + (s.team === "han" ? "韩梦凯组" : "沈子晗组") + '</h3>' +
+            field("WPS 共享链接", "url", s.url, "https://www.kdocs.cn/l/…") + field("工作表名称", "sheetName", s.sheetName) +
+            '<button type="button" class="is-secondary" data-wps-check>检查读取权限</button><p data-check-status></p><details><summary>读取范围与分类汇总</summary><p>仅同步登记日期为当天的店铺，读到“登记日期”列为止。请指定可见行列；原表隐藏范围变化后需在这里更新。</p>' +
+            '<div class="xm-hm-week-range-grid">' + field("表头行", "headerRow", s.headerRow, "2") + field("店铺行", "rows", s.rows, "3-19") +
+            field("可见列", "columns", s.columns, "A:H,MG:NT") + field("分类汇总行", "footerRows", s.footerRows, "28-29") +
+            field("左侧汇总行", "summaryRows", s.summaryRows, "3-8") + field("汇总名称列", "summaryLabelColumn", s.summaryLabelColumn, "A") + field("汇总数值列", "summaryValueColumn", s.summaryValueColumn, "B") + '</div>' +
+            '<label class="xm-hm-week-check"><input type="checkbox" data-wps-verified ' + (s.verified ? "checked" : "") + ' />我已核对以上范围，仅包含需要同步的可见数据</label></details></section>';
+        }).join("") + '</div><p class="xm-hm-week-notice" data-config-status role="status">配置保存在当前服务端，换电脑登录后仍可使用。留空共享链接表示暂不接入该组。</p><footer><button type="button" class="is-secondary" data-wps-save>保存配置</button><button type="button" data-wps-sync>保存并立即同步</button></footer>';
+      var notice = content.querySelector("[data-config-status]");
+      function form() {
+        return { accountLabel: content.querySelector("[data-wps-account]").value, sources: Array.from(content.querySelectorAll("[data-wps-team]")).map(function (section) {
+          var item = { team: section.dataset.wpsTeam, verified: section.querySelector("[data-wps-verified]").checked };
+          section.querySelectorAll("[data-wps-field]").forEach(function (el) { item[el.dataset.wpsField] = el.value; });
+          return item;
+        }) };
+      }
+      var timer;
+      dialog.addEventListener("close", function () { clearTimeout(timer); });
+      function showAuth(state) {
+        var label = content.querySelector("[data-auth-status]"), link = content.querySelector("[data-auth-link]");
+        label.textContent = state.message || "正在生成授权链接…";
+        link.hidden = !state.url;
+        if (state.url && /^https:\/\/mcp-center\.wps\.cn\/kdocs-auth\/auth-guide\?auth_code=[\w-]+$/.test(state.url)) link.href = state.url;
+        content.querySelector("[data-wps-connect]").disabled = ["starting", "waiting"].includes(state.status);
+        if (["starting", "waiting"].includes(state.status)) timer = setTimeout(async function () {
+          if (!dialog.isConnected) return;
+          try { var result = await weekRequest("/api/home/week-wps/auth"); if (dialog.isConnected) showAuth(result.authorization); }
+          catch (err) { if (dialog.isConnected) { label.textContent = err.message; content.querySelector("[data-wps-connect]").disabled = false; } }
+        }, 2000);
+      }
+      if (["starting", "waiting"].includes(data.authorization.status)) showAuth(data.authorization);
+      content.addEventListener("click", async function (event) {
+        var button = event.target.closest("button");
+        if (!button || button.disabled) return;
+        button.disabled = true;
+        try {
+          if (button.hasAttribute("data-wps-connect")) { var result = await weekRequest("/api/home/week-wps/auth", {}); showAuth(result.authorization); return; }
+          if (button.hasAttribute("data-wps-check")) {
+            var section = button.closest("[data-wps-team]"), status = section.querySelector("[data-check-status]");
+            weekNotice(status, "正在检查…");
+            try { var check = await weekRequest("/api/home/week-wps/check", form().sources.find(function (s) { return s.team === section.dataset.wpsTeam; })); weekNotice(status, check.message); }
+            catch (err) { weekNotice(status, err.message, true); }
+          }
+          if (button.hasAttribute("data-wps-save") || button.hasAttribute("data-wps-sync")) {
+            weekNotice(notice, "正在保存…");
+            await weekRequest("/api/home/week-wps/config", form());
+            if (button.hasAttribute("data-wps-sync")) {
+              weekNotice(notice, "配置已保存，正在读取 WPS 数据，请稍候…");
+              await weekRequest("/api/home/week-wps/sync", {});
+              weekNotice(notice, "同步完成，页面已刷新。只有两组当天数据完整时才能发送。");
+              if (refresh) refresh();
+            } else weekNotice(notice, "配置已保存");
+          }
+        } catch (err) { weekNotice(notice, err.message, true); if (button.hasAttribute("data-wps-connect")) button.disabled = false; }
+        finally { if (!button.hasAttribute("data-wps-connect")) button.disabled = false; }
+      });
+    } catch (err) { content.innerHTML = '<p class="xm-hm-week-notice is-error">' + escapeHtml(err.message) + '</p>'; }
+  }
+  async function openWeekHistory() {
+    var dialog = weekDialog("历史数据"), content = dialog.querySelector("[data-dialog-content]");
+    content.innerHTML = '<div class="xm-hm-week-history-filter"><label>开始日期<input type="date" data-history-from /></label><label>结束日期<input type="date" data-history-to /></label><button type="button" data-history-search>查询</button><p>保留每次发送时的表格与原图，同一天更正发送会另存一版。</p></div><div data-history-list role="status">正在读取历史记录…</div><div data-history-detail></div>';
+    var list = content.querySelector("[data-history-list]"), detail = content.querySelector("[data-history-detail]");
+    async function load() {
+      try {
+        var params = new URLSearchParams({ from: content.querySelector("[data-history-from]").value, to: content.querySelector("[data-history-to]").value });
+        var data = await weekRequest("/api/home/week-history?" + params);
+        list.innerHTML = data.items.length ? '<div class="xm-hm-week-history-list">' + data.items.map(function (item) {
+          var label = { sent: "发送成功", accepted: "钉钉已受理 / 待确认送达", partial: "部分接收人未通过", sending: "发送中 / 待确认", failed: "发送失败", uncertain: "结果待确认" }[item.status] || item.status;
+          var base = "/api/home/week-history/" + encodeURIComponent(item.id);
+          return '<article><div><b>' + escapeHtml(item.date) + ' <small>第 ' + item.version + ' 版</small></b><p>' + item.shops + ' 家店铺 · ' + escapeHtml(new Date(item.sentAt || item.createdAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false })) + '</p><span class="xm-hm-week-status ' + (item.status === "sent" ? "is-sent" : "") + '">' + escapeHtml(label) + '</span></div><div class="xm-hm-week-history-actions"><button type="button" class="is-secondary" data-history-view="' + item.id + '">查看表格</button><button type="button" class="is-secondary" data-history-image="' + item.id + '">查看图片</button><a href="' + base + '/export/xlsx">导出 Excel</a><a href="' + base + '/export/png">下载 PNG</a></div></article>';
+        }).join("") + '</div>' : '<div class="xm-hm-week-empty"><b>暂无历史记录</b><p>钉钉发送成功后，当次表格与图片会自动保存在这里。预览和下载图片不会生成发送记录。</p></div>';
+      } catch (err) { weekNotice(list, err.message, true); }
+    }
+    content.addEventListener("click", async function (event) {
+      var button = event.target.closest("button");
+      if (!button) return;
+      if (button.hasAttribute("data-history-search")) { detail.innerHTML = ""; await load(); return; }
+      var id = button.dataset.historyView || button.dataset.historyImage;
+      if (!id) return;
+      detail.innerHTML = '<p>正在打开历史版本…</p>';
+      try {
+        var item = await weekRequest("/api/home/week-history/" + encodeURIComponent(id));
+        detail.innerHTML = '<h3>' + escapeHtml(item.meta.date) + ' · 第 ' + item.meta.version + ' 版</h3><p>' + escapeHtml(item.meta.message) + '</p>' +
+          (item.meta.destination ? '<p>' + escapeHtml(item.meta.destination.label + ' · ' + item.meta.destination.name + (item.meta.destination.recipients.length ? ' · ' + item.meta.destination.recipients.join('、') : '')) + '</p>' : '') +
+          (item.meta.receipt ? '<p>发送凭证：' + escapeHtml(item.meta.receipt) + '</p>' : '') +
+          (item.meta.rejected && item.meta.rejected.length ? '<p>未通过的接收人：' + escapeHtml(item.meta.rejected.join('、')) + '</p>' : '') + '<div class="xm-hm-week-history-preview">' +
+          (button.dataset.historyImage ? '<img alt="发送时保存的报表原图" src="/api/home/week-history/' + id + '/export/png?view=1" />' : weekTableHtml(item.pack)) + '</div>';
+      } catch (err) { weekNotice(detail, err.message, true); }
+    });
+    await load();
+  }
+  function weekManagementClick(event, refresh) {
+    if (event.target.closest("[data-week-ding-config]")) { openWeekDing(); return true; }
+    if (event.target.closest("[data-week-wps]")) { openWeekWps(refresh); return true; }
+    if (event.target.closest("[data-week-history]")) { openWeekHistory(); return true; }
+    return false;
+  }
+
   function seesAllChiefs(user) {
     return canSeeChiefView(user);
   }
@@ -2520,6 +2805,10 @@
         : n < 0
           ? "环比 ↘ 下降 " + Math.round(Math.abs(n)) + "%"
           : "环比 0%";
+    if (chart && chart.comparisonStatus) trendText = chart.comparisonStatus;
+    else if (chart && chart.comparisonEmpty) trendText = "环比 待采集";
+    else if (chart && chart.zeroBaseline) trendText = "环比 昨日为0";
+    else if (chart && chart.referenceComparison) trendText = trendText.replace("环比", "参考环比");
     return (
       '<article class="xm-hm-chart" data-chart="' +
       kind +
@@ -2532,8 +2821,9 @@
       escapeHtml((chart && chart.label) || "实时指标") +
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
       escapeHtml(chart && chart.value != null && chart.value !== "" ? chart.value : "—") +
-      '</div><div class="xm-hm-yest-now">' + (chart.serverHistory ? "昨日同段 " : "昨天 ") +
+      '</div><div class="xm-hm-yest-now">' + escapeHtml(chart.yestLabel || (chart.serverHistory ? "昨日同段" : "昨天")) + " " +
       escapeHtml((chart && chart.yestText) || "—") +
+      (chart.comparisonCoverage ? ' <span>（' + chart.comparisonCoverage.count + '/' + chart.comparisonCoverage.total + '家）</span>' : "") +
       "</div>" +
       '<div class="xm-hm-trend' +
       trendCls +
@@ -2541,7 +2831,7 @@
       trendText +
       "</div>" +
       compareLineHtml(line) +
-      (chart.serverHistory ? '<div class="xm-hm-line-caption">' + (chart.historyUnavailable ? "历史暂时读取失败，请稍后刷新" : "服务器历史 · 按已采集店铺汇总 · 悬停查看覆盖数") + '</div>' : "") +
+      (chart.serverHistory ? '<div class="xm-hm-line-caption">' + escapeHtml(chart.comparisonNote || "服务器历史 · 按已采集店铺汇总 · 悬停查看覆盖数") + '</div>' : "") +
       "</article>"
     );
   }
@@ -3002,6 +3292,8 @@
       ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-live2 .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-overview .xm-hm-kpis-shell,.xm-hm.is-week .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-live2 .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges,.xm-hm.is-live2 .xm-hm-ranges,.xm-hm.is-week .xm-hm-ranges{display:none}" +
       ".xm-hm-live-refresh[data-connect-live2]{opacity:.55}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden],.xm-hm-week[hidden]{display:none}" +
+      ".xm-hm-week-dialog{box-sizing:border-box;width:min(1180px,94vw);max-height:90vh;padding:0;border:1px solid #dbe3ef;border-radius:16px;background:var(--xm-card,#fff);color:var(--xm-text,#16253d);box-shadow:0 20px 80px #12233c40;font:14px 'Microsoft YaHei',sans-serif}.xm-hm-week-dialog[open]{display:flex;flex-direction:column;overflow:hidden}.xm-hm-week-dialog [hidden]{display:none!important}.xm-hm-week-dialog::backdrop{background:#132c4b66}.xm-hm-week-dialog *{box-sizing:border-box}.xm-hm-week-dialog>header{flex-shrink:0;position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:20px 26px;border-bottom:1px solid #e3e9f2;background:var(--xm-card,#fff)}.xm-hm-week-dialog h2{margin:5px 0 0;font-size:21px}.xm-hm-week-dialog small{color:#64748b;font-size:12px}.xm-hm-week-dialog [data-dialog-content]{padding:24px;overflow:auto;min-height:0}.xm-hm-week-dialog button,.xm-hm-week-dialog a{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid #2673df;background:#2673df;color:white;border-radius:7px;padding:9px 14px;cursor:pointer;text-decoration:none;font-size:13px}.xm-hm-week-dialog button:disabled{opacity:.55;cursor:wait}.xm-hm-week-dialog button.is-secondary,.xm-hm-week-dialog a{background:var(--xm-card,#fff);color:#2673df;border-color:#c7d8ed}.xm-hm-week-dialog [data-dialog-close]{font-size:25px;border:0;background:transparent;color:#64748b;padding:0 6px}.xm-hm-week-dialog label{display:flex;flex-direction:column;gap:7px;font-size:13px;font-weight:500}.xm-hm-week-dialog input{font:inherit;width:100%;min-width:0;padding:10px;border:1px solid #ced9e6;border-radius:7px;color:inherit;background:var(--xm-card,#fff)}.xm-hm-week-dialog p{line-height:1.6;color:#63738b;font-size:13px}.xm-hm-week-account{background:#edf5ff;border:1px solid #d3e6ff;border-radius:10px;padding:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;color:#16253d}.xm-hm-week-account>div{flex:1;min-width:240px}.xm-hm-week-account p{margin:6px 0}.xm-hm-week-account [hidden]{display:none}.xm-hm-week-account-label{max-width:500px;margin:20px 0}.xm-hm-week-config-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.xm-hm-week-config-grid>section{padding:20px;border:1px solid #dbe3ef;border-radius:10px;min-width:0}.xm-hm-week-config-grid h3{margin:0 0 18px}.xm-hm-week-config-grid label{margin-bottom:16px}.xm-hm-week-config-grid details{border-top:1px solid #e3e9f2;padding-top:14px}.xm-hm-week-config-grid summary{cursor:pointer;color:#2673df}.xm-hm-week-range-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.xm-hm-week-dialog .xm-hm-week-check{display:flex;flex-direction:row;align-items:flex-start;font-size:12px;line-height:1.6;font-weight:400}.xm-hm-week-check input{width:16px;height:16px;flex:none}.xm-hm-week-notice{padding:12px 15px;background:#eef7f2;border-radius:7px;color:#236341!important}.xm-hm-week-notice.is-error{background:#fff1ef;color:#b63222!important}.xm-hm-week-dialog footer{display:flex;gap:12px;justify-content:flex-end;margin-top:18px}.xm-hm-week-history-filter{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:20px}.xm-hm-week-history-filter p{flex:1;min-width:200px;margin:0 0 5px}.xm-hm-week-history-list{display:flex;flex-direction:column;gap:12px}.xm-hm-week-history-list article{display:flex;justify-content:space-between;align-items:center;gap:16px;border:1px solid #dbe3ef;padding:18px;border-radius:10px;flex-wrap:wrap}.xm-hm-week-history-list p{margin:8px 0}.xm-hm-week-history-actions{display:flex;gap:8px;flex-wrap:wrap}.xm-hm-week-status{font-size:12px;background:#fff4dc;color:#925d0a;padding:4px 8px;border-radius:5px}.xm-hm-week-status.is-sent{background:#e6f5ec;color:#237647}.xm-hm-week-empty{text-align:center;padding:65px 20px;border:1px dashed #ccd8e7;border-radius:12px;background:#f8fafc;color:#16253d}.xm-hm-week-empty b{font-size:18px}.xm-hm-week-history-preview{overflow:auto;max-height:55vh;border:1px solid #dbe3ef;border-radius:8px;padding:12px}.xm-hm-week-history-preview img{max-width:none;width:1900px;height:auto}.xm-hm-week-history-preview .xm-hm-week-bar{display:none}.xm-hm-week-history-preview .xm-hm-week-head{position:static}.xm-hm-week-history-preview .xm-hm-week-team{margin-bottom:20px}@media(max-width:720px){.xm-hm-week-config-grid{grid-template-columns:1fr}.xm-hm-week-dialog [data-dialog-content]{padding:16px}.xm-hm-week-dialog>header{padding:16px}}" +
+      ".xm-hm-week-ding-tabs{display:flex;gap:10px;margin:20px 0;flex-wrap:wrap}.xm-hm-week-ding-tabs button[aria-selected=false]{background:var(--xm-card,#fff);color:#426080;border-color:#d3deeb}.xm-hm-week-dialog select,.xm-hm-week-dialog textarea{font:inherit;width:100%;min-width:0;padding:10px;border:1px solid #ced9e6;border-radius:7px;color:inherit;background:var(--xm-card,#fff)}.xm-hm-week-dialog textarea{resize:vertical}.xm-hm-week-dialog [data-ding-panel]>.xm-hm-week-config-grid{max-width:960px}.xm-hm-week-dialog [data-ding-manual],.xm-hm-week-dialog [data-ding-reuse]{grid-column:1/-1}.xm-hm-week-dialog [data-ding-panel] label{min-width:0}.xm-hm-week-form-actions{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0 12px}.xm-hm-week-ding-choices{display:flex;flex-direction:column;gap:12px;margin:24px 0}.xm-hm-week-ding-choices label{flex-direction:row;align-items:flex-start;padding:16px;border:1px solid #d3deeb;border-radius:10px}.xm-hm-week-ding-choices input{width:18px;flex:none;margin-top:3px}.xm-hm-week-ding-choices small{display:block;line-height:1.7;margin-top:6px;overflow-wrap:anywhere}.xm-hm-week-ding-choices label:has(input:checked){background:#edf5ff;border-color:#2673df}@media(max-width:720px){.xm-hm-week-ding-tabs{gap:6px}.xm-hm-week-ding-tabs button{flex:1;min-width:85px;padding:9px 7px}}" +
       ".xm-hm-week{display:flex;flex-direction:column;gap:12px}" +
       ".xm-hm-week-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}" +
       ".xm-hm-week-bar h2{margin:0;font-size:18px}" +
@@ -3011,13 +3303,19 @@
       ".xm-hm-week-bar button{border:0;background:var(--xm-primary);color:#fff;border-radius:6px;height:32px;padding:0 12px;cursor:pointer;font-size:13px}" +
       ".xm-hm-week-bar button.is-ghost{background:transparent;color:var(--xm-primary)}" +
       ".xm-hm-week-bar button:disabled{opacity:.55;cursor:wait}" +
-      ".xm-hm-week-team{border:1px solid #e4e7ed;border-radius:10px;overflow:auto;background:#fff}" +
-      ".xm-hm-week-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:8px 10px;background:#ffc000;font-weight:700}" +
+      ".xm-hm-week-team{border:1px solid #e4e7ed;border-radius:10px;overflow:auto;background:#fff;isolation:isolate}" +
+      ".xm-hm-week-sync{padding:8px 10px;font-size:12px;color:var(--xm-muted);background:#f1f6ff;position:sticky;left:0;z-index:3}" +
+      ".xm-hm-week-summary{display:flex;gap:20px;align-items:center;flex-wrap:wrap;min-height:36px;padding:6px 10px;background:#fff6c2;font-size:12px;position:sticky;left:0;z-index:3}" +
+      ".xm-hm-week-summary span{white-space:nowrap}.xm-hm-week-summary strong{margin-left:6px}" +
+      ".xm-hm-week-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:8px 10px;background:#ffc000;font-weight:700;position:sticky;left:0;z-index:3}" +
       ".xm-hm-week-kpis{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;font-weight:600}" +
       ".xm-hm-week-kpis b{font-size:16px;margin-left:4px}" +
       ".xm-hm-week-table{border-collapse:separate;border-spacing:0;font-size:11px;table-layout:fixed}" +
-      ".xm-hm-week-table th,.xm-hm-week-table td{border:1px solid #333;padding:3px 4px;text-align:center;vertical-align:middle;word-break:break-all;background:#fff}" +
-      ".xm-hm-week-table th{font-weight:700;line-height:1.25}" +
+      ".xm-hm-week-table th,.xm-hm-week-table td{box-sizing:border-box;border:1px solid #333;padding:3px 4px;text-align:center;vertical-align:middle;background:#fff;overflow:hidden}" +
+      ".xm-hm-week-table th{height:52px;font-weight:700;line-height:14px}" +
+      ".xm-hm-week-label{display:flex;align-items:center;justify-content:center;height:44px;max-height:44px;overflow:hidden;word-break:break-all}" +
+      ".xm-hm-week-table td{height:28px;max-height:28px;white-space:nowrap}" +
+      ".xm-hm-week-value{display:block;height:20px;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
       ".xm-hm-week-table th.is-id,.xm-hm-week-table td.is-id{background:#ffff00}" +
       ".xm-hm-week-table th.is-cat,.xm-hm-week-table td.is-cat{background:#f8cbad}" +
       ".xm-hm-week-table th.is-gmv{background:#ffff00}" +
@@ -3028,9 +3326,9 @@
       ".xm-hm-week-table td.is-up{background:#00b050;color:#fff}" +
       ".xm-hm-week-table td.is-down{background:#ff0000;color:#fff}" +
       ".xm-hm-week-table td.is-fine{background:#ffff00}" +
-      ".xm-hm-week-table td.is-noclean{background:#5b9bd5;color:#fff}" +
+      ".xm-hm-week-table td.is-noclean{background:#00b0f0;color:#111}" +
       ".xm-hm-week-table td.is-clean{background:#00b050;color:#fff}" +
-      ".xm-hm-week-table input{width:100%;border:0;background:transparent;text-align:center;font:inherit;color:inherit;padding:0}" +
+      ".xm-hm-week-table input{display:block;box-sizing:border-box;width:100%;height:20px;line-height:20px;border:0;background:transparent;text-align:center;font:inherit;color:inherit;padding:0}" +
       ".xm-hm-week-table .is-shop{text-align:left;font-weight:600}" +
       ".xm-hm-week-foot td{font-weight:700}" +
       ".xm-hm-over-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:0 0 16px}" +
@@ -3731,19 +4029,29 @@
     var pick = liveFilter();
     var rows = pick.shop || pick.team ? scopedRecords || [] : allRecords || [];
     var sums = live2Sums(rows), today = live2HistoryTotals(rows, "today"), yesterday = live2HistoryTotals(rows, "yesterday");
-    var yestDeal = live2YesterdayTotal(rows, "deal"), yestSpend = live2YesterdayTotal(rows, "spend");
-    var yestFee = yestDeal > 0 && yestSpend != null ? yestSpend / yestDeal : null;
-    function card(key, label, metric, value, prior) {
+    function card(key, label, metric, value) {
+      var pair = live2Comparison(rows, metric), prior = pair.yesterday;
+      function format(number) { return metric === "fee" ? fmtRate(number) : fmtMoney(number); }
+      var notes = [pair.count ? "环比按相同" + pair.count + "家店铺计算，今日 " + format(pair.today) : "等待昨日可比数据"];
+      if (pair.maxAge > 900) notes.push("昨日采样最多提前" + Math.ceil(pair.maxAge / 60) + "分钟");
+      if (pair.cached) notes.push("历史刷新失败，沿用已读取记录");
+      else if (pair.unavailable) notes.push("部分历史暂时读取失败");
       return { key: key, label: label, value: value == null ? "—" : metric === "fee" ? fmtRate(value) : fmtMoney(value),
-        yestText: prior == null ? "—" : metric === "fee" ? fmtRate(prior) : fmtMoney(prior),
-        delta: value != null && prior != null && prior > 0 ? trendOf(value, prior) : "",
+        yestText: prior == null ? metric === "fee" && pair.count ? "无成交" : "待采集" : format(prior),
+        yestLabel: pair.maxAge > 900 ? "昨日参考" : "昨日同段",
+        delta: pair.today != null && prior != null && prior > 0 ? trendOf(pair.today, prior) : pair.today === 0 && prior === 0 ? 0 : "",
+        comparisonEmpty: prior == null, zeroBaseline: prior === 0 && pair.today > 0,
+        comparisonStatus: metric === "fee" && pair.count && (pair.today == null || prior == null)
+          ? "环比 " + (pair.today == null ? "今日" : "昨日") + "无成交，暂无法计算" : "",
+        referenceComparison: pair.maxAge > 900,
+        comparisonCoverage: { count: pair.count, total: pair.total }, comparisonNote: notes.join(" · "),
         today: today[metric], yesterday: yesterday[metric], serverHistory: true, hours: 24,
         historyUnavailable: rows.some(function (row) { return !row.overviewHistory || row.overviewHistory.historyUnavailable; }),
         unit: metric === "fee" ? "rate" : "", coverage: { today: today.coverage[metric], yesterday: yesterday.coverage[metric], total: rows.length } };
     }
-    return { hero: card("jingmai", "实时总成交金额", "deal", sums.deal, yestDeal),
-      paid: card("spend", "推广总花费", "spend", sums.spend, yestSpend),
-      fee: card("fee", "实时费比", "fee", sums.fee, yestFee) };
+    return { hero: card("jingmai", "实时总成交金额", "deal", sums.deal),
+      paid: card("spend", "推广总花费", "spend", sums.spend),
+      fee: card("fee", "实时费比", "fee", sums.fee) };
   }
   function live2HistoryTotals(rows, day) {
     var result = { deal: [], spend: [], fee: [], coverage: { deal: [], spend: [], fee: [] } };
@@ -3763,16 +4071,35 @@
     }
     return result;
   }
-  function live2YesterdayTotal(rows, metric) {
-    var total = 0, count = 0, missing = false;
+  function live2Comparison(rows, metric) {
+    var today = 0, yesterday = 0, todayDeal = 0, yesterdayDeal = 0;
+    var result = { today: null, yesterday: null, count: 0, total: 0, maxAge: 0, cached: false, unavailable: false };
     rows.forEach(function (row) {
-      if (asNum(metric === "deal" ? row.liveAmount : row.paidAmount) == null) return;
-      var comparison = row.overviewHistory && row.overviewHistory.comparison;
-      var value = asNum(comparison && comparison[metric]);
-      if (value == null) missing = true;
-      else { total += value; count++; }
+      if (!row || row.pendingCollect) return;
+      var deal = asNum(row.liveAmount), spend = asNum(row.paidAmount);
+      var current = metric === "deal" ? deal : spend;
+      if (current == null || (metric === "fee" && deal == null)) return;
+      result.total++;
+      var history = row.overviewHistory || {}, comparison = history.comparison || {}, ages = history.comparisonAgeSeconds || {};
+      result.cached = result.cached || !!history.historyCached;
+      result.unavailable = result.unavailable || !!history.historyUnavailable;
+      var prior = asNum(comparison[metric === "deal" ? "deal" : "spend"]), priorDeal = asNum(comparison.deal);
+      if (prior == null || (metric === "fee" && priorDeal == null)) return;
+      // Both sides of every comparison use exactly the same shops. Fee rate
+      // also requires both metrics on each shop, not separate coverage sets.
+      result.count++; today += current; yesterday += prior;
+      if (metric === "fee") { todayDeal += deal; yesterdayDeal += priorDeal; }
+      result.maxAge = Math.max(result.maxAge, Number(ages[metric === "deal" ? "deal" : "spend"]) || 0,
+        metric === "fee" ? Number(ages.deal) || 0 : 0);
     });
-    return count && !missing ? total : null;
+    if (result.count) {
+      result.today = metric === "fee" ? todayDeal > 0 ? today / todayDeal : null : today;
+      result.yesterday = metric === "fee" ? yesterdayDeal > 0 ? yesterday / yesterdayDeal : null : yesterday;
+    }
+    return result;
+  }
+  function live2HistorySignature(pack) {
+    return JSON.stringify(((pack && pack.records) || []).map(function (row) { return [row.shop, row.overviewHistory]; }));
   }
   function live2PanelHtml(state) {
     var roster = adaptLive2Shops(state && state.dutyShops);
@@ -3952,7 +4279,7 @@
       : state.view === "live"
         ? "实时按付费中心的方式，用组织中心账号在服务器登录京麦，抓京麦成交和京准通付费。点掉线的店，在页面中间弹出这一家的登录画面。连接京麦登录还没有会话的店。在线只算 15 分钟内还在采集的店。"
         : state.view === "live2"
-          ? state.live2Hint || "实时（新版）用组织中心账号在服务器登录。实时成交金额取京麦经营数据的成交金额；实时付费金额、实时付费ROI、实时付费成交额取京准通当天的花费、投产比、总订单金额。实时费比 =（实时付费金额 / 实时成交金额）× 100%。还没有读到的格子显示—或待接入。"
+          ? state.live2Hint || "实时用组织中心账号在服务器登录。实时成交金额取京麦经营数据的成交金额；实时付费金额、实时付费ROI、实时付费成交额取京准通当天的花费、投产比、总订单金额。实时费比 =（实时付费金额 / 实时成交金额）× 100%。还没有读到的格子显示—或待接入。"
         : state.view === "week"
           ? "近七天业绩汇总：爬虫填店铺和当天数字，其余可手填；一键发送图片发到钉钉。"
           : "数字来自星脉 ERP。";
@@ -5751,7 +6078,8 @@
       var state = {
         view: (function () {
           try {
-            return sessionStorage.getItem("xm-home-view") === "live2" ? "live2" : "company";
+            var saved = sessionStorage.getItem("xm-home-view");
+            return saved === "live2" || saved === "live" ? "live2" : "company";
           } catch (_err) {
             return "company";
           }
@@ -6352,7 +6680,8 @@
           return;
         }
         var prev = state.live2Pack;
-        var same = prev && prev.publishedAt === pack.publishedAt && prev.running === pack.running;
+        var same = prev && prev.publishedAt === pack.publishedAt && prev.running === pack.running &&
+          live2HistorySignature(prev) === live2HistorySignature(pack);
         if (!same) {
           state.live2Hint = pack.running ? "正在读取新一轮。页面仍显示上一轮的金额、排名和登录状态。" : "";
           paintLive2(pack);
@@ -6561,6 +6890,7 @@
         var view = event.target.closest("[data-view]");
         if (view) {
           var nextView = view.getAttribute("data-view");
+          if (nextView === "live") nextView = "live2";
           if (!allowedHomeViews(state.user, state.people, state.dutyShops)[nextView]) {
             return;
           }
@@ -6614,19 +6944,7 @@
           paint(root, state);
           return;
         }
-        if (event.target.closest("[data-week-hook-save]")) {
-          var hookInput = root.querySelector("[data-week-hook]");
-          api("/api/home/week-report", { webhook: hookInput ? hookInput.value : "" }).then(function (data) {
-            if (state.weekPack) {
-              state.weekPack.dingReady = !!(data && data.dingReady);
-            }
-            if (hookInput) {
-              hookInput.value = "";
-              hookInput.placeholder = data && data.dingReady ? "钉钉机器人已保存" : "钉钉机器人 webhook";
-            }
-          });
-          return;
-        }
+        if (weekManagementClick(event, pullWeek)) return;
         var addTeam = event.target.closest("[data-week-add]");
         if (addTeam) {
           var teamKey = addTeam.getAttribute("data-week-add");
@@ -6642,42 +6960,19 @@
           });
           return;
         }
+        if (event.target.closest("[data-week-preview]")) {
+          drawWeekPng(state.weekPack || blankWeekPack()).then(function (blob) {
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement("a");
+            link.href = url;
+            link.download = "近七天业绩汇总.png";
+            link.click();
+            setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+          }).catch(function (err) { window.alert(err.message || "图片生成失败"); });
+          return;
+        }
         if (event.target.closest("[data-week-send]")) {
-          if (weekSending) {
-            return;
-          }
-          weekSending = true;
-          paint(root, state);
-          drawWeekPng(state.weekPack || blankWeekPack())
-            .then(function (blob) {
-              return fetch("/api/home/week-send", {
-                method: "POST",
-                credentials: "same-origin",
-                headers: { Accept: "application/json", "Content-Type": "application/octet-stream" },
-                body: blob
-              }).then(function (res) {
-                return res.json().then(function (data) {
-                  return { res: res, data: data, blob: blob };
-                });
-              });
-            })
-            .then(function (out) {
-              weekSending = false;
-              paint(root, state);
-              var msg = (out.data && (out.data.error || (out.data.sent ? "已发到钉钉" : "图已生成"))) || "发送结束";
-              window.alert(msg);
-              if (out.blob && !(out.data && out.data.sent)) {
-                var a = document.createElement("a");
-                a.href = URL.createObjectURL(out.blob);
-                a.download = "近七天业绩汇总.png";
-                a.click();
-              }
-            })
-            .catch(function (err) {
-              weekSending = false;
-              paint(root, state);
-              window.alert((err && err.message) || "出图失败");
-            });
+          openWeekSend(state.weekPack || blankWeekPack());
           return;
         }
         var range = event.target.closest("[data-range]");

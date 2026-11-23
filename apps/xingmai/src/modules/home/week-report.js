@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { shanghaiYmd, shanghaiNow } from "./local-paid.js";
+import { applyWpsPack, readWpsStore } from "./week-wps.js";
 
 const TEAMS = [
   { key: "han", label: "韩梦凯五倍店铺", totalLabel: "韩梦凯五倍店铺业绩" },
@@ -378,7 +379,7 @@ export function buildWeekPack(liveRecords, ymd = shanghaiYmd()) {
       ]
     };
   });
-  return {
+  return applyWpsPack({
     ok: true,
     title: "甄选五倍业绩统计",
     ymd: layout.ymd,
@@ -389,7 +390,7 @@ export function buildWeekPack(liveRecords, ymd = shanghaiYmd()) {
     dingReady: Boolean(saved.webhook || process.env.HOME_WEEK_DING_WEBHOOK),
     updatedAt: saved.updatedAt || shanghaiNow(),
     source: "han-shen-crawler+manual"
-  };
+  }, readWpsStore(), ymd);
 }
 
 function token() {
@@ -418,8 +419,8 @@ export function dingWebhook() {
 
 export async function postDingTalk({ webhook, title, text, picUrl }) {
   const url = String(webhook || "").trim();
-  if (!url || !/^https:\/\/[a-z0-9.-]*dingtalk\.com\//i.test(url)) {
-    return { ok: false, error: "未配置钉钉机器人 webhook" };
+  if (!url || !/^https:\/\/oapi\.dingtalk\.com\/robot\/send\?/i.test(url)) {
+    return { ok: false, definiteFailure: true, error: "未配置钉钉机器人 webhook" };
   }
   const body = picUrl
     ? {
@@ -436,11 +437,12 @@ export async function postDingTalk({ webhook, title, text, picUrl }) {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(20000)
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.errcode) {
-    return { ok: false, error: data.errmsg || `钉钉 ${res.status}`, data };
+  if (!res.ok || data.errcode !== 0) {
+    return { ok: false, definiteFailure: res.ok && typeof data.errcode === "number" && data.errcode !== 0, error: "钉钉发送未确认成功" };
   }
   return { ok: true, data };
 }
