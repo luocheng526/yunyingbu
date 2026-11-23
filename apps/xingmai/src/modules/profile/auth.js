@@ -1,5 +1,5 @@
 import { promisify } from "node:util";
-import { randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
 import { Router } from "express";
 
 let mysqlLib = null;
@@ -275,6 +275,52 @@ function resolveUser(username) {
     return users.get(DEMO_USERNAME) ?? null;
   }
   return users.get(trimmed) ?? null;
+}
+
+// Organization credentials are authoritative for real roster members. Read the
+// persisted roster on every login so resets, imports and another process's edits
+// take effect without restarting or accepting an obsolete xm_users password.
+async function rosterCredential(username) {
+  if (username === DEMO_USERNAME || username.toLowerCase() === "luocheng") return null;
+  const roster = await import("../people/store.js");
+  await roster.hydratePeopleRoster();
+  const people = roster.listPeople().filter((person) => !person.demo);
+  const matches = people.filter((person) => String(person.username || person.name).trim() === username);
+  if (matches.length > 1) return { blocked: true };
+  if (matches.length === 1) return { person: matches[0], roster };
+  const previous = resolveUser(username);
+  // A renamed roster account must not fall back to its old authentication row.
+  if (previous && people.some((person) => person.name === previous.displayName)) return { blocked: true };
+  return null;
+}
+
+function matchesRosterPassword(password, person) {
+  if (!person || person.status !== "在职" || !person.password) return false;
+  const digest = (value) => createHash("sha256").update(value).digest();
+  return timingSafeEqual(digest(password), digest(String(person.password)));
+}
+
+async function authenticateUser(username, password) {
+  const credential = await rosterCredential(username);
+  const existing = resolveUser(username);
+  if (!credential) return existing && await verifyPassword(password, existing.passwordHash) ? existing : null;
+  if (credential.blocked || !matchesRosterPassword(password, credential.person)) return null;
+  const person = credential.person;
+  const user = {
+    ...(existing || {}),
+    username,
+    displayName: existing?.displayName || person.name,
+    email: existing?.email || "",
+    phone: existing?.phone || "",
+    department: person.department || "",
+    center: person.center || "",
+    passwordHash: existing && await verifyPassword(password, existing.passwordHash)
+      ? existing.passwordHash : await hashPassword(password)
+  };
+  // Publish the in-process account only after durable authentication storage succeeds.
+  await persistUser(user);
+  users.set(username, user);
+  return user;
 }
 
 seed();
@@ -934,8 +980,14 @@ authRouter.post("/login", async (req, res) => {
     res.status(401).json({ ok: false, error: "请输入用户名和密码" });
     return;
   }
-  const user = resolveUser(username);
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
+  let user;
+  try {
+    user = await authenticateUser(username, password);
+  } catch {
+    res.status(503).json({ ok: false, error: "账号同步暂时失败，请稍后重试" });
+    return;
+  }
+  if (!user) {
     res.status(401).json({ ok: false, error: "用户名或密码错误" });
     return;
   }
@@ -1039,12 +1091,43 @@ profileRouter.post("/password", async (req, res) => {
     res.status(400).json({ ok: false, error: "新密码不能与当前密码相同" });
     return;
   }
-  if (!(await verifyPassword(currentPassword, req.user.passwordHash))) {
+  let credential;
+  try {
+    credential = await rosterCredential(req.user.username);
+  } catch {
+    res.status(503).json({ ok: false, error: "账号同步暂时失败，请稍后重试" });
+    return;
+  }
+  const currentMatches = credential
+    ? !credential.blocked && matchesRosterPassword(currentPassword, credential.person)
+    : await verifyPassword(currentPassword, req.user.passwordHash);
+  if (!currentMatches) {
     res.status(403).json({ ok: false, error: "当前密码错误" });
     return;
   }
-  req.user.passwordHash = await hashPassword(newPassword);
-  await persistUser(req.user);
+  // Keep personal-center changes in the same source used by organization login.
+  // The roster's password format trims surrounding whitespace.
+  if (credential && newPassword !== newPassword.trim()) {
+    res.status(400).json({ ok: false, error: "密码首尾不能包含空格" });
+    return;
+  }
+  if (newPassword.length > 128) {
+    res.status(400).json({ ok: false, error: "密码不能超过 128 位" });
+    return;
+  }
+  const updated = { ...req.user, passwordHash: await hashPassword(newPassword) };
+  try {
+    await persistUser(updated);
+    if (credential) {
+      const result = await credential.roster.patchPerson(credential.person.id, { password: newPassword });
+      if (!result.ok) throw new Error("roster password update failed");
+    }
+  } catch {
+    res.status(503).json({ ok: false, error: "密码同步失败，请稍后重试" });
+    return;
+  }
+  Object.assign(req.user, updated);
+  users.set(updated.username, req.user);
   res.json({ ok: true, message: "密码已更新" });
 });
 
