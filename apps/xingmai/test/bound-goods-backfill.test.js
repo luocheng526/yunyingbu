@@ -17,7 +17,7 @@ function fixtures(directory, beforeResponse = async () => {}) {
   const calls = []; let owner = 'one', fail = false;
   const config = { directory, today, discover: async () => ({ ok: true, owner, shops: [SHOP_DAY] }), makeCollector: scope => createShopDayCollector({ directory, scope, concurrency: GOODS_BACKFILL_CONCURRENCY, intervalMs: 0, maxPages: 200, retryFailures: true, request: async input => {
     calls.push({ scope, input });
-    await beforeResponse();
+    await beforeResponse(input);
     if (fail) return { blocked: 'login_conflict' };
     const spec = shopDayRequest(input, scope, 200);
     if (input.reportId.endsWith('_page')) {
@@ -155,4 +155,21 @@ test('failed request diagnostics retain status codes without exposing the raw re
   assert.equal(run.done, 0); assert.equal(run.failed, 1);
   assert.ok(run.errors[0].failures.every(f => f.httpStatus === 429 && f.upstreamCode === 1005));
   assert.ok(!JSON.stringify(run).includes('private source details'));
+}));
+
+test('SKU and SPU cards sharing an endpoint are collected serially without skipping either report', async () => temporary(async directory => {
+  const cards = [], scope = { ...SHOP_DAY, date: selection.to };
+  const f = fixtures(directory, async input => {
+    if (input.reportId === 'shop_cards_sku') cards.push('sku');
+    if (input.reportId === 'shop_cards_spu') {
+      const sku = await f.config.makeCollector(scope).getRecord({ reportId: 'shop_cards_sku', page: 1 });
+      assert.equal(sku.status, 'empty');
+      cards.push('spu');
+    }
+  });
+  const job = createGoodsBackfill(f.config);
+  await job.start({ ...selection, from: selection.to });
+  const run = await job.wait();
+  assert.equal(run.status, 'complete'); assert.equal(run.done, 1);
+  assert.deepEqual(cards, ['sku', 'spu']);
 }));

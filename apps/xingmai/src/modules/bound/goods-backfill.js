@@ -72,10 +72,13 @@ export function createGoodsBackfill({ directory, discover, makeCollector, blocke
             if (known.has(scopeKey(scope))) continue;
             run.current = { ...scope, reports: {} }; await progress(true);
             const collector = makeCollector(scope, source.owner), failures = [], counts = {};
+            // SKU/SPU cards use the same upstream endpoint. Start the SPU call
+            // only after the SKU response is archived, while other reports overlap.
+            const reports = GOODS_REPORTS.filter(id => id !== 'shop_cards_spu');
             let nextReport = 0;
             async function worker() {
-              while (!stopping && !failures.length && nextReport < GOODS_REPORTS.length) {
-                const reportId = GOODS_REPORTS[nextReport++], paged = ['shop_goods_page', 'shop_spu_page'].includes(reportId), identity = reportId === 'shop_spu_page' ? 'spuid' : 'goodsId';
+              while (!stopping && !failures.length && nextReport < reports.length) {
+                const reportId = reports[nextReport++], paged = ['shop_goods_page', 'shop_spu_page'].includes(reportId), identity = reportId === 'shop_spu_page' ? 'spuid' : 'goodsId';
                 let page = 1, expected = null, count = 0; const seen = new Set();
                 for (;;) {
                   if (stopping || failures.length) return;
@@ -84,7 +87,8 @@ export function createGoodsBackfill({ directory, discover, makeCollector, blocke
                   const record = result.record;
                   if (!result.ok || !good(record)) {
                     failures.push({ reportId, page, reason: record?.status || result.reason || 'report_unavailable',
-                      httpStatus: record?.response?.httpStatus ?? null, upstreamCode: record?.response?.payload?.code ?? null });
+                      httpStatus: record?.response?.httpStatus ?? null, upstreamCode: record?.response?.payload?.code ?? null,
+                      upstreamMessage: typeof record?.response?.payload?.content === 'string' ? record.response.payload.content.slice(0, 200) : null });
                     break;
                   }
                   if (paged) {
@@ -101,7 +105,10 @@ export function createGoodsBackfill({ directory, discover, makeCollector, blocke
                   await progress();
                   if (!record.nextPage) {
                     if (paged && count !== expected) failures.push({ reportId, page, reason: 'pagination_incomplete' });
-                    else counts[reportId] = count;
+                    else {
+                      counts[reportId] = count;
+                      if (reportId === 'shop_cards_sku') reports.push('shop_cards_spu');
+                    }
                     break;
                   }
                   if (!paged || record.nextPage !== page + 1 || page >= 200) { failures.push({ reportId, page, reason: 'pagination_incomplete' }); break; }
