@@ -11,7 +11,7 @@ import { isSingleShopRequest } from "./probe-target.js";
 import { shopDayRequest, validShopDay } from "./shop-day-contract.js";
 import { visibleShops, BATCH_DATE } from "./shop-batch.js";
 import { createRequestPacer } from "./request-pacer.js";
-import { GOODS_REPORTS } from './goods-backfill.js';
+import { GOODS_REPORTS, GOODS_BACKFILL_CONCURRENCY } from './goods-backfill.js';
 
 const QUIET_MODULES = new Set(["hp", "team"]);
 const QUIET_MASTERS = new Set(["goods", "teams", "members"]);
@@ -228,12 +228,13 @@ export async function requestGoodsBackfillReport(input, onRequest, scope, owner)
   if (ownerOf(await session()) !== owner) return { blocked: 'identity_changed' };
   const spec = shopDayRequest(input, scope, 200);
   if (!spec) return { blocked: 'invalid_scope' };
-  return batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner }, onRequest));
+  return batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner, parallelLimit: GOODS_BACKFILL_CONCURRENCY }, onRequest));
 }
 
 async function requestScopedRead(spec, onRequest = () => {}) {
   const parallel = Boolean(spec.ownerHash);
-  if (scopedReadBusy || batchReads >= (parallel ? 2 : 1)) return { blocked: "collector_busy" };
+  const limit = parallel ? spec.parallelLimit === GOODS_BACKFILL_CONCURRENCY ? GOODS_BACKFILL_CONCURRENCY : 2 : 1;
+  if (scopedReadBusy || batchReads >= limit) return { blocked: "collector_busy" };
   if (parallel) batchReads++; else scopedReadBusy = true;
   try { return await performScopedRead(spec, onRequest); }
   finally { if (parallel) batchReads--; else scopedReadBusy = false; }

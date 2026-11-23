@@ -80,7 +80,7 @@ export function chooseSoldProduct(record, scope = SHOP_DAY) {
 
 // Local disk archive only. Never writes the legacy bound_sheet key lacking shop identity.
 export function createShopDayCollector({ directory, request, intervalMs = 1500, scope = SHOP_DAY, retryFailures = false, maxPages = 10, concurrency = 1 }) {
-  if (![1, 2].includes(concurrency) || concurrency > 1 && intervalMs !== 0) throw new Error("invalid_concurrency");
+  if (![1, 2, 4].includes(concurrency) || concurrency > 1 && intervalMs !== 0) throw new Error("invalid_concurrency");
   if (!validShopDay(scope)) throw new Error("invalid_scope");
   scope = Object.freeze({ ...scope });
   if (!directory || typeof request !== "function") throw new Error("单店采集配置无效");

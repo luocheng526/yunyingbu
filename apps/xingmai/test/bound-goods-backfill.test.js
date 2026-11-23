@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createGoodsBackfill, validGoodsBackfill, GOODS_REPORTS } from '../src/modules/bound/goods-backfill.js';
+import { createGoodsBackfill, validGoodsBackfill, GOODS_REPORTS, GOODS_BACKFILL_CONCURRENCY } from '../src/modules/bound/goods-backfill.js';
 import { createShopDayCollector } from '../src/modules/bound/shop-day.js';
 import { SHOP_DAY, shopDayRequest } from '../src/modules/bound/shop-day-contract.js';
 import { createSavedData } from '../src/modules/bound/saved-data.js';
@@ -13,10 +13,11 @@ const today = () => '2026-11-23', selection = { from: '2026-10-03', to: '2026-10
 const table = rows => ({ columnInfo: [{ columnKey: 'gmv', columnName: '支付金额' }], columnData: rows });
 const success = data => ({ httpStatus: 200, payload: { code: 0, data } });
 async function temporary(work) { const directory = await mkdtemp(join(tmpdir(), 'bound-goods-backfill-')); try { await work(directory); } finally { await rm(directory, { recursive: true, force: true }); } }
-function fixtures(directory) {
+function fixtures(directory, beforeResponse = async () => {}) {
   const calls = []; let owner = 'one', fail = false;
-  const config = { directory, today, discover: async () => ({ ok: true, owner, shops: [SHOP_DAY] }), makeCollector: scope => createShopDayCollector({ directory, scope, concurrency: 2, intervalMs: 0, maxPages: 200, retryFailures: true, request: async input => {
+  const config = { directory, today, discover: async () => ({ ok: true, owner, shops: [SHOP_DAY] }), makeCollector: scope => createShopDayCollector({ directory, scope, concurrency: GOODS_BACKFILL_CONCURRENCY, intervalMs: 0, maxPages: 200, retryFailures: true, request: async input => {
     calls.push({ scope, input });
+    await beforeResponse();
     if (fail) return { blocked: 'login_conflict' };
     const spec = shopDayRequest(input, scope, 200);
     if (input.reportId.endsWith('_page')) {
@@ -64,12 +65,12 @@ test('backfill starts newest first, preserves successful archives, verifies all 
 test('login conflict halts immediately without indexing incomplete scopes; user can resume after login', async () => temporary(async directory => {
   const f = fixtures(directory); f.fail(true); const job = createGoodsBackfill(f.config);
   await job.start(selection); const state = await job.wait(); assert.equal(state.status, 'blocked'); assert.equal(state.reason, 'login_conflict');
-  assert.equal((await job.scopes()).length, 0); assert.ok(f.calls.length <= 2);
+  assert.equal((await job.scopes()).length, 0); assert.ok(f.calls.length <= GOODS_BACKFILL_CONCURRENCY);
   f.fail(false); await job.start(selection); assert.equal((await job.wait()).status, 'complete');
 }));
 
 test('duplicate/missing pages cannot become a completed scope even when a reader claims received', async () => temporary(async directory => {
-  const job = createGoodsBackfill({ directory, today, discover: async () => ({ ok: true, owner: 'one', shops: [SHOP_DAY] }), makeCollector: scope => ({ collect: async ({ reportId, page }) => ({ ok: true, record: { status: 'received', scope, reportId, page, total: 3, rows: [{ ...scope, goodsId: '1', spuid: '1' }], nextPage: page === 1 ? 2 : null } }) }) });
+  const job = createGoodsBackfill({ directory, today, discover: async () => ({ ok: true, owner: 'one', shops: [SHOP_DAY] }), makeCollector: scope => ({ collect: async ({ reportId, page }) => ({ ok: true, record: { status: 'received', scope, reportId, page, total: 3, rows: [{ ...scope, goodsId: '1', spuid: '1' }], nextPage: reportId.endsWith('_page') && page === 1 ? 2 : null } }) }) });
   await job.start(selection); const state = await job.wait(); assert.equal(state.status, 'complete_with_errors'); assert.equal(state.done, 0); assert.equal((await job.scopes()).length, 0);
   assert.equal(state.errors[0].failures[0].reason, 'pagination_identity_mismatch');
 }));
@@ -107,3 +108,51 @@ test('historical transport keeps the old fixed-day contract closed and allows on
     assert.equal(calls, 2);
   } finally { setBoundFetch(); resetBoundStore(); }
 });
+
+test('four independent reports overlap while each paginated report stays ordered and fully verified', async () => temporary(async directory => {
+  let active = 0, peak = 0, release;
+  const firstWave = new Promise(resolve => { release = resolve; });
+  const f = fixtures(directory, async () => {
+    peak = Math.max(peak, ++active);
+    if (active === 4) release();
+    await firstWave; active--;
+  });
+  const job = createGoodsBackfill(f.config);
+  await job.start({ ...selection, from: selection.to });
+  const run = await job.wait();
+  assert.equal(peak, 4); assert.equal(run.status, 'complete'); assert.equal(run.done, 1);
+  assert.equal(run.verifiedSku, 101); assert.equal(run.verifiedSpu, 2);
+  assert.deepEqual(f.calls.filter(c => c.input.reportId === 'shop_goods_page').map(c => c.input.page), [1, 2]);
+}));
+
+test('historical transport admits four paced requests and refuses a fifth while they are in flight', async () => {
+  resetBoundStore(); let count = 0, release, entered, pendingRequests = [];
+  const pending = new Promise(resolve => { release = resolve; });
+  const fourEntered = new Promise(resolve => { entered = resolve; });
+  try {
+    await writeState('session', { provider: 'PASSWORD', phase: 'logged_in', cookies: { sid: 'test' }, passwordIdentity: { userId: 'one', companyId: 'company' } });
+    setBoundFetch(async url => {
+      if (String(url).includes('getAllChannelList')) return new globalThis.Response(JSON.stringify({ code: 0, data: [{ channel: 'JD', shopList: [{ shopId: SHOP_DAY.shopId, shopName: SHOP_DAY.shopName }] }] }), { headers: { 'content-type': 'application/json' } });
+      if (++count === 4) entered();
+      await pending;
+      return new globalThis.Response(JSON.stringify({ code: 0, data: [] }), { headers: { 'content-type': 'application/json' } });
+    });
+    const source = await requestVisibleShops(), scope = { ...SHOP_DAY, date: '2026-11-18' };
+    assert.equal(source.ok, true);
+    pendingRequests = Array.from({ length: 5 }, (_, index) => requestGoodsBackfillReport({ reportId: GOODS_REPORTS[index], page: 1 }, () => {}, scope, source.owner));
+    await fourEntered;
+    assert.equal((await pendingRequests[4]).blocked, 'collector_busy');
+    assert.equal(count, 4);
+    release();
+    assert.ok((await Promise.all(pendingRequests.slice(0, 4))).every(r => r.httpStatus === 200));
+  } finally { release(); await Promise.allSettled(pendingRequests); setBoundFetch(); resetBoundStore(); }
+});
+
+test('failed request diagnostics retain status codes without exposing the raw response', async () => temporary(async directory => {
+  const job = createGoodsBackfill({ directory, today, discover: async () => ({ ok: true, owner: 'one', shops: [SHOP_DAY] }), makeCollector: () => ({ collect: async () => ({ ok: false, record: { status: 'request_failed', response: { httpStatus: 429, payload: { code: 1005, message: 'private source details' } } } }) }) });
+  await job.start({ ...selection, from: selection.to });
+  const run = await job.wait();
+  assert.equal(run.done, 0); assert.equal(run.failed, 1);
+  assert.ok(run.errors[0].failures.every(f => f.httpStatus === 429 && f.upstreamCode === 1005));
+  assert.ok(!JSON.stringify(run).includes('private source details'));
+}));

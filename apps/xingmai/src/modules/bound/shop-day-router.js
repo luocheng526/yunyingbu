@@ -10,7 +10,7 @@ import { createSavedOverview } from "./saved-overview.js";
 import { createShopBatch } from "./shop-batch.js";
 import { createSavedData } from "./saved-data.js";
 import { sendSavedJson } from './saved-wire.js';
-import { createGoodsBackfill } from './goods-backfill.js';
+import { createGoodsBackfill, GOODS_BACKFILL_CONCURRENCY } from './goods-backfill.js';
 
 export function defaultArchiveDirectory() {
   return process.env.BOUND_DAY_ARCHIVE_DIR || (process.platform === "win32"
@@ -48,7 +48,7 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
       request: (input, onRequest) => batchRequest(input, onRequest, scope, owner) }) }) });
   const goodsBackfill = createGoodsBackfill({ directory, discover,
     blocked: async () => collectionStatus().batchEnabled || collector.isBusy() || job.busy() || importer.busy() || batch.busy(),
-    makeCollector: (scope, owner) => createShopDayCollector({ directory, scope, maxPages: 200, concurrency: 2, intervalMs: 0, retryFailures: true,
+    makeCollector: (scope, owner) => createShopDayCollector({ directory, scope, maxPages: 200, concurrency: GOODS_BACKFILL_CONCURRENCY, intervalMs: 0, retryFailures: true,
       request: (input, onRequest) => backfillRequest(input, onRequest, scope, owner) }) });
   const readScopes = async () => [...await batch.scopes(), ...await goodsBackfill.scopes()];
   const annotations = createAnnotations();

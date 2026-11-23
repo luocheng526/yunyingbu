@@ -5,6 +5,7 @@ import { validShopDay } from './shop-day-contract.js';
 import { eachDay, shanghaiToday } from './time.js';
 
 export const GOODS_REPORTS = Object.freeze(['shop_goods_page', 'shop_spu_page', 'shop_goods_total', 'shop_spu_total', 'shop_cards_sku', 'shop_cards_spu']);
+export const GOODS_BACKFILL_CONCURRENCY = 4;
 const good = value => value && ['received', 'empty'].includes(value.status);
 const shopKey = s => s.platform + ':' + s.shopId;
 const scopeKey = s => s.date + ':' + shopKey(s);
@@ -81,7 +82,11 @@ export function createGoodsBackfill({ directory, discover, makeCollector, blocke
                   const result = await collector.collect({ reportId, page });
                   if (result.cached) run.cached++; else run.requests += result.record?.requestCount || 0;
                   const record = result.record;
-                  if (!result.ok || !good(record)) { failures.push({ reportId, page, reason: record?.status || result.reason || 'report_unavailable' }); break; }
+                  if (!result.ok || !good(record)) {
+                    failures.push({ reportId, page, reason: record?.status || result.reason || 'report_unavailable',
+                      httpStatus: record?.response?.httpStatus ?? null, upstreamCode: record?.response?.payload?.code ?? null });
+                    break;
+                  }
                   if (paged) {
                     if (expected === null) expected = record.total;
                     if (!Number.isInteger(expected) || expected < 0 || record.total !== expected) { failures.push({ reportId, page, reason: 'pagination_total_changed' }); break; }
@@ -105,7 +110,7 @@ export function createGoodsBackfill({ directory, discover, makeCollector, blocke
               }
             }
             // A failed worker never abandons another request's archive write.
-            const workers = await Promise.allSettled([worker(), worker()]);
+            const workers = await Promise.allSettled(Array.from({ length: GOODS_BACKFILL_CONCURRENCY }, () => worker()));
             if (workers.some(r => r.status === 'rejected')) failures.push({ reason: 'local_archive_error' });
             if (stopping) { run.status = 'paused'; await progress(true); break; }
             if (!failures.length && GOODS_REPORTS.every(id => Object.hasOwn(counts, id))) {
