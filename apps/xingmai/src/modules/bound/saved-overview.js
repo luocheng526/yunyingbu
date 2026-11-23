@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { listSheets } from "./persist.js";
 import { SHOP_TABLE_COLUMNS } from "./table-columns.js";
+import { sumSavedRows, dailyCoverage } from './saved-rollup.js';
 
 export const CHANNEL_TABLE_COLUMNS = [
   ['platform', '渠道'], ['ssxse', '实时销售额(支付)'], ['gmv', '支付金额(支付)'], ['invalidGmv', '无效单金额(标注)'],
@@ -53,7 +54,7 @@ export function overviewRows(payload) {
   visit(payload);
   return { rows, columns, groups };
 }
-export function createSavedOverview({ readSheets = listSheets, readScopes = async () => [], readArchived = async () => null } = {}) {
+export function createSavedOverview({ readSheets = listSheets, readScopes = async () => [], readArchived = async () => null, includePeriod = true } = {}) {
   return async function read(query = {}) {
     const from = String(query.from || ''), to = String(query.to || from);
     if (!validDay(from) || !validDay(to) || from < '2026-09-01' || to < from || Date.parse(to) - Date.parse(from) > 366 * 86400000) return { ok: false, statusCode: 400, reason: 'invalid_range' };
@@ -92,7 +93,7 @@ export function createSavedOverview({ readSheets = listSheets, readScopes = asyn
         response: { payload: { data: kind === 'operating' ? [responseData, responseData.history] : responseData } } };
     }
     const periodStart = new Date(Math.max(Date.parse('2026-09-01'), Date.parse(to) - 14 * 86400000)).toISOString().slice(0, 10);
-    const dailySheets = from === to ? await readSheets({ reportId: 'qdfx_dplb', dim: 'all', from: periodStart, to }) : [];
+    const dailySheets = includePeriod && from === to ? await readSheets({ reportId: 'qdfx_dplb', dim: 'all', from: periodStart, to }) : [];
     const periodRows = unambiguous(dailySheets.filter(s => s.status === 'done' && s.dim === 'all' && s.pageNo > 0 && s.startOn === s.endOn && validDay(s.startOn) && s.startOn >= periodStart && s.endOn <= to).flatMap(s => overviewRows(s.payload).rows.filter(r => day(r.date) === s.startOn && !r.sumLine && /^[A-Z]{2,8}$/.test(r.platform || '') && /^\d{1,24}$/.test(String(r.shopId)))), r => [r.platform, r.shopId, day(r.date)].join(':'));
     const shopReport = report('qdfx_dplb', 'saved_shops', 'shop', SHOP_TABLE_COLUMNS);
     const combined = new Map(shopReport.rows.map(row => [row.platform + ':' + row.shopId, row]));
@@ -109,7 +110,7 @@ export function createSavedOverview({ readSheets = listSheets, readScopes = asyn
       shopReport.source = { ...shopReport.source, kind: 'saved_data', archivedShops: archiveCount, note: '已完成补采的店铺使用新档案，其余保留历史采集；渠道合计仍取独立汇总接口原值' };
       shopReport.response.payload.data.columnData = shopReport.rows;
     }
-    return { ok: true, scope, records: {
+    const result = { ok: true, scope, records: {
       saved_channels: report('qdzl_lb', 'saved_channels', 'channel', CHANNEL_TABLE_COLUMNS),
       saved_shops: shopReport,
       saved_groups: report('qdzl_fz', 'saved_groups', 'group'),
@@ -118,5 +119,31 @@ export function createSavedOverview({ readSheets = listSheets, readScopes = asyn
       saved_hotgoods: report('qdzl_rx', 'saved_hotgoods', 'goods'),
       saved_shop_period: { reportId: 'saved_shop_period', scope, page: 1, status: periodRows.size ? 'received' : 'not_saved', rows: [...periodRows.values()], source: { kind: 'legacy_database', reportId: 'qdfx_dplb', note: '已保存店铺日报；缺失日留空' } }
     } };
+    if (from !== to) {
+      const dailySheets = (await readSheets({ reportIds: ['qdzl_lb', 'qdfx_dplb', 'qdzl_fz', 'qdzl_jy', 'qdzl_pl', 'qdzl_rx'], from, to, dim: 'all' })).filter(s => s.startOn === s.endOn && s.startOn >= from && s.endOn <= to);
+      const scopes = (await readScopes()).filter(s => s.date >= from && s.date <= to);
+      const dates = [...new Set([...dailySheets.map(s => s.startOn), ...scopes.map(s => s.date)])].sort();
+      const collected = [];
+      for (const date of dates) {
+        const daily = createSavedOverview({ readSheets: async () => dailySheets.filter(s => s.startOn === date), readScopes: async () => scopes.filter(s => s.date === date), readArchived, includePeriod: false });
+        collected.push(await daily({ from: date, to: date }));
+      }
+      for (const [id, report] of Object.entries(result.records)) {
+        if (report.status === 'received') continue; // Exact source totals retain priority.
+        const parts = collected.map(r => r.records[id]).filter(r => r.rows.length);
+        const dailyRows = parts.flatMap(r => r.rows.map(row => ({ ...row, date: r.scope.date })));
+        if (!dailyRows.length) continue;
+        const identity = row => id === 'saved_groups' ? row.groupId : id === 'saved_category' ? [row.platform, row.cateId].join(':') : id === 'saved_hotgoods' ? [row.platform, row.shopId, row.goodsId].join(':') : id === 'saved_shops' ? [row.platform, row.shopId].join(':') : String(row.platform).toLowerCase();
+        const rows = sumSavedRows(dailyRows, identity, from + '~' + to);
+        if (id === 'saved_groups') for (const row of rows) row.shopList = sumSavedRows(dailyRows.filter(r => r.groupId === row.groupId).flatMap(r => r.shopList || []), r => r.platform + ':' + r.shopId, from + '~' + to);
+        const coverage = dailyCoverage(dailyRows, from, to);
+        Object.assign(report, { rows, status: 'received', coverage, source: { kind: 'saved_daily_rollup', note: `按已保存日报汇总，覆盖 ${coverage.availableDays}/${coverage.expectedDays} 天；缺失日期不计为零` } });
+        const firstData = parts[0].response?.payload?.data;
+        const columnInfo = (Array.isArray(firstData) ? firstData[0] : firstData)?.columnInfo || [];
+        const table = { columnInfo, columnData: rows };
+        report.response = { payload: { data: id === 'saved_operating' ? [table, { columnInfo, columnData: dailyRows }] : table } };
+      }
+    }
+    return result;
   };
 }

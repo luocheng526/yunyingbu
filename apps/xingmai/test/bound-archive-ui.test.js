@@ -5,6 +5,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { createAnnotations } from "../src/modules/bound/annotations.js";
 import { publicCatalog } from "../src/modules/bound/catalog.js";
+import { createSavedData } from '../src/modules/bound/saved-data.js';
 
 const source = readFileSync(new URL("../public/shared/modules/bound.js", import.meta.url), "utf8");
 const scope = { shopId: "16501691", platform: "JD", shopName: "RASW潮流生活京选菀瑶专卖店", date: "2026-10-03" };
@@ -57,15 +58,15 @@ async function harness({ records = fixture(), failedPage = false, search = "", i
       if (url === "/api/bound/link") return reply({ phase: "not_logged_in", collection: { batchEnabled: false } });
       if (url === "/api/bound/progress") return reply({ items: [] });
       if (url.startsWith("/api/bound/collect/probe")) return reply({ target: { ...scope, metric: "广告花费" }, targets: [] });
-      if (url.startsWith("/api/bound/shop-day/saved/overview?")) return overview ? reply(overview) : reply({}, false);
+      if (url.startsWith("/api/bound/shop-day/saved/overview?")) { const data = typeof overview === 'function' ? overview() : overview; return data ? reply(data) : reply({}, false); }
       if (url === "/api/bound/shop-day/saved/options") return saved ? reply(saved.options) : reply({}, false);
       if (url.startsWith("/api/bound/shop-day/saved?")) {
         const p = new URL(url, "http://localhost").searchParams;
-        return reply(saved.manifest(p, manifest));
+        return Promise.resolve(saved.manifest(p, manifest)).then(reply);
       }
       if (url.startsWith("/api/bound/shop-day/saved/report?")) {
         const p = new URL(url, "http://localhost").searchParams;
-        return reply({ ok: true, record: saved.record(p, records) });
+        return Promise.resolve(saved.record(p, records)).then(record => reply({ ok: !!record, record }));
       }
       if (url === "/api/bound/shop-day") return reply(manifest);
       if (url.startsWith("/api/bound/shop-day/report?")) {
@@ -125,6 +126,39 @@ function savedFixture() {
     record(p, original) { return localRecords(p, original)[p.get("reportId")]?.find(r => r.page === Number(p.get("page"))); }
   };
 }
+
+test('四个页面全部店铺使用同一查询范围，关键指标跨店同商品ID仍可展示', async () => {
+  const day = scope.date;
+  const shops = [{ ...scope }, { ...scope, shopId: '456', shopName: '第二家店' }];
+  const rows = shops.map((s, i) => ({ ...s, gmv: (i + 1) * 100, goodsId: '999', goodsName: '同ID商品' }));
+  const sheets = ['qdfx_dplb', 'sp_zl_list'].map(reportId => ({ reportId, dim: reportId === 'sp_zl_list' ? 'sku' : 'all', startOn: day, endOn: day, status: 'done', pageNo: 1, payload: { raw: { data: { columnData: rows } } } }));
+  const api = createSavedData({ readSheets: async () => sheets, readHeads: async () => sheets, collector: { getRecord: async () => null, status: async () => ({ ok: true, scope, reports: [] }) } });
+  const saved = { options: { ok: true, shops, dates: [day], defaultScope: scope }, manifest: p => api.manifest(Object.fromEntries(p)), record: async p => (await api.record(Object.fromEntries(p))).record };
+  const overview = { ok: true, scope: { from: day, to: day }, records: { saved_shops: record('saved_shops', rows, 1, { source: {}, scope: { from: day, to: day } }) } };
+  const h = await harness({ saved, overview });
+  for (const page of ['channelOverview', 'channelAnalysis', 'productOverview', 'channelAnalysisNew']) {
+    await h.click({ 'data-act': 'page', 'data-page': page });
+    await h.change('saved-shop', '__all__');
+    await new Promise(resolve => setTimeout(resolve, 30));
+    assert.match(h.root.innerHTML, /value="__all__" selected/);
+    if (page === 'channelAnalysis') await h.click({ 'data-act': 'tab', 'data-tab': 'qdfx_dplb' });
+    assert.match(h.root.innerHTML, /当前表 2 条/, page);
+  }
+  assert.equal(h.calls.some(c => /saved\?/.test(c.url) && /shopId=__all__/.test(c.url) && /platform=all/.test(c.url)), true);
+});
+
+test('全部店铺临时读取失败后重新选择可恢复，不永久缓存成无数据', async () => {
+  let attempts = 0;
+  const overview = { ok: true, scope: { from: scope.date, to: scope.date }, records: { saved_shops: record('saved_shops', [{ ...scope, gmv: 10 }], 1, { source: {} }) } };
+  const h = await harness({ saved: savedFixture(), overview: () => ++attempts === 1 ? null : overview });
+  await h.click({ 'data-act': 'page', 'data-page': 'channelOverview' });
+  await h.change('saved-shop', '__all__');
+  assert.match(h.root.innerHTML, /全部店铺数据读取失败/);
+  await h.change('saved-shop', 'JD:12345');
+  await h.change('saved-shop', '__all__');
+  assert.match(h.root.innerHTML, /当前表 1 条/);
+  assert.equal(attempts, 2);
+});
 
 test("新页面统一读取旧库：四页、店铺日期、筛选导出都不分入口且不触发采集", async () => {
   const h = await harness({ saved: savedFixture() });

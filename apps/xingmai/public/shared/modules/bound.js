@@ -109,7 +109,7 @@
     if (!saved) return "/api/bound/shop-day" + path + (query ? "?" + query : "");
     if (!scope) {
       var options = state.savedOptions, selected = options.shops.find(function (s) { return s.platform + ":" + s.shopId === state.savedShopKey; }) || options.defaultScope;
-      scope = { platform: selected.platform, shopId: selected.shopId, from: state.from || options.defaultScope.date, to: state.to || options.defaultScope.date };
+      scope = { platform: state.archiveAccountOverview ? 'all' : selected.platform, shopId: state.archiveAccountOverview ? '__all__' : selected.shopId, from: state.from || options.defaultScope.date, to: state.to || options.defaultScope.date };
     }
     var params = new URLSearchParams(query || "");
     params.set("shopId", scope.shopId); params.set("platform", scope.platform);
@@ -288,7 +288,9 @@
             if (!Number.isInteger(expected) || r.total !== expected) throw new Error('pagination_total');
             r.rows.filter(function (row) { return !row.sumLine; }).forEach(function (row) {
               var identity = String(id === 'shop_spu_period' ? row.spuid || '' : row.goodsId || '');
-              if (!identity || seen.has(identity) || String(row.shopId) !== archive.scope.shopId || row.platform !== archive.scope.platform) throw new Error('pagination_identity');
+              var allShops = archive.scope.shopId === '__all__';
+              if (allShops && identity) identity = row.platform + ':' + row.shopId + ':' + identity;
+              if (!identity || seen.has(identity) || (allShops ? !/^\d{1,24}$/.test(String(row.shopId)) || !/^[A-Z]{2,8}$/.test(row.platform || '') : String(row.shopId) !== archive.scope.shopId || row.platform !== archive.scope.platform)) throw new Error('pagination_identity');
               seen.add(identity);
             });
           }
@@ -590,7 +592,12 @@
       return { key: key, label: entry[1], value: value, on: true, sourceValue: true, rate: /率|占比/.test(entry[1]), sourceRatio: true,
         note: key === 'realTimeGmv' ? '实时指标，不按所选日期累加；未保存时留空' : key === 'profit' && !product && state.page !== 'productOverview' ? '店铺利润已扣自定义费用' : '保留来源表值' };
     }) : [];
-    var message = !validRange ? "当前选择范围未采集。已保存的数据仅覆盖 " + scope.date + "，未采数据不计为 0。" : !id ? "这个页面本轮尚未采集。请查看渠道详情、商品总览或商品全景分析。" : !available ? "这张表尚未采集或档案读取失败。采集完成后点击刷新已采数据。" : !complete ? "商品分页不完整，暂不显示商品合计指标。" : partial ? "以下为已保存的部分明细，不代表全部记录。" : unavailableCard ? "已取得此卡片的数量与规则，但分类明细尚未核验，暂不显示商品列表。选择“全部”可返回。" : total === 0 ? (q || state.archiveCard || state.archiveCategory || state.archiveFlag || state.archiveProfit || Object.values(filters).some(function (f) { return f.value !== ""; }) ? "没有匹配的记录。" : "接口已采集完成，返回 0 条记录。") : "";
+    var message = !validRange ? "当前选择范围未采集。已保存的数据仅覆盖 " + scope.date + "，未采数据不计为 0。" : !id ? "这个页面本轮尚未采集。请查看渠道详情、商品总览或商品全景分析。" : !available ? "这张表尚未采集或档案读取失败。请点击刷新已采数据重试。" : !complete ? "商品分页不完整，暂不显示商品合计指标。" : partial ? "以下为已保存的部分明细，不代表全部记录。" : unavailableCard ? "已取得此卡片的数量与规则，但分类明细尚未核验，暂不显示商品列表。选择“全部”可返回。" : total === 0 ? (q || state.archiveCard || state.archiveCategory || state.archiveFlag || state.archiveProfit || Object.values(filters).some(function (f) { return f.value !== ""; }) ? "没有匹配的记录。" : "接口已采集完成，返回 0 条记录。") : "";
+    if (account) {
+      var overviewState = state.archiveOverviewCache[state.from + ':' + state.to];
+      if (!overviewState || overviewState.status === 'loading') message = '正在读取全部店铺数据…';
+      else if (overviewState.status === 'missing') message = '全部店铺数据读取失败，请点击“刷新已采数据”重试。';
+    }
     return {
       localArchive: true, account: account, page: { id: meta.id, label: meta.label, ops: [] },
       tabs: choices.map(function (tab) { return { id: tab[0], label: tab[1] }; }),
@@ -853,7 +860,7 @@
       if (date >= DATA_START && date <= scope.date && /^\d{4}-\d{2}-\d{2}$/.test(date)) result[date] = Object.hasOwn(result, date) ? null : row;
     });
     var anchor = record && record.rows[0];
-    if (result[scope.date] && anchor && ['gmv', 'netGmv', 'profit'].some(function (key) { return anchor[key] != null && result[scope.date][key] != null && Number(anchor[key]) !== Number(result[scope.date][key]); })) result = {};
+    if (state.from === state.to && result[scope.date] && anchor && ['gmv', 'netGmv', 'profit'].some(function (key) { return anchor[key] != null && result[scope.date][key] != null && Number(anchor[key]) !== Number(result[scope.date][key]); })) result = {};
     return { rows: result, table: table };
   }
   function savedShopPeriodRows(data) {
@@ -980,7 +987,7 @@
 
   function renderSavedChannels() {
     var record = archiveRecords('saved_channels')[0];
-    if (!record) return '<section class="bd-block"><h2>渠道列表</h2><p class="bd-miss">所选日期的渠道原表尚未保存，不能由店铺行推算。</p></section>';
+    if (!record) { var current = state.archiveOverviewCache[state.from + ':' + state.to]; return '<section class="bd-block"><h2>渠道列表</h2><p class="bd-miss">' + (!current || current.status === 'loading' ? '正在读取全部店铺数据…' : current.status === 'missing' ? '数据读取失败，请点击“刷新已采数据”重试。' : '所选范围暂无已保存渠道数据。') + '</p></section>'; }
     var columns = archiveColumns('saved_channels', record.rows);
     return '<section class="bd-block"><h2>渠道列表</h2><p class="bd-status">点击渠道筛选下方店铺；汇总指标保持全部已存店铺范围。' + (record.source.updatedAt ? '采集时间：' + esc(record.source.updatedAt) : '') + '</p><div class="bd-scroll"><table class="bd-table bd-source-table"><thead><tr>' + columns.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '</tr></thead><tbody>' + record.rows.map(function (r) {
       return '<tr>' + columns.map(function (c) { return '<td>' + (c.key === 'platform' ? '<button type="button" data-act="archive-channel-filter" data-platform="' + esc(String(r.platform).toLowerCase() === 'all' ? '' : r.platform) + '">' + esc({all:'全渠道', All:'全渠道', JD:'京东', TM:'天猫', TMALL:'天猫', DY:'抖音', DOUYIN:'抖音'}[r.platform] || r.platform) + '</button>' : formatCell(r[c.key], c)) + '</td>'; }).join('') + '</tr>';
@@ -995,11 +1002,13 @@
       ? "商品合计取完整分页对应的全部合计，包含零销量但有花费或退款的商品。利润未扣店铺自定义费用；金额保留来源表的显示精度，不将逐行取整金额相加。"
       : selected ? "仅展示这件商品在所选日期的已采结果。金额保留来源表显示精度。"
       : "上方指标取店铺经营表，店铺利润已扣自定义费用。商品、品类等明细表利润口径不同，不能直接替代店铺利润。推广花费为支付预估口径。";
-    if (data.account) explanation = '按所选日期读取历史渠道汇总和店铺原表；不将店铺取整值重新相加。旧站后续重算可能与采集时不同。';
+    if (data.account) { var overviewSource = archiveRecords(data.reportId)[0]; explanation = overviewSource && overviewSource.source && overviewSource.source.note || '按所选日期读取已保存数据；缺失日期不计为零。'; }
     var provenance = archiveRecords(data.page.id === 'channelAnalysisNew' ? 'key_graph' : data.page.id === 'productOverview' ? data.reportId : 'channel_operating')[0];
     if (!data.account && provenance && provenance.source) explanation = provenance.source.note + "。保留来源表金额精度与指标口径。";
     if (data.page.id === 'productOverview' && !data.complete) explanation = "展示已保存的商品明细；分页未核齐时不显示全店商品合计或分类数量。";
-    var shopPicker = state.savedOptions ? '<label>店铺 <select data-act="saved-shop" aria-label="选择店铺">' + (state.page === 'channelOverview' ? '<option value="__all__"' + (data.account ? ' selected' : '') + '>全部已存店铺</option>' : '') + state.savedOptions.shops.map(function (s) { return '<option value="' + esc(s.platform + ':' + s.shopId) + '"' + (!data.account && s.shopId === scope.shopId && s.platform === scope.platform ? ' selected' : '') + '>' + esc(s.shopName) + '</option>'; }).join('') + '</select></label>' : '';
+    var rangeRecord = archiveRecords(data.reportId)[0];
+    if (rangeRecord && rangeRecord.coverage) explanation += ' 所选范围已保存 ' + rangeRecord.coverage.availableDays + '/' + rangeRecord.coverage.expectedDays + ' 天，缺失日期不计为零。';
+    var shopPicker = state.savedOptions ? '<label>店铺 <select data-act="saved-shop" aria-label="选择店铺">' + (['channelOverview', 'channelAnalysis', 'channelAnalysisNew', 'productOverview'].includes(state.page) ? '<option value="__all__"' + (state.archiveAccountOverview ? ' selected' : '') + '>全部已存店铺</option>' : '') + state.savedOptions.shops.map(function (s) { return '<option value="' + esc(s.platform + ':' + s.shopId) + '"' + (!state.archiveAccountOverview && s.shopId === scope.shopId && s.platform === scope.platform ? ' selected' : '') + '>' + esc(s.shopName) + '</option>'; }).join('') + '</select></label>' : '';
     var inventory = state.localArchive.inventory;
     var selectProduct = selected ? '<section class="bd-block"><label>选择商品 <select data-act="archive-select-product" aria-label="选择商品">' + ((inventory && inventory.items) || [selected]).map(function (p) { return '<option value="' + esc(p.goodsId) + '"' + (String(p.goodsId) === String(selected.goodsId) ? ' selected' : '') + '>' + esc(p.goodsName + ' · ' + p.goodsId) + '</option>'; }).join('') + '</select></label><p>商品 ID：' + esc(selected.goodsId) + '</p><button type="button" class="bd-plain" data-act="page" data-page="' + (data.page.id === 'productOperation' ? 'productPanorama' : 'productOperation') + '">' + (data.page.id === 'productOperation' ? '查看商品全景' : '查看商品运营分析') + '</button></section>' : '';
     var dim = data.page.id === 'productOverview' ? chips([['spu', 'SPU'], ['sku', 'SKU']], 'dim') : '';
@@ -2335,8 +2344,8 @@
     render(root);
     var nextQr = oldQr && root.querySelector('.bd-qr');
     if (nextQr && nextQr.src === oldQr.src && nextQr.replaceWith) nextQr.replaceWith(oldQr);
-    fillArchiveExtras(root);
     fillSavedOverview(root);
+    fillArchiveExtras(root);
     fillArchiveAnnotations(root);
     fillArchivePeriods(root);
     if (focus && root.querySelector) {
@@ -2879,7 +2888,13 @@
         return;
       }
       if (act === "saved-shop" && state.savedOptions) {
-        if (node.value === '__all__' && state.page === 'channelOverview') { state.archiveAccountOverview = true; state.tab = ''; state.pageNo = 1; state.q = state.sortKey = ''; paint(root); return; }
+        if (node.value === '__all__') {
+          state.archiveAccountOverview = true; state.tab = ''; state.pageNo = 1; state.q = state.sortKey = '';
+          var overviewKey = state.from + ':' + state.to;
+          if (state.archiveOverviewCache[overviewKey]?.status === 'missing') delete state.archiveOverviewCache[overviewKey];
+          if (state.page === 'channelOverview') paint(root); else load(root, token);
+          return;
+        }
         state.archiveAccountOverview = false;
         var shop = state.savedOptions.shops.find(function (s) { return s.platform + ":" + s.shopId === node.value; });
         if (shop) { state.savedShopKey = node.value; state.shop = shop.shopName; state.pageNo = 1; load(root, token); }
