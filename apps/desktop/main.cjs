@@ -7,11 +7,12 @@ const { centeredBounds, allowedUrl, desktopOrigin, backgroundFor } = require('./
 const origin = desktopOrigin(app.isPackaged, process.env.XM_DESKTOP_PREVIEW);
 const material = backgroundFor(process.platform, os.release());
 let mainWindow;
-const cssFiles = ['desktop.css', 'modules.css'];
+const cssFiles = ['desktop.css', 'modules.css', 'layout.css'];
 const logo = 'data:image/png;base64,' + fs.readFileSync(path.join(__dirname, 'assets', 'logo-transparent.png')).toString('base64');
 function rendererSource() {
   return fs.readFileSync(path.join(__dirname, 'renderer', 'shortcut-model.js'), 'utf8') + '\n' +
-    fs.readFileSync(path.join(__dirname, 'renderer', 'desktop.js'), 'utf8').replace('__XM_APP_ICON__', JSON.stringify(logo));
+    fs.readFileSync(path.join(__dirname, 'renderer', 'desktop.js'), 'utf8').replace('__XM_APP_ICON__', JSON.stringify(logo)) + '\n' +
+    fs.readFileSync(path.join(__dirname, 'renderer', 'layout.js'), 'utf8');
 }
 
 app.setName('甄选未来');

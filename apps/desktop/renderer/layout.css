@@ -1,0 +1,83 @@
+/* Native-only containment and responsive layout. Wide data stays reachable. */
+html.xm-native.xm-glass[data-native-material] {
+  /* The web home module uses :has(#xm-hm) to force a full-screen shell,
+     including when its pane is cached behind another page. Keep the native dock clear. */
+  &:has(#xm-content) .xm-shell {
+    height: calc(100dvh - 65px) !important;
+    max-height: calc(100dvh - 65px) !important;
+    min-height: 0 !important;
+  }
+  & :is(.xm-main, .xm-workspace, .xm-pane, .xm-content) { min-width: 0 !important; box-sizing: border-box; }
+  & .xm-workspace { overflow: hidden !important; }
+  & :is(#xm-content, .xm-pane) { max-width: 100% !important; min-height: 0 !important; overflow: auto !important; }
+  & :is(.xm-hm, .xm-page, .page, .wc, .bd-app, .bd-main, .xm-ui-scope) { box-sizing: border-box !important; min-width: 0 !important; max-width: 100% !important; }
+  & :is(.xm-hm-body, .xm-hm-live, .xm-hm-teams, .wc-split, .wc-stack, .me-split, .me-col,
+      .xm-ui-card, .org-card, .org-struct, .bd-panel, .panel) { min-width: 0 !important; max-width: 100%; }
+  & :is(.wc-split, .me-split, .org-console-charts, .org-console-kpis, .xm-ui-stat-grid) > * { min-width: 0; }
+
+  & .xd-table-viewport {
+    box-sizing: border-box !important; width: 100%; min-width: 0 !important; max-width: 100% !important;
+    overflow-x: auto !important; overscroll-behavior-x: contain;
+    scrollbar-width: auto !important; scrollbar-color: #6474678c #ffffff30 !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  & .xd-table-viewport::-webkit-scrollbar { width: 11px; height: 11px; }
+  & .xd-table-viewport::-webkit-scrollbar-thumb { background: #6474678c; border: 2px solid transparent; border-radius: 8px; background-clip: padding-box; }
+  & .xd-table-viewport::-webkit-scrollbar-track { background: #ffffff30; border-radius: 8px; }
+  & .xd-table-viewport:focus-visible { outline: 2px solid #647467; outline-offset: -2px; }
+  & .xd-table-wrapper { border-radius: 12px; }
+  & .xd-table-viewport table { max-width: none; }
+  & .xm-hm-live .xd-fit-table {
+    width: 100% !important; min-width: var(--xd-table-min, 1120px) !important;
+    table-layout: fixed !important;
+  }
+  & .xd-fit-table col { width: var(--xd-col-width, auto) !important; }
+  & .xm-hm-live .xd-fit-table :is(th, td) { padding-inline: 5px !important; }
+  & .xm-hm-live .xd-fit-table th { overflow-wrap: anywhere; white-space: normal; }
+
+  /* A small reserved strip keeps horizontal navigation on screen, never over rows. */
+  &.xd-has-wide-table .xm-workspace { padding-bottom: 46px !important; }
+  & .xd-table-nav {
+    position: fixed; z-index: 1090; display: flex; align-items: center; gap: 8px;
+    height: 31px; box-sizing: border-box; padding: 3px 9px;
+    border: 1px solid #ffffff90; border-radius: 13px;
+    background: #dfe7dfde; color: #475343;
+    backdrop-filter: blur(22px); box-shadow: inset 0 1px 0 #ffffffab, 0 2px 8px #2433240c;
+    font-size: 11px; line-height: 1.3;
+  }
+  & .xd-table-nav[hidden] { display: none !important; }
+  & .xd-table-nav-label { min-width: 130px; white-space: nowrap; }
+  & .xd-table-nav button {
+    flex: 0 0 27px; width: 27px; height: 23px; padding: 0; border: 0;
+    border-radius: 8px; background: #ffffff75; color: #344431;
+    font: 17px/1 system-ui; cursor: pointer;
+  }
+  & .xd-table-nav button:disabled { opacity: .35; cursor: default; }
+  & .xd-table-nav input[type=range] {
+    flex: 1; min-width: 50px; width: auto; height: 22px; margin: 0;
+    padding: 0; border: 0 !important; background: transparent !important;
+    box-shadow: none !important; appearance: none; cursor: ew-resize;
+  }
+  & .xd-table-nav input[type=range]::-webkit-slider-runnable-track { height: 5px; border-radius: 5px; background: #71856f42; }
+  & .xd-table-nav input[type=range]::-webkit-slider-thumb { appearance: none; width: 30px; height: 15px; margin-top: -5px; background: #ffffffed; border: 1px solid #7d8d7955; border-radius: 8px; box-shadow: 0 1px 3px #354b3330; }
+  & .xd-table-nav input[type=range]::-moz-range-thumb { width: 30px; height: 13px; background: #ffffffed; border: 1px solid #7d8d7955; border-radius: 8px; }
+  & .xd-table-nav input[type=range]::-moz-range-track { height: 5px; border-radius: 5px; background: #71856f42; }
+
+  & :is(.xm-hm-bar, .xm-hm-live-filter, .xm-hm-live-filter-left, .xm-hm-live-filter-right,
+      .xm-hm-live-search, .xm-hm-live-chips, .org-search-form, .wc-toolbar, .bd-filters, .bd-tools) { flex-wrap: wrap !important; min-width: 0; }
+  & :is(.xm-hm-live-filter-right, .org-search-form) { max-width: 100%; }
+  & .org-search-form :is(input, select) { min-width: min(240px, 100%) !important; max-width: 100%; }
+  & .xm-hm-live-filter-box { min-width: min(220px, 100%); }
+  & :is(.wc-toolbar, .bd-filters, .org-toolbar) > * { max-width: 100%; }
+  & :is(.wc-dialog, .org-dialog, .work-dialog) { box-sizing: border-box; max-width: calc(100vw - 40px) !important; max-height: calc(100dvh - 60px) !important; overflow: auto; }
+  & :is(.wc-field, .me-profile, .xm-ui-card) { overflow-wrap: anywhere; }
+  @media (max-width: 1100px) {
+    & :is(.xm-hm-live-cards, .xm-hm-team-kpis) { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+    & :is(.wc-split, .me-split, .org-struct-stage) { grid-template-columns: minmax(0, 1fr) !important; }
+    & .xm-hm-live-filter-right { gap: 10px; }
+  }
+  @media (max-width: 850px) {
+    & :is(.xm-hm-live-cards, .xm-hm-team-kpis) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    & .xd-table-nav-label { min-width: 0; font-size: 10px; }
+  }
+}

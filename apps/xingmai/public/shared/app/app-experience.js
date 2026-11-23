@@ -4,7 +4,7 @@
   if (window.__xmAppExperience) return;
   window.__xmAppExperience = true;
   var ASSET = "glass-20261123-1";
-  var WINDOWS_APP = "https://github.com/luocheng526/yunyingbu/releases/download/desktop-v0.2.1/ZhenxuanFuture-0.2.1-win-x64.exe";
+  var WINDOWS_APP = "https://github.com/luocheng526/yunyingbu/releases/download/desktop-v0.2.2/ZhenxuanFuture-0.2.2-win-x64.exe";
   var root = document.documentElement;
   var query = new URLSearchParams(location.search);
   var standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
