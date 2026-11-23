@@ -17,7 +17,8 @@ export function buildShopOverviewHistory(record, samples, nowStamp) {
   const now = parts(nowStamp);
   const yesterdayDate = new Date(Date.parse(now.day + "T12:00:00Z") - 86400000).toISOString().slice(0, 10);
   const result = { source: "server-samples", todayDate: now.day, yesterdayDate,
-    today: blank(), yesterday: blank(), comparison: { deal: null, spend: null } };
+    today: blank(), yesterday: blank(), comparison: { deal: null, spend: null },
+    comparisonAgeSeconds: { deal: null, spend: null } };
   const latest = { today: blank(), yesterday: blank() };
   for (const [metric, field, currentField, stampField] of [
     ["deal", "dealAmount", "liveAmount", "dealCapturedAt"],
@@ -41,10 +42,12 @@ export function buildShopOverviewHistory(record, samples, nowStamp) {
       if (at.day === now.day && at.second <= cutoff) add("today", at.second, value);
       if (at.day === yesterdayDate) {
         add("yesterday", at.second, value);
-        // Header comparison uses yesterday's observation at or before the
-        // current reading, never a later hour or a stale all-day total.
-        if (valid && at.second <= cutoff && cutoff - at.second <= 15 * 60 && at.second >= comparisonSecond) {
+        // Keep the latest real observation before the current reading. Gaps
+        // over 15 minutes are explicitly labelled as a reference by the UI.
+        // Never substitute a later observation or yesterday's closing total.
+        if (valid && at.second <= cutoff && at.second >= comparisonSecond) {
           result.comparison[metric] = value;
+          result.comparisonAgeSeconds[metric] = cutoff - at.second;
           comparisonSecond = at.second;
         }
       }

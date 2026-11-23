@@ -122,9 +122,15 @@ export function createLive2SalesTrends({ listSamples, now, clock = Date.now }) {
       });
     } catch {
       // Current platform comparison remains usable even when history is unavailable.
-      return records.map(record => ({ ...record,
-        salesTrend: { ...buildShopSalesTrend(record, [], stamp), historyUnavailable: true },
-        overviewHistory: { ...buildShopOverviewHistory(record, [], stamp), historyUnavailable: true } }));
+      return records.map(record => {
+        // A failed refresh must not erase observations already read today.
+        // A cache from another day must never be relabelled as today's data.
+        const rows = cache?.day === day ? cache.byShop.get(record.shop) || [] : [];
+        return { ...record,
+          salesTrend: { ...buildShopSalesTrend(record, rows, stamp), historyUnavailable: true },
+          overviewHistory: { ...buildShopOverviewHistory(record, rows, stamp),
+            historyUnavailable: true, historyCached: rows.length > 0 } };
+      });
     }
   };
 }

@@ -75,10 +75,11 @@ test("Shanghai midnight and Date timestamps keep today's pairs on the right date
   assert.deepEqual(result.yesterday, [{ second: 300, amount: 1000 }, { second: 600, amount: 10000 }]);
 });
 
-test("cache loads today only and history failure preserves current platform comparison", async () => {
+test("cache loads yesterday and today and history failure preserves current platform comparison", async () => {
   let reads = 0, clock = 0, fail = false, stamp = now;
   const enrich = createLive2SalesTrends({ now: () => stamp, clock: () => clock, listSamples: async (from, to) => {
-    reads++; assert.equal(from, to); assert.equal(from, stamp.includes("/22") ? "2026-11-22" : "2026-11-21");
+    reads++; assert.equal(to, stamp.includes("/22") ? "2026-11-22" : "2026-11-21");
+    assert.equal(from, stamp.includes("/22") ? "2026-11-21" : "2026-11-20");
     if (fail) throw new Error("DB unavailable"); return [sample("12:00", 1000, 25)];
   } });
   const results = await Promise.all([enrich([record]), enrich([record])]);

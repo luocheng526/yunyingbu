@@ -2520,6 +2520,10 @@
         : n < 0
           ? "环比 ↘ 下降 " + Math.round(Math.abs(n)) + "%"
           : "环比 0%";
+    if (chart && chart.comparisonStatus) trendText = chart.comparisonStatus;
+    else if (chart && chart.comparisonEmpty) trendText = "环比 待采集";
+    else if (chart && chart.zeroBaseline) trendText = "环比 昨日为0";
+    else if (chart && chart.referenceComparison) trendText = trendText.replace("环比", "参考环比");
     return (
       '<article class="xm-hm-chart" data-chart="' +
       kind +
@@ -2532,8 +2536,9 @@
       escapeHtml((chart && chart.label) || "实时指标") +
       '</span><span class="xm-hm-legs"><i class="is-yest"></i>昨天<i class="is-today"></i>今天</span></div><div class="xm-hm-index-num">' +
       escapeHtml(chart && chart.value != null && chart.value !== "" ? chart.value : "—") +
-      '</div><div class="xm-hm-yest-now">' + (chart.serverHistory ? "昨日同段 " : "昨天 ") +
+      '</div><div class="xm-hm-yest-now">' + escapeHtml(chart.yestLabel || (chart.serverHistory ? "昨日同段" : "昨天")) + " " +
       escapeHtml((chart && chart.yestText) || "—") +
+      (chart.comparisonCoverage ? ' <span>（' + chart.comparisonCoverage.count + '/' + chart.comparisonCoverage.total + '家）</span>' : "") +
       "</div>" +
       '<div class="xm-hm-trend' +
       trendCls +
@@ -2541,7 +2546,7 @@
       trendText +
       "</div>" +
       compareLineHtml(line) +
-      (chart.serverHistory ? '<div class="xm-hm-line-caption">' + (chart.historyUnavailable ? "历史暂时读取失败，请稍后刷新" : "服务器历史 · 按已采集店铺汇总 · 悬停查看覆盖数") + '</div>' : "") +
+      (chart.serverHistory ? '<div class="xm-hm-line-caption">' + escapeHtml(chart.comparisonNote || "服务器历史 · 按已采集店铺汇总 · 悬停查看覆盖数") + '</div>' : "") +
       "</article>"
     );
   }
@@ -3731,19 +3736,29 @@
     var pick = liveFilter();
     var rows = pick.shop || pick.team ? scopedRecords || [] : allRecords || [];
     var sums = live2Sums(rows), today = live2HistoryTotals(rows, "today"), yesterday = live2HistoryTotals(rows, "yesterday");
-    var yestDeal = live2YesterdayTotal(rows, "deal"), yestSpend = live2YesterdayTotal(rows, "spend");
-    var yestFee = yestDeal > 0 && yestSpend != null ? yestSpend / yestDeal : null;
-    function card(key, label, metric, value, prior) {
+    function card(key, label, metric, value) {
+      var pair = live2Comparison(rows, metric), prior = pair.yesterday;
+      function format(number) { return metric === "fee" ? fmtRate(number) : fmtMoney(number); }
+      var notes = [pair.count ? "环比按相同" + pair.count + "家店铺计算，今日 " + format(pair.today) : "等待昨日可比数据"];
+      if (pair.maxAge > 900) notes.push("昨日采样最多提前" + Math.ceil(pair.maxAge / 60) + "分钟");
+      if (pair.cached) notes.push("历史刷新失败，沿用已读取记录");
+      else if (pair.unavailable) notes.push("部分历史暂时读取失败");
       return { key: key, label: label, value: value == null ? "—" : metric === "fee" ? fmtRate(value) : fmtMoney(value),
-        yestText: prior == null ? "—" : metric === "fee" ? fmtRate(prior) : fmtMoney(prior),
-        delta: value != null && prior != null && prior > 0 ? trendOf(value, prior) : "",
+        yestText: prior == null ? metric === "fee" && pair.count ? "无成交" : "待采集" : format(prior),
+        yestLabel: pair.maxAge > 900 ? "昨日参考" : "昨日同段",
+        delta: pair.today != null && prior != null && prior > 0 ? trendOf(pair.today, prior) : pair.today === 0 && prior === 0 ? 0 : "",
+        comparisonEmpty: prior == null, zeroBaseline: prior === 0 && pair.today > 0,
+        comparisonStatus: metric === "fee" && pair.count && (pair.today == null || prior == null)
+          ? "环比 " + (pair.today == null ? "今日" : "昨日") + "无成交，暂无法计算" : "",
+        referenceComparison: pair.maxAge > 900,
+        comparisonCoverage: { count: pair.count, total: pair.total }, comparisonNote: notes.join(" · "),
         today: today[metric], yesterday: yesterday[metric], serverHistory: true, hours: 24,
         historyUnavailable: rows.some(function (row) { return !row.overviewHistory || row.overviewHistory.historyUnavailable; }),
         unit: metric === "fee" ? "rate" : "", coverage: { today: today.coverage[metric], yesterday: yesterday.coverage[metric], total: rows.length } };
     }
-    return { hero: card("jingmai", "实时总成交金额", "deal", sums.deal, yestDeal),
-      paid: card("spend", "推广总花费", "spend", sums.spend, yestSpend),
-      fee: card("fee", "实时费比", "fee", sums.fee, yestFee) };
+    return { hero: card("jingmai", "实时总成交金额", "deal", sums.deal),
+      paid: card("spend", "推广总花费", "spend", sums.spend),
+      fee: card("fee", "实时费比", "fee", sums.fee) };
   }
   function live2HistoryTotals(rows, day) {
     var result = { deal: [], spend: [], fee: [], coverage: { deal: [], spend: [], fee: [] } };
@@ -3763,16 +3778,35 @@
     }
     return result;
   }
-  function live2YesterdayTotal(rows, metric) {
-    var total = 0, count = 0, missing = false;
+  function live2Comparison(rows, metric) {
+    var today = 0, yesterday = 0, todayDeal = 0, yesterdayDeal = 0;
+    var result = { today: null, yesterday: null, count: 0, total: 0, maxAge: 0, cached: false, unavailable: false };
     rows.forEach(function (row) {
-      if (asNum(metric === "deal" ? row.liveAmount : row.paidAmount) == null) return;
-      var comparison = row.overviewHistory && row.overviewHistory.comparison;
-      var value = asNum(comparison && comparison[metric]);
-      if (value == null) missing = true;
-      else { total += value; count++; }
+      if (!row || row.pendingCollect) return;
+      var deal = asNum(row.liveAmount), spend = asNum(row.paidAmount);
+      var current = metric === "deal" ? deal : spend;
+      if (current == null || (metric === "fee" && deal == null)) return;
+      result.total++;
+      var history = row.overviewHistory || {}, comparison = history.comparison || {}, ages = history.comparisonAgeSeconds || {};
+      result.cached = result.cached || !!history.historyCached;
+      result.unavailable = result.unavailable || !!history.historyUnavailable;
+      var prior = asNum(comparison[metric === "deal" ? "deal" : "spend"]), priorDeal = asNum(comparison.deal);
+      if (prior == null || (metric === "fee" && priorDeal == null)) return;
+      // Both sides of every comparison use exactly the same shops. Fee rate
+      // also requires both metrics on each shop, not separate coverage sets.
+      result.count++; today += current; yesterday += prior;
+      if (metric === "fee") { todayDeal += deal; yesterdayDeal += priorDeal; }
+      result.maxAge = Math.max(result.maxAge, Number(ages[metric === "deal" ? "deal" : "spend"]) || 0,
+        metric === "fee" ? Number(ages.deal) || 0 : 0);
     });
-    return count && !missing ? total : null;
+    if (result.count) {
+      result.today = metric === "fee" ? todayDeal > 0 ? today / todayDeal : null : today;
+      result.yesterday = metric === "fee" ? yesterdayDeal > 0 ? yesterday / yesterdayDeal : null : yesterday;
+    }
+    return result;
+  }
+  function live2HistorySignature(pack) {
+    return JSON.stringify(((pack && pack.records) || []).map(function (row) { return [row.shop, row.overviewHistory]; }));
   }
   function live2PanelHtml(state) {
     var roster = adaptLive2Shops(state && state.dutyShops);
@@ -6352,7 +6386,8 @@
           return;
         }
         var prev = state.live2Pack;
-        var same = prev && prev.publishedAt === pack.publishedAt && prev.running === pack.running;
+        var same = prev && prev.publishedAt === pack.publishedAt && prev.running === pack.running &&
+          live2HistorySignature(prev) === live2HistorySignature(pack);
         if (!same) {
           state.live2Hint = pack.running ? "正在读取新一轮。页面仍显示上一轮的金额、排名和登录状态。" : "";
           paintLive2(pack);
