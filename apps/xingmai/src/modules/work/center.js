@@ -1,3 +1,4 @@
+import { saveComposerImages, containsComposerImage } from './composer-images.js';
 import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
 import { access, canAssign, canEditTask, canReviewTask, allowedReviewers, reviewerOptions, recordVisible, managedRecord, scopeSnapshot, WORK_ROLES, normalizedRole, roleLevel } from './center-access.js';
@@ -143,7 +144,7 @@ export async function saveDaily(user,input) {
   const snapshot=await dailyDraft(ctx,rows,date,workRows,dailyRows,issueRows);
   if(submit&&snapshot.team) {const me=snapshot.team.members.find(p=>p.id===ctx.me.id);if(me)me.submitted=true;}
   const history=copy(previous?.history||[]);if(previous)history.push({...previous,history:undefined});
-  return writeRecord('daily',id,{...personSnapshot(ctx.me),date,notes,snapshot,createdAt:previous?.createdAt||now,
+  return writeRecord('daily',id,{...personSnapshot(ctx.me),date,notes,composerImages:await saveComposerImages(input.composerImages,Object.keys(notes),previous?.composerImages,ctx.me.id),snapshot,createdAt:previous?.createdAt||now,
     submittedAt:previous?.submittedAt||(submit?now:null),late:previous?.submittedAt?previous.late:submit&&late,
     lastSubmittedAt:submit?now:previous?.lastSubmittedAt||null,history},revision);
 }
@@ -154,7 +155,7 @@ export async function saveWork(user,input) {
   if(old&&(old.kind!=='work'||old.personId!==ctx.me.id))fault('无权修改此工作',403);
   const shopId=clean(input.shopId,80);if(shopId&&!ctx.bundle.shops.some(s=>String(s.id)===shopId&&ctx.me.visibleShops.includes(s.name)))fault('店铺不在本人职责范围内',403);
   const history=copy(old?.history||[]);if(old)history.push({...old,history:undefined});
-  return writeRecord('work',id,{...personSnapshot(ctx.me),title,date,content:clean(input.content),result:clean(input.result),category:clean(input.category,80)||'自主工作',shopId,shopName:ctx.bundle.shops.find(s=>String(s.id)===shopId)?.name||'',completedAt:clean(input.completedAt,40),createdAt:old?.createdAt||stamp(),history},Number(input.revision)||0);
+  return writeRecord('work',id,{...personSnapshot(ctx.me),title,date,composerImages:await saveComposerImages(input.composerImages,['content','result'],old?.composerImages,ctx.me.id),content:clean(input.content),result:clean(input.result),category:clean(input.category,80)||'自主工作',shopId,shopName:ctx.bundle.shops.find(s=>String(s.id)===shopId)?.name||'',completedAt:clean(input.completedAt,40),createdAt:old?.createdAt||stamp(),history},Number(input.revision)||0);
 }
 export async function saveIssue(user,input) {
   const ctx=await access(user);const id=clean(input.id,80)||randomUUID(),old=await record(id);
@@ -162,11 +163,12 @@ export async function saveIssue(user,input) {
     if(old.kind!=='issue'||!visibleRecord(ctx,old))fault('没有这个问题',404);
     if(!ctx.management&&ctx.me.id!==old.personId)fault('无权处理此问题',403);
     if(!clean(input.resolution))fault('请填写处理措施');
-    return writeRecord('issue',id,{...old,status:input.status==='已解决'?'已解决':'处理中',resolution:clean(input.resolution),history:[...(old.history||[]),{at:stamp(),actor:ctx.me.id,resolution:clean(input.resolution),status:input.status}]},Number(input.revision)||0);
+    const resolutionImages=await saveComposerImages(input.composerImages,['resolution'],(old.composerImages||[]).filter(i=>i.field==='resolution'),ctx.me.id);
+    return writeRecord('issue',id,{...old,composerImages:[...(old.composerImages||[]).filter(i=>i.field!=='resolution'),...resolutionImages],status:input.status==='已解决'?'已解决':'处理中',resolution:clean(input.resolution),history:[...(old.history||[]),{at:stamp(),actor:ctx.me.id,composerImages:resolutionImages,resolution:clean(input.resolution),status:input.status}]},Number(input.revision)||0);
   }
   if(!clean(input.title))fault('请填写问题标题');
   if(input.taskId) {const {rows}=await visibleTasks(user);if(!rows.some(t=>t.id===input.taskId))fault('无权关联此任务',403);}
-  return writeRecord('issue',id,{...personSnapshot(ctx.me),title:clean(input.title,200),date:day(),createdAt:stamp(),taskId:clean(input.taskId,80),description:clean(input.description),impact:clean(input.impact),attempts:clean(input.attempts),assistance:clean(input.assistance),escalated:Boolean(input.escalated),status:'待处理',history:[]});
+  return writeRecord('issue',id,{...personSnapshot(ctx.me),title:clean(input.title,200),composerImages:await saveComposerImages(input.composerImages,['description','impact','attempts','assistance'],[],ctx.me.id),date:day(),createdAt:stamp(),taskId:clean(input.taskId,80),description:clean(input.description),impact:clean(input.impact),attempts:clean(input.attempts),assistance:clean(input.assistance),escalated:Boolean(input.escalated),status:'待处理',history:[]});
 }
 export async function saveSettings(user,input) {
   const ctx=await access(user);if(!ctx.director)fault('只有总监可以修改工作中心全局设置',403);
@@ -193,11 +195,23 @@ export async function saveSettings(user,input) {
   if(!Array.isArray(next.collaborations))fault('协作授权格式不合法');
   for(const c of next.collaborations)if(!c||typeof c!=='object'||(next.roleOverrides[c.operatorId]||ctx.byId.get(String(c.operatorId))?.role)!=='运营'||normalizedRole(next.roleOverrides[c.assistantId]||ctx.byId.get(String(c.assistantId))?.role)!=='运营助理'||(c.startOn&&!validDay(c.startOn))||(c.endOn&&!validDay(c.endOn))||(c.startOn&&c.endOn&&c.startOn>c.endOn))fault('协作授权对象或日期不合法');
   for(const c of next.collaborations) {c.authorizedBy=ctx.me.id;c.updatedAt=stamp();}
-  next.history=[...(ctx.config.history||[]),{at:stamp(),actor:ctx.me.id,reason:clean(input.reason,500)||'调整工作设置',before:Object.fromEntries(allowed.map(k=>[k,ctx.config[k]])),after:Object.fromEntries(allowed.map(k=>[k,next[k]]))}];
+  for(const template of next.taskTemplates) template.composerImages=await saveComposerImages(template.composerImages,['description','criteria'],ctx.config.taskTemplates.flatMap(t=>t.composerImages||[]),ctx.me.id);
+  const composerImages=await saveComposerImages(input.composerImages,['reason','categories','requiredAttachmentCategories',...Object.keys(next.reportFields).map(k=>'fields_'+k)],[],ctx.me.id);
+  next.history=[...(ctx.config.history||[]),{at:stamp(),actor:ctx.me.id,composerImages,reason:clean(input.reason,500)||'调整工作设置',before:Object.fromEntries(allowed.map(k=>[k,ctx.config[k]])),after:Object.fromEntries(allowed.map(k=>[k,next[k]]))}];
   return writeRecord('settings','settings',next,Number(input.revision)||0);
+}
+export async function readComposerImage(user,id,parentId,taskId) {
+  const ctx=await access(user);let parent;
+  if(taskId) { const {rows}=await visibleTasks(user);parent=rows.find(t=>t.id===taskId); }
+  else if(parentId==='settings') parent=ctx.director?ctx.config:{taskTemplates:ctx.config.taskTemplates};
+  else {parent=await record(String(parentId||''));if(!parent||!['work','daily','issue'].includes(parent.kind)||!visibleRecord(ctx,parent))parent=null;}
+  if(!parent||!containsComposerImage(parent,id))fault('没有这张图片',404);
+  const image=await record(id);if(image?.kind!=='compose-image')fault('没有这张图片',404);
+  return image;
 }
 export const centerRouter=Router();
 const wrap=fn=>async(req,res)=>{try {const result=await fn(req,res);if(!res.headersSent)res.json(result);}catch(error){res.status(error.statusCode||500).json({ok:false,error:error.message});}};
+centerRouter.get('/image/:id',wrap(async(req,res)=>{const image=await readComposerImage(req.user,req.params.id,req.query.record,req.query.task);res.set('Cache-Control','private, no-store');res.set('X-Content-Type-Options','nosniff');res.type(image.mime).send(Buffer.from(image.data,'base64'));}));
 centerRouter.get('/',wrap(req=>centerData(req.user,req.query)));
 centerRouter.get('/reminders',wrap(async req=>{const ctx=await access(req.user);if(!ctx.director)fault('只有总监可以查看提醒状态',403);return reminderStatus(ctx);}));
 centerRouter.get('/tasks/:id',wrap(async req=>{

@@ -30,14 +30,18 @@
   }
 
   function ensureStyle() {
-    if (document.getElementById("work-task-style")) return;
+    var old = document.getElementById("work-task-style");
+    if (old && old.dataset.version === "chat-input-1") return;
+    if (old) old.remove();
     var style = document.createElement("style");
     style.id = "work-task-style";
+    style.dataset.version = "chat-input-1";
     style.textContent =
       ".wt-nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}.wt-badge{border-radius:8px;padding:2px 8px;background:#eef3ff;color:#2f6bff;font-weight:650}.wt-badge[data-status='已完成']{background:#e8f8ee;color:#1faa5a}.wt-badge[data-status='已退回']{background:#ffecec;color:#cf1322}.wt-badge[data-status='待检查']{background:#fff3e6;color:#f08a1e}.wt-overdue{color:#cf1322;font-weight:650}.wt-log{margin:8px 0 0;padding:0;list-style:none}.wt-log li{padding:8px 0;border-top:1px solid var(--l,#e8eef8)}.wt-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.wt-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.wt-layout{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:12px}@media(max-width:980px){.wt-grid,.wt-layout{grid-template-columns:1fr}}";
     style.textContent += ".wt-attachments{margin:10px 0 14px;padding:12px;border:1px dashed var(--xm-line,#cbdaf0);border-radius:8px;background:var(--xm-card,#fff);color:var(--xm-ink,#163568)}.wt-attachments:focus-within{border-color:var(--xm-primary,#1677ff)}.wt-attachments input{max-width:100%}.wt-attachment-title{display:block;font-size:13px;margin-bottom:8px}.wt-paste-hint{margin:8px 0;color:var(--xm-muted,#62718a);font-size:12px;line-height:1.6}.wt-paste-hint kbd{border:1px solid var(--xm-line,#cbdaf0);border-radius:4px;padding:1px 5px;font:inherit}.wt-previews{display:flex;gap:10px;flex-wrap:wrap}.wt-file-card{display:flex;align-items:center;gap:10px;max-width:100%;padding:8px;border:1px solid var(--xm-line,#cbdaf0);border-radius:8px;box-sizing:border-box}.wt-file-card img,.wt-file-icon{width:80px;height:64px;object-fit:contain;border-radius:4px;background:var(--xm-bg,#f4f7fc)}.wt-file-icon{display:grid;place-items:center;font-size:13px}.wt-file-info{display:flex;flex-direction:column;gap:5px;min-width:0;max-width:200px;font-size:12px}.wt-file-info span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wt-file-info small,.wt-file-message{color:var(--xm-muted,#62718a)}.wt-file-message{margin-top:8px;font-size:12px;line-height:1.5}.wt-file-message.is-error{color:#cf1322}@media(max-width:600px){.wt-file-card{width:100%}.wt-file-info{flex:1}}";
     style.textContent += ".wt-rich-field{margin-top:10px}.wt-editor{min-height:116px;padding:10px;border:1px solid var(--xm-ui-border-strong,#cadbf7);border-radius:8px;background:var(--xm-ui-surface,#fff);color:var(--xm-ui-text,#163568);font-size:14px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}.wt-editor:focus{outline:2px solid var(--xm-ui-primary,#1677ff);outline-offset:1px}.wt-editor:empty:before{content:attr(data-placeholder);color:var(--xm-ui-text-muted,#73839e);pointer-events:none}.wt-rich-hint{color:var(--xm-ui-text-muted,#73839e);font-size:12px}.wt-inline-image{display:block;position:relative;width:fit-content;max-width:100%;margin:8px 0;line-height:0;white-space:normal}.wt-inline-image img{display:block;max-width:100%;max-height:240px;object-fit:contain;border:1px solid var(--xm-ui-border-strong,#cadbf7);border-radius:6px;cursor:zoom-in}.wt-inline-image button{position:absolute;right:6px;top:6px;border:0;border-radius:4px;background:rgba(15,23,42,.8);color:white;padding:6px 8px;cursor:pointer;font-size:12px;line-height:1.2}.wt-rich-content{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}.wt-rich-message{color:#cf1322;font-size:12px;min-height:18px;margin:4px 0}.wt-image-viewer{padding:0;border:0;border-radius:12px;width:min(1200px,94vw);max-width:94vw;max-height:94vh;background:var(--xm-ui-surface,#fff);color:var(--xm-ui-text,#163568)}.wt-image-viewer::backdrop{background:rgba(0,0,0,.72)}.wt-viewer-bar{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--xm-ui-border-strong,#cadbf7)}.wt-viewer-bar strong{flex:1}.wt-viewer-body{overflow:auto;max-height:80vh;padding:12px;text-align:center}.wt-viewer-body img{max-width:100%;max-height:76vh;object-fit:contain}.wt-image-viewer.is-original .wt-viewer-body img{max-width:none;max-height:none}.wt-image-viewer.is-original .wt-viewer-body{text-align:left}";
     style.textContent += ".wt-editor-label{display:flex;align-items:center;justify-content:space-between;gap:10px}.wt-rich-field [data-editor-message]{font-size:12px;line-height:1.5}.wt-rich-field [data-editor-message]:empty{display:none}";
+    style.textContent += ".wt-compose{border:1px solid var(--xm-ui-border-strong,#cadbf7);border-radius:10px;background:var(--xm-ui-surface,#fff);overflow:hidden;cursor:text}.wt-compose:focus-within{border-color:#1677ff;box-shadow:0 0 0 2px #1677ff20}.wt-rich-field .wt-compose-text{display:block;width:100%;min-height:112px;max-height:320px;margin:0;border:0!important;border-radius:0;background:transparent!important;color:var(--xm-ui-text,#163568);padding:12px;font:inherit;line-height:1.7;resize:vertical;outline:none!important;box-shadow:none!important;user-select:text;-webkit-user-select:text;cursor:text}.wt-compose-images{display:flex;flex-wrap:wrap;gap:10px;padding:0 12px 12px}.wt-compose-images:empty{display:none}.wt-compose-image{position:relative;width:120px;height:92px}.wt-compose-preview{display:flex;align-items:center;justify-content:center;width:100%;height:100%;border:1px solid var(--xm-ui-border-strong,#cadbf7);border-radius:8px;background:var(--xm-ui-surface,#fff);padding:5px;cursor:zoom-in;font-size:12px}.wt-compose-preview img{display:block;max-width:100%;max-height:100%;object-fit:contain}.wt-compose-preview img:not([src]){display:none}.wt-compose-remove{position:absolute;right:-5px;top:-5px;width:24px;height:24px;border:1px solid white;border-radius:50%;background:#27384f;color:white;font-size:18px;line-height:18px;cursor:pointer}.wt-compose-button{border:1px solid var(--xm-ui-border-strong,#cadbf7);border-radius:6px;background:var(--xm-ui-surface,#fff);color:var(--xm-ui-text,#163568);padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}.wt-editor-label{margin-bottom:6px}.wt-rich-hint{display:block;margin-top:6px}html[data-theme=dark] .wt-compose{background:#202e42;border-color:#425674}html[data-theme=dark] .wt-rich-field .wt-compose-text{color:#dce7f7}";
     document.head.appendChild(style);
   }
 
@@ -167,11 +171,12 @@
   }
 
   function richEditor(label, name, max) {
-    return '<div class="work-field wt-rich-field"><div class="wt-editor-label"><span id="wt-label-' + name + '">' + label + '</span>' + uiButton("粘贴截图", 'data-rich-paste="' + name + '"', { variant: "secondary" }) + '</div><input type="hidden" name="' + name + '"><div class="wt-editor" data-rich-editor="' + name + '" data-max-text="' + max + '" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="wt-label-' + name + '" aria-describedby="wt-paste-status-' + name + '" data-placeholder="在这里输入文字、粘贴图片；图片可点击放大"></div><span class="wt-rich-hint">支持 Ctrl+V 粘贴截图，也可点上方“粘贴截图” · 图片点击放大 · 最多 ' + max + ' 字</span><span data-editor-message id="wt-paste-status-' + name + '" role="status" aria-live="polite"></span></div>';
+    label=esc(label); name=esc(name); max=Number(max)||4000;
+    return '<div class="work-field wt-rich-field"><div class="wt-editor-label"><label for="wt-input-' + name + '">' + label + '</label><button type="button" class="wt-compose-button" data-rich-paste="' + name + '">粘贴图片</button></div><div class="wt-compose"><textarea class="wt-compose-text" id="wt-input-' + name + '" name="' + name + '" data-rich-editor="' + name + '" maxlength="' + max + '" rows="4" placeholder="输入文字，或按 Ctrl+V 粘贴图片" aria-describedby="wt-paste-status-' + name + '"></textarea><div class="wt-compose-images" data-rich-images aria-label="已添加的图片"></div></div><span class="wt-rich-hint">可直接打字、粘贴文字和图片 · 图片可点击放大或删除 · 最多 ' + max + ' 字</span><span data-editor-message id="wt-paste-status-' + name + '" role="status" aria-live="polite"></span></div>';
   }
 
   function zoomImage(host, src, name) {
-    if (!/^data:image\/(png|jpeg|gif|webp|bmp);base64,/i.test(src || "")) return;
+    if (!/^data:image\/(png|jpeg|gif|webp|bmp);base64,/i.test(src || "") && !String(src||"").startsWith("/api/work/center/image/")) return;
     var dialog = document.createElement("dialog");
     dialog.className = "wt-image-viewer";
     dialog.setAttribute("aria-label", "图片放大查看");
@@ -190,245 +195,199 @@
   }
 
   function bindRichEditors(form) {
-    if (!form) return;
-    var entries = {};
+    if (!form || form._wtRichPayload) return;
+    var editors = [].slice.call(form.querySelectorAll('[data-rich-editor]'));
     var serial = 0;
-    var editors = [].slice.call(form.querySelectorAll("[data-rich-editor]"));
-    var message = form.querySelector("[data-rich-message]");
-    function sayRich(text) { message.textContent = text || ""; }
-    function sayEditor(editor, text, error) {
-      var node = editor.parentElement.querySelector("[data-editor-message]");
-      node.textContent = text || "";
-      node.style.color = error ? "#cf1322" : "var(--xm-ui-text-muted,#73839e)";
+    function attachments() {
+      var input = form.querySelector('[name="files"]');
+      return input ? [].slice.call(input._wtFiles || input.files || []) : [];
     }
-    function editorRange(editor, preferred) {
-      var selection = window.getSelection();
-      var current = selection.rangeCount ? selection.getRangeAt(0) : null;
-      function belongs(range) { return range && editor.contains(range.startContainer) && editor.contains(range.endContainer); }
-      var range = belongs(preferred) ? preferred : belongs(current) ? current : belongs(editor._wtRange) ? editor._wtRange : null;
-      if (!range) { range = document.createRange(); range.selectNodeContents(editor); range.collapse(false); }
-      var container = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
-      var image = container && container.closest("[data-inline-key]");
-      if (image && editor.contains(image)) { range = document.createRange(); range.setStartAfter(image); range.collapse(true); }
-      editor.focus();
-      selection.removeAllRanges(); selection.addRange(range);
-      return range;
+    function busy() { return !!form.querySelector('[type="submit"]:disabled'); }
+    function tell(editor, text, error) {
+      var node = editor.closest('.wt-rich-field').querySelector('[data-editor-message]');
+      node.textContent = text || '';
+      node.style.color = error ? '#cf1322' : 'var(--xm-ui-text-muted,#73839e)';
     }
-    function insertAtCaret(editor, value, html, marker) {
-      var range = editorRange(editor);
-      var done = false;
-      try { done = document.execCommand(html ? "insertHTML" : "insertText", false, value); } catch (_) { /* Range insertion below handles unsupported editing commands. */ }
-      if (html ? !editor.querySelector('[data-inline-key="' + marker + '"]') : !done) {
-        range = editorRange(editor, range);
-        var content;
-        if (html) { var template = document.createElement("template"); template.innerHTML = value; content = template.content; }
-        else content = document.createTextNode(value);
-        var tail = content.lastChild || content;
-        range.deleteContents(); range.insertNode(content); range.setStartAfter(tail); range.collapse(true);
-        var selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-      }
-      if (html) {
-        // Some browsers leave the inserted non-editable image selected. Always put the caret after it.
-        var image = editor.querySelector('[data-inline-key="' + marker + '"]');
-        if (!image) throw new Error("图片未能插入正文");
-        range = document.createRange(); range.setStartAfter(image.nextSibling || image); range.collapse(true);
-        var afterSelection = window.getSelection(); afterSelection.removeAllRanges(); afterSelection.addRange(range);
-      }
-      editor._wtRange = window.getSelection().getRangeAt(0).cloneRange();
-    }
-    function clipboardImage(file, hint) {
+    function normalizeImage(file, hint) {
       if (!file || !file.size) return null;
-      var type = String(file.type || hint || "").toLowerCase();
-      type = { "image/x-png": "image/png", "image/jpg": "image/jpeg", "image/x-ms-bmp": "image/bmp" }[type] || type;
-      if (!type || type === "application/octet-stream") {
-        var extension = String(file.name || "").split(".").pop().toLowerCase();
-        type = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp" }[extension] || type;
+      var type = String(file.type || hint || '').toLowerCase();
+      type = { 'image/x-png': 'image/png', 'image/jpg': 'image/jpeg', 'image/x-ms-bmp': 'image/bmp' }[type] || type;
+      if (!type || type === 'application/octet-stream') {
+        type = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' }[String(file.name || '').split('.').pop().toLowerCase()] || type;
       }
       if (!/^image\/(png|jpeg|gif|webp|bmp)$/.test(type)) return null;
-      return type === file.type ? file : new File([file], file.name || "截图.png", { type: type });
+      var extension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/bmp': 'bmp' }[type];
+      return new File([file], file.name || '粘贴图片-' + (++serial) + '.' + extension, { type: type });
     }
-    function referenced() {
-      return [].slice.call(form.querySelectorAll("[data-inline-key]")).map(function (node) { return node.getAttribute("data-inline-key"); }).filter(function (key, index, keys) { return entries[key] && keys.indexOf(key) === index; });
+    function allEntries() { return editors.reduce(function (all, editor) { return all.concat(editor._wtImages || []); }, []); }
+    form._wtInlineFiles = function () { return allEntries().map(function (entry) { return entry.file; }); };
+    function draw(editor) {
+      var box = editor.closest('.wt-rich-field').querySelector('[data-rich-images]');
+      box.replaceChildren();
+      editor._wtImages.forEach(function (entry) {
+        var card = document.createElement('div'); card.className = 'wt-compose-image';
+        var preview = document.createElement('button'); preview.type = 'button'; preview.className = 'wt-compose-preview';
+        preview.setAttribute('aria-label', '放大图片：' + entry.file.name);
+        var img = document.createElement('img'); img.alt = entry.file.name;
+        if (entry.src) img.src = entry.src;
+        else preview.textContent = entry.error ? '读取失败' : '正在读取…';
+        preview.appendChild(img); preview.disabled = !entry.src;
+        preview.addEventListener('click', function () {
+          zoomImage(form, entry.src, entry.file.name);
+          form.querySelector('.wt-image-viewer').addEventListener('close', function () { editor.focus({ preventScroll: true }); }, { once: true });
+        });
+        var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'wt-compose-remove'; remove.textContent = '×';
+        remove.setAttribute('aria-label', '删除图片：' + entry.file.name);
+        remove.addEventListener('click', function () {
+          if (busy()) return;
+          editor._wtImages = editor._wtImages.filter(function (item) { return item !== entry; });
+          draw(editor); tell(editor, '图片已删除', false); editor.focus({ preventScroll: true });
+        });
+        card.append(preview, remove); box.appendChild(card);
+      });
     }
-    form._wtInlineFiles = function () { return referenced().map(function (key) { return entries[key].file; }); };
-    function insertImages(editor, files, text) {
-      var error = attachmentError(form.querySelector('[name="files"]')._wtFiles.concat(form._wtInlineFiles(), files));
-      if (error) { sayEditor(editor, "正文图片和附件" + error.replace("最多上传", "最多共用"), true); return; }
-      if (files.some(function (file) { return !/^image\/(png|jpeg|gif|webp|bmp)$/i.test(file.type); })) {
-        sayEditor(editor, "请粘贴 PNG、JPG、GIF、WebP 或 BMP 图片。", true); return;
-      }
-      if (text) insertAtCaret(editor, text, false);
-      var remaining = files.length;
-      sayEditor(editor, "正在插入截图，请稍候…", false);
+    function addImages(editor, files) {
+      if (!files.length || !editor.isConnected || busy()) return;
+      var reserved=editors.flatMap(function(e){return Array.from({length:e._wtLoadCount||0},function(){return {size:1};});});
+      var error = attachmentError(attachments().concat(form._wtInlineFiles(), reserved, files));
+      if (error) { tell(editor, '图片和附件合计' + error.replace('最多上传', '最多'), true); return; }
       files.forEach(function (file) {
-        var key = "inline-" + (++serial);
-        var extension = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/bmp": "bmp" }[file.type.toLowerCase()];
-        entries[key] = { file: new File([file], key + "." + extension, { type: file.type }), ready: false };
-        insertAtCaret(editor, '<span class="wt-inline-image" contenteditable="false" data-inline-key="' + key + '"><img alt="正在读取截图" draggable="false" data-wt-zoom role="button" tabindex="0"><button type="button" data-inline-remove aria-label="移除正文图片">移除图片</button></span><span>\u200b</span>', true, key);
+        var entry = { file: file, src: '', error: false }; editor._wtImages.push(entry);
         var reader = new FileReader();
         reader.onload = function () {
-          entries[key].ready = true;
-          entries[key].src = reader.result;
-          var node = editor.querySelector('[data-inline-key="' + key + '"] img');
-          if (node) { node.src = reader.result; node.alt = "正文图片，点击放大"; }
-          remaining -= 1;
-          if (!remaining && node && editor.isConnected) sayEditor(editor, "截图已插入正文，可继续打字、点击放大或移除。", false);
+          entry.src = String(reader.result);
+          if (editor.isConnected && editor._wtImages.includes(entry)) { draw(editor); tell(editor, '已添加图片，文字和图片将一起提交', false); }
         };
-        reader.onerror = function () { sayEditor(editor, "图片读取失败，请移除后重新粘贴。", true); };
+        reader.onerror = function () { entry.error = true; if (editor.isConnected) { draw(editor); tell(editor, '图片读取失败，请删除后重新粘贴', true); } };
         reader.readAsDataURL(file);
       });
-      sayRich("");
+      draw(editor);
     }
-    function beginPaste(editor) {
-      editor._wtClipboardReading = false;
-      editor._wtPasteAttempt = (editor._wtPasteAttempt || 0) + 1;
-      return editor._wtPasteAttempt;
+    function insertText(editor, text) {
+      if (!text) return;
+      // Only mixed image/text paste needs manual insertion. Ordinary typing, IME and text paste remain native.
+      var start = editor.selectionStart, end = editor.selectionEnd;
+      var room = editor.maxLength - (editor.value.length - (end - start));
+      editor.setRangeText(text.slice(0, Math.max(0, room)), start, end, 'end');
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
     }
-    async function readScreenshot(editor, preferredRange, attempt) {
-      if (attempt == null) attempt = beginPaste(editor);
-      if (!navigator.clipboard || !navigator.clipboard.read) {
-        sayEditor(editor, "浏览器不支持直接读取截图，请重新截图后点击正文按 Ctrl+V。", true); return;
-      }
-      var range = editorRange(editor, preferredRange).cloneRange();
-      editor._wtClipboardReading = true;
-      sayEditor(editor, "正在读取截图；如浏览器询问，请允许访问剪贴板。", false);
-      var timeout, finished = false;
+    async function readClipboard(editor) {
+      if (!navigator.clipboard || !navigator.clipboard.read) { tell(editor, '请复制图片后在输入框中按 Ctrl+V', true); return; }
+      if (editor._wtReading) return;
+      editor._wtReading = true;
+      tell(editor, '正在读取剪贴板图片…', false);
+      var attempt = ++editor._wtAttempt;
       try {
-        var deadline = new Promise(function (_, reject) { timeout = setTimeout(function () { reject(new Error("clipboard-timeout")); }, 12000); });
-        var files = await Promise.race([(async function () {
-          // Screenshot tools can take a moment to finish owning/writing the Windows clipboard.
-          for (var round = 0; round < 4; round += 1) {
-            if (round) await new Promise(function (resolve) { setTimeout(resolve, 150 * round); });
-            if (finished || attempt !== editor._wtPasteAttempt || !editor.isConnected) return [];
-            try {
-              var items = await navigator.clipboard.read();
-              var images = [];
-              for (var i = 0; i < items.length; i += 1) {
-                var type = items[i].types.indexOf("image/png") >= 0 ? "image/png" : items[i].types.find(function (value) { return /^image\/(jpeg|gif|webp|bmp)$/.test(value); });
-                if (type) { var file = clipboardImage(await items[i].getType(type), type); if (file && file.size) images.push(file); }
-              }
-              if (images.length) return images;
-            } catch (err) {
-              if (err.name === "NotAllowedError" || err.name === "SecurityError" || round === 3) throw err;
-            }
-          }
-          return [];
-        })(), deadline]);
-        if (!editor.isConnected || attempt !== editor._wtPasteAttempt) return;
-        if (!files.length) { sayEditor(editor, "剪贴板中没有可读取的截图，请在截图工具中点击“复制”，再粘贴。", true); return; }
-        editorRange(editor, range);
-        insertImages(editor, files, "");
-      } catch (_) {
-        if (editor.isConnected && attempt === editor._wtPasteAttempt) sayEditor(editor, "未能读取截图。请点击“粘贴截图”并允许剪贴板访问，或重新截图后按 Ctrl+V。", true);
-      } finally {
-        finished = true;
-        clearTimeout(timeout);
-        if (attempt === editor._wtPasteAttempt) editor._wtClipboardReading = false;
-      }
-    }
-    function serialize(editor, uploadKeys, attachmentCount) {
-      var nodes = [];
-      function text(value) {
-        value = value.replace(/\u200b/g, "");
-        if (!value) return;
-        var last = nodes[nodes.length - 1];
-        if (last && last.type === "text") last.text += value;
-        else nodes.push({ type: "text", text: value });
-      }
-      function walk(node) {
-        if (node.nodeType === 3) { text(node.textContent); return; }
-        if (node.nodeType !== 1) return;
-        var key = node.getAttribute("data-inline-key");
-        if (key) {
-          if (!entries[key] || !entries[key].ready) throw new Error("正文图片仍在读取或读取失败，请稍候或移除后重新粘贴");
-          nodes.push({ type: "image", upload: attachmentCount + uploadKeys.indexOf(key) });
-          return;
+        var items = await Promise.race([navigator.clipboard.read(), new Promise(function (_, reject) { editor._wtTimer = setTimeout(function () { reject(new Error('读取超时')); }, 6000); })]);
+        var files = [];
+        for (var i = 0; i < items.length; i++) {
+          var type = items[i].types.find(function (value) { return /^image\/(png|jpeg|gif|webp|bmp)$/.test(value); });
+          if (type) { var file = normalizeImage(await items[i].getType(type), type); if (file) files.push(file); }
         }
-        if (node.tagName === "BR") { text("\n"); return; }
-        var block = /^(DIV|P|LI)$/.test(node.tagName);
-        var last = nodes[nodes.length - 1];
-        if (block && last && !(last.type === "text" && /\n$/.test(last.text))) text("\n");
-        [].slice.call(node.childNodes).forEach(walk);
-        if (block && node.nextSibling) text("\n");
-      }
-      [].slice.call(editor.childNodes).forEach(walk);
-      var plain = nodes.filter(function (node) { return node.type === "text"; }).map(function (node) { return node.text; }).join("");
-      if (plain.length > Number(editor.getAttribute("data-max-text"))) throw new Error("文字超过上限，请精简后再发布");
-      return { nodes: nodes, text: plain };
+        if (!editor.isConnected || attempt !== editor._wtAttempt) return;
+        if (files.length) addImages(editor, files);
+        else tell(editor, '剪贴板中没有图片，请复制图片后再粘贴', true);
+      } catch (_) {
+        if (editor.isConnected && attempt === editor._wtAttempt) tell(editor, '无法读取剪贴板，请允许剪贴板访问，或在输入框中按 Ctrl+V', true);
+      } finally { clearTimeout(editor._wtTimer); if (attempt === editor._wtAttempt) editor._wtReading = false; }
     }
+    async function readHtmlImages(editor, sources) {
+      var attempt = ++editor._wtAttempt;
+      editor._wtReading = true; tell(editor, '正在读取复制的图片…', false);
+      try {
+        if (sources.length + attachments().length + form._wtInlineFiles().length > 3) throw new Error('图片和附件合计最多 3 个');
+        var files = await Promise.all(sources.map(async function (src) {
+          // Clipboard HTML is never inserted. Read image bytes only; do not send site credentials.
+          if (!/^data:image\/(png|jpeg|gif|webp|bmp);base64,/i.test(src) && !/^https?:\/\//i.test(src)) throw new Error('请右键复制图片后粘贴，或使用截图');
+          if (src.length > 4.3 * 1024 * 1024) throw new Error('图片和附件合计最多 3 MB');
+          var res = await fetch(src, { credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(6000) });
+          if (!res.ok) throw new Error('无法读取网页图片，请右键复制图片后粘贴，或使用截图');
+          var file = normalizeImage(await res.blob());
+          if (!file) throw new Error('请复制 PNG、JPG、GIF、WebP 或 BMP 图片');
+          return file;
+        }));
+        if (attempt === editor._wtAttempt) addImages(editor, files);
+      } catch (error) { if (editor.isConnected && attempt === editor._wtAttempt) tell(editor, error.message || '无法读取网页图片，请右键复制图片后粘贴', true); }
+      finally { if (attempt === editor._wtAttempt) editor._wtReading = false; }
+    }
+    form._wtSetImages = async function (name, images, source) {
+      var editor=editors.find(function(e){return e.dataset.richEditor===name;});if(!editor)return;
+      var generation=(editor._wtLoadGeneration||0)+1;editor._wtLoadGeneration=generation;editor._wtLoading=true;editor._wtLoadError=false;editor._wtLoadCount=images.length;editor._wtImages=[];draw(editor);
+      try {
+        var files=await Promise.all(images.map(async function(image){var response=await fetch(await source(image),{credentials:'same-origin'});if(!response.ok)throw new Error('图片加载失败');return normalizeImage(await response.blob(),image.mime);}));
+        if(editor.isConnected&&generation===editor._wtLoadGeneration){editor._wtLoadCount=0;addImages(editor,files);}
+      } catch(error){tell(editor,error.message,true);editor._wtLoadError=true;}
+      finally{if(generation===editor._wtLoadGeneration){editor._wtLoading=false;editor._wtLoadCount=0;}}
+    };
+    form._wtComposerPayload = function () {
+      form._wtRichPayload();
+      return editors.flatMap(function(editor){return editor._wtImages.map(function(entry){return {field:editor.getAttribute('data-label')||editor.dataset.richEditor,name:entry.file.name,mime:entry.file.type,data:entry.src.split(',')[1]};});});
+    };
     form._wtRichPayload = function () {
-      if (editors.some(function (editor) { return editor._wtClipboardReading; })) throw new Error("正在读取剪贴板图片，请稍候再发布");
-      var attachments = form.querySelector('[name="files"]')._wtFiles;
-      var keys = referenced();
-      var files = attachments.concat(form._wtInlineFiles());
-      var error = attachmentError(files);
-      if (error) throw new Error(error);
+      if (editors.some(function(editor){return editor._wtLoadError;})) throw new Error('原有图片未能载入，请关闭后重试，以免丢失图片');
+      if (editors.some(function (editor) { return editor._wtReading || editor._wtLoading; })) throw new Error('图片正在读取，请稍候再提交');
+      var images = allEntries(), attached = attachments(), files = attached.concat(images.map(function (entry) { return entry.file; }));
+      var error = attachmentError(files); if (error) throw new Error(error);
+      if (images.some(function (entry) { return !entry.src || entry.error; })) throw new Error('图片尚未读取完成，请稍候或删除后重新粘贴');
       var fields = {};
       editors.forEach(function (editor) {
-        var name = editor.getAttribute("data-rich-editor");
-        var doc = serialize(editor, keys, attachments.length);
-        fields[name] = doc.text;
-        fields[name + "_doc"] = JSON.stringify(doc.nodes);
+        var name = editor.dataset.richEditor, text = editor.value;
+        if (text.length > editor.maxLength) throw new Error('文字超过上限，请精简后再提交');
+        fields[name] = text;
+        fields[name + '_doc'] = JSON.stringify((text ? [{ type: 'text', text: text }] : []).concat(editor._wtImages.map(function (entry) { return { type: 'image', upload: attached.length + images.indexOf(entry) }; })));
       });
       return { files: files, fields: fields };
     };
     editors.forEach(function (editor) {
-      var pasteButton = editor.parentElement.querySelector("[data-rich-paste]");
-      pasteButton.addEventListener("mousedown", function (event) { event.preventDefault(); });
-      pasteButton.addEventListener("click", function () {
-        if (!form.querySelector('[type="submit"]').disabled) readScreenshot(editor, editor._wtRange);
+      editor._wtImages = []; editor._wtAttempt = 0; editor._wtReading = false;
+      var field = editor.closest('.wt-rich-field');
+      field.querySelector('[data-rich-paste]').addEventListener('click', function () { if (!busy()) { editor.focus({ preventScroll: true }); readClipboard(editor); } });
+      editor.addEventListener('paste', function (event) {
+        if (busy()) { event.preventDefault(); return; }
+        var data = event.clipboardData; if (!data) return;
+        var files = [].slice.call(data.items || []).filter(function (item) { return item.kind === 'file'; }).map(function (item) { return normalizeImage(item.getAsFile(), item.type); }).filter(Boolean);
+        if (!files.length) files = [].slice.call(data.files || []).map(function (file) { return normalizeImage(file); }).filter(Boolean);
+        var text = data.getData('text/plain'), html = data.getData('text/html');
+        var sources = [];
+        if (!files.length && html) {
+          var parsed = new DOMParser().parseFromString(html, 'text/html');
+          sources = [].slice.call(parsed.querySelectorAll('img[src]')).map(function (img) { return img.getAttribute('src'); });
+        }
+        if (files.length || sources.length) {
+          event.preventDefault(); event.stopPropagation();
+          ++editor._wtAttempt; editor._wtReading = false; clearTimeout(editor._wtTimer);
+          insertText(editor, text);
+          if (files.length) addImages(editor, files); else readHtmlImages(editor, sources);
+        } else if (!text) {
+          event.preventDefault(); event.stopPropagation(); readClipboard(editor);
+        }
+        // Do not cancel native text paste or intercept keyboard/composition events.
       });
-      ["keyup", "mouseup", "blur"].forEach(function (eventName) {
-        editor.addEventListener(eventName, function () {
-          var selection = window.getSelection();
-          if (selection.rangeCount && editor.contains(selection.anchorNode) && editor.contains(selection.focusNode)) editor._wtRange = selection.getRangeAt(0).cloneRange();
-        });
-      });
-      editor.addEventListener("paste", function (event) {
-        event.preventDefault();
-        var data = event.clipboardData;
-        if (form.querySelector('[type="submit"]').disabled) return;
-        var attempt = beginPaste(editor);
-        var files = [].slice.call((data && data.items) || []).filter(function (item) { return item.kind === "file"; }).map(function (item) { return clipboardImage(item.getAsFile(), item.type); }).filter(Boolean);
-        if (!files.length) files = [].slice.call((data && data.files) || []).map(function (file) { return clipboardImage(file); }).filter(Boolean);
-        var text = data ? data.getData("text/plain") : "";
-        try {
-          if (files.length) insertImages(editor, files, text);
-          else if (text) { insertAtCaret(editor, text, false); sayEditor(editor, "", false); }
-          else readScreenshot(editor, null, attempt);
-        } catch (_) { sayEditor(editor, "截图未能插入，请点击正文后重新粘贴。", true); }
-      });
-      // Browser-dropped HTML must never create arbitrary elements in the editor.
-      editor.addEventListener("drop", function (event) { event.preventDefault(); sayRich("请复制图片后在正文中粘贴。"); });
-      editor.addEventListener("mousedown", function (event) {
-        if (event.target.closest("[data-inline-key]")) { event.preventDefault(); event.stopPropagation(); }
-      });
-      editor.addEventListener("click", function (event) {
-        var remove = event.target.closest("[data-inline-remove]");
-        if (!remove || form.querySelector('[type="submit"]').disabled) return;
+      field.querySelector('.wt-compose').addEventListener('dragover', function (event) { if ([].slice.call(event.dataTransfer.types || []).includes('Files')) event.preventDefault(); });
+      field.querySelector('.wt-compose').addEventListener('drop', function (event) {
+        var raw = [].slice.call(event.dataTransfer.files || []); if (!raw.length) return;
         event.preventDefault(); event.stopPropagation();
-        var image = remove.closest("[data-inline-key]");
-        editor.focus();
-        var range = document.createRange(); range.selectNode(image);
-        var selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-        try { document.execCommand("delete", false); } catch (_) { /* Check actual DOM below, not the command's reported result. */ }
-        if (editor.contains(image)) {
-          // contenteditable=false images are not consistently deleted by execCommand in Chrome variants.
-          range = document.createRange(); range.setStartBefore(image); range.collapse(true);
-          image.remove();
-        } else if (selection.rangeCount) range = selection.getRangeAt(0).cloneRange();
-        range.collapse(true); selection.removeAllRanges(); selection.addRange(range);
-        editor._wtRange = range.cloneRange();
-        sayRich("");
-        sayEditor(editor, "图片已移除，可以继续输入或粘贴。", false);
-      });
-      editor.addEventListener("input", function () {
-        editor.querySelectorAll("[data-inline-key] img").forEach(function (img) {
-          var entry = entries[img.parentElement.getAttribute("data-inline-key")];
-          if (entry && entry.src) img.src = entry.src;
-        });
+        var files = raw.map(function (file) { return normalizeImage(file); }).filter(Boolean);
+        if (files.length !== raw.length) tell(editor, '这里可拖入图片，其他文件请在附件中上传', true);
+        else addImages(editor, files);
+        editor.focus({ preventScroll: true });
       });
     });
+  }
+
+  function upgradeEditors(form) {
+    [].slice.call(form.querySelectorAll('textarea:not([data-rich-editor])')).forEach(function(old){
+      if(old.name==='links')return;
+      var wrapper=old.closest('.wc-field'), label=wrapper && wrapper.querySelector('span');
+      var holder=document.createElement('div');holder.innerHTML=richEditor(label?label.textContent:old.name,old.name,old.maxLength>0?old.maxLength:old.name==='reason'?500:['criteria','note'].includes(old.name)?2000:4000);
+      var replacement=holder.firstElementChild,editor=replacement.querySelector('textarea');
+      [].slice.call(old.attributes).forEach(function(a){if(!['class','id','placeholder'].includes(a.name))editor.setAttribute(a.name,a.value);});
+      editor.value=old.value;
+      if(wrapper && wrapper.tagName==='LABEL') {
+        var outer=document.createElement('div');outer.className=wrapper.className;outer.appendChild(replacement);wrapper.replaceWith(outer);
+      } else old.replaceWith(replacement);
+    });
+    bindRichEditors(form);
   }
 
   function richImageIds(task) {
@@ -757,5 +716,5 @@
   }
 
   window.XmWorkTasks = { mount: mount };
-  window.XmWorkRich = { editor: richEditor, bind: bindRichEditors, style: ensureStyle };
+  window.XmWorkRich = { version: "chat-input-1", editor: richEditor, bind: bindRichEditors, style: ensureStyle, upgrade: upgradeEditors, preview: zoomImage };
 })();
