@@ -19,6 +19,8 @@
     probeDate: "",
     probeBusy: false,
     passwordBusy: false,
+    qrBusy: false,
+    qrOpen: false,
     autoReloginChoice: null,
     autoReloginBusy: false,
     autoReloginMessage: "",
@@ -2223,13 +2225,15 @@
   function renderLink() {
     var link = state.link || {};
     var showQr = link.qrReady && (link.phase === "waiting_scan" || link.phase === "needs_scan" || link.phase === "choose_account");
-    var qr = showQr ? '<img class="bd-qr" alt="旧站登录二维码" src="/api/bound/link/qr?ts=' + Date.now() + '">' : "";
+    var qr = showQr ? link.provider && link.provider !== 'WECHAT'
+      ? '<p><a href="/api/bound/link/qr?open=1" target="_blank" rel="noopener noreferrer">打开官方扫码授权页面</a></p>'
+      : '<img class="bd-qr" alt="旧站登录二维码" src="/api/bound/link/qr?v=' + encodeURIComponent(link.qrToken || '') + '">' : "";
     var accounts = (link.accounts || []).map(function (account) {
-      return '<button type="button" data-act="pick" data-company="' + esc(account.companyId) + '">' + esc(account.companyName || account.name || account.companyId) + "</button>";
+      return '<button type="button" data-act="pick" data-company="' + esc(account.companyId) + '"' + (state.qrBusy ? ' disabled' : '') + '>' + esc(account.companyName || account.name || account.companyId) + "</button>";
     }).join("");
-    var dailyHold = link.authFailure === 'login_daily_limit' && Date.parse(link.loginRetryAfter) > Date.now();
+    var dailyHold = Date.parse(link.passwordRetryAfter || (link.authFailure === 'login_daily_limit' ? link.loginRetryAfter : '')) > Date.now();
     var autoRelogin = state.autoReloginChoice === null ? link.autoReloginEnabled === true : state.autoReloginChoice;
-    var password = '<div class="bd-login" data-bound-password><label>旧站账号<input name="bound-user-name" autocomplete="username" value="' + esc(link.userName || "") + '"></label><label>旧站密码<input name="bound-password" type="password" autocomplete="current-password"></label><label class="bd-auto"><input name="bound-auto-relogin" data-act="auto-relogin" type="checkbox"' + (autoRelogin ? ' checked' : '') + (state.autoReloginBusy ? ' disabled' : '') + '>登录正常过期后自动重新登录</label><p class="bd-status" data-auto-relogin-status role="status">' + esc(state.autoReloginMessage) + '</p><button class="bd-primary" type="button" data-act="password-login"' + (state.passwordBusy || state.autoReloginBusy || dailyHold ? ' disabled' : '') + '>' + (state.passwordBusy ? "正在登录…" : dailyHold ? "今日登录已达上限" : "账号密码登录") + '</button><p class="bd-status">取消勾选立即关闭自动重登；勾选后需下次登录成功才会启用。密码仅在服务运行期间保留，服务重启后需重新输入。异地登录、账号禁用或重新登录失败时会停止。</p></div>';
+    var password = '<div class="bd-login" data-bound-password><label>旧站账号<input name="bound-user-name" autocomplete="username" value="' + esc(link.userName || "") + '"></label><label>旧站密码<input name="bound-password" type="password" autocomplete="current-password"></label><label class="bd-auto"><input name="bound-auto-relogin" data-act="auto-relogin" type="checkbox"' + (autoRelogin ? ' checked' : '') + (state.autoReloginBusy ? ' disabled' : '') + '>登录正常过期后自动重新登录</label><p class="bd-status" data-auto-relogin-status role="status">' + esc(state.autoReloginMessage) + '</p><button class="bd-primary" type="button" data-act="password-login"' + (state.passwordBusy || state.qrBusy || state.autoReloginBusy || dailyHold ? ' disabled' : '') + '>' + (state.passwordBusy ? "正在登录…" : dailyHold ? "今日登录已达上限" : "账号密码登录") + '</button><p class="bd-status">取消勾选立即关闭自动重登；勾选后需下次登录成功才会启用。密码仅在服务运行期间保留，服务重启后需重新输入。异地登录、账号禁用或重新登录失败时会停止。</p></div>';
     var diagnostic = link.authDiagnostic;
     if (diagnostic) password += '<details><summary>查看登录诊断</summary><p class="bd-status">'
       + esc(({ login: '账号验证', session: '会话校验', profile: '身份校验' }[diagnostic.stage] || '登录')
@@ -2239,7 +2243,10 @@
     var archive = state.localArchive;
     var run = archive && archive.run, running = state.batchRun && state.batchRun.status === 'running' || run && ['running', 'collecting'].includes(run.status);
     var scoped = archive ? '<section class="bd-block"><h2>单店四页采集</h2><p>' + esc((archive.collectionScope || archive.scope).shopName + ' · ' + (archive.collectionScope || archive.scope).date) + '</p><p>渠道总览（单店范围）、渠道详情、关键指标分析、商品总览</p><p data-archive-progress>' + esc(archiveRunText()) + '</p>' + (archive.runtime === 'server' ? '<button type="button" data-act="archive-job-start"' + (running ? ' disabled' : '') + '>开始 / 继续补采</button><button type="button" data-act="archive-job-stop"' + (!running ? ' disabled' : '') + '>停止采集</button><p class="bd-status">采集固定为上方店铺及日期，浏览筛选不会改变采集范围。只补缺少的结果，已成功归档的数据直接复用。关闭页面后服务器继续采集；账号冲突或接口异常时停止。</p>' : '<p class="bd-status">旧的全模块批量采集保持暂停。四页专用接口正在逐项核验。</p>') + '<button type="button" data-act="archive-refresh">刷新已采数据</button></section>' : renderProgress();
-    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>连接旧站</h1><p class="bd-sub">使用旧站账号密码建立采集会话。</p><p class="bd-status">同一账号只能保持一处登录。采集期间查看本系统已采数据，旧站对照需等采集停止后进行。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + '</p></div></header><section class="bd-block"><p role="status">' + esc(link.message || "") + '</p>' + password + '<details><summary>扫码登录（备用）</summary>' + qr + '<div class="bd-tools"><button type="button" data-act="scan" data-provider="WECHAT">微信</button><button type="button" data-act="scan" data-provider="FEISHU">飞书</button><button type="button" data-act="scan" data-provider="DINGTALK">钉钉</button><button type="button" data-act="scan" data-provider="QYWX">企业微信</button>' + accounts + '</div></details></section>' + (archive ? '' : renderProbe()) + renderShopBatch() + scoped + '</section>';
+    var qrButtons = [['WECHAT', '微信'], ['FEISHU', '飞书'], ['DINGTALK', '钉钉'], ['QYWX', '企业微信']].map(function (p) {
+      return '<button type="button" data-act="scan" data-provider="' + p[0] + '"' + (state.qrBusy || state.passwordBusy ? ' disabled' : '') + '>' + p[1] + '</button>';
+    }).join('');
+    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>连接旧站</h1><p class="bd-sub">使用旧站账号密码或扫码建立采集会话。</p><p class="bd-status">采集期间查看本系统已采数据，避免在其他设备重复登录旧站导致会话失效。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + '</p></div></header><section class="bd-block"><p role="status">' + esc(link.message || "") + '</p>' + password + '<details data-bound-qr' + (state.qrOpen || showQr || link.phase === 'choose_account' ? ' open' : '') + '><summary>扫码登录（可续采）</summary><p>使用旧站已绑定的账号扫码。身份核验成功后，点击“开始 / 继续本轮采集”；已完成的数据会复用。登录过期时停止并保留进度，重新扫码后可继续。</p>' + (state.qrBusy ? '<p role="status">正在处理扫码登录…</p>' : '') + qr + '<div class="bd-tools">' + qrButtons + accounts + '</div></details></section>' + (archive ? '' : renderProbe()) + renderShopBatch() + scoped + '</section>';
   }
 
   function renderMain() {
@@ -2324,7 +2331,10 @@
     var focusAct = focus && focus.getAttribute && focus.getAttribute('data-act');
     if (!['q', 'archive-filter-value'].includes(focusAct) || !root.contains || !root.contains(focus)) focus = null;
     var start = focus ? focus.selectionStart : null;
+    var oldQr = state.page === 'link' && root.querySelector ? root.querySelector('.bd-qr') : null;
     render(root);
+    var nextQr = oldQr && root.querySelector('.bd-qr');
+    if (nextQr && nextQr.src === oldQr.src && nextQr.replaceWith) nextQr.replaceWith(oldQr);
     fillArchiveExtras(root);
     fillSavedOverview(root);
     fillArchiveAnnotations(root);
@@ -2406,7 +2416,7 @@
         var response = await fetch(url);
         return response.ok ? response.json() : null;
       }));
-      if (token !== active || revision !== loadRevision || state.page !== 'link' || state.loginEditing || state.passwordBusy || state.batchBusy) return;
+      if (token !== active || revision !== loadRevision || state.page !== 'link' || state.loginEditing || state.passwordBusy || state.qrBusy || state.batchBusy) return;
       if (results[0] && results[0].ok) state.batchRun = results[0].run;
       if (results[1] && results[1].ok && state.localArchive) state.localArchive.run = results[1].run;
       if (results[2]) state.link = results[2];
@@ -2697,7 +2707,7 @@
         state.datePop = "";
         applyRange({ from: yearRange.from, to: yearRange.to, daysType: "year" });
       } else if (act === "password-login") {
-        if (state.passwordBusy || state.probeBusy || state.autoReloginBusy) return;
+        if (state.passwordBusy || state.qrBusy || state.probeBusy || state.autoReloginBusy) return;
         var userField = root.querySelector('[name="bound-user-name"]');
         var passwordField = root.querySelector('[name="bound-password"]');
         var autoField = root.querySelector('[name="bound-auto-relogin"]');
@@ -2751,15 +2761,19 @@
           if (token === active) paint(root);
         });
         return;
-      } else if (act === "scan") {
-        fetch("/api/bound/link/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: node.getAttribute("data-provider") }) }).then(function () {
-          return load(root, token);
-        });
-        return;
-      } else if (act === "pick") {
-        fetch("/api/bound/link/pick", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ companyId: node.getAttribute("data-company") }) }).then(function () {
-          return load(root, token);
-        });
+      } else if (act === "scan" || act === "pick") {
+        if (state.qrBusy || state.passwordBusy) return;
+        state.qrBusy = true; state.qrOpen = true; state.loginEditing = false; state.error = "";
+        var qrBody = act === "scan" ? { provider: node.getAttribute("data-provider") } : { companyId: node.getAttribute("data-company") };
+        paint(root);
+        fetch("/api/bound/link/" + (act === "scan" ? "start" : "pick"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(qrBody) })
+          .then(async function (response) {
+            var result = await response.json();
+            if (token !== active) return;
+            if (result.phase) state.link = result;
+            if (!response.ok || !result.ok) state.error = result.message || result.error || "扫码登录未完成，请稍后重试。";
+          }).catch(function () { if (token === active) state.error = "扫码登录请求未完成，请稍后重试。"; })
+          .finally(function () { state.qrBusy = false; if (token === active) paint(root); });
         return;
       } else if (act === "save-batch") {
         var input = root.querySelector("[data-act='batch-value']");
@@ -2846,7 +2860,7 @@
           var button = root.querySelector('[data-act="password-login"]');
           if (field) { field.checked = state.autoReloginChoice; field.disabled = state.autoReloginBusy; }
           if (message) message.textContent = state.autoReloginMessage;
-          if (button) button.disabled = state.passwordBusy || state.autoReloginBusy || Boolean(state.link && state.link.authFailure === 'login_daily_limit' && Date.parse(state.link.loginRetryAfter) > Date.now());
+          if (button) button.disabled = state.passwordBusy || state.qrBusy || state.autoReloginBusy || Boolean(state.link && Date.parse(state.link.passwordRetryAfter || (state.link.authFailure === 'login_daily_limit' ? state.link.loginRetryAfter : '')) > Date.now());
         }
         // Do not repaint the form here: it would discard a password being typed.
         updatePreferenceFields();
@@ -2986,6 +3000,10 @@
     }
     root.addEventListener("click", onClick);
     root.addEventListener("change", onChange);
+    function onQrToggle(event) {
+      if (event.target.getAttribute && event.target.getAttribute('data-bound-qr') !== null) state.qrOpen = Boolean(event.target.open);
+    }
+    root.addEventListener("toggle", onQrToggle, true);
     function onArchiveSearch(event) {
       if (!state.localArchive || !event.target.getAttribute) return;
       var act = event.target.getAttribute('data-act');
@@ -3016,6 +3034,7 @@
       if (root.removeEventListener) {
         root.removeEventListener("click", onClick);
         root.removeEventListener("change", onChange);
+        root.removeEventListener("toggle", onQrToggle, true);
         root.removeEventListener("input", onArchiveSearch);
         root.removeEventListener("error", onProductImageError, true);
         root.removeEventListener("focusin", onLoginFocus);

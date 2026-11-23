@@ -414,6 +414,7 @@ test("扫码后按进度补采，过期保留断点", async () => {
     const href = String(url);
     calls.push(`${options.method || "GET"} ${href} ${options.body || ""}`);
     const json = (body) => ({
+      status: 200,
       headers: {
         get(name) {
           return String(name).toLowerCase() === "content-type" ? "application/json" : null;
@@ -442,6 +443,8 @@ test("扫码后按进度补采，过期保留断点", async () => {
     if (expired) {
       return json({ code: -1, content: "用户未登录或登录状态已过期" });
     }
+    if (href.includes("/auth/info")) return json({ code: 0, data: { uid: "test-user", verify: true } });
+    if (href.includes("/auth/getUserInfo")) return json({ code: 0, data: { userInfo: { userId: "test-user", companyId: "test-company" } } });
     return json({ code: 0, data: { list: [{ shopName: "甲店", payAmount: 12 }], total: 1 } });
   });
   await startLink("WECHAT");
@@ -475,6 +478,7 @@ test("过期后仍核对页面上的二维码，扫完就登录", async () => {
   setBoundFetch(async (url) => {
     const href = String(url);
     const json = (body) => ({
+      status: 200,
       headers: {
         get(name) {
           return String(name).toLowerCase() === "content-type" ? "application/json" : null;
@@ -492,6 +496,8 @@ test("过期后仍核对页面上的二维码，扫完就登录", async () => {
     if (href.includes("/auth/checkQrcode")) {
       return json({ code: 0, data: { nickName: "罗成" } });
     }
+    if (href.includes("/auth/info")) return json({ code: 0, data: { uid: "test-user", verify: true } });
+    if (href.includes("/auth/getUserInfo")) return json({ code: 0, data: { userInfo: { userId: "test-user", companyId: "test-company" } } });
     return json({ code: 0, data: {} });
   });
   await startLink("WECHAT");

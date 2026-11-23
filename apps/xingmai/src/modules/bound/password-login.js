@@ -1,6 +1,6 @@
 import { createCipheriv, randomUUID } from "node:crypto";
 import { Buffer } from "node:buffer";
-import { classifyLoginFailure, loginDiagnostic, nextShanghaiDay } from "./login-diagnostics.js";
+import { classifyLoginFailure, loginDiagnostic, nextShanghaiDay, passwordLoginHold } from "./login-diagnostics.js";
 
 // Wire format used by the official hejun.ecbis.cn login client (shared-DUVJACM6.js).
 // This public protocol key is NOT encryption for storing credentials.
@@ -34,7 +34,8 @@ export function createPasswordAuth({ readSession, saveSession, request, allowUse
   async function fail(current, reason, message, diagnostic = null) {
     forget();
     const loginRetryAfter = reason === "login_daily_limit" ? nextShanghaiDay(now()) : null;
-    await saveSession({ ...current, phase: "needs_password", cookies: {}, message, authFailure: reason, authDiagnostic: diagnostic, loginRetryAfter });
+    const hold = loginRetryAfter ? { userName: current.userName, until: loginRetryAfter, message, diagnostic } : passwordLoginHold(current, now());
+    await saveSession({ ...current, phase: "needs_password", cookies: {}, message, authFailure: reason, authDiagnostic: diagnostic, loginRetryAfter, passwordLoginHold: hold });
     return { ok: false, reason, message, diagnostic, loginRetryAfter };
   }
 
@@ -51,17 +52,17 @@ export function createPasswordAuth({ readSession, saveSession, request, allowUse
       if (!automatic) await savePreference(input.autoRelogin);
       const previous = await readSession();
       if (automatic && version !== disableVersion) return { ok: false, reason: "auto_relogin_disabled" };
-      if (previous.authFailure === "login_daily_limit" && previous.userName === input.userName.trim()
-        && Date.parse(previous.loginRetryAfter) > now()) {
+      const hold = passwordLoginHold(previous, now());
+      if (hold && hold.userName === input.userName.trim()) {
         forget();
-        return { ok: false, statusCode: 429, reason: "login_daily_limit", message: previous.message,
-          diagnostic: previous.authDiagnostic || null, loginRetryAfter: previous.loginRetryAfter };
+        return { ok: false, statusCode: 429, reason: "login_daily_limit", message: hold.message,
+          diagnostic: hold.diagnostic || null, loginRetryAfter: hold.until };
       }
       const current = {
         ...previous, provider: "PASSWORD", phase: "logging_in", cookies: {},
         scene: "", qrUrl: "", loginTicket: "", accounts: [], allowed: null,
         userName: input.userName.trim(), authGeneration: randomUUID(),
-        authFailure: "", authDiagnostic: null, loginRetryAfter: null, passwordIdentity: null, message: automatic ? "登录过期，正在重新登录。" : "正在验证账号密码。"
+        authFailure: "", authDiagnostic: null, loginRetryAfter: null, passwordLoginHold: hold, passwordIdentity: null, qrIdentityGeneration: null, message: automatic ? "登录过期，正在重新登录。" : "正在验证账号密码。"
       };
       forget();
       await saveSession(current);

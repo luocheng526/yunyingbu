@@ -93,13 +93,15 @@ test("默认模式完成登录只标记已登录，不开始批量采集", async
   const requests = [];
   setBoundFetch(async url => {
     requests.push(new URL(url).pathname);
-    return { headers: { get: () => "application/json", getSetCookie: () => [] }, json: async () => ({ code: 0, data: {} }) };
+    const data = String(url).includes('/auth/info') ? { uid: 'test-user', verify: true }
+      : String(url).includes('/auth/getUserInfo') ? { userInfo: { userId: 'test-user', companyId: 'test-company' } } : {};
+    return { status: 200, headers: { get: () => "application/json", getSetCookie: () => ['sid=test'] }, json: async () => ({ code: 0, data }) };
   });
   const status = await pollLink();
   assert.equal(status.phase, "logged_in");
   assert.equal((await readState("session")).phase, "logged_in");
   assert.equal(status.collection.batchEnabled, false);
-  assert.deepEqual(requests, ["/prod/auth/checkQrcode", "/prod/auth/info"]);
+  assert.deepEqual(requests, ["/prod/auth/checkQrcode", "/prod/auth/info", "/prod/auth/getUserInfo"]);
   const before = requests.length;
   await tick();
   assert.equal(requests.length, before);

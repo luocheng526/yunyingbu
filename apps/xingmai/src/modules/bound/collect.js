@@ -5,6 +5,8 @@ import { API_ORIGIN, MASTERS, ORIGIN, PAGE_SIZE, accessCodes, reports } from "./
 import { listSheetHeads, readState, replaceMasters, writeMaster, writeSheet, writeState } from "./persist.js";
 import { collectScopes, shanghaiToday } from "./time.js";
 import { createPasswordAuth } from "./password-login.js";
+import { verifyQrIdentity } from "./qr-login.js";
+import { passwordLoginHold } from "./login-diagnostics.js";
 import { isSingleShopRequest } from "./probe-target.js";
 import { shopDayRequest, validShopDay } from "./shop-day-contract.js";
 import { visibleShops, BATCH_DATE } from "./shop-batch.js";
@@ -195,10 +197,14 @@ export async function requestShopDayReport(input, onRequest = () => {}) {
 }
 
 let batchShops = new Set(), batchOwner = "";
+const QR_PROVIDERS = ["FEISHU", "DINGTALK", "QYWX", "WECHAT"];
+const verifiedLogin = current => current.provider === "PASSWORD" || (QR_PROVIDERS.includes(current.provider)
+  && Boolean(current.authGeneration) && current.qrIdentityGeneration === current.authGeneration);
+// Keep the legacy field and hash shape to preserve ownership of existing jobs.
 const ownerOf = current => current.passwordIdentity?.userId ? createHash("sha256").update(JSON.stringify(current.passwordIdentity)).digest("hex") : "";
 export async function requestVisibleShops() {
   const current = await session(), owner = ownerOf(current);
-  if (collectionStatus().batchEnabled || !owner || current.provider !== "PASSWORD") return { ok: false, statusCode: 409, reason: "server_login_required" };
+  if (collectionStatus().batchEnabled || !owner || !verifiedLogin(current)) return { ok: false, statusCode: 409, reason: "server_login_required" };
   const response = await requestScopedRead({ method: "get", path: "/v2/channel/getAllChannelList", access: "", referer: ORIGIN + "/workTable/channelOverview" });
   if (response.blocked) return { ok: false, statusCode: 409, reason: response.blocked };
   if (response.httpStatus !== 200 || response.payload?.code !== 0) return { ok: false, statusCode: 502, reason: "shop_discovery_failed" };
@@ -412,10 +418,12 @@ export async function linkStatus() {
     authFailure: current.authFailure || "",
     authDiagnostic: current.authDiagnostic || null,
     loginRetryAfter: current.loginRetryAfter || null,
+    passwordRetryAfter: passwordLoginHold(current)?.until || null,
+    batchLoginReady: ["logged_in", "collecting"].includes(current.phase) && Boolean(ownerOf(current)) && verifiedLogin(current),
     deviceId: current.deviceId,
     message: qrClient === "old" && current.provider !== "PASSWORD"
       ? "二维码还在闪。请点浏览器左上角的刷新按钮，重新打开这一页。刷新后请用微信扫这一张，它会停住。"
-      : pausedLogin && current.provider !== "PASSWORD" ? collection.message : current.message,
+      : pausedLogin && current.provider !== "PASSWORD" && !verifiedLogin(current) ? collection.message : current.message,
     qrToken: current.scene || "",
     userName: current.userName,
     accounts: current.accounts || [],
@@ -426,24 +434,31 @@ export async function linkStatus() {
 
 export async function startLink(provider) {
   if (passwordAuth.status().busy) return { ...(await linkStatus()), ok: false, message: "正在验证账号密码，请稍候。" };
-  passwordAuth.forget();
+  passwordAuth.disableAutoRelogin();
   const current = await session();
+  current.passwordLoginHold = passwordLoginHold(current);
   current.authGeneration = randomBytes(16).toString("hex");
-  current.provider = ["FEISHU", "DINGTALK", "QYWX", "WECHAT"].includes(provider) ? provider : "WECHAT";
+  current.provider = QR_PROVIDERS.includes(provider) ? provider : "WECHAT";
+  current.cookies = {}; current.passwordIdentity = null; current.qrIdentityGeneration = null;
+  current.allowed = null; current.userName = "";
+  current.scene = ""; current.qrUrl = "";
+  current.authFailure = ""; current.authDiagnostic = null; current.loginRetryAfter = null;
   current.phase = "waiting_scan";
   current.message = "正在向旧站官方登录接口取二维码";
   current.accounts = [];
   current.loginTicket = "";
   await saveSession(current);
-  const payload = await callUpstream(current, {
-    method: "get",
-    path: "/auth/qrcode",
-    query: { deviceId: current.deviceId, domain: "hejun.ecbis.cn", ...providerQuery(current.provider) }
-  });
+  let payload;
+  try {
+    payload = await callUpstream(current, {
+      method: "get", path: "/auth/qrcode", redirect: "error", signal: globalThis.AbortSignal.timeout(15000),
+      query: { deviceId: current.deviceId, domain: "hejun.ecbis.cn", ...providerQuery(current.provider) }
+    });
+  } catch { /* An explicit click may retry fetching a QR code; never submit a password. */ }
   if ((await session()).authGeneration !== current.authGeneration) return linkStatus();
   if (!payload || payload.code !== 0 || !payload.data) {
     current.phase = "needs_scan";
-    current.message = (payload && payload.content) || "官方登录二维码没有生成";
+    current.message = "官方登录二维码未取得，请稍后点击登录方式重试。采集进度已保留。";
     await saveSession(current);
     return linkStatus();
   }
@@ -451,7 +466,9 @@ export async function startLink(provider) {
   current.qrUrl = payload.data.url || "";
   current.qrIssuedAt = new Date().toISOString();
   current.qrCheckedAt = "";
-  current.message = "请用微信扫这一张二维码。这一张会保持约一分半，扫旧站网页上的码不会登录这里。";
+  current.message = current.provider === "WECHAT"
+    ? "请用已绑定旧站账号的微信扫这一张二维码，并在手机上确认。扫旧站网页上的码不会登录这里。"
+    : "请打开下方官方授权页面完成扫码，再回到此页查看登录结果。";
   await saveSession(current);
   return linkStatus();
 }
@@ -487,6 +504,7 @@ export async function qrBytes() {
     return { kind: "image", type: qrCache.type, buffer: qrCache.buffer };
   }
   const response = await fetchImpl(current.qrUrl, {
+    signal: globalThis.AbortSignal.timeout(15000),
     headers: {
       Referer: `${ORIGIN}/login`,
       Cookie: Object.entries(current.cookies || {}).map(([key, value]) => `${key}=${value}`).join("; ")
@@ -498,44 +516,26 @@ export async function qrBytes() {
   return { kind: "image", type, buffer };
 }
 
-function cookieNames(current) {
-  return Object.keys(current.cookies || {}).join("、") || "无";
-}
-
-function fieldNames(data) {
-  if (!data || typeof data !== "object") {
-    return "无";
-  }
-  return Object.keys(data).slice(0, 12).join("、") || "无";
-}
-
-async function finishLogin(current, data) {
-  let info = null;
-  try {
-    info = await callUpstream(current, { method: "get", path: "/auth/info" });
-  } catch {
-    info = null;
-  }
+async function finishLogin(current, _data, expectedCompany = "") {
+  const verified = await verifyQrIdentity(current, callUpstream,
+    async () => (await session()).authGeneration === current.authGeneration, expectedCompany);
   if ((await session()).authGeneration !== current.authGeneration) return;
-  if (!info || info.code !== 0) {
-    const detail = String((info && (info.content || info.message)) || "没有返回").slice(0, 40);
+  if (!verified.ok) {
     current.phase = "needs_scan";
     current.scene = "";
     current.qrUrl = "";
     current.loginTicket = "";
     current.accounts = [];
-    current.message = `手机上已经确认，但旧站资料接口仍说未登录（${detail}）。返回字段：${fieldNames(data)}。凭证：${cookieNames(current)}。请点下面的微信，扫新的一张。`;
+    current.cookies = {}; current.passwordIdentity = null; current.qrIdentityGeneration = null;
+    current.authFailure = verified.reason; current.authDiagnostic = verified.diagnostic;
+    current.message = verified.message;
     await saveSession(current);
     return;
   }
-  const infoData = info.data || {};
-  const user = infoData.userInfo || infoData;
-  current.userName = String(
-    (user && (user.nickName || user.userName || user.name))
-    || (data && (data.nickName || data.userName || data.name))
-    || current.userName
-    || ""
-  );
+  current.userName = verified.userName;
+  current.passwordIdentity = verified.identity;
+  current.qrIdentityGeneration = current.authGeneration;
+  current.authFailure = ""; current.authDiagnostic = null; current.loginRetryAfter = null;
   const collection = collectionStatus();
   current.phase = collection.batchEnabled ? "collecting" : "logged_in";
   current.scene = "";
@@ -543,7 +543,7 @@ async function finishLogin(current, data) {
   current.loginTicket = "";
   current.message = collection.batchEnabled
     ? "已登录。按筛选时间整段补采，最近两天不取。页面查询不会再打旧站。"
-    : `已登录。${collection.message}`;
+    : "扫码已登录，账号身份已核验。请点击“开始 / 继续本轮采集”；同一账号可继续原队列，已采数据会复用。会话过期后需重新扫码。";
   current.accounts = [];
   await saveSession(current);
 }
@@ -594,8 +594,9 @@ async function pollLinkOnce() {
   if (!current.qrIssuedAt) {
     current.qrIssuedAt = new Date().toISOString();
   }
-  const payload = await callUpstream(current, {
-    method: "get",
+  let payload;
+  try { payload = await callUpstream(current, {
+    method: "get", redirect: "error", signal: globalThis.AbortSignal.timeout(15000),
     path: "/auth/checkQrcode",
     query: {
       scene: current.scene,
@@ -603,7 +604,10 @@ async function pollLinkOnce() {
       deviceId: current.deviceId,
       ...providerQuery(current.provider)
     }
-  });
+  }); } catch {
+    current.message = "暂未取得扫码状态，请稍候。采集进度已保留。";
+    return saveUnlessLoggedIn(current);
+  }
   if ((await session()).authGeneration !== current.authGeneration) return linkStatus();
   const code = Number(payload && payload.code);
   const content = String((payload && payload.content) || "");
@@ -644,9 +648,10 @@ async function pollLinkOnce() {
     }
     current.scene = "";
     current.qrUrl = "";
-    current.message = "刚才那张二维码已经失效，正在换一张。";
+    current.phase = "needs_scan";
+    current.message = "二维码已过期。请点击下方登录方式重新获取，采集进度已保留。";
     await saveSession(current);
-    return startLink(current.provider);
+    return linkStatus();
   } else if (shaky) {
     current.phase = "waiting_scan";
     current.message = content || "请用微信扫这一张，扫完后在手机上点确认登录。";
@@ -665,13 +670,19 @@ export function pollLink() {
 }
 
 export async function pickAccount(companyId) {
+  if (passwordAuth.status().busy) return { ...(await linkStatus()), ok: false, message: "正在验证账号密码，请稍候。" };
   const current = await session();
-  const account = (current.accounts || []).find((item) => String(item.companyId) === String(companyId)) || current.accounts[0];
+  const account = (current.accounts || []).find((item) => String(item.companyId) === String(companyId));
   if (!account || !current.loginTicket) {
     return { ...(await linkStatus()), ok: false, error: "没有可选择的企业账号" };
   }
-  const payload = await callUpstream(current, {
-    method: "json",
+  // A later company choice supersedes the earlier ticket exchange.
+  current.authGeneration = randomBytes(16).toString("hex");
+  current.passwordIdentity = null; current.qrIdentityGeneration = null;
+  await saveSession(current);
+  let payload;
+  try { payload = await callUpstream(current, {
+    method: "json", redirect: "error", signal: globalThis.AbortSignal.timeout(15000),
     path: "/auth/ticket/login",
     body: {
       loginTicket: current.loginTicket,
@@ -679,14 +690,16 @@ export async function pickAccount(companyId) {
       deviceId: current.deviceId,
       agreementStatus: true
     }
-  });
+  }); } catch { /* Return a bounded failure without leaking the ticket or upstream body. */ }
   if ((await session()).authGeneration !== current.authGeneration) return linkStatus();
   if (!payload || payload.code !== 0) {
-    current.message = (payload && payload.content) || "企业账号登录失败";
+    current.message = "企业账号登录未完成，请稍后重新扫码。";
+    current.phase = "needs_scan"; current.scene = ""; current.qrUrl = "";
+    current.loginTicket = ""; current.accounts = [];
     await saveSession(current);
     return { ...(await linkStatus()), ok: false };
   }
-  await finishLogin(current, payload.data || account);
+  await finishLogin(current, payload.data || account, account.companyId);
   return linkStatus();
 }
 

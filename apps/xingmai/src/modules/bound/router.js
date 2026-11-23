@@ -206,12 +206,22 @@ boundRouter.get("/link/qr", async (req, res) => {
   if (!requireAdmin(req, res)) {
     return;
   }
-  const image = await qrBytes();
+  res.setHeader("Cache-Control", "no-store");
+  let image;
+  try { image = await qrBytes(); }
+  catch { return res.status(502).json({ ok: false, message: "二维码暂时未取得，请稍后重试。" }); }
   if (!image) {
     res.status(404).json({ ok: false, error: "二维码还没生成", module: "bound", source: "crawler", erp: false });
     return;
   }
   if (image.kind === "url") {
+    if (req.query.open === "1") {
+      try {
+        const url = new URL(image.url);
+        if (url.protocol !== "https:") throw new Error("invalid_auth_url");
+        return res.redirect(url.href);
+      } catch { return res.status(400).json({ ok: false, message: "官方授权地址不可用，请重新获取。" }); }
+    }
     res.json({ ok: true, url: image.url, module: "bound", source: "crawler", erp: false });
     return;
   }

@@ -30,3 +30,10 @@ export function classifyLoginFailure(response) {
 export function nextShanghaiDay(now) {
   return new Date(Math.floor((now + 8 * 3600000) / 86400000) * 86400000 + 86400000 - 8 * 3600000).toISOString();
 }
+
+// Preserve a known password-login cooldown while using the independent QR flow.
+export function passwordLoginHold(session, now = Date.now()) {
+  const hold = session.passwordLoginHold || (session.authFailure === "login_daily_limit"
+    ? { userName: session.userName, until: session.loginRetryAfter, message: session.message, diagnostic: session.authDiagnostic || null } : null);
+  return hold && Date.parse(hold.until) > now ? hold : null;
+}
