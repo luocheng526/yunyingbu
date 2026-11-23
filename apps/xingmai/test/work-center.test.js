@@ -1,23 +1,64 @@
 import test,{beforeEach} from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { resetPeopleStore } from '../src/modules/people/store.js';
+import { resetPeopleStore, createPerson } from '../src/modules/people/store.js';
 import { resetWorkStore } from '../src/modules/work/store.js';
 import { resetOrgMemo } from '../src/modules/work/diary.js';
 import { resetCenterRecords, day, record, settings } from '../src/modules/work/center-db.js';
-import { access } from '../src/modules/work/center-access.js';
+import { access, normalizedRole } from '../src/modules/work/center-access.js';
 import { publishTask,listTasks,actTask,readTaskFile,resetTaskStore,setTaskNotifier,exportTasks,importTasks } from '../src/modules/work/tasks.js';
 import { centerData,saveDaily,saveWork,saveIssue,saveSettings } from '../src/modules/work/center.js';
 import { workRouter } from '../src/modules/work/router.js';
-const users={manager:{username:'沈子晗'},lead:{username:'杨润泽'},leadB:{username:'高丽男'},op:{username:'张文静'},assistant:{username:'陈明婧'},opB:{username:'郭桂良'},assistantB:{username:'王博'}};
+const users={director:{username:'罗成'},managerB:{username:'韩梦凯'},manager:{username:'沈子晗'},lead:{username:'杨润泽'},leadB:{username:'高丽男'},op:{username:'张文静'},assistant:{username:'陈明婧'},opB:{username:'郭桂良'},assistantB:{username:'王博'}};
 const today=()=>day();
 beforeEach(async()=>{
   resetPeopleStore();resetWorkStore();resetOrgMemo();resetCenterRecords();resetTaskStore();setTaskNotifier(async()=>false);
-  await saveSettings(users.manager,{revision:0,roleOverrides:{'11':'主管','5':'助理','7':'助理'},teamOverrides:{'4':'8','5':'8','6':'11','7':'11'},weekdays:[0,1,2,3,4,5,6],deadline:'23:59'});
+  await saveSettings(users.director,{revision:0,roleOverrides:{'11':'主管','5':'助理','7':'助理'},teamOverrides:{'4':'8','5':'8','6':'11','7':'11'},weekdays:[0,1,2,3,4,5,6],deadline:'23:59'});
 });
 const draft=(overrides={})=>({title:'测试任务',assignee:'5',start_at:today()+'T09:00',due_at:today()+'T23:59',...overrides});
 async function create(user=users.manager,overrides={}){const result=await publishTask(user,draft(overrides));assert.equal(result.ok,true,result.error);return result.task;}
 async function act(user,task,action,extra={}){const result=await actTask(user,{id:task.id,revision:task.revision,action,note:'验证成果与说明',...extra});assert.equal(result.ok,true,result.error);return result.task;}
+
+test('director, manager and operator assistant remain distinct business roles',async()=>{
+  assert.equal((await access(users.director)).me.role,'总监');assert.equal((await access(users.manager)).me.role,'经理');
+  assert.equal(normalizedRole('运营助理'),'运营助理');assert.equal(normalizedRole('助理'),'运营助理');
+  assert.equal(normalizedRole('人事经理'),'经理');assert.equal(normalizedRole('后端工程师'),'员工');
+  assert.equal((await centerData(users.director)).canManage,true);assert.equal((await centerData(users.manager)).canManage,false);
+});
+test('director sees HR, technical and backend work; managers stay inside reporting scope',async()=>{
+  const hr=await createPerson({name:'测试人事主管',username:'qa-hr',role:'人事主管',department:'人事部',board:'hrTech',director:'罗成'});
+  const tech=await createPerson({name:'测试技术工程师',username:'qa-tech',role:'技术工程师',department:'技术部',board:'hrTech',director:'罗成'});
+  const backend=await createPerson({name:'测试后端工程师',username:'qa-backend',role:'后端工程师',department:'后端部',board:'backend',director:'罗成',managerId:2,lineManager:'韩梦凯'});
+  assert.ok(hr.ok&&tech.ok&&backend.ok);resetOrgMemo();
+  const ht=await create(users.director,{assignee:String(hr.person.id)}),bt=await create(users.director,{assignee:String(backend.person.id)});
+  await saveWork({username:'qa-tech'},{title:'开发事项',date:today()});await saveDaily({username:'qa-hr'},{date:today(),submit:true});
+  const all=await centerData(users.director);assert.equal(all.departments.find(d=>d.id==='hrTech').members,2);assert.equal(all.departments.find(d=>d.id==='backend').members,1);
+  assert.equal(all.people.find(p=>p.id===String(tech.person.id)).orgRole,'技术工程师');
+  const filtered=await centerData(users.director,{board:'hrTech'});assert.deepEqual(filtered.tasks.map(t=>t.id),[ht.id]);assert.equal(filtered.works.length,1);assert.equal(filtered.dailies.length,1);
+  const a=await centerData(users.manager),b=await centerData(users.managerB);assert.equal(a.tasks.some(t=>[ht.id,bt.id].includes(t.id)),false);assert.deepEqual(b.tasks.map(t=>t.id),[bt.id]);
+  assert.equal((await publishTask(users.manager,draft({assignee:String(hr.person.id)}))).statusCode,403);
+  assert.equal((await publishTask(users.manager,draft({assignee:'2'}))).statusCode,403);
+  assert.equal(all.options.departments.includes('技术部'),true);
+});
+test('director tasks reach managers and supervisors without granting core edit permission',async()=>{
+  const t=await create(users.director);assert.equal(t.publisher_role,'总监');assert.equal(t.team_id,'team-8');
+  assert.equal((await listTasks(users.manager,'all')).rows.length,1);assert.equal((await listTasks(users.lead,'all')).rows.length,1);assert.equal((await listTasks(users.managerB,'all')).rows.length,0);
+  assert.equal((await actTask(users.manager,{id:t.id,revision:t.revision,action:'edit',description:'更改总监要求',note:'测试'})).statusCode,403);
+  assert.equal((await centerData(users.director)).teams.find(team=>team.id==='team-8').directorPublished,1);
+  assert.equal((await create(users.director,{reviewer:'1'})).reviewer,'1');
+  assert.equal((await create(users.director,{reviewer:'8'})).reviewer,'8');
+  await assert.rejects(()=>saveSettings(users.manager,{revision:1,roleOverrides:{'1':'总监'}}),/只有总监/);
+});
+test('manager transfer preserves task and daily management snapshots',async()=>{
+  const old=await create(users.director);await saveDaily(users.assistant,{date:today(),submit:true});
+  const s=await settings();await saveSettings(users.director,{revision:s.revision,reportingOverrides:{'8':'2'}});
+  const fresh=await create(users.director);assert.deepEqual(old.manager_ids,['1']);assert.deepEqual(fresh.manager_ids,['2']);
+  assert.deepEqual((await listTasks(users.manager,'all')).rows.map(t=>t.id),[old.id]);assert.deepEqual((await listTasks(users.managerB,'all')).rows.map(t=>t.id),[fresh.id]);
+  assert.equal((await centerData(users.manager)).dailies.length,1);assert.equal((await centerData(users.managerB)).dailies.length,0);
+});
+test('reporting configuration rejects peer and downward manager relationships',async()=>{
+  const s=await settings();for(const relation of [{'1':'2'},{'1':'8'},{'8':'5'},{'4':'missing'}])await assert.rejects(()=>saveSettings(users.director,{revision:s.revision,reportingOverrides:relation}),/更高层级/);
+});
 
 test('manager direct assignment belongs to employee team without increasing supervisor publication',async()=>{
   const t=await create();assert.equal(t.publisher,'1');assert.equal(t.team_id,'team-8');assert.equal(t.reviewer,'1');
@@ -31,15 +72,15 @@ test('supervisor can assign assistant directly but not another team',async()=>{
 });
 test('operator requires explicit current collaboration; assistant cannot publish',async()=>{
   assert.equal((await publishTask(users.op,draft())).statusCode,403);
-  const config=await settings();await saveSettings(users.manager,{revision:config.revision,collaborations:[{operatorId:'4',assistantId:'5',enabled:true,startOn:today()}]});
+  const config=await settings();await saveSettings(users.director,{revision:config.revision,collaborations:[{operatorId:'4',assistantId:'5',enabled:true,startOn:today()}]});
   const t=await create(users.op);assert.equal(t.reviewer,'4');assert.equal((await listTasks(users.lead,'all')).rows.length,1);
   assert.equal((await publishTask(users.assistant,draft({assignee:'4'}))).statusCode,403);
-  const config2=await settings();await saveSettings(users.manager,{revision:config2.revision,collaborations:[{operatorId:'4',assistantId:'5',enabled:false}]});
+  const config2=await settings();await saveSettings(users.director,{revision:config2.revision,collaborations:[{operatorId:'4',assistantId:'5',enabled:false}]});
   assert.equal((await publishTask(users.op,draft())).statusCode,403);
   assert.equal((await listTasks(users.op,'published')).rows.length,1);
 });
 test('expired and future collaborations do not authorize dispatch',async()=>{
-  const s=await settings();await saveSettings(users.manager,{revision:s.revision,collaborations:[{operatorId:'4',assistantId:'5',endOn:'2001-01-01'},{operatorId:'4',assistantId:'5',startOn:'2099-01-01'}]});
+  const s=await settings();await saveSettings(users.director,{revision:s.revision,collaborations:[{operatorId:'4',assistantId:'5',endOn:'2001-01-01'},{operatorId:'4',assistantId:'5',startOn:'2099-01-01'}]});
   assert.equal((await publishTask(users.op,draft())).statusCode,403);
 });
 test('manager can designate employee supervisor as reviewer; other reviewers rejected',async()=>{
@@ -63,7 +104,7 @@ test('parent cannot submit before children accepted and never auto-completes',as
   const data=await centerData(users.manager);assert.equal(data.counts.roots,1);assert.equal(data.counts.children,1);
 });
 test('team reassignment preserves old task snapshot, new tasks follow new team',async()=>{
-  const old=await create();const s=await settings();await saveSettings(users.manager,{revision:s.revision,teamOverrides:{...s.teamOverrides,'5':'11'}});
+  const old=await create();const s=await settings();await saveSettings(users.director,{revision:s.revision,teamOverrides:{...s.teamOverrides,'5':'11'}});
   const fresh=await create();assert.equal(fresh.team_id,'team-11');assert.equal((await listTasks(users.lead,'all')).rows.find(t=>t.id===old.id).team_id,'team-8');assert.equal((await listTasks(users.leadB,'all')).rows.length,1);
 });
 test('supervisor cannot edit manager requirements; manager extension keeps old deadline',async()=>{
@@ -91,7 +132,7 @@ test('daily snapshot is server generated, versioned and independent from live ta
 test('daily late flag, role requirements and day off use separate task status',async()=>{
   const previous=new Date(Date.parse(today())-86400000).toISOString().slice(0,10);
   const r=await saveDaily(users.assistant,{date:previous,submit:true,revision:0,notes:{}});assert.equal(r.late,true);
-  const s=await settings();await saveSettings(users.manager,{revision:s.revision,restDays:[today()]});
+  const s=await settings();await saveSettings(users.director,{revision:s.revision,restDays:[today()]});
   const d=await centerData(users.assistant);assert.equal(d.counts.should,0);assert.equal(d.counts.reportRate,null);
 });
 test('autonomous work does not grant assistant dispatch or expose another team records',async()=>{
@@ -135,7 +176,7 @@ test('reassigning employee also checks the final reviewer scope',async()=>{
   assert.equal(response.statusCode,403);assert.equal((await listTasks(users.manager,'all')).rows[0].assignee,'5');
 });
 test('malformed settings are rejected without replacing valid configuration',async()=>{
-  const s=await settings();for(const input of [{roleOverrides:null},{taskTemplates:{}},{reportRoles:null},{collaborations:[null]},{reportFields:{主管:'bad'}}])await assert.rejects(()=>saveSettings(users.manager,{revision:s.revision,...input}),e=>e.statusCode===400);
+  const s=await settings();for(const input of [{roleOverrides:null},{taskTemplates:{}},{reportRoles:null},{collaborations:[null]},{reportFields:{主管:'bad'}}])await assert.rejects(()=>saveSettings(users.director,{revision:s.revision,...input}),e=>e.statusCode===400);
   assert.equal((await settings()).revision,s.revision);
 });
 test('employee detail keeps received and published tasks separate under a person filter',async()=>{

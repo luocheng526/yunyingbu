@@ -1,7 +1,7 @@
 /* 工作任务：发布、执行、检查走同一条记录。 */
 import { randomUUID } from "node:crypto";
 import { dbMode, query, getPool } from "../profile/auth.js";
-import { access, canAssign, taskVisible, canEditTask, allowedReviewers, taskScope } from './center-access.js';
+import { access, canAssign, taskVisible, canEditTask, canReviewTask, allowedReviewers, reviewerOptions, managedRecord, taskScope } from './center-access.js';
 import { fault, copy, writeRecord, stamp } from './center-db.js';
 import { dingUserOf, sendTaskNotice, workLink } from "./dingtalk.js";
 import { matchPerson, orgPeople } from "./store.js";
@@ -231,7 +231,7 @@ export async function taskContext(user) {
   await ready(); const ctx = await access(user);
   return { ok:true, me:ctx.me.id, role:ctx.me.role, today:new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date()),
     people:ctx.active.filter(p => canAssign(ctx,p) || p.id === ctx.me.id).map(p=>({id:p.id,name:p.name,role:p.role,teamId:p.teamId,teamName:p.teamName,supervisorId:p.supervisorId})),
-    reviewers:ctx.active.filter(p=>ctx.manager ? p.role==='主管'||p.id===ctx.me.id : p.id===ctx.me.id).map(p=>({id:p.id,name:p.name})), canPublish:ctx.active.some(p=>canAssign(ctx,p)) };
+    reviewers:reviewerOptions(ctx).map(p=>({id:p.id,name:p.name})), canPublish:ctx.active.some(p=>canAssign(ctx,p)) };
 }
 export async function listTasks(user, queue) {
   if (!QUEUES.has(String(queue||''))) return fail('任务列表不存在');
@@ -266,7 +266,7 @@ export async function publishTask(user, input) {
     if (!allowedReviewers(ctx,target).some(p=>p.id===reviewer)) return fail('验收人不在授权范围内',403);
     const parentId = String(input?.parent_id || '');
     const parent = parentId ? tasks.get(parentId) : null;
-    if (parentId && (!parent || !taskVisible(ctx,parent) || (!ctx.manager && parent.assignee!==me.id))) return fail('无权拆分此任务',403);
+    if (parentId && (!parent || !taskVisible(ctx,parent) || (!(ctx.director||ctx.manager&&managedRecord(ctx,parent)) && parent.assignee!==me.id))) return fail('无权拆分此任务',403);
     if (parent && ['已完成','已取消','待检查'].includes(parent.status)) return fail('父任务当前状态不能拆分');
     const collaborators = [...new Set(Array.isArray(input?.collaborators) ? input.collaborators.map(String) : [])].filter(id=>id!==assignee);
     if (collaborators.some(id=>!canAssign(ctx,ctx.byId.get(id)))) return fail('协作人不在可分派范围内',403);
@@ -313,6 +313,8 @@ export async function publishTask(user, input) {
       publisher: me.id,
       created_at: now,
       team_id: target.teamId, team_name: target.teamName, supervisor_id: target.supervisorId,
+      scope_ids:[...target.scopeIds],manager_ids:[...target.managerIds],team_leader_id:target.teamLeaderId,team_kind:target.teamKind,
+      department:target.department,board:target.board,assignee_role:target.role,
       publisher_role: me.role, source: me.role + '发布', parent_id: parentId, collaborators,
       assignee_name: target.name, publisher_name: me.name, reviewer_name: ctx.byId.get(reviewer)?.name || '',
       shop_id: shopId, shop_name: ctx.bundle.shops.find(s=>String(s.id)===shopId)?.name || '',
@@ -406,13 +408,14 @@ export async function actTask(user, input) {
       if([...tasks.values()].some(t=>t.parent_id===id&&!['已完成','已取消'].includes(t.status)))return fail('请先处理未完成子任务');
       task.status='已取消';task.cancelled_at=now;
     } else if(action==='review') {
-      if(!ctx.manager || task.status!=='已完成')return fail('只有经理可以复核已完成任务',403);requireNote();task.manager_review={actor:me.id,at:now,note};
+      if(!canReviewTask(ctx,task) || task.status!=='已完成')return fail('只有总监或管理范围内的经理可以复核已完成任务',403);requireNote();task.manager_review={actor:me.id,at:now,note};
     } else if(action==='confirmTeam') {
-      if(!ctx.manager || task.team_id)return fail('只有经理可以确认历史任务归属',403);requireNote();
+      if(!ctx.director || task.team_id)return fail('只有总监可以确认历史任务归属',403);requireNote();
       const lead=ctx.byId.get(String(input.supervisor_id));if(lead?.role!=='主管')return fail('请选择主管');
       changed.team_id={before:'',after:lead.teamId};task.team_id=lead.teamId;task.team_name=lead.teamName;task.supervisor_id=lead.id;
+      task.scope_ids=[lead.id,...lead.scopeIds];task.manager_ids=[...lead.managerIds];task.team_leader_id=lead.id;task.department=lead.department;task.board=lead.board;
     } else return fail('不支持此操作');
-    const labels={start:'开始执行',progress:'更新进度',submit:'提交检查',approve:'检查通过',return:'退回修改',edit:'修改任务',cancel:'取消任务',review:'经理复核',confirmTeam:'确认历史归属'};
+    const labels={start:'开始执行',progress:'更新进度',submit:'提交检查',approve:'检查通过',return:'退回修改',edit:'修改任务',cancel:'取消任务',review:me.role+'复核',confirmTeam:'确认历史归属'};
     task.revision++;task.updated_at=now;
     task.events.push({id:randomUUID(),action:labels[action],actor:me.id,actor_name:me.name,at:now,note,changes:changed,files:stored.map(f=>({id:f.id,name:f.name,mime:f.mime}))});
     await saveTask(task,stored,revision);

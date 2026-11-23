@@ -61,13 +61,18 @@ export async function audit(actor, action, before, after, reason = '') {
 }
 export const DEFAULT_SETTINGS = {
   categories: ['日常工作','商品上架','商品优化','选品测品','付费推广','店铺经营','退货治理','数据分析','人员管理','临时工作','其他'],
-  roleOverrides: {}, teamOverrides: {}, collaborations: [], taskTemplates: [],
-  reportRoles: ['主管','运营','助理'], reportMembers: [], weekdays: [1,2,3,4,5], restDays: [],
+  roleOverrides: {}, teamOverrides: {}, reportingOverrides: {}, collaborations: [], taskTemplates: [],
+  reportRoles: ['主管','运营','运营助理'], reportMembers: [], weekdays: [1,2,3,4,5], restDays: [],
   deadline: '18:00', allowLate: true, reviewHours: 24, staleHours: 48,
   requiredAttachmentCategories: [],
   reportFields: { 主管: ['团队主要工作','主动发现的问题','已解决问题','未解决问题','员工指导与培养','明日团队计划','需要经理支持'], 运营: ['店铺经营','商品优化','选品测品','推广调整','退货治理','未完成原因','明日计划'], 助理: ['商品上架','主图与详情优化','商品维护','遇到的问题','明日计划'] }
 };
-export async function settings() { return { ...copy(DEFAULT_SETTINGS), ...(await record('settings') || {}) }; }
+export async function settings() {
+  const result={...copy(DEFAULT_SETTINGS),...(await record('settings')||{})};
+  result.reportRoles=result.reportRoles.map(r=>r==='助理'?'运营助理':r);
+  result.reportFields['运营助理'] ||= result.reportFields['助理']||[];
+  return result;
+}
 export function resetCenterRecords() { memory.clear(); readyPromise = null; tails.clear(); }
 export function exportCenterRecords() { return [...memory.values()].map(copy); }
 export function importCenterRecords(rows) { memory.clear(); for (const row of rows || []) memory.set(row.id, copy(row)); }
