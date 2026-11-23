@@ -4,9 +4,8 @@
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
-    { key: "live", label: "实时" },
     { key: "week", label: "近七天业绩汇总" },
-    { key: "live2", label: "实时（新版）" }
+    { key: "live2", label: "实时" }
   ];
   var OVERVIEW_PANES = [
     { key: "team", label: "经理团队", tone: "teal", hint: "经营团队" },
@@ -3986,7 +3985,7 @@
       : state.view === "live"
         ? "实时按付费中心的方式，用组织中心账号在服务器登录京麦，抓京麦成交和京准通付费。点掉线的店，在页面中间弹出这一家的登录画面。连接京麦登录还没有会话的店。在线只算 15 分钟内还在采集的店。"
         : state.view === "live2"
-          ? state.live2Hint || "实时（新版）用组织中心账号在服务器登录。实时成交金额取京麦经营数据的成交金额；实时付费金额、实时付费ROI、实时付费成交额取京准通当天的花费、投产比、总订单金额。实时费比 =（实时付费金额 / 实时成交金额）× 100%。还没有读到的格子显示—或待接入。"
+          ? state.live2Hint || "实时用组织中心账号在服务器登录。实时成交金额取京麦经营数据的成交金额；实时付费金额、实时付费ROI、实时付费成交额取京准通当天的花费、投产比、总订单金额。实时费比 =（实时付费金额 / 实时成交金额）× 100%。还没有读到的格子显示—或待接入。"
         : state.view === "week"
           ? "近七天业绩汇总：爬虫填店铺和当天数字，其余可手填；一键发送图片发到钉钉。"
           : "数字来自星脉 ERP。";
@@ -5785,7 +5784,8 @@
       var state = {
         view: (function () {
           try {
-            return sessionStorage.getItem("xm-home-view") === "live2" ? "live2" : "company";
+            var saved = sessionStorage.getItem("xm-home-view");
+            return saved === "live2" || saved === "live" ? "live2" : "company";
           } catch (_err) {
             return "company";
           }
@@ -6596,6 +6596,7 @@
         var view = event.target.closest("[data-view]");
         if (view) {
           var nextView = view.getAttribute("data-view");
+          if (nextView === "live") nextView = "live2";
           if (!allowedHomeViews(state.user, state.people, state.dutyShops)[nextView]) {
             return;
           }
