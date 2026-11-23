@@ -5,9 +5,10 @@ import { patchExpiredShopLogin, patchLive2OfflineRelogin } from "../src/modules/
 
 const homeJs = readFileSync(new URL("../public/shared/modules/home.js", import.meta.url), "utf8");
 
-test("实时（新版） sits after 近七天业绩汇总 and stays independent of old live", () => {
+test("实时 has one entry after 近七天业绩汇总 and uses live2", () => {
   const views = homeJs.slice(homeJs.indexOf("var VIEWS"), homeJs.indexOf("var OVERVIEW_PANES"));
-  assert.match(views, /key: "live", label: "实时" \},\s*\{ key: "week", label: "近七天业绩汇总" \},\s*\{ key: "live2", label: "实时（新版）" \}/);
+  assert.match(views, /key: "week", label: "近七天业绩汇总" \},\s*\{ key: "live2", label: "实时" \}/);
+  assert.doesNotMatch(views, /key: "live"|实时（新版）/);
   assert.match(homeJs, /live2: true/);
   assert.match(homeJs, /function adaptLive2Shops/);
   assert.match(homeJs, /xm-home-live2-/);
