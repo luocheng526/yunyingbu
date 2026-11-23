@@ -2357,8 +2357,7 @@
         + ' · 旧站错误码 ' + (diagnostic.upstreamCode == null ? '未提供' : diagnostic.upstreamCode)
         + ' · ' + (diagnostic.at || '')) + '</p></details>';
     var archive = state.localArchive;
-    var run = archive && archive.run, running = state.batchRun && state.batchRun.status === 'running' || run && ['running', 'collecting'].includes(run.status);
-    var scoped = archive ? '<section class="bd-block"><h2>单店四页采集</h2><p>' + esc((archive.collectionScope || archive.scope).shopName + ' · ' + (archive.collectionScope || archive.scope).date) + '</p><p>渠道总览（单店范围）、渠道详情、关键指标分析、商品总览</p><p data-archive-progress>' + esc(archiveRunText()) + '</p>' + (archive.runtime === 'server' ? '<button type="button" data-act="archive-job-start"' + (running ? ' disabled' : '') + '>开始 / 继续补采</button><button type="button" data-act="archive-job-stop"' + (!running ? ' disabled' : '') + '>停止采集</button><p class="bd-status">采集固定为上方店铺及日期，浏览筛选不会改变采集范围。只补缺少的结果，已成功归档的数据直接复用。关闭页面后服务器继续采集；账号冲突或接口异常时停止。</p>' : '<p class="bd-status">旧的全模块批量采集保持暂停。四页专用接口正在逐项核验。</p>') + '<button type="button" data-act="archive-refresh">刷新已采数据</button></section>' : renderProgress();
+    var scoped = archive ? '' : renderProgress();
     var qrButtons = [['WECHAT', '微信'], ['FEISHU', '飞书'], ['DINGTALK', '钉钉'], ['QYWX', '企业微信']].map(function (p) {
       return '<button type="button" data-act="scan" data-provider="' + p[0] + '"' + (state.qrBusy || state.passwordBusy ? ' disabled' : '') + '>' + p[1] + '</button>';
     }).join('');

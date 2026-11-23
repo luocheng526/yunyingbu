@@ -304,7 +304,8 @@ test("新页面统一读取旧库：四页、店铺日期、筛选导出都不�
   assert.match(url, /from=2026-09-01/);
   assert.equal(h.calls.some(c => c.options.method === "POST" || c.url.startsWith("/api/bound/view?")), false);
   await h.click({ "data-act": "page", "data-page": "link" });
-  assert.match(h.root.innerHTML, /RASW潮流生活京选菀瑶专卖店 · 2026-10-03/);
+  assert.match(h.root.innerHTML, /data-bound-password/);
+  assert.doesNotMatch(h.root.innerHTML, /单店四页采集|archive-job-start|archive-job-stop|RASW潮流生活京选菀瑶专卖店 · 2026-10-03/);
 });
 
 function periodFixture() {
