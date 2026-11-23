@@ -17,6 +17,22 @@ html.xm-native.xm-glass[data-native-material] {
   --xm-card: #ffffff33;
   --xm-line: #ffffff45;
 
+  /* Floating content must cover the page below, even when mounted under body.
+   * Keep glass on the workspace, but give hover tips and menus an opaque surface.
+   */
+  & :is(.xm-hm-sales-tip, .xm-hm-tip, .xm-hm-pop, .xm-hm-head-pop) {
+    --xm-card: #fff;
+    --xm-line: #d9dfd6;
+    --xm-ink: var(--xd-ink);
+    --xm-muted: var(--xd-muted);
+    background: #fff !important;
+    color: var(--xd-ink) !important;
+    border-color: #d9dfd6 !important;
+    box-shadow: 0 8px 32px #14294326 !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
   & :is(.xm-content, .xm-pane, .people-page, .org-console, .wc, .bd-app, .bd-main, .data-fill, .ch-root, .me-page, .xm-ui-scope) {
     background: transparent !important;
     color: var(--xd-ink) !important;
