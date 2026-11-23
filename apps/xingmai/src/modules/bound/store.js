@@ -2,7 +2,7 @@ import { resetQrClient, resetPasswordCredentials, stopCollectLoop, setBoundFetch
 import { resetBoundStore as resetMemory } from "./persist.js";
 import { setBoundClock } from "./time.js";
 
-export { setBoundFetch, startLink, pollLink, pickAccount, qrBytes, linkStatus, noteQrClient, resetQrClient, tick, ensureCollectLoop, loginWithPassword } from "./collect.js";
+export { setBoundFetch, startLink, pollLink, pickAccount, qrBytes, linkStatus, noteQrClient, resetQrClient, tick, ensureCollectLoop, loginWithPassword, setAutoReloginPreference } from "./collect.js";
 export { readView, savePagePref, saveRowMark, exportView, catalogBody, coverageBody, progressBody } from "./view.js";
 export { setBoundClock } from "./time.js";
 

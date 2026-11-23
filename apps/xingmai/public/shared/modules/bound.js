@@ -19,6 +19,9 @@
     probeDate: "",
     probeBusy: false,
     passwordBusy: false,
+    autoReloginChoice: null,
+    autoReloginBusy: false,
+    autoReloginMessage: "",
     batchRun: null,
     batchBusy: false,
     batchError: "",
@@ -2224,7 +2227,15 @@
     var accounts = (link.accounts || []).map(function (account) {
       return '<button type="button" data-act="pick" data-company="' + esc(account.companyId) + '">' + esc(account.companyName || account.name || account.companyId) + "</button>";
     }).join("");
-    var password = '<div class="bd-login" data-bound-password><label>旧站账号<input name="bound-user-name" autocomplete="username" value="' + esc(link.userName || "") + '"></label><label>旧站密码<input name="bound-password" type="password" autocomplete="current-password"></label><label class="bd-auto"><input name="bound-auto-relogin" type="checkbox" checked>登录正常过期后自动重新登录</label><button class="bd-primary" type="button" data-act="password-login"' + (state.passwordBusy ? ' disabled' : '') + '>' + (state.passwordBusy ? "正在登录…" : "账号密码登录") + '</button><p class="bd-status">密码仅在服务运行期间保留，服务重启后需重新输入。异地登录、账号禁用或重新登录失败时会停止。</p></div>';
+    var dailyHold = link.authFailure === 'login_daily_limit' && Date.parse(link.loginRetryAfter) > Date.now();
+    var autoRelogin = state.autoReloginChoice === null ? link.autoReloginEnabled === true : state.autoReloginChoice;
+    var password = '<div class="bd-login" data-bound-password><label>旧站账号<input name="bound-user-name" autocomplete="username" value="' + esc(link.userName || "") + '"></label><label>旧站密码<input name="bound-password" type="password" autocomplete="current-password"></label><label class="bd-auto"><input name="bound-auto-relogin" data-act="auto-relogin" type="checkbox"' + (autoRelogin ? ' checked' : '') + (state.autoReloginBusy ? ' disabled' : '') + '>登录正常过期后自动重新登录</label><p class="bd-status" data-auto-relogin-status role="status">' + esc(state.autoReloginMessage) + '</p><button class="bd-primary" type="button" data-act="password-login"' + (state.passwordBusy || state.autoReloginBusy || dailyHold ? ' disabled' : '') + '>' + (state.passwordBusy ? "正在登录…" : dailyHold ? "今日登录已达上限" : "账号密码登录") + '</button><p class="bd-status">取消勾选立即关闭自动重登；勾选后需下次登录成功才会启用。密码仅在服务运行期间保留，服务重启后需重新输入。异地登录、账号禁用或重新登录失败时会停止。</p></div>';
+    var diagnostic = link.authDiagnostic;
+    if (diagnostic) password += '<details><summary>查看登录诊断</summary><p class="bd-status">'
+      + esc(({ login: '账号验证', session: '会话校验', profile: '身份校验' }[diagnostic.stage] || '登录')
+        + ' · HTTP ' + (diagnostic.httpStatus == null ? '未取得响应' : diagnostic.httpStatus)
+        + ' · 旧站错误码 ' + (diagnostic.upstreamCode == null ? '未提供' : diagnostic.upstreamCode)
+        + ' · ' + (diagnostic.at || '')) + '</p></details>';
     var archive = state.localArchive;
     var run = archive && archive.run, running = state.batchRun && state.batchRun.status === 'running' || run && ['running', 'collecting'].includes(run.status);
     var scoped = archive ? '<section class="bd-block"><h2>单店四页采集</h2><p>' + esc((archive.collectionScope || archive.scope).shopName + ' · ' + (archive.collectionScope || archive.scope).date) + '</p><p>渠道总览（单店范围）、渠道详情、关键指标分析、商品总览</p><p data-archive-progress>' + esc(archiveRunText()) + '</p>' + (archive.runtime === 'server' ? '<button type="button" data-act="archive-job-start"' + (running ? ' disabled' : '') + '>开始 / 继续补采</button><button type="button" data-act="archive-job-stop"' + (!running ? ' disabled' : '') + '>停止采集</button><p class="bd-status">采集固定为上方店铺及日期，浏览筛选不会改变采集范围。只补缺少的结果，已成功归档的数据直接复用。关闭页面后服务器继续采集；账号冲突或接口异常时停止。</p>' : '<p class="bd-status">旧的全模块批量采集保持暂停。四页专用接口正在逐项核验。</p>') + '<button type="button" data-act="archive-refresh">刷新已采数据</button></section>' : renderProgress();
@@ -2686,7 +2697,7 @@
         state.datePop = "";
         applyRange({ from: yearRange.from, to: yearRange.to, daysType: "year" });
       } else if (act === "password-login") {
-        if (state.passwordBusy || state.probeBusy) return;
+        if (state.passwordBusy || state.probeBusy || state.autoReloginBusy) return;
         var userField = root.querySelector('[name="bound-user-name"]');
         var passwordField = root.querySelector('[name="bound-password"]');
         var autoField = root.querySelector('[name="bound-auto-relogin"]');
@@ -2696,6 +2707,7 @@
           return;
         }
         var loginBody = JSON.stringify({ userName: userField.value.trim(), password: passwordField.value, autoRelogin: Boolean(autoField && autoField.checked) });
+        state.autoReloginChoice = Boolean(autoField && autoField.checked);
         passwordField.value = "";
         state.loginEditing = false;
         state.passwordBusy = true;
@@ -2821,6 +2833,37 @@
         return;
       }
       var act = node.getAttribute("data-act");
+      if (act === "auto-relogin") {
+        if (state.autoReloginBusy) return;
+        state.autoReloginChoice = Boolean(node.checked);
+        state.autoReloginBusy = true;
+        state.autoReloginMessage = "正在保存自动重登设置…";
+        var enabled = state.autoReloginChoice;
+        function updatePreferenceFields() {
+          if (token !== active) return;
+          var field = root.querySelector('[name="bound-auto-relogin"]');
+          var message = root.querySelector('[data-auto-relogin-status]');
+          var button = root.querySelector('[data-act="password-login"]');
+          if (field) { field.checked = state.autoReloginChoice; field.disabled = state.autoReloginBusy; }
+          if (message) message.textContent = state.autoReloginMessage;
+          if (button) button.disabled = state.passwordBusy || state.autoReloginBusy || Boolean(state.link && state.link.authFailure === 'login_daily_limit' && Date.parse(state.link.loginRetryAfter) > Date.now());
+        }
+        // Do not repaint the form here: it would discard a password being typed.
+        updatePreferenceFields();
+        fetch("/api/bound/link/auto-relogin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: enabled }) })
+          .then(async function (response) {
+            var result = await response.json();
+            if (!response.ok || !result.ok) throw new Error("preference_not_saved");
+            if (state.link) { state.link.autoReloginEnabled = result.autoReloginEnabled; state.link.passwordAuth = result.passwordAuth; }
+            state.autoReloginMessage = enabled ? "设置已保存，下次登录成功后启用自动重登。" : "已关闭自动重登，设置已保存。";
+          }).catch(function () {
+            state.autoReloginMessage = "自动重登设置未保存，请刷新确认后再操作。";
+          }).finally(function () {
+            state.autoReloginBusy = false;
+            updatePreferenceFields();
+          });
+        return;
+      }
       if (act === "saved-shop" && state.savedOptions) {
         if (node.value === '__all__' && state.page === 'channelOverview') { state.archiveAccountOverview = true; state.tab = ''; state.pageNo = 1; state.q = state.sortKey = ''; paint(root); return; }
         state.archiveAccountOverview = false;
@@ -2986,6 +3029,7 @@
     mount: function (root) {
       var token = ++active;
       state.loginEditing = false;
+      if (!state.autoReloginBusy) { state.autoReloginChoice = null; state.autoReloginMessage = ""; }
       var initialProbeDate = new URLSearchParams(window.location && window.location.search || "").get("probeDate");
       if (initialProbeDate) { state.page = "link"; state.probeDate = initialProbeDate; }
       ensureStyle();

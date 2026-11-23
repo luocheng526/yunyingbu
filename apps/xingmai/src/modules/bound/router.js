@@ -11,6 +11,7 @@ import {
   exportView,
   isBoundAdmin,
   loginWithPassword,
+  setAutoReloginPreference,
   pickAccount,
   pollLink,
   qrBytes,
@@ -155,6 +156,7 @@ boundRouter.get("/link", async (req, res) => {
   if (!requireAdmin(req, res)) {
     return;
   }
+  res.setHeader("Cache-Control", "no-store");
   res.json(await pollLink());
 });
 
@@ -163,6 +165,22 @@ boundRouter.post("/link/start", async (req, res) => {
     return;
   }
   res.json(await startLink((req.body || {}).provider));
+});
+
+boundRouter.post("/link/auto-relogin", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  res.setHeader("Cache-Control", "no-store");
+  let sameOrigin = true;
+  try { if (req.headers.origin) sameOrigin = new URL(req.headers.origin).host === req.headers.host; } catch { sameOrigin = false; }
+  if (!sameOrigin || req.headers["sec-fetch-site"] === "cross-site" || !req.is("application/json")) {
+    return res.status(403).json({ ok: false, message: "请在本站页面修改自动重登设置。" });
+  }
+  try {
+    const result = await setAutoReloginPreference(req.body);
+    res.status(result.statusCode || 200).json(result);
+  } catch {
+    res.status(500).json({ ok: false, message: "自动重登设置未保存，请刷新确认后再操作。" });
+  }
 });
 
 boundRouter.post("/link/password", async (req, res) => {

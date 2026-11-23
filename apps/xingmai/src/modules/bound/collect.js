@@ -25,9 +25,27 @@ function withScopedWrite(action) {
   scopedWrites = result.catch(() => {});
   return result;
 }
-const passwordAuth = createPasswordAuth({ readSession: session, saveSession, request: callUpstream, allowUserOnlyIdentity: () => !collectionStatus().batchEnabled });
+let preferenceWrites = Promise.resolve();
+const passwordAuth = createPasswordAuth({ readSession: session, saveSession, request: callUpstream, allowUserOnlyIdentity: () => !collectionStatus().batchEnabled, savePreference: writeAutoReloginPreference });
 
-export function resetPasswordCredentials() { passwordAuth.forget(); }
+export function resetPasswordCredentials() { passwordAuth.disableAutoRelogin(); }
+
+function writeAutoReloginPreference(enabled) {
+  // Stop immediately, before waiting for storage. Keep this outside session so
+  // an in-flight login or collector cannot overwrite a later cancellation.
+  if (!enabled) passwordAuth.disableAutoRelogin();
+  const write = preferenceWrites.then(() => writeState("password-auto-relogin", enabled));
+  preferenceWrites = write.catch(() => {});
+  return write;
+}
+
+export async function setAutoReloginPreference(input) {
+  if (!input || typeof input.enabled !== "boolean" || Object.keys(input).length !== 1) {
+    return { ok: false, statusCode: 400, message: "自动重登选项必须为开启或关闭。" };
+  }
+  await writeAutoReloginPreference(input.enabled);
+  return { ok: true, autoReloginEnabled: input.enabled, passwordAuth: passwordAuth.status() };
+}
 
 export async function loginWithPassword(input) {
   if (collectionStatus().batchEnabled) {
@@ -377,6 +395,8 @@ function providerQuery(provider) {
 
 export async function linkStatus() {
   const current = await session();
+  await preferenceWrites;
+  const autoReloginEnabled = (await readState("password-auto-relogin", false)) === true;
   const collection = collectionStatus();
   const pausedLogin = !collection.batchEnabled && ["collecting", "logged_in"].includes(current.phase);
   return {
@@ -388,6 +408,10 @@ export async function linkStatus() {
     collection,
     provider: current.provider,
     passwordAuth: passwordAuth.status(),
+    autoReloginEnabled,
+    authFailure: current.authFailure || "",
+    authDiagnostic: current.authDiagnostic || null,
+    loginRetryAfter: current.loginRetryAfter || null,
     deviceId: current.deviceId,
     message: qrClient === "old" && current.provider !== "PASSWORD"
       ? "二维码还在闪。请点浏览器左上角的刷新按钮，重新打开这一页。刷新后请用微信扫这一张，它会停住。"

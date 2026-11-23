@@ -1,5 +1,6 @@
 import { createCipheriv, randomUUID } from "node:crypto";
 import { Buffer } from "node:buffer";
+import { classifyLoginFailure, loginDiagnostic, nextShanghaiDay } from "./login-diagnostics.js";
 
 // Wire format used by the official hejun.ecbis.cn login client (shared-DUVJACM6.js).
 // This public protocol key is NOT encryption for storing credentials.
@@ -17,20 +18,24 @@ export function passwordIdentity(user = {}) {
   return { userId: id(user.userId), companyId: company || (primary ? `primary-account:${primary}` : "") };
 }
 
-export function createPasswordAuth({ readSession, saveSession, request, allowUserOnlyIdentity = () => false }) {
+export function createPasswordAuth({ readSession, saveSession, request, allowUserOnlyIdentity = () => false, savePreference = async () => {}, now = Date.now }) {
   let credentials = null;
   let busy = false;
+  let disableVersion = 0;
 
   function status() {
     return { busy, autoReloginReady: Boolean(credentials), credentialStorage: "process_memory", identityScope: credentials?.identityScope || "none" };
   }
 
   function forget() { credentials = null; }
+  // A cancellation also fences a login already awaiting an upstream response.
+  function disableAutoRelogin() { disableVersion++; forget(); }
 
-  async function fail(current, reason, message) {
+  async function fail(current, reason, message, diagnostic = null) {
     forget();
-    await saveSession({ ...current, phase: "needs_password", cookies: {}, message, authFailure: reason });
-    return { ok: false, reason, message };
+    const loginRetryAfter = reason === "login_daily_limit" ? nextShanghaiDay(now()) : null;
+    await saveSession({ ...current, phase: "needs_password", cookies: {}, message, authFailure: reason, authDiagnostic: diagnostic, loginRetryAfter });
+    return { ok: false, reason, message, diagnostic, loginRetryAfter };
   }
 
   async function signIn(input, automatic = false) {
@@ -41,58 +46,72 @@ export function createPasswordAuth({ readSession, saveSession, request, allowUse
     }
     if (busy) return { ok: false, statusCode: 409, reason: "login_busy", message: "正在登录，请稍候。" };
     busy = true;
+    const version = disableVersion;
     try {
+      if (!automatic) await savePreference(input.autoRelogin);
       const previous = await readSession();
+      if (automatic && version !== disableVersion) return { ok: false, reason: "auto_relogin_disabled" };
+      if (previous.authFailure === "login_daily_limit" && previous.userName === input.userName.trim()
+        && Date.parse(previous.loginRetryAfter) > now()) {
+        forget();
+        return { ok: false, statusCode: 429, reason: "login_daily_limit", message: previous.message,
+          diagnostic: previous.authDiagnostic || null, loginRetryAfter: previous.loginRetryAfter };
+      }
       const current = {
         ...previous, provider: "PASSWORD", phase: "logging_in", cookies: {},
         scene: "", qrUrl: "", loginTicket: "", accounts: [], allowed: null,
         userName: input.userName.trim(), authGeneration: randomUUID(),
-        authFailure: "", passwordIdentity: null, message: automatic ? "登录过期，正在重新登录。" : "正在验证账号密码。"
+        authFailure: "", authDiagnostic: null, loginRetryAfter: null, passwordIdentity: null, message: automatic ? "登录过期，正在重新登录。" : "正在验证账号密码。"
       };
       forget();
       await saveSession(current);
+      let stage = "login", latestReply;
+      const send = async (nextStage, spec) => { stage = nextStage; latestReply = undefined; latestReply = await request(current, spec); return latestReply; };
+      const failed = (reason, message) => fail(current, reason, message, loginDiagnostic(stage, latestReply));
       try {
-        const reply = await request(current, {
+        if (automatic && version !== disableVersion) {
+          return await fail(current, "auto_relogin_disabled", "自动重登已关闭，请手动登录。");
+        }
+        const reply = await send("login", {
           method: "form", path: "/auth/login", withHttpStatus: true, redirect: "error", signal: globalThis.AbortSignal.timeout(15000),
           body: { userName: current.userName, password: encodeLoginPassword(input.password), deviceId: current.deviceId, domain: "hejun.ecbis.cn", agreementStatus: true }
         });
         const code = reply.payload?.code;
-        if (code === -7) return await fail(current, "login_conflict", "账号已在其他设备登录，已停止自动重登。");
-        if (code === 9901) return await fail(current, "account_disabled", "旧站账号已禁用，已停止自动重登。");
-        if (code === 1011) return await fail(current, "device_restricted", "旧站限制了此浏览器标识，请联系旧站管理员。");
-        if (reply.payload?.data?.needSelect) return await fail(current, "company_selection_required", "旧站要求选择企业，请先核实目标企业，未自动选择账号。");
-        if (reply.httpStatus !== 200 || code !== 0) return await fail(current, "login_failed", "旧站未通过登录验证，请核对账号密码或登录限制。");
-        const info = await request(current, { method: "get", path: "/auth/info", query: { domain: "hejun.ecbis.cn", url: "workTable-channelAnalysis-route" }, withHttpStatus: true, redirect: "error", signal: globalThis.AbortSignal.timeout(15000) });
-        if (info.httpStatus !== 200 || info.payload?.code !== 0 || !info.payload?.data?.uid || !info.payload.data.verify || !Object.keys(current.cookies).length) {
-          return await fail(current, "session_unverified", "登录返回后未能验证服务器会话，本次停止。");
+        if (reply.httpStatus !== 200 || code !== 0 || reply.payload?.data?.needSelect) {
+          const issue = classifyLoginFailure(reply);
+          return await failed(issue.reason, issue.message);
         }
-        const profile = await request(current, { method: "get", path: "/auth/getUserInfo", withHttpStatus: true, redirect: "error", signal: globalThis.AbortSignal.timeout(15000) });
+        const info = await send("session", { method: "get", path: "/auth/info", query: { domain: "hejun.ecbis.cn", url: "workTable-channelAnalysis-route" }, withHttpStatus: true, redirect: "error", signal: globalThis.AbortSignal.timeout(15000) });
+        if (info.httpStatus !== 200 || info.payload?.code !== 0 || !info.payload?.data?.uid || !info.payload.data.verify || !Object.keys(current.cookies).length) {
+          return await failed("session_unverified", "登录返回后未能验证服务器会话，本次停止。");
+        }
+        const profile = await send("profile", { method: "get", path: "/auth/getUserInfo", withHttpStatus: true, redirect: "error", signal: globalThis.AbortSignal.timeout(15000) });
         if (profile.httpStatus !== 200 || profile.payload?.code !== 0 || !profile.payload?.data?.userInfo) {
-          return await fail(current, "profile_unverified", "未能核实旧站用户资料，本次停止。");
+          return await failed("profile_unverified", "未能核实旧站用户资料，本次停止。");
         }
         const identity = passwordIdentity(profile.payload.data.userInfo);
         if (!identity.userId || identity.userId !== String(info.payload.data.uid)) {
-          return await fail(current, "identity_changed", "会话与用户资料的身份不一致，已停止采集。");
+          return await failed("identity_changed", "会话与用户资料的身份不一致，已停止采集。");
         }
         if (automatic && ((!identity.companyId && !allowUserOnlyIdentity()) || JSON.stringify(identity) !== JSON.stringify(previous.passwordIdentity))) {
-          return await fail(current, "identity_changed", "重新登录后的用户或企业身份不一致，已停止采集。");
+          return await failed("identity_changed", "重新登录后的用户或企业身份不一致，已停止采集。");
         }
         current.passwordIdentity = identity;
         current.phase = "logged_in";
         current.message = "账号密码登录成功，批量采集保持暂停。";
-        if (input.autoRelogin && (identity.companyId || allowUserOnlyIdentity())) {
+        if (input.autoRelogin && version === disableVersion && (identity.companyId || allowUserOnlyIdentity())) {
           const identityScope = identity.companyId ? "user_and_company" : "user_and_fixed_shop";
           credentials = { userName: input.userName.trim(), password: input.password, autoRelogin: true, identityScope };
           current.message += "自动重登已就绪，仅用于已授权的采集任务。";
           if (!identity.companyId) current.message += "旧站未返回企业标识，将严格核对同一用户及其可见店铺。";
-        } else if (input.autoRelogin) {
+        } else if (input.autoRelogin && version === disableVersion) {
           current.message += "旧站未返回完整用户和企业标识，自动重登暂不可用。";
         }
         await saveSession(current);
         return { ok: true, phase: current.phase, message: current.message };
       } catch (error) {
         return await fail(current, "login_request_failed", error?.name === "TimeoutError" || error?.name === "AbortError"
-          ? "旧站登录请求超时，已停止，不自动重复提交。" : "旧站登录请求失败，已停止，不自动重复提交。");
+          ? "旧站登录请求超时，已停止，不自动重复提交。" : "旧站登录请求失败，已停止，不自动重复提交。", loginDiagnostic(stage, latestReply, error));
       }
     } finally { busy = false; }
   }
@@ -107,5 +126,5 @@ export function createPasswordAuth({ readSession, saveSession, request, allowUse
     return signIn(input, true);
   }
 
-  return { signIn, refresh, forget, status };
+  return { signIn, refresh, forget, disableAutoRelogin, status };
 }
