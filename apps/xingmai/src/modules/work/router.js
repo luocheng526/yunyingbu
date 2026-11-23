@@ -19,8 +19,10 @@ import {
 import { getReport, getSettings, isWorkAdmin, myTodoCount, orgPeople, saveMembers, saveReport, saveTemplate, snapshot } from "./store.js";
 import { dingUserOf, popupTo, saveNotifyWebhook } from "./dingtalk.js";
 import { actTask, listTasks, publishTask, readTaskFile, taskContext, taskCounts } from "./tasks.js";
+import { centerRouter } from './center.js';
 
 export const workRouter = Router();
+workRouter.use('/center', centerRouter);
 startDiaryReminder();
 
 function sendResult(res, result, fallbackStatus = 400) {
@@ -37,7 +39,7 @@ function sendResult(res, result, fallbackStatus = 400) {
 function wrap(handler) {
   return (req, res) => {
     Promise.resolve(handler(req, res)).catch((err) => {
-      res.status(500).json({ ok: false, error: err.message || "失败" });
+      res.status(err.statusCode || 500).json({ ok: false, error: err.message || "失败" });
     });
   };
 }

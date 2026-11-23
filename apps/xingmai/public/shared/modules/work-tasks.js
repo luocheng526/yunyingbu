@@ -757,4 +757,5 @@
   }
 
   window.XmWorkTasks = { mount: mount };
+  window.XmWorkRich = { editor: richEditor, bind: bindRichEditors, style: ensureStyle };
 })();

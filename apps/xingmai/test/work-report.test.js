@@ -568,7 +568,7 @@ test("发布、执行、退回、再提交、检查通过走同一条任务", as
     description: "把今天的活动价整理出来",
     criteria: "表格里每个 SPU 都有价格",
     assignee: "4",
-    reviewer: "2",
+    reviewer: "3",
     start_at: "2026-11-17T09:00",
     due_at: "2026-11-17T18:00",
     files: [{ name: "要求.txt", data: Buffer.from("完成要求附件").toString("base64") }]
@@ -600,7 +600,7 @@ test("发布、执行、退回、再提交、检查通过走同一条任务", as
     const openBadge = await json(base, "/api/work/badges");
     assert.equal(openBadge.data.mine, 1);
     assert.equal(openBadge.data.review, 0);
-    current = han;
+    current = luocheng;
     const hanBadge = await json(base, "/api/work/badges");
     assert.equal(hanBadge.data.review, 0);
     current = luocheng;
@@ -635,20 +635,20 @@ test("发布、执行、退回、再提交、检查通过走同一条任务", as
       method: "POST",
       body: { id: "task-role-1", revision: 2, action: "submit", note: "价格已填完" }
     });
-    assert.equal(repeat.status, 400);
+    assert.equal(repeat.status, 409);
     assert.match(repeat.data.error, /刷新/);
     assert.equal(notices.length, 2);
-    assert.equal(notices[1].personId, "2");
+    assert.equal(notices[1].personId, "3");
     assert.match(notices[1].url, /tab=taskReview/);
     assert.match(notices[1].text, /截止 2026-11-17 18:00/);
     current = zhang;
     const afterSubmit = await json(base, "/api/work/badges");
     assert.equal(afterSubmit.data.mine, 0);
-    current = han;
+    current = luocheng;
     const reviewBadge = await json(base, "/api/work/badges");
     assert.equal(reviewBadge.data.review, 1);
 
-    current = han;
+    current = luocheng;
     const review = await json(base, "/api/work/tasks?queue=review");
     const waiting = review.data.rows[0];
     assert.equal(waiting.status, "待检查");
@@ -665,20 +665,20 @@ test("发布、执行、退回、再提交、检查通过走同一条任务", as
       method: "POST",
       body: { id: "task-role-1", revision: waiting.revision, action: "return", note: "少了两个 SPU" }
     });
-    assert.equal(returned.data.task.status, "已退回");
+    assert.equal(returned.data.task.status, "进行中");
     assert.equal(notices.at(-1).personId, "4");
     assert.match(notices.at(-1).text, /少了两个 SPU/);
     assert.match(notices.at(-1).url, /tab=taskMine/);
     current = zhang;
     const returnedBadge = await json(base, "/api/work/badges");
     assert.equal(returnedBadge.data.mine, 1);
-    current = han;
+    current = luocheng;
     const returnedReview = await json(base, "/api/work/badges");
     assert.equal(returnedReview.data.review, 0);
 
     current = zhang;
     const bounced = await json(base, "/api/work/tasks?queue=mine");
-    assert.equal(bounced.data.rows[0].status, "已退回");
+    assert.equal(bounced.data.rows[0].status, "进行中");
     assert.match(bounced.data.rows[0].events.map((event) => event.note).join("\n"), /少了两个 SPU/);
     const resubmitted = await json(base, "/api/work/tasks/action", {
       method: "POST",
@@ -686,7 +686,7 @@ test("发布、执行、退回、再提交、检查通过走同一条任务", as
     });
     assert.equal(resubmitted.data.task.status, "待检查");
 
-    current = han;
+    current = luocheng;
     const pending = await json(base, "/api/work/tasks?queue=review");
     assert.equal(pending.data.rows[0].status, "待检查");
     const approved = await json(base, "/api/work/tasks/action", {
@@ -701,14 +701,14 @@ test("发布、执行、退回、再提交、检查通过走同一条任务", as
     const done = after.data.rows[0];
     assert.equal(done.status, "已完成");
     assert.equal(handled[0].id, done.id);
-    assert.equal(done.events.some((event) => event.actor === "2" && event.action === "检查通过"), true);
+    assert.equal(done.events.some((event) => event.actor === "3" && event.action === "检查通过"), true);
 
     current = zhang;
     const finished = await json(base, "/api/work/tasks?queue=mine");
     assert.equal(finished.data.rows[0].status, "已完成");
     const clearMine = await json(base, "/api/work/badges");
     assert.equal(clearMine.data.mine, 0);
-    current = han;
+    current = luocheng;
     const clearReview = await json(base, "/api/work/badges");
     assert.equal(clearReview.data.review, 0);
     current = zhang;
@@ -756,7 +756,7 @@ test("任务附件用表单上传，重复发布不新增", async () => {
     form.set("description", "说明");
     form.set("criteria", "要求");
     form.set("assignee", "4");
-    form.set("reviewer", "2");
+    form.set("reviewer", "3");
     form.set("start_at", "2026-11-17T09:00");
     form.set("due_at", "2026-11-18T09:00");
     form.append("files", new Blob(["表单附件"]), "brief.txt");
@@ -768,7 +768,7 @@ test("任务附件用表单上传，重复发布不新增", async () => {
     second.set("id", "task-form-600e");
     second.set("title", "另一条");
     second.set("assignee", "4");
-    second.set("reviewer", "2");
+    second.set("reviewer", "3");
     second.set("start_at", "2026-11-17T09:00");
     second.set("due_at", "2026-11-18T09:00");
     const again = await fetch(`${base}/api/work/tasks/publish`, { method: "POST", body: second });
@@ -804,7 +804,7 @@ test("逾期任务只计一次，新的一条单独提醒，待办排人只提�
   const late = {
     title: "逾期仍算一条",
     assignee: "4",
-    reviewer: "2",
+    reviewer: "3",
     start_at: "2026-11-01T09:00",
     due_at: "2026-11-02T09:00"
   };
@@ -819,7 +819,7 @@ test("逾期任务只计一次，新的一条单独提醒，待办排人只提�
     current = zhang;
     const badges = await json(base, "/api/work/badges");
     assert.equal(badges.data.mine, 3);
-    current = han;
+    current = luocheng;
     assert.equal((await json(base, "/api/work/badges")).data.review, 0);
   } finally {
     resetWorkStore();

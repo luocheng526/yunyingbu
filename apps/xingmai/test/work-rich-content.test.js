@@ -30,7 +30,7 @@ test("rejects arbitrary HTML, URLs, foreign image IDs and mismatched image conte
 test("task save/read keeps rich content and file access permissions; rejected input creates no task", async () => {
   resetPeopleStore(); resetTaskStore(); setTaskNotifier(async()=>true);
   const user={username:"罗成",displayName:"罗成"};
-  const draft={id:"task-rich-test-01",title:"图文任务",description:"fallback",criteria:"旧要求",assignee:"4",reviewer:"2",start_at:"2026-11-21T09:00",due_at:"2026-11-22T18:00",files,description_doc:JSON.stringify([{type:"text",text:"图前"},{type:"image",upload:0},{type:"text",text:"图后"}]),criteria_doc:JSON.stringify([{type:"text",text:"验收文字"}])};
+  const draft={id:"task-rich-test-01",title:"图文任务",description:"fallback",criteria:"旧要求",assignee:"4",reviewer:"3",start_at:"2026-11-21T09:00",due_at:"2026-11-22T18:00",files,description_doc:JSON.stringify([{type:"text",text:"图前"},{type:"image",upload:0},{type:"text",text:"图后"}]),criteria_doc:JSON.stringify([{type:"text",text:"验收文字"}])};
   try{
     const created=await publishTask(user,draft);assert.equal(created.ok,true);
     const fileId=created.task.description_doc[1].fileId;

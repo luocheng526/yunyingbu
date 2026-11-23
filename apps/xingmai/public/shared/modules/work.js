@@ -2480,11 +2480,12 @@
  }
 
  window.XmModules = window.XmModules || {};
- window.XmModules["/work"] = {
-  mount: function (root) {
+ window.XmWorkLegacy = {
+  mount: function (root, initialTab) {
    ensureStyle();
    state.tab = "today";
    readDeepLink();
+   if (initialTab) state.tab = initialTab;
    state.date = "";
    state.dept = "";
    state.settingsDept = "ops";
@@ -2513,6 +2514,23 @@
     state.badgeTimer = 0;
     root.innerHTML = "";
    };
+  }
+ };
+ window.XmModules['/work'] = {
+  mount: function(root) {
+    var stopped=false, cleanup=null;
+    if (!document.getElementById('work-center-css')) {
+      var css=document.createElement('link'); css.id='work-center-css';css.rel='stylesheet';css.href='/shared/modules/work-center.css?v=20261123-v2';document.head.appendChild(css);
+    }
+    function run(){if(!stopped)cleanup=window.XmWorkCenter.mount(root);}
+    if(window.XmWorkCenter)run();
+    else {
+      root.innerHTML='<div style="padding:32px">正在打开工作中心…</div>';
+      var script=document.createElement('script');script.src='/shared/modules/work-center.js?v=20261123-v2';script.onload=run;
+      script.onerror=function(){if(!stopped)root.innerHTML='<div style="padding:32px">工作中心加载失败，请刷新页面重试。</div>';};
+      document.head.appendChild(script);
+    }
+    return function(){stopped=true;if(cleanup)cleanup();root.innerHTML='';};
   }
  };
 })();

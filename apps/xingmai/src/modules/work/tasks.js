@@ -1,6 +1,8 @@
 /* 工作任务：发布、执行、检查走同一条记录。 */
 import { randomUUID } from "node:crypto";
-import { dbMode, query } from "../profile/auth.js";
+import { dbMode, query, getPool } from "../profile/auth.js";
+import { access, canAssign, taskVisible, canEditTask, allowedReviewers, taskScope } from './center-access.js';
+import { fault, copy, writeRecord, stamp } from './center-db.js';
 import { dingUserOf, sendTaskNotice, workLink } from "./dingtalk.js";
 import { matchPerson, orgPeople } from "./store.js";
 import { parseRichContent, bindRichFiles, richPlainText } from "./rich-content.js";
@@ -11,13 +13,7 @@ const tails = new Map();
 let readyP = null;
 let notify = defaultNotify;
 
-const QUEUES = new Set(["published", "mine", "review"]);
-const ACTIONS = {
-  start: { from: ["待执行"], to: "进行中", who: "assignee", note: false, notice: "" },
-  submit: { from: ["待执行", "进行中", "已退回"], to: "待检查", who: "assignee", note: true, notice: "reviewer" },
-  approve: { from: ["待检查"], to: "已完成", who: "reviewer", note: false, notice: "" },
-  return: { from: ["待检查"], to: "已退回", who: "reviewer", note: true, notice: "assignee" }
-};
+const QUEUES = new Set(["published", "mine", "review", "all", "team"]);
 const ACTION_LABEL = {
   publish: "发布任务",
   start: "开始执行",
@@ -58,7 +54,9 @@ function clip(value, max) {
 
 function clock(value) {
   const text = String(value || "").trim();
-  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text) ? text.slice(0, 16) : "";
+  if (!/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/.test(text)) return '';
+  const parsed = new Date(text + '+08:00');
+  return Number.isNaN(parsed.getTime()) || new Date(parsed.getTime()+8*3600000).toISOString().slice(0,16)!==text ? '' : text;
 }
 
 function lock(id, fn) {
@@ -150,59 +148,35 @@ async function meOf(user) {
 }
 
 function view(task) {
-  return {
-    id: task.id,
-    title: task.title,
-    description: task.description,
-    criteria: task.criteria,
-    description_doc: task.description_doc || null,
-    criteria_doc: task.criteria_doc || null,
-    publisher: task.publisher,
-    assignee: task.assignee,
-    reviewer: task.reviewer,
-    start_at: task.start_at,
-    due_at: task.due_at,
-    status: task.status,
-    revision: task.revision,
-    files: (task.files || []).map((file) => ({ id: file.id, name: file.name })),
-    events: (task.events || []).map((event) => ({
-      id: event.id,
-      action: event.action,
-      actor: event.actor,
-      at: event.at,
-      note: event.note || "",
-      files: (event.files || []).map((file) => ({ id: file.id, name: file.name }))
-    }))
-  };
+  return copy(task);
 }
-
-function canSee(task, personId) {
-  return task.publisher === personId || task.assignee === personId || task.reviewer === personId;
+async function saveTask(task, files = [], expected = 0) {
+  if (dbMode() === 'mysql') {
+    const conn = await (await getPool()).getConnection();
+    try {
+      await conn.beginTransaction();
+      const [rows] = await conn.query('SELECT body FROM work_report_task WHERE id = ? FOR UPDATE', [task.id]);
+      const old = rows.length ? JSON.parse(rows[0].body) : null;
+      if ((old?.revision || 0) !== expected) fault('任务已经更新，请刷新后操作', 409);
+      for (const file of files) await conn.query('INSERT INTO work_report_task_file (id,task_id,name,mime,bytes) VALUES (?,?,?,?,?)', [file.id, task.id, file.name, file.mime, file.bytes]);
+      await conn.query('INSERT INTO work_report_task (id,body) VALUES (?,?) ON DUPLICATE KEY UPDATE body=VALUES(body)', [task.id, JSON.stringify(task)]);
+      await conn.commit();
+    } catch (error) { await conn.rollback(); throw error; } finally { conn.release(); }
+  } else if ((tasks.get(task.id)?.revision || 0) !== expected) fault('任务已经更新，请刷新后操作', 409);
+  for (const file of files) fileBytes.set(file.id, file.bytes);
+  tasks.set(task.id, copy(task));
 }
-
-async function saveTask(task) {
-  tasks.set(task.id, task);
-  if (dbMode() !== "mysql") {
-    return;
+export async function visibleTasks(user) {
+  await ready(); const ctx = await access(user);
+  if (dbMode() === 'mysql') {
+    const [rows] = await query('SELECT body FROM work_report_task');
+    tasks.clear(); for (const row of rows) { const task = JSON.parse(row.body); tasks.set(task.id, task); }
   }
-  const body = JSON.stringify(task);
-  await query(
-    `INSERT INTO work_report_task (id, body) VALUES (?, ?)
-     ON DUPLICATE KEY UPDATE body = VALUES(body)`,
-    [task.id, body]
-  );
+  return { ctx, rows: [...tasks.values()].map(t => taskScope(t, ctx)).filter(t => taskVisible(ctx, t)).map(view) };
 }
+export function exportTasks() { return { tasks: [...tasks.values()].map(copy), files: [...fileBytes.entries()].map(([id, bytes]) => [id, bytes.toString('base64')]) }; }
+export function importTasks(data) { tasks.clear(); fileBytes.clear(); for (const task of data?.tasks || []) tasks.set(task.id, copy(task)); for (const [id, bytes] of data?.files || []) fileBytes.set(id, Buffer.from(bytes,'base64')); }
 
-async function saveFile(file) {
-  fileBytes.set(file.id, file.bytes);
-  if (dbMode() !== "mysql") {
-    return;
-  }
-  await query(
-    `INSERT INTO work_report_task_file (id, task_id, name, mime, bytes) VALUES (?, ?, ?, ?, ?)`,
-    [file.id, file.taskId, file.name, file.mime || "application/octet-stream", file.bytes]
-  );
-}
 
 function takeFiles(input) {
   const list = Array.isArray(input?.files) ? input.files : [];
@@ -213,6 +187,7 @@ function takeFiles(input) {
   let total = 0;
   for (const item of list) {
     const name = clip(String(item?.name || "").split(/[/\\]/).pop(), 80);
+    if (!/\.(png|jpe?g|webp|gif|bmp|pdf|txt|csv|xlsx?|docx?|pptx?|zip)$/i.test(name)) return fail('附件支持图片、PDF、Office 文档、文本和 ZIP');
     if (!name) {
       return fail("附件缺少文件名");
     }
@@ -233,6 +208,7 @@ function takeFiles(input) {
 
 async function tell(personId, title, text, url) {
   try {
+    await writeRecord('notice', randomUUID(), { personId, title, text, url, createdAt: stamp(), readAt: null });
     await notify(personId, title, text, url);
   } catch {
     /* 通知失败不回滚任务。 */
@@ -252,41 +228,20 @@ function taskPersonName(person) {
 }
 
 export async function taskContext(user) {
-  await ready();
-  const me = await meOf(user);
-  const people = [...(await peopleMap()).values()]
-    .map((person) => ({ id: String(person.id), name: taskPersonName(person) }))
-    .sort((a, b) => a.name.localeCompare(b.name, "zh"));
-  return {
-    ok: true,
-    me: me ? me.id : "",
-    today: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(new Date()),
-    people
-  };
+  await ready(); const ctx = await access(user);
+  return { ok:true, me:ctx.me.id, role:ctx.me.role, today:new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date()),
+    people:ctx.active.filter(p => canAssign(ctx,p) || p.id === ctx.me.id).map(p=>({id:p.id,name:p.name,role:p.role,teamId:p.teamId,teamName:p.teamName,supervisorId:p.supervisorId})),
+    reviewers:ctx.active.filter(p=>ctx.manager ? p.role==='主管'||p.id===ctx.me.id : p.id===ctx.me.id).map(p=>({id:p.id,name:p.name})), canPublish:ctx.active.some(p=>canAssign(ctx,p)) };
 }
-
 export async function listTasks(user, queue) {
-  await ready();
-  const me = await meOf(user);
-  if (!me) {
-    return fail("对不上组织中心的人", 403);
-  }
-  const kind = String(queue || "");
-  if (!QUEUES.has(kind)) {
-    return fail("任务列表不存在");
-  }
-  const rows = [...tasks.values()]
-    .filter((task) => (kind === "published" ? task.publisher === me.id : kind === "mine" ? task.assignee === me.id : task.reviewer === me.id))
-    .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
-  return { ok: true, me: me.id, rows: rows.map(view) };
+  if (!QUEUES.has(String(queue||''))) return fail('任务列表不存在');
+  const {ctx,rows} = await visibleTasks(user);
+  return {ok:true, me:ctx.me.id, rows:rows.filter(t => queue==='published' ? t.publisher===ctx.me.id : queue==='mine' ? t.assignee===ctx.me.id || (t.collaborators||[]).includes(ctx.me.id) : queue==='review' ? t.reviewer===ctx.me.id : true).sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at)))};
 }
 
 export async function publishTask(user, input) {
   await ready();
-  const me = await meOf(user);
-  if (!me) {
-    return fail("对不上组织中心的人", 403);
-  }
+  const ctx = await access(user); const me = ctx.me;
   const id = cleanId(input?.id) || randomUUID();
   return lock(id, async () => {
     const existing = tasks.get(id);
@@ -304,7 +259,20 @@ export async function publishTask(user, input) {
     }
     const people = await peopleMap();
     const assignee = String(input?.assignee || "");
-    const reviewer = String(input?.reviewer || "");
+    const reviewer = String(input?.reviewer || me.id);
+    if (assignee === reviewer) return fail('检查人和执行人必须为不同人员');
+    const target = ctx.byId.get(assignee);
+    if (!canAssign(ctx,target)) return fail('没有向此员工分派任务的权限',403);
+    if (!allowedReviewers(ctx,target).some(p=>p.id===reviewer)) return fail('验收人不在授权范围内',403);
+    const parentId = String(input?.parent_id || '');
+    const parent = parentId ? tasks.get(parentId) : null;
+    if (parentId && (!parent || !taskVisible(ctx,parent) || (!ctx.manager && parent.assignee!==me.id))) return fail('无权拆分此任务',403);
+    if (parent && ['已完成','已取消','待检查'].includes(parent.status)) return fail('父任务当前状态不能拆分');
+    const collaborators = [...new Set(Array.isArray(input?.collaborators) ? input.collaborators.map(String) : [])].filter(id=>id!==assignee);
+    if (collaborators.some(id=>!canAssign(ctx,ctx.byId.get(id)))) return fail('协作人不在可分派范围内',403);
+    const shopId = String(input?.shop_id || '');
+    if (shopId && !ctx.bundle.shops.some(s=>String(s.id)===shopId && (target.visibleShops||[]).includes(s.name))) return fail('店铺不在负责人的职责范围内');
+    const category = ctx.config.categories.includes(input?.category) ? input.category : ctx.config.categories[0];
     if (!people.has(assignee) || !people.has(reviewer)) {
       return fail("请选择执行人和检查人");
     }
@@ -334,9 +302,7 @@ export async function publishTask(user, input) {
     const now = shanghaiStamp();
     const eventId = randomUUID();
     const files = packed.files.map((file) => ({ id: randomUUID(), name: file.name, bytes: file.bytes, mime: file.mime, taskId: id }));
-    for (const file of files) {
-      await saveFile(file);
-    }
+
     const task = {
       id,
       title,
@@ -345,6 +311,13 @@ export async function publishTask(user, input) {
       description_doc: bindRichFiles(descriptionDoc, files),
       criteria_doc: bindRichFiles(criteriaDoc, files),
       publisher: me.id,
+      created_at: now,
+      team_id: target.teamId, team_name: target.teamName, supervisor_id: target.supervisorId,
+      publisher_role: me.role, source: me.role + '发布', parent_id: parentId, collaborators,
+      assignee_name: target.name, publisher_name: me.name, reviewer_name: ctx.byId.get(reviewer)?.name || '',
+      shop_id: shopId, shop_name: ctx.bundle.shops.find(s=>String(s.id)===shopId)?.name || '',
+      category, priority: ['紧急','高','普通','低'].includes(input?.priority) ? input.priority : '普通',
+      original_due_at: dueAt, progress: 0, returned: false, return_count: 0, blocked: false, delayed: false,
       assignee,
       reviewer,
       start_at: startAt,
@@ -358,82 +331,93 @@ export async function publishTask(user, input) {
           id: eventId,
           action: ACTION_LABEL.publish,
           actor: me.id,
+          actor_name: me.name,
           at: now,
           note: "",
           files: files.map((file) => ({ id: file.id, name: file.name }))
         }
       ]
     };
-    await saveTask(task);
+    await saveTask(task, files, 0);
     await tell(assignee, "新的工作任务", `我的任务「${title}」，截止 ${dueText(dueAt)}。`, workLink("taskMine", id));
     return { ok: true, task: view(task) };
   });
 }
 
 export async function actTask(user, input) {
-  await ready();
-  const me = await meOf(user);
-  if (!me) {
-    return fail("对不上组织中心的人", 403);
-  }
-  const id = cleanId(input?.id);
-  const spec = ACTIONS[String(input?.action || "")];
-  if (!id || !spec) {
-    return fail("不能做这个操作");
-  }
-  return lock(id, async () => {
-    const task = tasks.get(id);
-    if (!task || !canSee(task, me.id)) {
-      return fail("没有这条任务", 404);
-    }
-    if (task[spec.who] !== me.id) {
-      return fail(spec.who === "assignee" ? "只有执行人能操作" : "只有检查人能操作", 403);
-    }
-    const revision = Number(input?.revision);
-    if (revision !== task.revision) {
-      return fail("任务已经更新，请刷新后再操作");
-    }
-    if (!spec.from.includes(task.status)) {
-      return fail("当前状态不能做这个操作");
-    }
-    const note = clip(input?.note, 2000);
-    if (spec.note && !note) {
-      return fail(spec.to === "已退回" ? "退回必须填写原因" : "请填写执行结果");
-    }
-    const packed = spec.to === "待检查" ? takeFiles(input) : { ok: true, files: [] };
-    if (!packed.ok) {
-      return packed;
-    }
-    const stored = [];
-    for (const file of packed.files) {
-      const row = { id: randomUUID(), name: file.name, bytes: file.bytes, mime: file.mime, taskId: id };
-      await saveFile(row);
-      stored.push({ id: row.id, name: row.name });
-    }
-    const now = shanghaiStamp();
-    task.status = spec.to;
-    task.revision += 1;
-    task.updated_at = now;
-    task.events.push({
-      id: randomUUID(),
-      action: ACTION_LABEL[input.action],
-      actor: me.id,
-      at: now,
-      note,
-      files: stored
-    });
-    await saveTask(task);
-    if (spec.notice) {
-      const target = task[spec.notice];
-      const due = dueText(task.due_at);
-      const text =
-        spec.notice === "reviewer"
-          ? `待检查任务「${task.title}」，截止 ${due}。`
-          : `我的任务「${task.title}」被退回。${note} 截止 ${due}。`;
-      const tab = spec.notice === "reviewer" ? "taskReview" : "taskMine";
-      await tell(target, spec.notice === "reviewer" ? "任务待检查" : "任务被退回", text, workLink(tab, task.id));
-    }
-    return { ok: true, task: view(task) };
+  const {ctx} = await visibleTasks(user); const me = ctx.me;
+  const id=cleanId(input?.id); if(!id) return fail('任务编号无效');
+  return lock(id, async()=>{
+    const original=tasks.get(id); if(!original || !taskVisible(ctx,original)) return fail('没有这条任务',404);
+    const task=copy(original); const revision=Number(input?.revision);
+    if(revision!==task.revision) return fail('任务已经更新，请刷新后再操作',409);
+    const action=String(input?.action||''); const note=clip(input?.note,2000); const now=shanghaiStamp();
+    const terminal=['已完成','已取消'].includes(task.status); const editor=canEditTask(ctx,task);
+    const actor=task.assignee===me.id; const reviewer=task.reviewer===me.id;
+    const changed={}; let stored=[]; let notice='';
+    const requireNote=()=>{if(!note) fault('请填写说明或原因');};
+    if(action==='start') {
+      if(!actor || !['待执行','已退回'].includes(task.status)) return fail('当前状态不能开始执行',403);
+      task.status='进行中'; task.started_at ||= now;
+    } else if(action==='progress') {
+      if(!actor || terminal || task.status==='待检查') return fail('无权更新此任务进度',403);
+      requireNote(); const progress=Number(input?.progress);
+      if(!Number.isFinite(progress)||progress<0||progress>100) return fail('进度应在 0～100 之间');
+      changed.progress={before:task.progress||0,after:progress}; task.progress=progress; task.blocked=Boolean(input?.blocked); task.status='进行中';
+    } else if(action==='submit') {
+      if(!actor || !['待执行','进行中','已退回'].includes(task.status)) return fail('无权提交此任务',403);
+      requireNote();
+      if([...tasks.values()].some(t=>t.parent_id===id&&!['已完成','已取消'].includes(t.status))) return fail('请先完成所有子任务的验收');
+      const packed=takeFiles(input); if(!packed.ok)return packed;
+      if(ctx.config.requiredAttachmentCategories.includes(task.category)&&!packed.files.length) return fail('此类任务提交成果时必须附带文件');
+      stored=packed.files.map(f=>({...f,id:randomUUID(),taskId:id}));
+      const links=Array.isArray(input?.links)?input.links:[];
+      if(links.some(link=>!/^https?:\/\//i.test(String(link)))) return fail('成果链接必须使用 http 或 https');
+      changed.links=links.map(link=>String(link).slice(0,1000));
+      task.status='待检查'; task.first_submitted_at ||= now; task.submitted_at=now; task.progress=100; task.blocked=false; task.returned=false; notice=task.reviewer;
+    } else if(action==='approve' || action==='return') {
+      if(!reviewer || task.status!=='待检查') return fail('只有指定验收人可以处理待验收任务',403);
+      if(action==='return') {requireNote();task.status='进行中';task.returned=true;task.return_count=(task.return_count||0)+1;notice=task.assignee;}
+      else {task.status='已完成';task.completed_at=now;task.accepted_submission_at=task.submitted_at||'';task.returned=false;}
+    } else if(action==='edit') {
+      if(!editor || terminal) return fail('无权修改此任务',403); requireNote();
+      for(const key of ['title','description','criteria','due_at','reviewer','assignee','priority']) {
+        if(!Object.hasOwn(input,key))continue; const value=clip(input[key],key==='description'?4000:2000);
+        if(value===String(task[key]||''))continue;
+        if(key==='title'&&!value) return fail('标题不能为空');
+        if(key==='due_at'&&(!clock(value)||clock(value)<task.start_at))return fail('截止时间不合法');
+        if(key==='assignee'&&!canAssign(ctx,ctx.byId.get(value)))return fail('负责人不在授权范围内',403);
+        if(key==='priority'&&!['紧急','高','普通','低'].includes(value))return fail('优先级不合法');
+        changed[key]={before:task[key]||'',after:value}; task[key]=value;
+      }
+      if(task.assignee===task.reviewer)return fail('执行人与验收人不能相同');
+      if((changed.assignee||changed.reviewer)&&!allowedReviewers(ctx,ctx.byId.get(task.assignee)).some(p=>p.id===task.reviewer))return fail('请为调整后的负责人选择授权范围内的验收人',403);
+      // Text edits replace the current text while retaining original rich content in the audit trail.
+      for(const key of ['description','criteria']) if(changed[key]) {
+        changed[key].beforeDoc=copy(task[key+'_doc']||null);
+        const images=(task[key+'_doc']||[]).filter(n=>n.type==='image');
+        task[key+'_doc']=[{type:'text',text:task[key]},...images];
+      }
+      if(changed.assignee){task.assignee_name=ctx.byId.get(task.assignee)?.name||'';task.status='待执行';task.progress=0;}
+      if(changed.reviewer)task.reviewer_name=ctx.byId.get(task.reviewer)?.name||'';
+      task.original_due_at ||= original.due_at; task.delayed=task.due_at>task.original_due_at;
+    } else if(action==='cancel') {
+      if(!editor || terminal)return fail('无权取消此任务',403); requireNote();
+      if([...tasks.values()].some(t=>t.parent_id===id&&!['已完成','已取消'].includes(t.status)))return fail('请先处理未完成子任务');
+      task.status='已取消';task.cancelled_at=now;
+    } else if(action==='review') {
+      if(!ctx.manager || task.status!=='已完成')return fail('只有经理可以复核已完成任务',403);requireNote();task.manager_review={actor:me.id,at:now,note};
+    } else if(action==='confirmTeam') {
+      if(!ctx.manager || task.team_id)return fail('只有经理可以确认历史任务归属',403);requireNote();
+      const lead=ctx.byId.get(String(input.supervisor_id));if(lead?.role!=='主管')return fail('请选择主管');
+      changed.team_id={before:'',after:lead.teamId};task.team_id=lead.teamId;task.team_name=lead.teamName;task.supervisor_id=lead.id;
+    } else return fail('不支持此操作');
+    const labels={start:'开始执行',progress:'更新进度',submit:'提交检查',approve:'检查通过',return:'退回修改',edit:'修改任务',cancel:'取消任务',review:'经理复核',confirmTeam:'确认历史归属'};
+    task.revision++;task.updated_at=now;
+    task.events.push({id:randomUUID(),action:labels[action],actor:me.id,actor_name:me.name,at:now,note,changes:changed,files:stored.map(f=>({id:f.id,name:f.name,mime:f.mime}))});
+    await saveTask(task,stored,revision);
+    if(notice) await tell(notice,action==='submit'?'任务待检查':'任务被退回',task.title+' '+note+' 截止 '+dueText(task.due_at),workLink(action==='submit'?'taskReview':'taskMine',id));
+    return {ok:true,task:view(task)};
   });
 }
 
@@ -463,7 +447,8 @@ export async function readTaskFile(user, fileId) {
   if (!me || !id) {
     return fail("没有这个附件", 404);
   }
-  const task = [...tasks.values()].find((item) => canSee(item, me.id) && [...item.files, ...item.events.flatMap((event) => event.files)].some((file) => file.id === id));
+  const ctx = await access(user);
+  const task = [...tasks.values()].find((item) => taskVisible(ctx, item) && [...item.files, ...item.events.flatMap((event) => event.files)].some((file) => file.id === id));
   if (!task) {
     return fail("没有这个附件", 404);
   }
