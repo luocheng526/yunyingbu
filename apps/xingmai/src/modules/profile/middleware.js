@@ -12,6 +12,9 @@ import { PWA_ICONS } from "./app-pwa-icons.js";
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
 export const SHELL_ASSET_VER = "0.1.1361-glass-app";
+// Navigation changes independently of the shell release. Revalidate it on each
+// page load, including in the persistent cache retained by desktop App updates.
+export const NAV_SCRIPT_URL = "/shared/nav.js";
 export const WEB_MANIFEST = {
   "id": "/home",
   "name": "星脉甄选运营中心",
@@ -341,7 +344,7 @@ const hanApiCache = new Map();
 function versionShellAssets(text) {
   return String(text || "")
     .replace(/\/shared\/layout\.css(?:\?[^"'>\s]*)?/g, `/shared/layout.css?v=${SHELL_ASSET_VER}`)
-    .replace(/\/shared\/nav\.js(?:\?[^"'>\s]*)?/g, `/shared/nav.js?v=${SHELL_ASSET_VER}`)
+    .replace(/\/shared\/nav\.js(?:\?[^"'>\s]*)?/g, NAV_SCRIPT_URL)
     .replace(/\/shared\/xm-ui\.css(?:\?[^"'>\s]*)?/g, `/shared/xm-ui.css?v=${SHELL_ASSET_VER}`)
     .replace(/\/shared\/xm-ui\.js(?:\?[^"'>\s]*)?/g, `/shared/xm-ui.js?v=${SHELL_ASSET_VER}`)
     .replace(/\/shared\/modules\/([a-z]+)\.js(?:\?[^"'>\s]*)?/g, `/shared/modules/$1.js?v=${SHELL_ASSET_VER}`)
@@ -464,10 +467,10 @@ export function withSharedShell(html) {
       extras.push(`    <link rel="preload" href="/shared/layout.css?v=${SHELL_ASSET_VER}" as="style" />`);
     }
     if (!out.includes("/shared/nav.js")) {
-      extras.push(`    <link rel="preload" href="/shared/nav.js?v=${SHELL_ASSET_VER}" as="script" />`);
-      extras.push(`    <script src="/shared/nav.js?v=${SHELL_ASSET_VER}" defer></script>`);
+      extras.push(`    <link rel="preload" href="${NAV_SCRIPT_URL}" as="script" />`);
+      extras.push(`    <script src="${NAV_SCRIPT_URL}" defer></script>`);
     } else if (!out.includes('rel="preload" href="/shared/nav.js')) {
-      extras.push(`    <link rel="preload" href="/shared/nav.js?v=${SHELL_ASSET_VER}" as="script" />`);
+      extras.push(`    <link rel="preload" href="${NAV_SCRIPT_URL}" as="script" />`);
     }
     if (!/rel=["']icon["']/.test(out)) {
       extras.push(`    ${tabIconTag()}`);
@@ -479,7 +482,7 @@ export function withSharedShell(html) {
     }
     out = out.replace(/<title>[^<]*<\/title>/, `<title>${TAB_TITLE}</title>`);
   } else if (!out.includes("/shared/nav.js") && out.includes("</body>")) {
-    out = out.replace("</body>", `    <script src="/shared/nav.js?v=${SHELL_ASSET_VER}"></script>\n  </body>`);
+    out = out.replace("</body>", `    <script src="${NAV_SCRIPT_URL}"></script>\n  </body>`);
   }
   return versionShellAssets(withThemeBoot(out));
 }
@@ -516,7 +519,7 @@ export function injectHtmlShell(req, res, next) {
       res.setHeader("Cache-Control", "private, no-store");
       let html = body;
       if (
-        !html.includes(`/shared/nav.js?v=${SHELL_ASSET_VER}`) &&
+        !html.includes(`src="${NAV_SCRIPT_URL}"`) &&
         !isLoginHtml(html)
       ) {
         html = withSharedShell(html);
@@ -576,7 +579,7 @@ function serveShellAsset(req, res) {
   if (!rel) {
     return false;
   }
-  const versioned = Boolean(req.query && req.query.v);
+  const versioned = rel !== "shared/nav.js" && Boolean(req.query && req.query.v);
   const noStore = rel === "login.css" || rel === "shared/modules/me.js";
   res.setHeader(
     "Cache-Control",

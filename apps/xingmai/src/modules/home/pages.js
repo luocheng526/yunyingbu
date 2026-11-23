@@ -14,6 +14,7 @@ import { boundRouter } from "../bound/router.js";
 // xm-ui 内容区公共组件随壳加载，必须和 profile/middleware.js 成套发。
 // xm-login-session 登录会话回读必须和 profile/middleware.js 成套发。
 // login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
+// 菜单脚本由 profileShell 统一生成可重新验证的 URL，避免桌面 App 沿用旧菜单缓存。
 
 function renderExistingPage(filePath) {
   if (typeof profileShell.readThemedHtml === "function") {
