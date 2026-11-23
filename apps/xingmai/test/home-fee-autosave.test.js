@@ -92,6 +92,7 @@ test("failed initial read does not import stale browser settings", async () => {
   fail = false; await h.tick(); assert.equal(h.posts.length, 0); assert.equal(h.state().book.A.lo, 50);
 });
 test("leaving the module flushes a pending change immediately", async () => {
-  const h = setup(); await h.sync.start(); h.sync.edit("A", 35, 42); h.sync.stop();
-  await Promise.resolve(); await Promise.resolve(); assert.equal(h.goals.A.lo, 35);
+  const h = setup(); await h.sync.start(); h.sync.edit("A", 35, 42); h.sync.edit("B", 32, 38); h.sync.stop();
+  await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+  assert.equal(h.goals.A.lo, 35); assert.equal(h.goals.B.lo, 32);
 });

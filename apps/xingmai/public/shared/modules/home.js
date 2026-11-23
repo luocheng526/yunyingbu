@@ -1774,7 +1774,8 @@
       } finally {
         busy = false;
         emit();
-        if (ready && Object.keys(pending).length) later(0);
+        if (ready && Object.keys(pending).length && stopped) flush();
+        else if (ready && Object.keys(pending).length) later(0);
         else later(failed ? 3000 : 30000);
       }
     }
@@ -1804,7 +1805,8 @@
       } finally {
         busy = false;
         emit();
-        later(failed ? 3000 : Object.keys(pending).length ? 0 : 30000);
+        if (stopped && !failed && Object.keys(pending).length) flush();
+        else later(failed ? 3000 : Object.keys(pending).length ? 0 : 30000);
       }
     }
     emit();
