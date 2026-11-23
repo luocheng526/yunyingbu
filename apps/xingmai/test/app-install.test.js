@@ -73,3 +73,14 @@ test('preview manifest matches the served configuration', () => {
   const local=JSON.parse(fs.readFileSync(new URL('../public/shared/app/manifest.webmanifest',import.meta.url),'utf8'));
   assert.deepEqual(JSON.parse(JSON.stringify(api.WEB_MANIFEST)),local);
 });
+
+test('native update metadata is public without exposing authenticated JSON or writes', () => {
+  const dest='/shared/app/desktop-update.json.js';
+  assert.equal(api.isPublicRequest({method:'GET',path:dest}),true);
+  assert.equal(api.isPublicRequest({method:'POST',path:dest}),false);
+  assert.equal(api.isPublicRequest({method:'GET',path:'/api/people/export.json'}),false);
+  const metadata=JSON.parse(fs.readFileSync(new URL('../public'+dest,import.meta.url),'utf8'));
+  assert.equal(metadata.schema,1);
+  assert.match(metadata.platforms['win32-x64'].url,/^https:\/\/github\.com\/luocheng526\/yunyingbu\/releases\/download\//);
+  assert.match(metadata.platforms['win32-x64'].sha256,/^[a-f0-9]{64}$/);
+});

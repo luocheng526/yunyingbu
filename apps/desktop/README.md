@@ -29,7 +29,7 @@ pnpm dev
 pnpm pack:win
 ```
 
-Windows 免安装可执行文件位于 `dist/ZhenxuanFuture-0.2.3-win-x64.exe`。
+Windows 免安装可执行文件位于 `dist/ZhenxuanFuture-0.2.4-win-x64.exe`。
 Mac 包须在 macOS 上执行 `pnpm pack:mac`，正式分发需要公司的 Apple 签名和公证配置；未在 Mac 真机上验证。
 此目录不生成 Android 或 iOS 原生包。
 
@@ -40,8 +40,10 @@ Mac 包须在 macOS 上执行 `pnpm pack:mac`，正式分发需要公司的 Appl
 ## 发布 App 更新
 
 1. 同步修改 `package.json` 与 `release-notes.json` 的版本号和面向员工的更新说明，执行 `pnpm test`、`pnpm pack:win`。
-2. 执行 `node scripts/update-manifest.cjs`，根据刚生成的 EXE 生成 `apps/xingmai/public/shared/app/desktop-update.json`；不要手填哈希或混用不同构建的文件。
+2. 执行 `node scripts/update-manifest.cjs`，根据刚生成的 EXE 生成 `apps/xingmai/public/shared/app/desktop-update.json.js`；不要手填哈希或混用不同构建的文件。
 3. 提交源代码，上传到本仓库正式 Release `desktop-v版本号`，资产名称必须为 `ZhenxuanFuture-版本号-win-x64.exe`。验证公开下载成功且大小和哈希与 manifest 一致，之后才能发布更新信息。
-4. 网站更新单仅包含 `public/shared/app/desktop-update.json` 及 `public/shared/app/app-experience.js` 的下载链接改动，模块填「主框架」，`restart:false`。通过网站闸门后，员工才能收到该版本通知。不改网站业务 UI。
+4. 网站更新单仅包含 `public/shared/app/desktop-update.json.js` 及 `public/shared/app/app-experience.js` 的下载链接改动，模块填「主框架」，`restart:false`。通过网站闸门后，员工才能收到该版本通知。不改网站业务 UI。
 
-0.2.2 及以前没有内置更新能力，员工需手动下载一次 0.2.3 或更新版本。App 内原位更新目前仅适用于已提供的 Windows x64 免安装包；macOS 尚未构建签名包，不能据此宣称支持 Mac 自动更新。
+更新信息是纯 JSON 文本，通过现有公开静态资源路径 `.json.js` 提供；客户端只进行 JSON 解析，不执行该文件。不扩大网站认证中间件的公开范围。
+
+0.2.2 及以前没有内置更新能力，员工需手动下载一次 0.2.4 或更新版本。App 内原位更新目前仅适用于已提供的 Windows x64 免安装包；macOS 尚未构建签名包，不能据此宣称支持 Mac 自动更新。

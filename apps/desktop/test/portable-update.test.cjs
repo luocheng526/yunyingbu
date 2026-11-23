@@ -6,7 +6,7 @@ const path = require('node:path');
 const {createHash} = require('node:crypto');
 const {execFile,spawn} = require('node:child_process');
 const {promisify} = require('node:util');
-const {replacementScript,makeReplacementConfig} = require('../portable-update.cjs');
+const {startReplacement} = require('../portable-update.cjs');
 const exec=promisify(execFile);
 const powershell=path.join(process.env.SystemRoot||'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe');
 const run=script=>exec(powershell,['-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],{windowsHide:true,timeout:30000});
@@ -29,8 +29,12 @@ test('Windows replacement handles Chinese/quoted paths, waits for exit, and rest
     await fs.writeFile(staged,bytes);
     const parent=spawn(process.execPath,['-e','setTimeout(()=>{},2500)'],{windowsHide:true,stdio:'ignore'});
     const update={version:'0.2.3',size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
-    const config=makeReplacementConfig({target,staged,update,cacheDir,pid:parent.pid});
-    const started=Date.now();await run(replacementScript(config));
+    const started=Date.now();
+    const {config}=await startReplacement({target,staged,update,cacheDir,pid:parent.pid});
+    for(let i=0;i<120;i++) {
+      try{const result=JSON.parse(await fs.readFile(config.report,'utf8'));if(result.status===(valid?'installed':'error'))break;}catch{}
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
     const result=JSON.parse(await fs.readFile(config.report,'utf8'));
     assert.ok(Date.now()-started>=2000,'helper must wait for the running App: '+JSON.stringify(result));
     assert.equal(result.status,valid?'installed':'error');
@@ -39,5 +43,6 @@ test('Windows replacement handles Chinese/quoted paths, waits for exit, and rest
     for(let i=0;i<30;i++){try{await fs.access(marker);break;}catch{await new Promise(resolve=>setTimeout(resolve,100));}}
     assert.equal(await fs.readFile(marker,'utf8'),'started');
     await assert.rejects(fs.access(config.backup));await assert.rejects(fs.access(config.incoming));
+    await fs.rm(config.report,{force:true});
   }
 });

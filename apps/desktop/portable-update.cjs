@@ -84,7 +84,9 @@ async function startReplacement(options) {
   const env = {...process.env};
   for (const key of Object.keys(env)) if (key.startsWith('PORTABLE_') || key === 'ELECTRON_RUN_AS_NODE') delete env[key];
   const exe = path.join(process.env.SystemRoot || 'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe');
-  const child = spawn(exe,['-NoLogo','-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',command],{detached:true,windowsHide:true,stdio:'ignore',env});
+  // DETACHED_PROCESS can make Windows PowerShell exit without executing its
+  // command. An unreferenced normal child survives the GUI parent on Windows.
+  const child = spawn(exe,['-NoLogo','-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',command],{windowsHide:true,stdio:'ignore',env});
   let failed = false, cancelled = false;
   const cancel=()=>{cancelled=true;child.kill();};
   child.once('error',()=>{failed=true;});

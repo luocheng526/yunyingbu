@@ -15,6 +15,6 @@ const manifest={schema:1,version,publishedAt:new Date().toISOString(),notes:rele
   url:`https://github.com/luocheng526/yunyingbu/releases/download/desktop-v${version}/${filename}`,
   size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')}}};
 validateManifest(manifest);
-const destination=path.resolve(root,'../xingmai/public/shared/app/desktop-update.json');
+const destination=path.resolve(root,'../xingmai/public/shared/app/desktop-update.json.js');
 fs.writeFileSync(destination,JSON.stringify(manifest,null,2)+'\n');
 console.log(JSON.stringify({version,destination,size:bytes.length,sha256:manifest.platforms['win32-x64'].sha256}));

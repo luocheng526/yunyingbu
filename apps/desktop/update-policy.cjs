@@ -1,4 +1,4 @@
-const FEED_URL = 'https://zx.xingmaierp.cc/shared/app/desktop-update.json';
+const FEED_URL = 'https://zx.xingmaierp.cc/shared/app/desktop-update.json.js';
 const DOWNLOAD_ROOT = 'https://github.com/luocheng526/yunyingbu/releases/download/';
 const MAX_DOWNLOAD = 350 * 1024 * 1024;
 
