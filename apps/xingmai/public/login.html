@@ -211,7 +211,8 @@
             if (!res.ok) throw new Error(data.error || "登录失败");
             if (remember.checked) localStorage.setItem(KEY, username.value.trim());
             else localStorage.removeItem(KEY);
-            window.location.replace((data.user && data.user.home) || "/data");
+            var back = location.pathname + location.search;
+            window.location.replace(back.indexOf("/work") === 0 ? back : (data.user && data.user.home) || "/data");
           } catch (err) {
             error.textContent = err.message || "连不上服务器。请确认地址是 https://zx.xingmaierp.cc/login。";
             error.hidden = false;
@@ -221,5 +222,6 @@
         });
       })();
     </script>
+    <script src="/shared/app/app-experience.js?v=glass-20261123-1"></script>
   </body>
 </html>

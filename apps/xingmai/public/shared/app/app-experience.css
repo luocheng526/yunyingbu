@@ -1,0 +1,237 @@
+/* The glass presentation is opt-in in a browser and automatic when installed. */
+.xg-install-entry{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--xm-line,#dedbd4);border-radius:9px;padding:7px 10px;background:var(--xm-card,#fff);color:var(--xm-ink,#242c29);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}
+.xg-install-entry svg{width:17px;height:17px}
+.xg-login-install{position:fixed;right:24px;bottom:20px;z-index:100;background:rgba(255,255,255,.9);color:#293731;border:1px solid #d4d9d4;box-shadow:0 8px 24px #20352812}
+.xg-heading,.xg-dock{display:none}
+.xg-login-note{display:none}
+.xg-offline{position:fixed;left:50%;top:max(12px,env(safe-area-inset-top));transform:translateX(-50%);z-index:2147483100;background:#fff3d6;border:1px solid #d4b46b;border-radius:12px;padding:12px 18px;color:#634715;font-size:14px;max-width:calc(100% - 24px);box-shadow:0 8px 24px #0002}
+.xg-offline[hidden]{display:none}
+.xg-install-dialog{box-sizing:border-box;width:min(580px,calc(100vw - 32px));max-height:calc(100dvh - 36px);overflow:auto;border:1px solid #fff9;border-radius:28px;padding:36px;background:#f4f0e9f5;color:#293731;box-shadow:0 30px 100px #1f2b3240;font-family:"PingFang SC","Microsoft YaHei",sans-serif;backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px)}
+.xg-install-dialog::backdrop{background:#202b3755;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
+.xg-dialog-close{position:absolute;right:16px;top:12px;width:40px;height:40px;border:0;border-radius:50%;background:#fff7;font-size:25px;color:#56625b;cursor:pointer}
+.xg-app-mark img{display:block;border-radius:15px;box-shadow:0 5px 18px #51443518}
+.xg-eyebrow{font-size:11px;letter-spacing:.17em;font-weight:600;color:#68756b;margin:20px 0 10px}
+.xg-install-dialog h2{font-size:27px;line-height:1.35;letter-spacing:-.04em;margin:0;font-weight:600}
+.xg-install-lead{font-size:15px;line-height:1.7;color:#687269;margin:10px 0 24px}
+.xg-device-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:5px;border:1px solid #fff9;border-radius:13px;background:#dbd7cb75}
+.xg-device-tab{min-height:42px;border:0;border-radius:9px;background:transparent;color:#59665e;font:inherit;font-size:13px;cursor:pointer}
+.xg-device-tab[aria-pressed=true]{background:#fff;color:#1d4d3d;box-shadow:0 2px 9px #5e5a4a12}
+.xg-install-steps{padding-left:23px;font-size:15px;line-height:1.8;margin:23px 0}
+.xg-install-steps li{padding-left:5px;margin:11px 0}
+.xg-install-status{min-height:2.8em;color:#646e67;font-size:13px;line-height:1.7}
+.xg-install-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.xg-button{min-height:44px;border:1px solid #b8c3b6;border-radius:12px;padding:11px 17px;background:#fff9;color:#314b3d;font:inherit;font-size:14px;cursor:pointer}
+.xg-button-primary{background:#275e4b;color:#fff;border-color:#275e4b;box-shadow:0 5px 15px #275e4b20}
+.xg-button:disabled{opacity:.6;cursor:wait}
+.xg-copy-link{border:0;background:transparent;padding:16px 0 0;color:#456553;font:inherit;font-size:13px;text-decoration:underline;text-underline-offset:4px;cursor:pointer}
+:where(.xg-install-dialog,.xg-dock,.xg-install-entry) :focus-visible,.xg-install-entry:focus-visible{outline:2px solid #397d65;outline-offset:3px}
+
+html.xm-glass,html.xm-glass[data-theme]{
+  --xm-bg:transparent;--xm-sider:rgba(239,233,223,.65);--xm-top:transparent;
+  --xm-ink:#29362e;--xm-muted:#657168;--xm-line:rgba(122,132,111,.18);
+  --xm-primary:#286d55;--xm-primary-soft:rgba(64,127,94,.12);--xm-primary-deep:#1f5442;
+  --xm-card:rgba(255,255,250,.67);--xm-shadow:0 3px 18px rgba(70,55,36,.045),inset 0 1px 0 rgba(255,255,255,.5);
+  --xm-sider-w:210px;--login-bg:transparent;--login-ink:#29362e;--login-muted:#647368;
+  --login-line:#b8c3b68c;--login-card:#ffffff80;--login-field:#ffffff90;--login-accent:#285c49;--login-accent-ink:#fff;
+  background:#d9cdbd url('/shared/app/ambient-room.svg') center/cover fixed;color-scheme:light;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Microsoft YaHei",sans-serif;
+}
+html.xm-glass body{background:transparent;color:#29362e;font-family:inherit}
+html.xm-glass body:has(.xm-shell){padding:24px 24px 86px;height:100dvh;max-height:100dvh;overflow:hidden}
+html.xm-glass:has(.xm-shell) .xm-shell{height:calc(100dvh - 110px)!important;max-height:calc(100dvh - 110px)!important;min-height:0;border:1px solid #ffffffaa;border-radius:28px;background:linear-gradient(130deg,#f9f7ee99,#e5e0d277);box-shadow:0 22px 65px #51422d25,inset 0 1px 0 #fff9;backdrop-filter:blur(28px) saturate(112%);-webkit-backdrop-filter:blur(28px) saturate(112%);isolation:isolate;overflow:hidden}
+html.xm-glass .xm-sider{height:100%;position:relative;top:auto;border-right:1px solid #fff6;background:#f4f0e460;padding:10px;flex-shrink:0}
+html.xm-glass .xm-brand{background:transparent;padding:16px 4px 24px;min-height:76px;gap:8px;border:0}
+html.xm-glass .xm-logo img{max-width:140px;filter:brightness(.76) saturate(.5)}
+html.xm-glass .xm-menu{padding:0 0 8px}
+html.xm-glass .xm-menu-item{min-height:42px;margin:3px 0;border-radius:12px;color:#526052;font-size:14px;transition:background-color .16s,color .16s}
+html.xm-glass .xm-menu-item:hover{background:#fff7;color:#294b38}
+html.xm-glass .xm-menu-item.is-active,html.xm-glass .xm-menu-item[aria-current=page],html.xm-glass .xm-menu-group.is-current>.xm-menu-parent{background:#ffffffbc;color:#245c45;box-shadow:0 3px 10px #3a493309,inset 0 1px 0 #fff;border:0}
+html.xm-glass .xm-menu-item .xm-ico{color:inherit}
+html.xm-glass .xm-submenu .xm-menu-item{font-size:13px;min-height:37px}
+html.xm-glass .xm-menu-label{font-size:11px;letter-spacing:.1em;color:#788172;margin:16px 10px 8px}
+html.xm-glass .xm-version{color:#788172;font-size:11px}
+html.xm-glass .xm-main{background:transparent;min-width:0}
+html.xm-glass .xm-topbar{background:transparent;border:0;border-bottom:1px solid #ffffff70;padding:12px 24px;min-height:60px;flex:0 0 60px;gap:12px}
+html.xm-glass .xm-tab{background:transparent;color:#667065;border:0;border-radius:18px;min-height:30px;padding:4px 12px;box-shadow:none;font-size:13px}
+html.xm-glass .xm-tab.is-active{background:#fff9;color:#285c49;border:1px solid #fffc}
+html.xm-glass .xm-tab-close{color:inherit}
+html.xm-glass .xm-styles{display:none}
+html.xm-glass .xm-date{display:none}
+html.xm-glass .xm-user{gap:12px}
+html.xm-glass .xm-refresh{background:#fff6;color:#526052;border:1px solid #fff9;border-radius:8px;height:32px}
+html.xm-glass .xm-username{font-size:14px;color:#34513e}
+html.xm-glass .xg-install-entry{background:#fff6;border-color:#fff9;color:#49604f;min-height:32px}
+html.xm-glass .xm-notice-bar{background:#fff4;color:#526052;border:0;padding:8px 24px;min-height:34px}
+html.xm-glass .xg-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:24px 28px 20px;flex-shrink:0}
+html.xm-glass .xg-heading .xg-eyebrow{margin:0 0 9px;font-size:10px}
+html.xm-glass .xg-heading h1{margin:0;font-size:30px;line-height:1.25;font-weight:550;letter-spacing:-.035em}
+html.xm-glass .xg-subtitle{font-size:13px;color:#6c7567;margin:9px 0 0}
+html.xm-glass .xg-today{font-size:13px;color:#6a7567;white-space:nowrap;padding-bottom:3px}
+html.xm-glass .xm-workspace{padding:0 18px 18px}
+html.xm-glass .xm-pane{border-radius:18px;scrollbar-width:thin;scrollbar-color:#a3a99555 transparent;scroll-padding-top:12px}
+html.xm-glass .xm-page,html.xm-glass .page{padding:8px 10px 20px}
+html.xm-glass .xm-hm{padding:4px 10px 20px}
+html.xm-glass .xm-hm .xm-hm-kpis-shell{background:transparent;border:0;padding:0}
+html.xm-glass .xm-hm-bar{gap:16px;margin-bottom:18px;flex-wrap:wrap}
+html.xm-glass :is(.xm-hm-views,.xm-hm-ranges){gap:4px;background:#f2efe25c;padding:4px;border:1px solid #fff7;border-radius:12px}
+html.xm-glass :is(.xm-hm-views,.xm-hm-ranges)>button{border:0;border-radius:9px;background:transparent;min-height:34px;font-size:13px;color:#647161;padding:6px 14px}
+html.xm-glass :is(.xm-hm-views,.xm-hm-ranges)>button.is-on{background:#fff;color:#2d634c;box-shadow:0 2px 9px #55613c10}
+html.xm-glass .xm-hm-dates{border:0;background:transparent;color:#56664f}
+html.xm-glass .xm-hm-teams-bar{margin-top:4px;padding-bottom:12px;color:#42513f}
+html.xm-glass :is(.xm-hm-card,.xm-hm-chart,.xm-hm-panel,.xm-hm-ladder,.xm-hm-podium,.work-card,.work-kpi,.kpi-card,.panel,.card,.data-card,.people-card,.hr-card,.bd-card){border-radius:17px;border:1px solid #ffffffb3;background:var(--xm-card);box-shadow:var(--xm-shadow)}
+html.xm-glass :is(.xm-hm-kpis,.xm-hm-team-kpis){gap:12px}
+html.xm-glass .xm-hm-card{min-height:122px;padding:18px 18px 14px}
+html.xm-glass .xm-hm-card-head{font-size:13px;color:#657464;gap:6px}
+html.xm-glass .xm-hm-value{font-size:25px;font-weight:550;letter-spacing:-.035em;margin-top:12px;font-variant-numeric:tabular-nums}
+html.xm-glass .xm-hm-card:has(.is-accent){background:linear-gradient(130deg,#27664fe8,#3c856bec);color:#fff;border-color:#a9c1a780}
+html.xm-glass .xm-hm-card:has(.is-accent) :is(.xm-hm-card-head,.xm-hm-value,.xm-hm-trend,.xm-hm-help){color:#fff}
+html.xm-glass .xm-hm-chart{padding:18px}
+html.xm-glass .xm-hm-sales{gap:12px;margin-bottom:16px}
+html.xm-glass .xm-hm-index-num{font-weight:550;letter-spacing:-.035em}
+html.xm-glass .xm-hm-table{font-size:13px;background:#fff5}
+html.xm-glass .xm-hm-table th{background:#f0eee4;color:#63705e}
+html.xm-glass .xm-hm-table td{border-color:#84987918}
+html.xm-glass .xm-hm-note{font-size:12px;color:#74816c}
+/* Shared business UI: departments, reports, people, courses, releases and profiles. */
+html.xm-glass .xm-ui-scope{
+  --xm-ui-bg:transparent;--xm-ui-surface:rgba(255,255,250,.69);--xm-ui-surface-soft:rgba(239,237,226,.7);
+  --xm-ui-border:rgba(141,150,123,.18);--xm-ui-border-strong:rgba(120,139,114,.3);
+  --xm-ui-text:#29362e;--xm-ui-text-secondary:#596956;--xm-ui-text-muted:#71806a;
+  --xm-ui-primary:#286d55;--xm-ui-primary-hover:#1f5442;--xm-ui-primary-soft:rgba(64,127,94,.12);
+  --xm-ui-radius-sm:10px;--xm-ui-radius-md:17px;--xm-ui-radius-lg:20px;
+  --xm-ui-shadow:0 4px 16px #4f51300a,inset 0 1px 0 #ffffff60;--xm-ui-shadow-hover:0 8px 24px #4f513016;
+  background:transparent;color:#29362e;font-family:inherit;
+}
+html.xm-glass .xm-main:has(.xm-pane.is-active .xm-ui-page-header)>.xg-heading{display:none}
+html.xm-glass .xm-ui-scope :is(.xm-ui-card,.xm-ui-stat-card,.xm-ui-filter-toolbar,.xm-ui-course-card){border-color:#ffffffbd;border-radius:17px;box-shadow:var(--xm-ui-shadow)}
+html.xm-glass .xm-ui-scope .xm-ui-page-title{font-weight:550;letter-spacing:-.03em}
+html.xm-glass .xm-ui-scope .xm-ui-stat-card__value{font-weight:550;letter-spacing:-.03em}
+html.xm-glass .xm-ui-scope .xm-ui-button{box-shadow:none;border-radius:10px}
+html.xm-glass .xm-ui-scope .xm-ui-tabs{max-width:100%;overflow:auto;scrollbar-width:thin;gap:5px;padding:5px;border-radius:12px}
+html.xm-glass .xm-ui-scope .xm-ui-tab{flex:0 0 auto;white-space:nowrap;min-height:36px;border-radius:9px}
+html.xm-glass .xm-ui-scope .xm-ui-tab.is-active{background:#fff;box-shadow:0 2px 7px #4f5c3b12}
+html.xm-glass .xm-ui-scope .xm-ui-table{background:#fff9}
+html.xm-glass .xm-ui-scope .xm-ui-table th{background:#eeede3;color:#56654e}
+html.xm-glass input:not([type=checkbox]):not([type=radio]),html.xm-glass select,html.xm-glass textarea{border-radius:9px}
+html.xm-glass :is(button,a,input,select,textarea):focus-visible{outline:2px solid #398168;outline-offset:3px}
+html.xm-glass .xg-dock{display:flex;position:fixed;bottom:max(15px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);gap:6px;padding:7px;border:1px solid #ffffffc9;border-radius:22px;background:#f4f0e4b3;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);box-shadow:0 8px 30px #51473225;z-index:100}
+.xg-dock-item{min-width:74px;min-height:44px;padding:8px 14px;display:flex;align-items:center;justify-content:center;gap:7px;border:0;border-radius:15px;color:#65715f;background:transparent;font:inherit;font-size:13px;cursor:pointer;transition:background-color .15s}
+.xg-dock-item svg{width:19px;height:19px}
+.xg-dock-item[aria-current=page]{background:#fff;color:#2d654d;box-shadow:0 2px 7px #4f5c3b12}
+.xg-dock-item:hover{background:#fff8}
+html.xm-glass .xm-pane.is-active{animation:xg-reveal .22s ease-out}
+@keyframes xg-reveal{from{opacity:.6;translate:0 5px}to{opacity:1;translate:0 0}}
+
+/* Login keeps the production form, validation, remember-account and password controls. */
+html.xm-glass-login,html.xm-glass-login body{height:auto;min-height:100dvh;max-height:none;overflow:auto}
+html.xm-glass-login .LoginPage{display:grid;grid-template-columns:minmax(0,1fr) minmax(330px,440px);width:min(1100px,calc(100% - 80px));height:auto;min-height:620px;max-height:none;overflow:hidden;margin:max(7vh,48px) auto 80px;border:1px solid #ffffffb0;border-radius:32px;background:linear-gradient(130deg,#f9f5e99c,#eee8da85);backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);box-shadow:0 26px 90px #5848332b}
+html.xm-glass-login .login-hero{width:auto;min-width:0;height:auto;max-height:none;min-height:0;flex:auto;background:transparent;padding:46px;color:#334c3d;border-right:1px solid #ffffff60;overflow:hidden}
+html.xm-glass-login :is(.hero-bg,.hero-slogan,.hero-lower,.hero-foot){display:none}
+html.xm-glass-login .login-wave{display:none}
+html.xm-glass-login .login-card>.hint{display:none}
+html.xm-glass-login .xg-login-note{display:block;margin:16px 0 0;font-size:12px;line-height:1.6;color:#6a7964}
+html.xm-glass-login .hero-brand{margin:0}
+html.xm-glass-login .hero-logo{max-width:180px;filter:brightness(.75) saturate(.55)}
+html.xm-glass-login .hero-body{display:flex;flex:1;align-items:center;padding:55px 0 20px}
+html.xm-glass-login .hero-copy{padding:0;margin:0;max-width:100%}
+html.xm-glass-login .hero-kicker{color:#61735d;font-size:11px;letter-spacing:.18em}
+html.xm-glass-login .hero-copy h2{font-size:clamp(28px,2.7vw,39px);line-height:1.65;font-weight:500;letter-spacing:-.035em;color:#334c3d;text-shadow:none;margin:24px 0}
+html.xm-glass-login .hero-line{white-space:normal;color:inherit}
+html.xm-glass-login .hero-pills{font-size:14px;color:#6b7962;margin-top:28px;letter-spacing:.06em}
+html.xm-glass-login .login-pane{width:auto;min-width:0;height:auto;min-height:0;background:#fff4;padding:44px 40px;display:flex;flex-direction:column;justify-content:center;align-items:stretch}
+html.xm-glass-login :is(.login-card,.login-box,.login-panel){background:transparent;border:0;box-shadow:none;width:100%;max-width:100%;padding:0}
+html.xm-glass-login .login-pane h1{color:#2d4434;font-size:29px;letter-spacing:-.03em;font-weight:550}
+html.xm-glass-login .login-pane :is(input[type=text],input[type=password],input[type=email]){background:#ffffffa6;border:1px solid #ffffffda;border-radius:12px;min-height:48px;font-size:16px;color:#304633;box-shadow:inset 0 1px 2px #8b947a05}
+html.xm-glass-login .login-pane :is(button[type=submit],[data-submit]){background:#2c604b;color:#fff;border:1px solid #2c604b;border-radius:12px;min-height:48px;box-shadow:0 7px 20px #38664720}
+html.xm-glass-login .login-pane :is(a,[data-forgot]){color:#426447}
+html.xm-glass-login .login-pane :is(.login-subtitle,.login-desc,.login-footer){color:#6a7964}
+html.xm-glass-login .login-foot{position:static;inset:auto;transform:none;margin:26px 0 0;padding:0;text-align:center;flex-shrink:0;color:#6a7964;font-size:11px}
+html.xm-glass-login .login-foot small{display:block;margin-top:5px;font-size:9px;line-height:1.5;letter-spacing:.06em}
+
+@media (min-width:1600px){html.xm-glass body:has(.xm-shell){padding:36px 48px 92px}html.xm-glass:has(.xm-shell) .xm-shell{height:calc(100dvh - 128px)!important;max-height:calc(100dvh - 128px)!important}html.xm-glass .xg-heading{padding-top:30px;padding-bottom:24px}}
+@media (max-width:1100px) and (min-width:881px){html.xm-glass{--xm-sider-w:180px}html.xm-glass .xm-topbar{padding-left:16px;padding-right:16px}html.xm-glass .xm-user{gap:7px}html.xm-glass .xm-refresh{display:none}html.xm-glass .xg-heading{padding:20px}html.xm-glass .xm-hm-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:880px){
+  html.xm-glass body:has(.xm-shell){padding:env(safe-area-inset-top) 0 0;height:100dvh;max-height:100dvh}
+  html.xm-glass:has(.xm-shell) .xm-shell{height:calc(100dvh - env(safe-area-inset-top))!important;max-height:calc(100dvh - env(safe-area-inset-top))!important;border:0;border-radius:0;background:#eee9df75;box-shadow:none;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+  html.xm-glass .xm-main{width:100%;min-width:0;padding-bottom:calc(82px + env(safe-area-inset-bottom))}
+  html.xm-glass .xm-sider{position:fixed;left:12px;top:max(12px,env(safe-area-inset-top));bottom:calc(86px + env(safe-area-inset-bottom));width:260px!important;max-width:calc(100vw - 44px);height:auto;z-index:1101;transform:translateX(calc(-100% - 24px));transition:transform .18s ease;visibility:hidden;background:#f1eee5f7;border:1px solid #fff;border-radius:21px;box-shadow:0 20px 70px #28392530}
+  html.xm-glass.xm-phone-nav .xm-sider{transform:translateX(0);visibility:visible}
+  html.xm-glass .xm-phone-mask{display:none;position:fixed;inset:0;background:#24342340;border:0;z-index:1100}
+  html.xm-glass.xm-phone-nav .xm-phone-mask{display:block}
+  html.xm-glass .xm-sider :is(.xm-menu-item span,.xm-menu-label,.xm-version,.xm-caret){display:initial}
+  html.xm-glass .xm-sider .xm-submenu{display:none}
+  html.xm-glass .xm-sider .xm-menu-group.is-open>.xm-submenu{display:block}
+  html.xm-glass .xm-collapse{display:none}
+  html.xm-glass .xm-topbar{padding:10px 15px;min-height:58px;height:58px;flex-basis:58px;gap:8px}
+  html.xm-glass .xm-phone-menu{display:flex;width:38px;height:38px;flex-basis:38px;border-radius:12px;background:#fff6;color:#496043}
+  html.xm-glass .xm-tabs{min-width:0;overflow:auto;scrollbar-width:none;gap:4px}
+  html.xm-glass .xm-tab{padding:6px 9px;white-space:nowrap;font-size:12px;min-height:30px;flex-shrink:0}
+  html.xm-glass .xm-user{gap:6px}
+  html.xm-glass .xm-user :is(.xm-refresh,.xm-username){display:none}
+  html.xm-glass .xg-install-entry{width:38px;height:38px;padding:0;border-radius:12px}
+  html.xm-glass .xg-install-entry span{display:none}
+  html.xm-glass .xg-heading{padding:21px 19px 16px;align-items:flex-start}
+  html.xm-glass .xg-heading h1{font-size:26px}
+  html.xm-glass .xg-today{font-size:11px;padding-top:3px}
+  html.xm-glass .xg-subtitle{font-size:12px;margin-top:8px}
+  html.xm-glass .xm-notice-bar{padding:6px 18px;font-size:12px}
+  html.xm-glass .xm-workspace{padding:0 9px 4px;min-height:0}
+  html.xm-glass :is(.xm-page,.page,.xm-hm){padding:3px 8px 20px;min-width:0;width:100%;max-width:100%}
+  html.xm-glass .xm-hm-bar{gap:8px;margin-bottom:14px;display:flex;flex-direction:column;align-items:stretch}
+  html.xm-glass .xm-hm-views{width:100%;overflow:auto;flex-wrap:nowrap;justify-content:space-between}
+  html.xm-glass :is(.xm-hm-views,.xm-hm-ranges)>button{padding:7px 9px;min-height:38px;white-space:nowrap;font-size:13px;flex-shrink:0}
+  html.xm-glass .xm-hm-ranges{display:flex;flex-wrap:wrap;justify-content:flex-start;background:transparent;border:0;padding:0}
+  html.xm-glass .xm-hm-datewrap{max-width:100%}
+  html.xm-glass .xm-hm-dates{font-size:12px;min-height:38px;padding:5px 9px;background:#fff6;border-radius:9px}
+  html.xm-glass .xm-hm-kpis,html.xm-glass .xm-hm-team-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  html.xm-glass #xm-hm :is(.xm-hm-kpis,.xm-hm-team-kpis,.xm-hm-live-cards){grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+  html.xm-glass #xm-hm .xm-hm-card{min-height:112px!important;padding:14px 12px!important;border:1px solid #ffffffb3!important;border-radius:17px!important}
+  html.xm-glass #xm-hm .xm-hm-card:has(.is-accent){background:linear-gradient(130deg,#27664fe8,#3c856bec)!important}
+  html.xm-glass #xm-hm .xm-hm-value{font-size:23px!important;margin-top:10px!important}
+  html.xm-glass #xm-hm .xm-hm-card-head span{white-space:normal}
+  html.xm-glass .xm-hm-card{min-height:112px;padding:14px 12px}
+  html.xm-glass .xm-hm-card-head{font-size:13px;line-height:1.4}
+  html.xm-glass .xm-hm-value{font-size:23px;margin-top:10px;overflow-wrap:anywhere}
+  html.xm-glass .xm-hm-trend{font-size:12px}
+  html.xm-glass .xm-hm-sales.xm-hm-live-charts,html.xm-glass .xm-hm-live .xm-hm-live-charts{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+  html.xm-glass .xm-hm-live-charts>.xm-hm-chart{padding:15px;min-width:0}
+  html.xm-glass .xm-hm-live-charts .xm-hm-line{display:block;height:118px;width:100%}
+  html.xm-glass .xm-hm-live-charts .xm-hm-legs{display:flex}
+  html.xm-glass .xm-hm-live-charts .xm-hm-index-num{font-size:28px}
+  html.xm-glass .xm-hm-teams-grid,html.xm-glass .xm-hm.is-team:not(.is-chief) .xm-hm-teams-grid,html.xm-glass .xm-hm-podiums{grid-template-columns:minmax(0,1fr)}
+  html.xm-glass .work-form{gap:12px}
+  html.xm-glass .work-field{min-width:0;flex:1 1 140px}
+  html.xm-glass .work-field :is(input,select,textarea){font-size:16px;min-height:42px}
+  html.xm-glass .work-card{overflow:auto}
+  html.xm-glass .xm-ui-scope:is(.work-page,.people-page,.hr-page,.me-page){padding:16px 8px 24px}
+  html.xm-glass .xm-ui-scope .xm-ui-page-header{margin-bottom:18px;gap:14px}
+  html.xm-glass .xm-ui-scope .xm-ui-page-title{font-size:26px}
+  html.xm-glass .xm-ui-scope .xm-ui-page-description{font-size:13px;line-height:1.6}
+  html.xm-glass .xm-ui-scope .xm-ui-filter-toolbar{min-width:0;max-width:100%;padding:10px}
+  html.xm-glass .xm-ui-scope .xm-ui-filter-toolbar__controls{min-width:0}
+  html.xm-glass .xm-ui-scope .xm-ui-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  html.xm-glass .xm-ui-scope .xm-ui-stat-card{padding:14px 12px;min-height:104px;gap:8px;align-items:flex-start;flex-direction:column}
+  html.xm-glass .xm-ui-scope .xm-ui-stat-card__icon{width:30px;height:30px}
+  html.xm-glass .xm-ui-scope .xm-ui-stat-card__value{font-size:24px}
+  html.xm-glass .xm-ui-scope .xm-ui-card__body{padding:14px}
+  html.xm-glass .xm-ui-scope :is(input:not([type=checkbox]):not([type=radio]),select,textarea){font-size:16px;min-height:42px;max-width:100%}
+  html.xm-glass .xg-dock{bottom:calc(10px + env(safe-area-inset-bottom));width:min(430px,calc(100% - 28px));gap:3px;border-radius:22px;padding:6px;justify-content:space-around;z-index:1090}
+  html.xm-glass .xg-dock-item{min-width:0;min-height:51px;flex:1;flex-direction:column;gap:4px;padding:6px 8px;font-size:11px;border-radius:16px}
+  html.xm-glass .xg-dock-item svg{width:20px;height:20px}
+  html.xm-glass.xm-phone-cal .xg-dock{visibility:hidden}
+  .xg-install-dialog{padding:28px 23px;border-radius:24px}
+  .xg-install-dialog h2{font-size:24px}
+  .xg-device-tab{font-size:12px}
+  html.xm-glass-login .LoginPage{display:flex;flex-direction:column;width:min(480px,calc(100% - 28px));margin:24px auto 85px;min-height:0;border-radius:27px}
+  html.xm-glass-login .login-hero{display:flex!important;padding:28px 28px 10px;border:0}
+  html.xm-glass-login .hero-logo{max-width:154px}
+  html.xm-glass-login .hero-body{padding:15px 0 0}
+  html.xm-glass-login .hero-copy h2{font-size:23px;line-height:1.5;margin:10px 0}
+  html.xm-glass-login .hero-kicker{font-size:10px;margin:10px 0}
+  html.xm-glass-login .hero-pills{display:none}
+  html.xm-glass-login .login-pane{padding:10px 28px 30px;background:transparent}
+  html.xm-glass-login .login-pane h1{font-size:24px}
+  .xg-login-install{bottom:max(15px,env(safe-area-inset-bottom));right:16px;min-height:40px}
+}
+@media (prefers-reduced-motion:reduce){html.xm-glass *,html.xm-glass *::before,html.xm-glass *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@supports not (backdrop-filter:blur(1px)){html.xm-glass .xm-shell{background:#ede8df}html.xm-glass .xg-dock{background:#efede6}}

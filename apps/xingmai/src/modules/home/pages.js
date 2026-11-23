@@ -10,7 +10,8 @@ import { meetingRouter } from "../meeting/router.js";
 import { boundRouter } from "../bound/router.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.772-bound
+// xm-fast-shell 0.1.787-acadleaf
+// xm-ui 内容区公共组件随壳加载，必须和 profile/middleware.js 成套发。
 // xm-login-session 登录会话回读必须和 profile/middleware.js 成套发。
 // login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
 
@@ -183,9 +184,11 @@ export function registerPageRoutes(app) {
   app.get("/han", (_req, res) => {
     res.redirect(302, "/han/selection");
   });
-  app.get("/academy", (_req, res) => {
-    res.redirect(302, "/academy/courses");
-  });
+  for (const href of ["/academy/courses", "/academy/exams", "/academy/handbook"]) {
+    app.get(href, (req, res) => {
+      res.status(200).type("html").set("Cache-Control", "private, no-store").send(renderRouteShell(href, req.user));
+    });
+  }
   for (const item of NAV_ITEMS) {
     app.get(item.href, (req, res) => {
       if (pageFiles.get(item.href) || typeof profileShell.renderAppShell === "function") {
