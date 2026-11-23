@@ -89,6 +89,35 @@
   var active = 0;
   var loadRevision = 0;
   var archivePromise = null, archiveKey = "", archiveScopeKey = "", archiveRevision = 0, savedOptionsPromise = null;
+  var savedResponses = new Map(), archiveViews = new Map(), annotationIndexes = {};
+  function restoreSavedRecord(record) {
+    if (!record || !Array.isArray(record.rowAliases)) return record;
+    record.rowAliases.forEach(function (path) {
+      if (!Array.isArray(path) || path[0] !== 'response' || path.some(function (key) { return ['__proto__', 'constructor', 'prototype'].includes(key); })) return;
+      var parent = record;
+      for (var i = 0; i < path.length - 1; i++) { parent = parent && parent[path[i]]; }
+      if (parent) parent[path[path.length - 1]] = record.rows;
+    });
+    delete record.rowAliases;
+    return record;
+  }
+  async function savedFetch(url) {
+    if (!url.startsWith('/api/bound/shop-day/saved')) return fetch(url);
+    var cached = savedResponses.get(url);
+    if (!cached || Date.now() - cached.at > 60000) {
+      cached = { at: Date.now(), promise: null };
+      cached.promise = fetch(url + (url.includes('?') ? '&' : '?') + 'wire=compact').then(async function (response) {
+        var body = await response.json();
+        if (body.record) restoreSavedRecord(body.record);
+        if (body.records) Object.values(body.records).forEach(function (records) { records.forEach(restoreSavedRecord); });
+        if (!response.ok || !body.ok) savedResponses.delete(url);
+        return { ok: response.ok, json: async function () { return body; } };
+      }).catch(function (error) { savedResponses.delete(url); throw error; });
+      savedResponses.set(url, cached);
+      if (savedResponses.size > 12) savedResponses.delete(savedResponses.keys().next().value);
+    }
+    return cached.promise;
+  }
   // Only display preferences, never BI credentials or collected rows.
   function saveArchiveDisplay() {
     try { window.localStorage.setItem('bound.display.v1', JSON.stringify({ columns: state.archiveColumnsHidden, order: state.archiveColumnOrder, cards: state.archiveCardHidden })); } catch { /* Private browsing may disable storage. */ }
@@ -123,7 +152,7 @@
     if (refresh) savedOptionsPromise = null;
     if (!savedOptionsPromise) savedOptionsPromise = (async function () {
       try {
-        var r = await fetch("/api/bound/shop-day/saved/options");
+        var r = await fetch("/api/bound/shop-day/saved/options" + (refresh ? '?refresh=1' : ''));
         if (!r.ok) return;
         var options = await r.json();
         if (!options.ok || !Array.isArray(options.shops) || !options.defaultScope) return;
@@ -140,7 +169,10 @@
 
   function visibleArchiveReports() {
     var tab = state.tab;
-    if (state.page === 'productOverview' || state.page === 'channelAnalysis' && tab === 'qdfx_goods') return ['shop_goods_page', 'shop_spu_page', 'shop_goods_total', 'shop_spu_total', 'shop_cards_sku', 'shop_cards_spu'];
+    if (state.page === 'productOverview' || state.page === 'channelAnalysis' && tab === 'qdfx_goods') {
+      var dim = state.page === 'productOverview' ? state.dim : 'sku';
+      return [dim === 'spu' ? 'shop_spu_page' : 'shop_goods_page', dim === 'spu' ? 'shop_spu_total' : 'shop_goods_total', 'shop_cards_' + dim];
+    }
     if (state.page === 'productPanorama') return ['shop_goods_page', 'product_overview', 'product_skus', 'product_area', 'product_hour'];
     if (state.page === 'productOperation') return ['shop_goods_page', 'product_operation', 'product_operation_skus', 'product_operation_area', 'product_operation_hour', 'product_promotion'];
     var report = { qdzl_pl: 'channel_category', qdzl_rx: 'channel_goods', qdfx_rx: 'channel_goods', qdfx_pl: 'channel_category', qdfx_bqfx: 'channel_labels', qdfx_area: 'channel_area', qdfx_hour: 'channel_hour' }[tab];
@@ -151,6 +183,7 @@
   // never trigger collection or put single-shop rows into the legacy daily table.
   async function readLocalArchive(refresh) {
     if (!window.location) return;
+    if (refresh) { savedResponses.clear(); archiveViews.clear(); annotationIndexes = {}; }
     await readSavedOptions(refresh);
     if (state.savedOptions && state.page === 'channelOverview' && state.archiveAccountOverview) {
       archivePromise = null; archiveKey = ''; archiveRevision++;
@@ -159,7 +192,7 @@
       return;
     }
     var scopeKey = savedUrl('', ''), scopeChanged = archiveScopeKey !== scopeKey;
-    var url = savedUrl('', state.savedOptions ? 'reports=' + encodeURIComponent(visibleArchiveReports().join(',')) : ''), changed = archiveKey !== url;
+    var url = savedUrl('', state.savedOptions ? 'include=records&reports=' + encodeURIComponent(visibleArchiveReports().join(',')) : ''), changed = archiveKey !== url;
     archiveScopeKey = scopeKey;
     if (refresh || changed) { archivePromise = null; archiveKey = url; archiveRevision++; }
     var revision = archiveRevision;
@@ -168,7 +201,9 @@
       state.pageNo = 1; state.open = {};
     }
     if (!archivePromise) archivePromise = (async function () {
-      var response = await fetch(url);
+      var cachedView = archiveViews.get(url);
+      if (!refresh && cachedView && Date.now() - cachedView.at < 60000) { state.localArchive = cachedView.value; state.shop = cachedView.value.scope.shopName; return; }
+      var response = await savedFetch(url);
       if (!response.ok) { if (state.localArchive || state.savedOptions) throw new Error("archive unavailable"); return; }
       var manifest = await response.json();
       if (!manifest.ok || !manifest.scope || !Array.isArray(manifest.reports)) { if (state.localArchive || state.savedOptions) throw new Error("archive manifest invalid"); return; }
@@ -179,9 +214,10 @@
         await Promise.all((report.pages || []).map(async function (page) {
           if (page.status !== "received" && page.status !== "empty") return;
           try {
-            var result = await fetch(savedUrl("/report", "reportId=" + encodeURIComponent(report.id) + "&page=" + page.page, manifest));
-            if (!result.ok) throw new Error("archive unavailable");
-            var body = await result.json();
+            var inline = manifest.records && manifest.records[report.id] && manifest.records[report.id].find(function (r) { return r.page === page.page; });
+            var result = inline ? null : await savedFetch(savedUrl("/report", "reportId=" + encodeURIComponent(report.id) + "&page=" + page.page, manifest));
+            if (result && !result.ok) throw new Error("archive unavailable");
+            var body = inline ? { ok: true, record: inline } : await result.json();
             var record = body.record;
             var scope = record && record.scope;
             if (!body.ok || !scope || !sameArchiveScope(scope, manifest.scope) || record.reportId !== report.id || record.page !== page.page || !Array.isArray(record.rows) || (record.status !== "received" && record.status !== "empty")) throw new Error("archive scope mismatch");
@@ -201,7 +237,7 @@
         });
       }
       state.localArchive = { scope: manifest.scope, selected: manifest.selected, records: records, failures: failures, products: products,
-        unified: manifest.unified, collectionScope: manifest.collectionScope || manifest.scope, runtime: manifest.runtime || 'local', inventory: manifest.inventory, reports: manifest.reports, run: manifest.runtime === 'server' ? manifest.fourPageRun : manifest.run, exclusions: manifest.exclusions || [], cardRecords: {}, periods: {}, extras: {} };
+        unified: manifest.unified, collectionScope: manifest.collectionScope || manifest.scope, runtime: manifest.runtime || 'local', inventory: manifest.inventory, reports: manifest.reports, run: manifest.runtime === 'server' ? manifest.fourPageRun : manifest.run, exclusions: manifest.exclusions || [], cardRecords: previous && !refresh && !scopeChanged ? previous.cardRecords : {}, periods: previous && !refresh && !scopeChanged ? previous.periods : {}, extras: previous && !refresh && !scopeChanged ? previous.extras : {} };
       if (!previous) {
         state.from = manifest.scope.from || manifest.scope.date; state.to = manifest.scope.to || manifest.scope.date;
         state.daysType = "1";
@@ -211,9 +247,10 @@
         state.pageNo = 1;
       }
       state.shop = manifest.scope.shopName;
-      if (changed && !records.shop_spu_page?.length) state.dim = "sku";
       var notice = document.querySelector && document.querySelector(".local-notice");
       if (notice) notice.textContent = "边界数据中心 · 本机已采数据　" + manifest.scope.shopName + " · " + manifest.scope.date + "。采集期间请勿在旧站登录同一账号；本地查看已采数据无需重新登录。";
+      archiveViews.set(url, { at: Date.now(), value: state.localArchive });
+      if (archiveViews.size > 8) archiveViews.delete(archiveViews.keys().next().value);
     })().catch(function () {
       if (revision !== archiveRevision) return;
       state.error = "已采数据读取失败，请刷新重试。";
@@ -298,9 +335,9 @@
   function fillArchiveExtras(root) {
     var archive = state.localArchive, token = active;
     if (!archive || archive.overviewOnly || state.page === 'channelOverview' && state.archiveAccountOverview) return;
-    var ids = ['channelOverview', 'channelAnalysis'].includes(state.page) ? ['channel_shop_table'] : state.page === 'channelAnalysisNew' ? ['key_graph'] : ['productOverview', 'channelAnalysis'].includes(state.page) && state.view === 'period' ? [state.page === 'productOverview' && state.dim === 'spu' ? 'shop_spu_period' : 'shop_goods_period'] : [];
+    var ids = state.page === 'channelOverview' || state.page === 'channelAnalysis' && state.tab === 'qdfx_dplb' ? ['channel_shop_table'] : state.page === 'channelAnalysisNew' ? ['key_graph'] : ['productOverview', 'channelAnalysis'].includes(state.page) && state.view === 'period' ? [state.page === 'productOverview' && state.dim === 'spu' ? 'shop_spu_period' : 'shop_goods_period'] : [];
     if (state.page === 'channelAnalysis' && state.view === 'period') ids.push('shop_goods_period');
-    if (state.page === 'channelAnalysisNew' && archiveRecords('key_graph').length) ids.push(state.tab === 'qd_gjzbfx_dpck' ? 'key_shops' : 'key_goods');
+    if (state.page === 'channelAnalysisNew') ids.push(state.tab === 'qd_gjzbfx_dpck' ? 'key_shops' : 'key_goods');
     ids.forEach(function (id) {
       var key = archiveExtraKey(id);
       if (archive.extras[key]) return;
@@ -311,7 +348,7 @@
         var records = [], expected = null, seen = new Set();
         for (var page = 1; page <= 10; page++) {
           var query = '?reportId=' + id + '&page=' + page + (metric ? '&columnKey=' + encodeURIComponent(metric) : '') + (days ? '&trendDays=' + days : '');
-          var response = await fetch(savedUrl("/report", query.slice(1), archive));
+          var response = await savedFetch(savedUrl("/report", query.slice(1), archive));
           if (!response.ok) throw new Error('not_collected');
           var result = await response.json(), r = result.record;
           if (!result.ok || !r || !['received', 'empty'].includes(r.status) || r.reportId !== id || r.page !== page || metric && r.columnKey !== metric || days && r.trendDays !== days || !Array.isArray(r.rows) || !r.scope || !sameArchiveScope(r.scope, archive.scope)) throw new Error('scope_mismatch');
@@ -447,6 +484,17 @@
     if (!data || !data.localArchive || !data.allRows) return;
     var keys = data.allRows.map(function (r) { return archiveRowIdentity(r, data.reportId); }).filter(Boolean);
     var scopeKey = annotationScopeKey(), cache = state.archiveAnnotations[scopeKey] || (state.archiveAnnotations[scopeKey] = {});
+    if (state.localArchive.unified) {
+      if (annotationIndexes[scopeKey]) return;
+      var entry = annotationIndexes[scopeKey] = {}, currentToken = active;
+      fetch('/api/bound/shop-day/annotations/index?from=' + encodeURIComponent(state.from) + '&to=' + encodeURIComponent(state.to)).then(async function (response) {
+        var result = await response.json();
+        if (!response.ok || !result.ok || !result.marks) throw Error('unavailable');
+        entry.ready = true;
+        Object.keys(result.marks).forEach(function (id) { cache[id] = Object.assign({ ready: true }, result.marks[id]); });
+      }).catch(function () { entry.unavailable = true; }).finally(function () { if (currentToken === active && annotationIndexes[scopeKey] === entry && annotationScopeKey() === scopeKey) paint(root); });
+      return;
+    }
     keys = Array.from(new Set(keys)).filter(function (id) { return !cache[id]; });
     var token = active;
     for (var offset = 0; offset < keys.length; offset += 50) {
@@ -475,7 +523,7 @@
     if (state.panel !== 'archive-annotation' || !state.archiveAnnotationMode) return '';
     var field = state.archiveAnnotationMode, keys = data.allRows.filter(function (r) { return state.archiveSelectedRows[archiveRowIdentity(r, data.reportId)]; }).map(function (r) { return archiveRowIdentity(r, data.reportId); });
     var cache = state.archiveAnnotations[annotationScopeKey()] || {};
-    var ready = keys.length > 0 && keys.length <= 100 && keys.every(function (id) { return cache[id] && cache[id].ready; });
+    var ready = keys.length > 0 && keys.length <= 100 && (annotationIndexes[annotationScopeKey()]?.ready || keys.every(function (id) { return cache[id] && cache[id].ready; }));
     var columns = data.columns.filter(function (c) { return c.numeric; });
     var metric = columns.find(function (c) { return c.key === state.archiveTargetMetric; }) || columns[0];
     if (metric) state.archiveTargetMetric = metric.key;
@@ -2512,7 +2560,7 @@
           if (state.archiveAnnotationBusy) return;
           var annoData = state.viewData, annoScope = annotationScopeKey(), annoCache = state.archiveAnnotations[annoScope] || {};
           var annoKeys = annoData.allRows.map(function (r) { return archiveRowIdentity(r, annoData.reportId); }).filter(function (id) { return state.archiveSelectedRows[id]; });
-          if (!annoKeys.length || annoKeys.length > 100 || annoKeys.some(function (id) { return !annoCache[id] || !annoCache[id].ready; })) return;
+          if (!annoKeys.length || annoKeys.length > 100 || !annotationIndexes[annoScope]?.ready && annoKeys.some(function (id) { return !annoCache[id] || !annoCache[id].ready; })) return;
           var annoValue = act === 'archive-annotation-clear' ? '' : state.archiveAnnotationDraft, annoField = state.archiveAnnotationMode;
           if (annoField === 'target') {
             var annoColumn = annoData.columns.find(function (c) { return c.key === state.archiveTargetMetric; });
@@ -2522,7 +2570,7 @@
           state.archiveAnnotationBusy = true; state.error = ''; paint(root);
           fetch('/api/bound/shop-day/annotations', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ keys: annoKeys, from: state.from, to: state.to, field: annoField, value: annoValue }) }).then(async function (r) {
             var result = await r.json(); if (!r.ok || !result.ok) throw Error('save_failed');
-            Object.keys(result.marks).forEach(function (id) { annoCache[id] = Object.assign({ready:true},result.marks[id]); if (annoField !== 'target') Object.keys(state.archiveAnnotations).forEach(function (k) { if (state.archiveAnnotations[k][id]) state.archiveAnnotations[k][id][annoField] = result.marks[id][annoField]; }); });
+            Object.keys(result.marks).forEach(function (id) { annoCache[id] = Object.assign({ready:true},result.marks[id]); if (annoField !== 'target') Object.keys(state.archiveAnnotations).forEach(function (k) { if (state.archiveAnnotations[k][id] || annotationIndexes[k]?.ready) { var mark = state.archiveAnnotations[k][id] || (state.archiveAnnotations[k][id] = { ready: true }); mark[annoField] = result.marks[id][annoField]; } }); });
             if (annotationScopeKey() === annoScope) state.panel = '';
           }).catch(function () { state.error = '保存未完成，请刷新读取后核对；未修改旧站数据。'; }).finally(function () { state.archiveAnnotationBusy = false; if (token === active) paint(root); });
           return;
@@ -2620,9 +2668,9 @@
           return;
         }
       }
-      if (act === "archive-product" && state.localArchive && state.localArchive.selected) {
-        var goodsId = node.getAttribute("data-goods-id") || state.localArchive.selected.goodsId;
-        var allowed = String(goodsId) === String(state.localArchive.selected.goodsId) || ((state.localArchive.inventory && state.localArchive.inventory.items) || []).some(function (p) { return String(p.goodsId) === String(goodsId); });
+      if (act === "archive-product" && state.localArchive) {
+        var goodsId = node.getAttribute("data-goods-id") || state.localArchive.selected?.goodsId;
+        var allowed = goodsId && (String(goodsId) === String(state.localArchive.selected?.goodsId) || ((state.localArchive.inventory && state.localArchive.inventory.items) || []).some(function (p) { return String(p.goodsId) === String(goodsId); }) || state.viewData.allRows.some(function (p) { return String(p.goodsId) === String(goodsId) && String(p.shopId) === state.localArchive.scope.shopId && p.platform === state.localArchive.scope.platform; }));
         if (!allowed) return;
         state.archiveGoodsId = goodsId;
         state.page = node.getAttribute('data-product-page') === 'productOperation' ? 'productOperation' : 'productPanorama';
@@ -2977,6 +3025,7 @@
         if (act === "archive-chart-metric") { state.archiveChartMetric = node.value; paint(root); return; }
       }
       if (act === "q" && state.localArchive) {
+        if (state.q === node.value) return;
         state.q = node.value;
         state.pageNo = 1;
         paint(root);
@@ -3095,6 +3144,7 @@
       state.archiveCard = state.archiveCategory = state.archiveFlag = state.archiveProfit = state.archiveChannelFilter = state.sortKey = state.panel = state.datePop = '';
       state.localArchive = null; state.savedOptions = null; state.archiveAccountOverview = false; state.archiveOverviewCache = {}; state.linkChecked = false;
       savedOptionsPromise = archivePromise = null; archiveKey = archiveScopeKey = ''; archiveRevision++;
+      savedResponses.clear(); archiveViews.clear(); annotationIndexes = {}; state.archiveAnnotations = {};
       state.loginEditing = false;
       if (!state.autoReloginBusy) { state.autoReloginChoice = null; state.autoReloginMessage = ""; }
       var initialProbeDate = new URLSearchParams(window.location && window.location.search || "").get("probeDate");

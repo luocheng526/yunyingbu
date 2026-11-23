@@ -1,4 +1,4 @@
-import { readMarks, writeMark } from "./persist.js";
+import { readMarks, writeMark, readBoundMarks } from "./persist.js";
 const validKey = key => typeof key === 'string' && /^[A-Z]{2,8}:\d{1,24}:(shop|goods|spu):\d{1,30}$/.test(key);
 function range(input) {
   const from = String(input.from || ''), to = String(input.to || from);
@@ -6,8 +6,24 @@ function range(input) {
   return valid(from) && valid(to) && from >= '2026-09-01' && to >= from && Date.parse(to) - Date.parse(from) <= 366 * 86400000 ? [from, to] : null;
 }
 const storageKey = key => 'bound:v1:' + key;
-export function createAnnotations({ read = readMarks, write = writeMark } = {}) {
+export function createAnnotations({ read = readMarks, write = writeMark, list = readBoundMarks } = {}) {
   let pending = Promise.resolve();
+  async function index(input = {}) {
+    const days = range(input);
+    if (!days) return { ok: false, statusCode: 400, reason: 'invalid_range' };
+    const rows = await list(...days), marks = {};
+    const suffix = ':target:' + days.join(':');
+    for (const row of rows) {
+      if (!row.rowKey.startsWith('bound:v1:')) continue;
+      const target = row.rowKey.endsWith(suffix);
+      const key = row.rowKey.slice(9, target ? -suffix.length : undefined);
+      if (!validKey(key)) continue;
+      const mark = marks[key] || (marks[key] = { tag: '', follow: '', target: null });
+      if (target) { try { mark.target = JSON.parse(row.target || 'null'); } catch { /* Invalid legacy goal stays empty. */ } }
+      else { mark.tag = row.tag || ''; mark.follow = row.follow || ''; }
+    }
+    return { ok: true, marks };
+  }
   async function get(input = {}) {
     const keys = Array.isArray(input.keys) ? input.keys : String(input.keys || '').split(',');
     const days = range(input);
@@ -41,5 +57,5 @@ export function createAnnotations({ read = readMarks, write = writeMark } = {}) 
     pending = result.catch(()=>{});
     return result;
   }
-  return {get,save};
+  return {get,save,index};
 }

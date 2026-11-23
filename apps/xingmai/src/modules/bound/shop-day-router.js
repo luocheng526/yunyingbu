@@ -9,6 +9,7 @@ import { createAnnotations } from "./annotations.js";
 import { createSavedOverview } from "./saved-overview.js";
 import { createShopBatch } from "./shop-batch.js";
 import { createSavedData } from "./saved-data.js";
+import { sendSavedJson } from './saved-wire.js';
 
 export function defaultArchiveDirectory() {
   return process.env.BOUND_DAY_ARCHIVE_DIR || (process.platform === "win32"
@@ -46,6 +47,8 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
   const annotations = createAnnotations();
   const savedOverview = createSavedOverview({ readScopes: () => batch.scopes(), readArchived: (scope, input) => scopedCollector(scope).getRecord(input) });
   const saved = createSavedData({ collector, readRun: () => job.status(), scopedCollector, readScopes: () => batch.scopes() });
+  // Warm only the local saved-data selector catalog; never contact BI.
+  void saved.options().catch(() => {});
   const importer = createArchiveImport({ directory, blocked: async () =>
     batch.busy() || job.busy() || collector.isBusy() });
   router.use((req, res, next) => {
@@ -61,15 +64,16 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
     next();
   });
   const route = (method, path, action) => router[method](path, async (req, res) => {
-    try { const result = await action(req); res.status(result.statusCode || 200).json(result); }
+    try { const result = await action(req); await sendSavedJson(req, res, result); }
     catch { res.status(500).json({ ok: false, reason: "archive_unavailable" }); }
   });
   route("get", "/", async () => { const data = await collector.status(); delete data.directory; return { ...data, archiveMode: "single_shop", runtime: "server", fourPageRun: await job.status() }; });
   route("get", "/four-pages", () => collector.fourPageStatus());
   route("get", "/annotations", req => annotations.get(req.query));
+  route('get', '/annotations/index', req => annotations.index(req.query));
   route("post", "/annotations", req => annotations.save(req.body));
   route("get", "/saved/overview", req => savedOverview(req.query));
-  route("get", "/saved/options", () => saved.options());
+  route("get", "/saved/options", req => saved.options(req.query.refresh === '1'));
   route("get", "/saved", req => saved.manifest(req.query));
   route("get", "/saved/report", req => saved.record(req.query));
   route("post", "/import", req => importer.accept(req.body));

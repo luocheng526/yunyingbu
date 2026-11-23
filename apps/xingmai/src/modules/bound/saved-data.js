@@ -57,23 +57,32 @@ function columns(rows, keys) {
 }
 
 export function createSavedData({ collector, readSheets = listSheets, readHeads = listSheetHeads, readRun = async () => null, scopedCollector = () => null, readScopes = async () => [] }) {
-  let optionsCache;
+  let optionsCache, optionsPending, optionsFingerprint;
   const cache = new Map();
   const rollups = new Map();
-  async function options() {
-    if (optionsCache && Date.now() - optionsCache.at < 30000) return optionsCache.value;
-    const heads = await readHeads();
+  async function options(refresh = false) {
+    if (refresh) { cache.clear(); rollups.clear(); }
+    if (!refresh && optionsCache && Date.now() - optionsCache.at < 30000) return optionsCache.value;
+    if (optionsPending) return optionsPending;
+    optionsPending = buildOptions();
+    try { return await optionsPending; } finally { optionsPending = null; }
+  }
+  async function buildOptions() {
+    const [heads, archivedScopes] = await Promise.all([readHeads({ reportId: 'qdfx_dplb', daily: true, from: START_ON }), readScopes()]);
+    const fingerprint = hash([heads, archivedScopes]);
+    if (optionsCache && fingerprint === optionsFingerprint) { optionsCache.at = Date.now(); return optionsCache.value; }
     const dates = [...new Set(heads.filter(r => r.status === "done" && r.startOn === r.endOn && r.startOn >= START_ON && r.reportId === "qdfx_dplb").map(r => r.startOn))].sort();
     const latest = dates.at(-1);
-    const sheets = latest ? await readSheets({ reportId: "qdfx_dplb", from: START_ON, to: latest }) : [];
+    const sheets = latest ? await readSheets({ reportId: "qdfx_dplb", daily: true, from: START_ON, to: latest }) : [];
     const shops = new Map([[`${SHOP_DAY.platform}:${SHOP_DAY.shopId}`, { platform: SHOP_DAY.platform, shopId: SHOP_DAY.shopId, shopName: SHOP_DAY.shopName }]]);
     for (const sheet of sheets.filter(s => s.status === "done" && s.startOn >= START_ON && s.startOn === s.endOn).sort((a, b) => a.startOn.localeCompare(b.startOn))) for (const row of legacyRows(sheet.payload)) {
       if (!/^\d{1,24}$/.test(String(row.shopId)) || !/^[A-Z]{2,8}$/.test(row.platform || "") || day(row.date) !== sheet.startOn || !row.shopName || row.sumLine) continue;
       shops.set(`${row.platform}:${row.shopId}`, { platform: row.platform, shopId: String(row.shopId), shopName: String(row.shopName) });
     }
-    const archivedScopes = await readScopes();
     for (const scope of archivedScopes) shops.set(scope.platform + ":" + scope.shopId, { platform: scope.platform, shopId: scope.shopId, shopName: scope.shopName });
-    const value = { ok: true, shops: [...shops.values()], dates: [...new Set([...dates, SHOP_DAY.date, ...archivedScopes.map(s => s.date)])].sort(), latestDate: latest || SHOP_DAY.date, startOn: START_ON, defaultScope: SHOP_DAY };
+    const availableDates = [...new Set([...dates, SHOP_DAY.date, ...archivedScopes.map(s => s.date)])].sort();
+    const value = { ok: true, shops: [...shops.values()], dates: availableDates, latestDate: availableDates.at(-1), startOn: START_ON, defaultScope: SHOP_DAY };
+    optionsFingerprint = fingerprint;
     optionsCache = { at: Date.now(), value }; return value;
   }
   async function bundle(scope, reportIds = sourceIds) {
@@ -181,7 +190,7 @@ export function createSavedData({ collector, readSheets = listSheets, readHeads 
       const partial = !['channel_operating', 'channel_shop_table', 'key_shops'].includes(input.reportId);
       const columnInfo = input.reportId === 'channel_shop_table' ? SHOP_TABLE_COLUMNS : metadata.length ? metadata.filter((c, i) => metadata.findIndex(v => v.columnKey === c.columnKey) === i) : columns(rows);
       const dates = [...new Set(daily.map(row => row.date))];
-      const history = { columnInfo, columnData: sumSavedRows(daily, r => r.date, '').map((r, i) => ({ ...r, date: dates[i], ...(all ? { platform: 'all', shopId: '__all__' } : {}) })) };
+      const history = input.reportId === 'channel_operating' ? { columnInfo, columnData: sumSavedRows(daily, r => r.date, '').map((r, i) => ({ ...r, date: dates[i], ...(all ? { platform: 'all', shopId: '__all__' } : {}) })) } : null;
       const table = { columnInfo, columnData: rows };
       return { reportId: input.reportId, scope, page: 1, status: 'received', rows, total: rows.length, matchedRows: rows.length,
         ...(input.columnKey ? { columnKey: input.columnKey } : {}), completeness: partial ? 'partial' : 'saved_days', coverage,
@@ -260,10 +269,31 @@ export function createSavedData({ collector, readSheets = listSheets, readHeads 
     const scope = savedScope(query); if (!scope) return { ok: false, statusCode: 400, reason: "invalid_scope" };
     const wanted = query.reports == null ? null : new Set(String(query.reports).split(','));
     if (wanted && [...wanted].some(id => !DAY_REPORTS.some(r => r.id === id))) return { ok: false, statusCode: 400, reason: 'invalid_reports' };
-    const available = await options();
-    const shop = scope.shopId === '__all__' ? scope : available.shops.find(s => s.shopId === scope.shopId && s.platform === scope.platform);
+    const shop = scope.shopId === '__all__' ? scope : (await options()).shops.find(s => s.shopId === scope.shopId && s.platform === scope.platform);
     if (!shop) return { ok: false, statusCode: 400, reason: "unknown_shop" };
     scope.shopName = shop.shopName;
+    // The four browsing pages need only their selected reports. Read those once
+    // and inline them, avoiding full archive inventory scans and a second GET
+    // of every large report after the manifest has already computed it.
+    if (query.include === 'records' && wanted && [...wanted].every(id => !DAY_REPORTS.find(r => r.id === id).product)) {
+      const records = {};
+      const reports = await Promise.all([...wanted].filter(Boolean).map(async id => {
+        const definition = DAY_REPORTS.find(r => r.id === id);
+        const first = (await record({ ...scope, reportId: id, page: 1 })).record;
+        const pages = first ? [first] : [];
+        if (first && definition.paged && first.completeness !== 'partial' && first.source?.kind !== 'saved_daily_rollup') {
+          const count = Math.min(200, Math.ceil(Number(first.total || 0) / (first.pageSize || 100)));
+          for (let page = 2; page <= count; page++) {
+            const next = (await record({ ...scope, reportId: id, page })).record;
+            if (!next) break;
+            pages.push(next);
+          }
+        }
+        records[id] = pages;
+        return { id, label: definition.label, pages: pages.map(r => ({ page: r.page, status: r.status, matchedRows: r.rows.length, completeness: r.completeness })) };
+      }));
+      return { ok: true, runtime: 'server', unified: true, scope, collectionScope: SHOP_DAY, selected: null, reports, records, inventory: { complete: false, items: [] }, exclusions: [], run: null };
+    }
     const fixed = scope.platform === SHOP_DAY.platform && scope.shopId === SHOP_DAY.shopId && scope.from === SHOP_DAY.date && scope.to === SHOP_DAY.date;
     if (fixed) {
       const status = await collector.status(); delete status.directory;

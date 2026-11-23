@@ -6,6 +6,7 @@ import vm from "node:vm";
 import { createAnnotations } from "../src/modules/bound/annotations.js";
 import { publicCatalog } from "../src/modules/bound/catalog.js";
 import { createSavedData } from '../src/modules/bound/saved-data.js';
+import { compactSavedRecord } from '../src/modules/bound/saved-wire.js';
 
 const source = readFileSync(new URL("../public/shared/modules/bound.js", import.meta.url), "utf8");
 const scope = { shopId: "16501691", platform: "JD", shopName: "RASW潮流生活京选菀瑶专卖店", date: "2026-10-03" };
@@ -33,7 +34,7 @@ function fixture() {
   };
 }
 async function harness({ records = fixture(), failedPage = false, search = "", inventory, products = {}, cardRecords = {}, extras = {}, run, saved, overview, marks = new Map(), annotationFailure = false, storage = new Map(), startAtDefault = false } = {}) {
-  const annotationApi = createAnnotations({ read: async keys => keys.filter(k => marks.has(k)).map(k => ({ rowKey:k, ...marks.get(k) })), write: async (k,v) => { marks.set(k,v); } });
+  const annotationApi = createAnnotations({ read: async keys => keys.filter(k => marks.has(k)).map(k => ({ rowKey:k, ...marks.get(k) })), list: async () => [...marks].map(([rowKey, value]) => ({ rowKey, ...value })), write: async (k,v) => { marks.set(k,v); } });
   const calls = [];
   const downloads = [], blobs = [];
   class LocalURL extends URL {}
@@ -51,7 +52,7 @@ async function harness({ records = fixture(), failedPage = false, search = "", i
       if (url.startsWith("/api/bound/shop-day/annotations")) {
         if (annotationFailure) return reply({ok:false},false);
         const input = options.method === 'POST' ? JSON.parse(options.body) : Object.fromEntries(new URL(url,'http://localhost').searchParams);
-        return (options.method === 'POST' ? annotationApi.save(input) : annotationApi.get(input)).then(body=>({ok:body.ok,json:async()=>body}));
+        return (options.method === 'POST' ? annotationApi.save(input) : url.includes('/annotations/index?') ? annotationApi.index(input) : annotationApi.get(input)).then(body=>({ok:body.ok,json:async()=>body}));
       }
       if (url === "/api/bound") return reply({ ok: true });
       if (url === "/api/bound/catalog") return reply(publicCatalog());
@@ -59,7 +60,7 @@ async function harness({ records = fixture(), failedPage = false, search = "", i
       if (url === "/api/bound/progress") return reply({ items: [] });
       if (url.startsWith("/api/bound/collect/probe")) return reply({ target: { ...scope, metric: "广告花费" }, targets: [] });
       if (url.startsWith("/api/bound/shop-day/saved/overview?")) { const data = typeof overview === 'function' ? overview(new URL(url, 'http://localhost').searchParams) : overview; return Promise.resolve(data).then(value => value ? reply(value) : reply({}, false)); }
-      if (url === "/api/bound/shop-day/saved/options") return saved ? reply(saved.options) : reply({}, false);
+      if (url.startsWith("/api/bound/shop-day/saved/options")) return saved ? reply(saved.options) : reply({}, false);
       if (url.startsWith("/api/bound/shop-day/saved?")) {
         const p = new URL(url, "http://localhost").searchParams;
         return Promise.resolve(saved.manifest(p, manifest)).then(reply);
@@ -219,6 +220,43 @@ test('快速切换日期时旧请求较晚返回不会覆盖新日期', async ()
   assert.match(h.root.innerHTML, /新日期店铺/);
   finishOld(); await new Promise(resolve => setTimeout(resolve, 20));
   assert.match(h.root.innerHTML, /新日期店铺/); assert.doesNotMatch(h.root.innerHTML, /旧日期店铺/);
+});
+
+test('大表内联读取一次、菜单往返复用、未显示SPU不请求；标记全表一次读取且可保存', async () => {
+  const saved = savedFixture();
+  const large = Array.from({ length: 1100 }, (_, i) => ({ ...scope, goodsId: String(10000 + i), goodsName: '完整商品' + i, profit: i, gmv: i }));
+  const marks = new Map([['bound:v1:JD:' + scope.shopId + ':goods:11099', { tag: '最后一页' }]]);
+  saved.manifest = p => {
+    const current = { ...scope, from: p.get('from'), to: p.get('to') };
+    const records = Object.fromEntries(p.get('reports').split(',').map(id => [id, [compactSavedRecord(record(id, id === 'shop_goods_page' ? large : [{ gmv: 1200 }], 1, { scope: current, total: id === 'shop_goods_page' ? large.length : 1 }))]]));
+    return { ok: true, unified: true, scope: current, records, reports: Object.keys(records).map(id => ({ id, pages: [{ page: 1, status: 'received' }] })) };
+  };
+  const h = await harness({ saved, marks });
+  await h.click({ 'data-act': 'page', 'data-page': 'productOverview' });
+  assert.match(h.root.innerHTML, /完整商品0/);
+  assert.match(h.root.innerHTML, /最后一页/);
+  const manifests = () => h.calls.filter(c => c.url.includes('/saved?'));
+  const reports = new URL(manifests().at(-1).url, 'http://localhost').searchParams.get('reports');
+  assert.equal(reports, 'shop_goods_page,shop_goods_total,shop_cards_sku');
+  assert.equal(h.calls.filter(c => /saved\/report.*reportId=shop_goods_page/.test(c.url)).length, 0);
+  const before = manifests().length;
+  await h.click({ 'data-act': 'page', 'data-page': 'channelAnalysis' });
+  await h.click({ 'data-act': 'page', 'data-page': 'productOverview' });
+  assert.equal(manifests().length, before);
+  assert.equal(h.calls.filter(c => c.url.includes('/annotations/index?') && c.url.includes('from=' + scope.date)).length, 1);
+  await h.change('archive-tag-filter', '最后一页');
+  assert.match(h.root.innerHTML, /完整商品1099/); assert.doesNotMatch(h.root.innerHTML, />完整商品0</);
+  await h.click({ 'data-act': 'archive-select-page' });
+  await h.click({ 'data-act': 'archive-annotation-open', 'data-field': 'tag' });
+  await h.input('archive-annotation-value', '改后的标签');
+  await h.click({ 'data-act': 'archive-annotation-save' });
+  assert.equal(marks.get('bound:v1:JD:' + scope.shopId + ':goods:11099').tag, '改后的标签');
+  await h.change('archive-tag-filter', '');
+  await h.change('q', '完整商品1099');
+  await h.click({ 'data-act': 'archive-export' });
+  assert.match(await h.blobs.at(-1).text(), /完整商品1099/);
+  await h.click({ 'data-act': 'archive-product', 'data-goods-id': '11099' });
+  assert.match(manifests().at(-1).url, /product_overview/);
 });
 
 test("新页面统一读取旧库：四页、店铺日期、筛选导出都不分入口且不触发采集", async () => {

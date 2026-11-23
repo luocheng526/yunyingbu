@@ -187,13 +187,14 @@ function mapSheet(row) {
   };
 }
 
-export async function listSheetHeads() {
+export async function listSheetHeads(filter = {}) {
   await ensure();
   if (dbMode() !== "mysql") {
-    return [...memory.sheets.values()].map((row) => ({ ...row, payload: undefined }));
+    return [...memory.sheets.values()].filter(row => sheetMatches(row, filter)).map((row) => ({ ...row, payload: undefined }));
   }
+  const { where, params } = sheetWhere(filter);
   const [found] = await query(
-    "SELECT report_id, dim, start_on, end_on, page_no, status, kind, total_rows, page_size, attempts, row_count, error_text, updated_at FROM bound_sheet"
+    `SELECT report_id, dim, start_on, end_on, page_no, status, kind, total_rows, page_size, attempts, row_count, error_text, updated_at FROM bound_sheet${where.length ? ` WHERE ${where.join(' AND ')}` : ''}`, params
   );
   return found.map((row) => mapSheet({ ...row, payload: "{}" }));
 }
@@ -201,6 +202,7 @@ export async function listSheetHeads() {
 function sheetWhere(filter) {
   const where = [];
   const params = [];
+  if (filter.daily) where.push('start_on = end_on');
   const ids = Array.isArray(filter.reportIds) ? filter.reportIds.filter(Boolean) : [];
   if (ids.length) {
     where.push(`report_id IN (${ids.map(() => "?").join(",")})`);
@@ -233,6 +235,7 @@ function sheetWhere(filter) {
 }
 
 function sheetMatches(row, filter) {
+  if (filter.daily && row.startOn !== row.endOn) return false;
   const ids = Array.isArray(filter.reportIds) ? filter.reportIds.filter(Boolean) : [];
   if (ids.length && !ids.includes(row.reportId)) {
     return false;
@@ -292,6 +295,14 @@ export async function writePref(key, value) {
     [key, JSON.stringify(value), stamp()]
   );
   return value;
+}
+
+export async function readBoundMarks(from, to) {
+  await ensure();
+  const prefix = 'bound:v1:', suffix = ':target:' + from + ':' + to;
+  if (dbMode() !== 'mysql') return [...memory.marks.entries()].filter(([key]) => key.startsWith(prefix) && (!key.includes(':target:') || key.endsWith(suffix))).map(([rowKey, value]) => ({ rowKey, ...value }));
+  const [rows] = await query("SELECT row_key, follow_text, tag_text, target_text FROM bound_mark WHERE row_key LIKE 'bound:v1:%' AND (row_key NOT LIKE '%:target:%' OR row_key LIKE ?)", ['%' + suffix]);
+  return rows.map(r => ({ rowKey: r.row_key, follow: r.follow_text || '', tag: r.tag_text || '', target: r.target_text || '' }));
 }
 
 export async function readMarks(keys) {
