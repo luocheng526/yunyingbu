@@ -7,7 +7,7 @@ const { centeredBounds, allowedUrl, desktopOrigin, backgroundFor } = require('./
 const origin = desktopOrigin(app.isPackaged, process.env.XM_DESKTOP_PREVIEW);
 const material = backgroundFor(process.platform, os.release());
 let mainWindow;
-const cssPath = path.join(__dirname, 'renderer', 'desktop.css');
+const cssFiles = ['desktop.css', 'modules.css'];
 const logo = 'data:image/png;base64,' + fs.readFileSync(path.join(__dirname, 'assets', 'logo-transparent.png')).toString('base64');
 function rendererSource() {
   return fs.readFileSync(path.join(__dirname, 'renderer', 'shortcut-model.js'), 'utf8') + '\n' +
@@ -16,6 +16,10 @@ function rendererSource() {
 
 app.setName('甄选未来');
 app.setAppUserModelId('cn.xingmai.zhenxuan.desktop');
+// Keep a read-only development preview separate from employees' running App.
+if (!app.isPackaged && process.env.XM_DESKTOP_PREVIEW) {
+  app.setPath('userData', path.join(app.getPath('userData'), 'preview'));
+}
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => { if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.focus(); } });
@@ -57,7 +61,7 @@ function createWindow() {
   contents.on('will-attach-webview', event => event.preventDefault());
   contents.on('dom-ready', async () => {
     if (!allowedUrl(contents.getURL(), origin)) return;
-    await contents.insertCSS(fs.readFileSync(cssPath, 'utf8'));
+    await contents.insertCSS(cssFiles.map(file => fs.readFileSync(path.join(__dirname, 'renderer', file), 'utf8')).join('\n'));
     await contents.executeJavaScript(rendererSource());
   });
   let loadErrorOpen = false;

@@ -31,7 +31,7 @@
   controls.append(button('恢复居中大小','center',()=>window.XmDesktop.center()),button('最小化','minimize',()=>window.XmDesktop.minimize()),button('最大化或还原','maximize',()=>window.XmDesktop.maximize()),button('关闭 App','close',()=>window.XmDesktop.close()));
   const top=document.querySelector('.xm-topbar');
   if(top) {
-    const brand=document.createElement('img');brand.src=logo;brand.alt='甄选未来';brand.className='xd-brand-mark';top.prepend(brand);
+    const brand=document.createElement('img');brand.src=logo;brand.alt='甄选未来';brand.title='甄选未来 App '+window.XmDesktop.version;brand.className='xd-brand-mark';top.prepend(brand);
     top.appendChild(controls);
   }
   else {controls.classList.add('xd-controls-floating');document.body.appendChild(controls);}

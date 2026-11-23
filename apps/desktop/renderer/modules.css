@@ -1,0 +1,222 @@
+/* Native content theme. Every rule is scoped to the desktop preload marker.
+ * Module styles arrive after navigation, so the material rules intentionally
+ * outrank those legacy styles. No business HTML, data or permissions are changed.
+ * The translucent surfaces reveal the real OS backdrop, never a wallpaper asset.
+ */
+html.xm-native.xm-glass[data-native-material] {
+  --xd-ink: #292a27;
+  --xd-muted: #63665f;
+  --xd-material: linear-gradient(120deg, #ffffff57, #ffffff21);
+  --xd-highlight: #ffffff80;
+  --xd-shadow: inset 0 1px 0 #ffffff80, 0 5px 16px #25292209;
+  --xd-action: #30352f;
+  --xd-accent: #b65c3e;
+  --xm-ink: var(--xd-ink);
+  --xm-muted: var(--xd-muted);
+  --xm-primary: var(--xd-action);
+  --xm-card: #ffffff33;
+  --xm-line: #ffffff45;
+
+  & :is(.xm-content, .xm-pane, .people-page, .org-console, .wc, .bd-app, .bd-main, .data-fill, .ch-root, .me-page, .xm-ui-scope) {
+    background: transparent !important;
+    color: var(--xd-ink) !important;
+  }
+  & .xm-topbar .xm-tabs { display: flex !important; }
+  & :is(.people-page.org-console, .wc, .xm-ui-scope) {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 1260px !important;
+    margin-inline: auto !important;
+    padding: 17px 5px 18px !important;
+  }
+  & :is(.wc, .wc-dialog, .xm-ui-scope) {
+    --wc-blue: var(--xd-action) !important;
+    --wc-ink: var(--xd-ink) !important;
+    --wc-muted: var(--xd-muted) !important;
+    --wc-line: #ffffff50 !important;
+    --wc-bg: transparent !important;
+    --xm-ui-bg: transparent !important;
+    --xm-ui-surface: #ffffff33 !important;
+    --xm-ui-surface-soft: #ffffff24 !important;
+    --xm-ui-border: #ffffff60 !important;
+    --xm-ui-border-strong: #ffffff99 !important;
+    --xm-ui-text: var(--xd-ink) !important;
+    --xm-ui-text-secondary: var(--xd-muted) !important;
+    --xm-ui-primary: var(--xd-action) !important;
+    --xm-ui-primary-hover: #222a22 !important;
+    --xm-ui-primary-soft: #ffffff55 !important;
+    --xm-ui-radius-md: 14px !important;
+    --xm-ui-radius-lg: 18px !important;
+  }
+
+  /* One glass surface language, including asynchronously mounted modules. */
+  & :is(.org-hero-kpi, .org-chart-card, .org-kpi, .org-toolbar, .org-card,
+      .org-struct, .org-struct-tree, .org-struct-canvas, .org-struct-members,
+      .site-acl-sidebar, .site-acl-detail, .site-acl-card,
+      .wc-toolbar, .wc-kpi, .wc-card,
+      .xm-ui-card, .xm-ui-stat-card, .xm-ui-filter-toolbar, .xm-ui-course-card,
+      .me-banner, .me-safe-bar, .me-perm-box, .me-dev,
+      .bd-panel, .bd-kpi, .bd-stat, .bd-block, .bd-class-card,
+      .xm-hm-card, .xm-hm-chart, .xm-hm-panel, .xm-hm-ladder, .xm-hm-podium,
+      .kpi-card, .panel, .data-card, .people-card, .hr-card) {
+    background: var(--xd-material) !important;
+    border: 1px solid var(--xd-highlight) !important;
+    border-radius: 16px !important;
+    box-shadow: var(--xd-shadow) !important;
+    backdrop-filter: blur(8px) saturate(1.12);
+    -webkit-backdrop-filter: blur(8px) saturate(1.12);
+    color: var(--xd-ink);
+  }
+  & :is(.org-console-head, .wc-head, .xm-ui-page-header) { margin-bottom: 17px !important; gap: 16px; }
+  & :is(.org-console-brand h1, .wc h1, .xm-ui-page-title) {
+    color: var(--xd-ink) !important;
+    font-size: 27px !important;
+    font-weight: 600 !important;
+    letter-spacing: -.035em;
+    line-height: 1.3;
+  }
+  & :is(.org-console-brand p, .wc-muted, .wc-small, .org-hero-kpi .label, .org-hero-kpi .hint,
+      .org-chart-head span, .org-chart-legend li, .org-chart-legend b, .org-chart-legend em,
+      .xm-ui-page-description) { color: var(--xd-muted) !important; }
+  & :is(.wc-eyebrow, .xm-ui-page-eyebrow) { display: none; }
+  & .org-console-mark {
+    width: 42px; height: 42px; border-radius: 14px;
+    background: #ffffff3b !important; color: #454e43 !important;
+    border: 1px solid #ffffff91; box-shadow: inset 0 1px 0 #ffffffa6 !important;
+  }
+
+  /* Compact segmented navigation replaces large blue web tabs. */
+  & :is(.org-tabs, .people-dept-tabs, .wc-nav, .wc-subtabs, .xm-ui-tabs, .bd-tabs) {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px !important; margin: 0 0 16px !important;
+    width: max-content; max-width: 100%; box-sizing: border-box;
+    background: #353b3314 !important;
+    border: 1px solid #ffffff50 !important;
+    border-radius: 22px !important;
+    box-shadow: inset 0 1px 0 #ffffff40 !important;
+  }
+  & :is(.org-tabs, .people-dept-tabs, .wc-subtabs, .xm-ui-tabs, .bd-tabs) { flex-wrap: wrap; }
+  & :is(button.org-tab, .org-tab, .people-dept-tab, .wc-nav button, .wc-subtabs button, .xm-ui-tab, .bd-tabs button) {
+    flex: 0 0 auto !important; min-height: 33px !important; height: auto;
+    padding: 7px 15px !important; gap: 7px;
+    border: 1px solid transparent !important; border-radius: 19px !important;
+    background: transparent !important; box-shadow: none !important;
+    color: #62685e !important; font-size: 12px !important; font-weight: 500 !important;
+    line-height: 1.4;
+    transition: background .2s, color .2s, box-shadow .2s;
+  }
+  & :is(.org-tab.is-active, .people-dept-tab.is-active, .wc-nav button.active,
+      .wc-subtabs button.active, .xm-ui-tab.is-active, .bd-tabs button.active, .bd-tabs button.is-on) {
+    background: linear-gradient(140deg, #ffffffa3, #ffffff42) !important;
+    color: #2b3529 !important; border-color: #ffffffad !important;
+    box-shadow: inset 0 1px 0 #ffffffe6, 0 2px 6px #242e2012 !important;
+  }
+  & :is(.org-tab, .wc-nav button, .wc-subtabs button, .xm-ui-tab):hover { color: #1d291b !important; }
+  & .org-tab-ico { width: 16px; height: 16px; }
+
+  /* Metrics keep their real status colors; decorative blue blocks become glass. */
+  & .org-console-kpis { gap: 11px; margin-bottom: 12px; }
+  & .org-hero-kpi { min-height: 104px !important; padding: 15px 14px !important; }
+  & .org-hero-kpi .value { color: var(--xd-ink); font-size: 27px; font-weight: 600; letter-spacing: -.7px; }
+  & .org-hero-kpi-ico {
+    width: 32px; height: 32px; border-radius: 11px;
+    background: #ffffff55 !important; color: #697967 !important;
+    border: 1px solid #ffffff70; box-shadow: inset 0 1px 0 #ffffff90;
+  }
+  & .org-hero-kpi.tone-purple .org-hero-kpi-ico { color: #83708d !important; }
+  & .org-hero-kpi.tone-orange .org-hero-kpi-ico { color: #b8724d !important; }
+  & .org-hero-kpi.tone-cyan .org-hero-kpi-ico { color: #54888c !important; }
+  & .org-console-charts { gap: 12px; margin-bottom: 14px; }
+  & .org-chart-card { padding: 16px !important; }
+  & .org-chart-head strong { color: var(--xd-ink); font-weight: 600; }
+  & .org-seats-tiles article { border: 1px solid #ffffff65; background: #ffffff2b !important; border-radius: 12px; }
+  & .wc-grid { gap: 11px; margin-bottom: 14px; }
+  & .wc-kpi { padding: 13px 16px !important; min-height: 99px; }
+  & .wc-kpi .value { font-size: 27px; font-weight: 600; line-height: 1.45; }
+  & .wc-kpi .value.blue { color: var(--xd-ink) !important; }
+  & .wc-kpi .label { font-size: 12px; }
+  & .wc-kpi .note { font-size: 11px; }
+  & .wc-card { padding: 18px !important; margin-bottom: 14px; }
+  & .wc-card-head { margin-bottom: 13px; }
+  & .wc-card h2 { font-size: 15px; font-weight: 600; }
+
+  /* Filters and action controls retain their behavior and danger states. */
+  & :is(.wc-toolbar, .org-toolbar, .xm-ui-filter-toolbar) { padding: 10px 12px !important; gap: 8px; margin-bottom: 14px; }
+  & :is(.wc-toolbar, .org-toolbar, .xm-ui-filter-toolbar) :is(input, select) { font-size: 12px; }
+  & :is(.wc-btn, .org-toolbar > button, .org-search-form button,
+      .org-actions button, .org-card-actions button, .xm-ui-button, .people-form button) {
+    border: 1px solid #ffffff91 !important; border-radius: 18px !important;
+    background: #ffffff45 !important; color: var(--xd-ink) !important;
+    padding: 7px 14px; font-size: 12px !important; font-weight: 500;
+    box-shadow: inset 0 1px 0 #ffffff80;
+  }
+  & :is(.wc-btn.primary, .xm-ui-button--primary, .org-search-form button[type=submit],
+      .org-toolbar > button:not(.ghost):not([id$=remove]), .org-card-actions button:not(.ghost), .people-form button[type=submit]) {
+    background: #30382fea !important; border-color: #ffffff3d !important; color: #fff !important;
+    box-shadow: inset 0 1px 0 #ffffff30, 0 3px 10px #25322213;
+  }
+  & :is(.wc-btn.danger, .xm-ui-button--danger, .people-page #people-bulk-remove) {
+    background: #f6dfdf70 !important; border-color: #c66a7445 !important; color: #a33443 !important;
+  }
+  & :is(.wc-link, .org-link) { color: #4a6552 !important; }
+  & :is(.wc-link, .org-link):hover { text-decoration: underline; }
+  & :is(input:not([type=checkbox]):not([type=radio]), select, textarea) {
+    border-radius: 10px !important; background-color: #ffffff3d !important;
+    border-color: #ffffff80 !important; color: var(--xd-ink) !important;
+    box-shadow: inset 0 1px 2px #ffffff25;
+  }
+  & :is(button, a, input, select, textarea):focus-visible {
+    outline: 2px solid #596e58; outline-offset: 2px;
+  }
+  & :is(.wc-avatar, .wc-badge.blue, .me-role) { background: #ffffff45 !important; color: #53634f !important; }
+  & :is(.wc-note, .wc-detail-grid, .me-meta, .me-note-item) { background: #ffffff29 !important; border-color: #ffffff60 !important; color: var(--xd-muted); }
+  & .wc-progress { background: #ffffff5c; }
+  & :is(.wc-progress span, .wc-rank .bar span) { background: #be7459 !important; }
+
+  /* Transparent table rows inside a single pane, with readable sticky headers. */
+  & :is(.org-table-wrap, .org-table-foot) { background: #ffffff26 !important; box-shadow: none !important; border: 1px solid #ffffff60; }
+  & .org-table-wrap { border-radius: 16px 16px 0 0; border-bottom: 0; }
+  & .org-table-foot { border-top: 0; }
+  & :is(.people-page table, .wc-table, .xm-ui-table, .bd-table, .data-table) { background: transparent !important; color: var(--xd-ink); }
+  & :is(.people-page table, .wc-table, .xm-ui-table, .bd-table, .data-table) :is(tbody, tr, td) {
+    background-color: transparent !important; border-color: #ffffff55 !important;
+  }
+  & :is(.people-page table, .wc-table, .xm-ui-table, .bd-table, .data-table) th {
+    background: #e9ede68c !important; color: #5d6658 !important;
+    border-color: #ffffff75 !important; box-shadow: inset 0 -1px 0 #ffffff50 !important;
+  }
+  & :is(.people-page table, .wc-table, .xm-ui-table, .bd-table, .data-table) tbody tr:hover { background: #ffffff40 !important; }
+  & .wc-table td { font-size: 13px; padding: 12px; }
+  & .org-table-foot :is(.people-page-size, .people-page-num) { background: #ffffff40 !important; color: var(--xd-muted) !important; border-color: #ffffff70 !important; border-radius: 12px; }
+  & .org-table-foot :is(.people-page-size, .people-page-num).is-active { background: #ffffffa0 !important; color: var(--xd-ink) !important; }
+
+  /* Dialogs need denser glass so text stays legible over content. */
+  & :is(.wc-dialog, .org-dialog, .org-filter-pop, .xm-ui-dialog, .work-dialog) {
+    background: #e8ece5d9 !important; color: var(--xd-ink) !important;
+    border: 1px solid #ffffffc4 !important; border-radius: 20px !important;
+    backdrop-filter: blur(28px) saturate(1.15);
+    box-shadow: 0 20px 70px #1a271a30, inset 0 1px 0 #fff !important;
+  }
+  & :is(.wc-dialog-head, .org-dialog-head) { background: #e8ece5d9 !important; border-color: #ffffff80 !important; }
+  & .wc-dialog::backdrop { background: #17231738; }
+  & .wc-legacy .work-page { padding: 0 !important; }
+
+  @media (max-width: 1100px) {
+    & .org-console-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    & .org-console-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    & .org-console-charts > :last-child { grid-column: 1 / -1; }
+    & .org-chart-body { min-height: 105px; }
+    & .org-tabs { width: 100%; }
+    & :is(.wc-nav button, button.org-tab) { padding-inline: 11px !important; }
+  }
+  @media (max-width: 850px) {
+    & .wc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    & .org-console-charts { grid-template-columns: 1fr; }
+    & .org-console-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    & .org-console-kpis > :last-child { grid-column: 1 / -1; }
+    & .wc-head { flex-wrap: wrap; gap: 10px; }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    --xd-material: linear-gradient(120deg, #eef0e9ed, #e2e6dfe8);
+  }
+}
