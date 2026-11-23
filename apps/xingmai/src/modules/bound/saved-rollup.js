@@ -1,8 +1,32 @@
-const additive = new Set(('gmv netGmv tghf profit refund thtkje netHpCost jhpcb ptCost deliverCost zdyFyAll sales invalidGmv otherCost saleCost fhSaleCost wyj gxh_5c0f6bdb52296da6ff08652f4ed898844f30ff09').split(' '));
+const additive = new Set(('gmv netGmv tghf profit refund wfhRefund thtkje netHpCost jhpcb ptCost deliverCost zdyFyAll sales invalidGmv otherCost saleCost fhSaleCost wyj gxh_5c0f6bdb52296da6ff08652f4ed898844f30ff09').split(' '));
 const labels = new Set(('shopId shopName platform goodsId goodsName spuid goodsUrl cateId cateName catePathName province city isProv hour groupId groupName leaders onSaleTime').split(' '));
-const rates = { refundRatio: ['refund', 'gmv'], tghfXseZb: ['tghf', 'gmv'], fhfyZfZb: ['deliverCost', 'gmv'] };
-const number = value => value != null && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
+// Denominators follow the saved BI shop/channel reports: cost and profit ratios
+// use net sales; the two custom gross margins use payment GMV. Small gross
+// profit is its own saved measure (before penalties), not the shop profit.
+const rates = {
+  refundRatio: ['refund', 'gmv'], wfhTkl: ['wfhRefund', 'gmv'],
+  netHpCostRatio: ['netHpCost', 'netGmv'], profitRate: ['profit', 'netGmv'],
+  gxh_59276bdb52297387: ['profit', 'gmv'],
+  gxh_5c0f6bdb52297387: ['gxh_5c0f6bdb52296da6ff08652f4ed898844f30ff09', 'gmv'],
+  tghfXseZb: ['tghf', 'gmv'], fhfyZfZb: ['deliverCost', 'gmv']
+};
+const number = value => (typeof value === 'number' || typeof value === 'string' && value.trim() !== '') && Number.isFinite(Number(value)) ? Number(value) : null;
 export const normalizedDay = value => String(value || '').replaceAll('/', '-');
+
+function unshippedRefund(row) {
+  const explicit = number(row.wfhRefund);
+  if (explicit != null) return explicit;
+  if (Array.isArray(row.lstRefund) && row.lstRefund.every(item => item && typeof item.code === 'string')) {
+    const parts = row.lstRefund.filter(item => item.code === 'wfhRefund');
+    const values = parts.map(item => number(item.originCost ?? item.cost));
+    if (parts.length && values.every(value => value != null)) return values.reduce((a, b) => a + b, 0);
+    if (!parts.length && (number(row.wfhTkl) == null || number(row.wfhTkl) === 0)) return 0;
+  }
+  // Older flat records may retain only the rounded ratio. Reconstruct its
+  // numerator with payment GMV so aggregation is weighted, never a mean of rates.
+  const ratio = number(row.wfhTkl), gmv = number(row.gmv);
+  return ratio != null && gmv != null ? ratio * gmv : null;
+}
 
 // Sum only additive measures. Unknown ratios, ranks and realtime snapshots stay
 // blank; carrying the last day's value would misrepresent the selected period.
@@ -12,7 +36,7 @@ export function sumSavedRows(rows, identity, date) {
     const key = identity(row);
     if (key == null) continue;
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(row);
+    groups.get(key).push({ ...row, wfhRefund: unshippedRefund(row) });
   }
   return [...groups.values()].map(items => {
     const out = {};

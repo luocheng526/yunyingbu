@@ -80,3 +80,48 @@ test('未知比例、排名和实时数不累加，缺字段不当零；趋势�
   assert.deepEqual(result.record.metricTrend.map(r => r.date), [from, '2026-10-02', to]);
   assert.equal(result.record.metricTrend[1].cells.gmv.value, null);
 });
+
+test('五项缺失比例按汇总金额重算，净销售额与支付金额分母不可混用', () => {
+  const smallProfit = 'gxh_5c0f6bdb52296da6ff08652f4ed898844f30ff09';
+  const rows = [
+    { gmv: 100, netGmv: 80, netHpCost: 20, profit: 10, [smallProfit]: 12, wfhTkl: .99, lstRefund: [{ code: 'wfhRefund', originCost: '5.25', cost: '5' }, { code: 'fhthRefund', originCost: '90' }] },
+    { gmv: 300, netGmv: 150, netHpCost: 30, profit: -5, [smallProfit]: 15, wfhTkl: .99, lstRefund: [{ code: 'wfhRefund', originCost: '30.75' }] }
+  ];
+  const before = JSON.stringify(rows);
+  const sum = sumSavedRows(rows, () => 'shop', from + '~' + to)[0];
+  assert.equal(sum.wfhTkl, 36 / 400);
+  assert.equal(sum.netHpCostRatio, 50 / 230);
+  assert.equal(sum.profitRate, 5 / 230);
+  assert.equal(sum.gxh_59276bdb52297387, 5 / 400);
+  assert.equal(sum.gxh_5c0f6bdb52297387, 27 / 400);
+  assert.equal(JSON.stringify(rows), before);
+  assert.equal(sumSavedRows([sum], () => 'shop', to)[0].wfhTkl, sum.wfhTkl);
+});
+
+test('旧扁平日报未存退款明细时按GMV加权已存未发货退款率，有明确零时保留零', () => {
+  const sum = sumSavedRows([{ gmv: 100, wfhTkl: .1 }, { gmv: 300, wfhTkl: .3 }], () => 'shop', to)[0];
+  assert.equal(sum.wfhTkl, .25);
+  const zero = sumSavedRows([{ gmv: 100, lstRefund: [{ code: 'fhthRefund', originCost: '20' }], netGmv: 80, netHpCost: 0, profit: 0, gxh_5c0f6bdb52296da6ff08652f4ed898844f30ff09: 0 }], () => 'shop', to)[0];
+  for (const key of ['wfhTkl', 'netHpCostRatio', 'profitRate', 'gxh_59276bdb52297387', 'gxh_5c0f6bdb52297387']) assert.equal(zero[key], 0, key);
+});
+
+test('零分母、缺失金额和非法值不生成比例，负净销售额保留实际符号', () => {
+  const zero = sumSavedRows([{ gmv: 0, netGmv: 0, netHpCost: 0, profit: -9, wfhRefund: 0 }], () => 'shop', to)[0];
+  for (const key of ['wfhTkl', 'netHpCostRatio', 'profitRate', 'gxh_59276bdb52297387', 'gxh_5c0f6bdb52297387']) assert.equal(zero[key], undefined);
+  const missing = sumSavedRows([{ gmv: 100, netGmv: 100, profit: 10, netHpCost: 20 }, { gmv: 200, netGmv: 200, netHpCost: false, profit: '--' }], () => 'shop', to)[0];
+  assert.equal(missing.profitRate, undefined); assert.equal(missing.netHpCostRatio, undefined); assert.equal(missing.wfhTkl, undefined);
+  const negative = sumSavedRows([{ gmv: 10, netGmv: -20, profit: -5, netHpCost: -3 }], () => 'shop', to)[0];
+  assert.equal(negative.profitRate, .25); assert.equal(negative.gxh_59276bdb52297387, -.5); assert.equal(negative.netHpCostRatio, .15);
+});
+
+test('单店、全部店铺及渠道总览使用同一套比例汇总', async () => {
+  const extra = { netGmv: 80, netHpCost: 20, profit: 10, gxh_5c0f6bdb52296da6ff08652f4ed898844f30ff09: 12, lstRefund: [{ code: 'wfhRefund', originCost: '5' }] };
+  const data = [sheet('qdfx_dplb', from, [row(from, 100, extra)]), sheet('qdfx_dplb', to, [row(to, 100, extra)])];
+  const { saved, overview } = fixture(data);
+  const expected = [await saved.record({ ...shop, from, to, reportId: 'channel_shop_table' }), await saved.record({ platform: 'all', shopId: '__all__', from, to, reportId: 'channel_shop_table' })].map(r => r.record.rows[0]);
+  expected.push((await overview({ from, to })).records.saved_shops.rows[0]);
+  for (const sum of expected) {
+    assert.equal(sum.wfhTkl, .05); assert.equal(sum.netHpCostRatio, .25); assert.equal(sum.profitRate, .125);
+    assert.equal(sum.gxh_59276bdb52297387, .1); assert.equal(sum.gxh_5c0f6bdb52297387, .12);
+  }
+});
