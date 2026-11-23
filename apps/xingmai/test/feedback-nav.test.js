@@ -22,7 +22,7 @@ async function listen(app) {
   };
 }
 
-test("侧栏在工作汇报后面挂需求与反馈，不进底部", () => {
+test("侧栏在工作中心后面挂需求与反馈，不进底部", () => {
   const hrefs = NAV_MAIN.map((item) => item.href);
   assert.equal(hrefs.includes("/feedback"), true);
   assert.ok(hrefs.indexOf("/feedback") === hrefs.indexOf("/work") + 1);
@@ -32,7 +32,7 @@ test("侧栏在工作汇报后面挂需求与反馈，不进底部", () => {
   );
   const html = navMarkup("/feedback", luocheng);
   const main = html.match(/<nav class="xm-menu xm-menu-main">([\s\S]*?)<\/nav>/)[1];
-  const work = main.indexOf("工作汇报");
+  const work = main.indexOf("工作中心");
   const feedback = main.indexOf("需求与反馈");
   assert.ok(work >= 0 && feedback > work);
   assert.equal(html.includes('href="/feedback"'), true);

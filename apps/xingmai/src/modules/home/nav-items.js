@@ -487,7 +487,7 @@ export const NAV_MAIN = [
   { href: "/stores", file: "stores.html", label: "店铺维护中心" },
   { href: "/academy", label: "甄选商学院" },
   { href: "/agents", file: "agents.html", label: "甄选智能体" },
-  { href: "/work", label: "工作汇报" },
+  { href: "/work", label: "工作中心" },
   { href: "/meeting", label: "月度大会" },
   { href: "/feedback", label: "需求与反馈" }
 ];

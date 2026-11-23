@@ -46,7 +46,7 @@ async function json(base, path, options = {}) {
   return { status: res.status, data: await res.json() };
 }
 
-test("侧栏在甄选智能体后面挂工作汇报，不进底部", () => {
+test("侧栏在甄选智能体后面挂工作中心，不进底部", () => {
   const hrefs = NAV_MAIN.map((item) => item.href);
   assert.equal(hrefs.includes("/work"), true);
   assert.ok(hrefs.indexOf("/work") === hrefs.indexOf("/agents") + 1);
@@ -57,17 +57,17 @@ test("侧栏在甄选智能体后面挂工作汇报，不进底部", () => {
   const html = navMarkup("/work", luocheng);
   const main = html.match(/<nav class="xm-menu xm-menu-main">([\s\S]*?)<\/nav>/)[1];
   const agents = main.indexOf("甄选智能体");
-  const work = main.indexOf("工作汇报");
+  const work = main.indexOf("工作中心");
   assert.ok(agents >= 0 && work > agents);
   assert.equal(html.includes('href="/work"'), true);
 });
 
-test("壳把 /work 交给工作汇报模块", () => {
+test("壳把 /work 交给工作中心模块", () => {
   assert.equal(APP_MODULES["/work"], "work");
   assert.equal(SHELL_ASSET_VER, "0.1.772-feedback");
   const html = renderAppShell("/work", luocheng);
   assert.equal(html.includes("/shared/modules/work.js"), true);
-  assert.equal(html.includes("工作汇报"), true);
+  assert.equal(html.includes("工作中心"), true);
 });
 
 test("填写日报页用看板，空的时候仍能写下日报", () => {
@@ -99,7 +99,7 @@ test("填写日报页用看板，空的时候仍能写下日报", () => {
   assert.match(tasks, /退回必须填写原因|检查意见/);
 });
 
-test("今天未交时侧栏工作汇报右上角是 1，交了就去掉", () => {
+test("今天未交时侧栏工作中心右上角是 1，交了就去掉", () => {
   const js = readFileSync(join(root, "../public/shared/modules/work.js"), "utf8");
   assert.match(js, /function paintNavBadge\(\)/);
   assert.match(js, /a\.xm-menu-item\[href="\/work"\]/);
@@ -108,10 +108,10 @@ test("今天未交时侧栏工作汇报右上角是 1，交了就去掉", () => 
   assert.match(js, /\.xm-work-badge\{position:absolute;top:2px;right:8px/);
 });
 
-test("nav.js 把工作汇报放进主栏而不是底栏", () => {
+test("nav.js 把工作中心放进主栏而不是底栏", () => {
   const js = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
   assert.match(js, /0\.1\.772-feedback/);
-  assert.match(js, /\{ href: "\/work", label: "工作汇报" \}/);
+  assert.match(js, /\{ href: "\/work", label: "工作中心" \}/);
   assert.match(js, /"\/work": "work"/);
   const itemsBlock = js.match(/const items = \[([\s\S]*?)\];/)[1];
   const agentsAt = itemsBlock.indexOf('href: "/agents"');

@@ -37,7 +37,7 @@ test("人事部账号登录只进智能人事，侧栏只留智能人事和个�
   const navSrc = fs.readFileSync(new URL("../public/shared/nav.js", import.meta.url), "utf8");
   assert.match(navSrc, /isHrDesk\(\) && leafRoute\(current\) === deskHome\(\) && key !== deskHome\(\)/);
   assert.equal(html.includes("数据中心"), false);
-  assert.equal(html.includes("工作汇报"), false);
+  assert.equal(html.includes("工作中心"), false);
   assert.equal(html.includes("需求与反馈"), false);
   assert.equal(html.includes("组织中心"), false);
 
@@ -88,7 +88,7 @@ test("人事部账号登录只进智能人事，侧栏只留智能人事和个�
     assert.match(body, /智能人事/);
     assert.doesNotMatch(body, />首页</);
     assert.doesNotMatch(body, />数据中心</);
-    assert.doesNotMatch(body, />工作汇报</);
+    assert.doesNotMatch(body, />工作中心</);
     assert.doesNotMatch(body, />需求与反馈</);
     assert.match(body, />个人中心</);
     assert.match(body, /"desk":"hr"/);
@@ -129,6 +129,6 @@ test("罗成全菜单不受人事台影响", () => {
   const html = navMarkup("/home", luocheng);
   assert.match(html, />首页</);
   assert.match(html, />智能人事</);
-  assert.match(html, />工作汇报</);
+  assert.match(html, />工作中心</);
   assert.match(html, />个人中心</);
 });
