@@ -40,11 +40,127 @@ export function canSeeStaffNav(user) {
   });
 }
 
+function textLooksHr(value) {
+  const text = String(value || "").trim();
+  if (!text || text.includes("人员管理")) {
+    return false;
+  }
+  const lower = text.toLowerCase();
+  if (lower === "hrtech" || lower === "hr") {
+    return true;
+  }
+  if (text === "人事" || text.includes("人事部") || text.includes("人事部门") || text.includes("人事和技术")) {
+    return true;
+  }
+  return /人事(专员|主管|经理|总监)$/.test(text);
+}
+
+function textLooksTech(value) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return false;
+  }
+  const lower = text.toLowerCase();
+  return lower === "backend" || text === "技术" || text.includes("技术部");
+}
+
+function actorAliases(user) {
+  if (!user) {
+    return [];
+  }
+  if (typeof user === "string") {
+    return [user.trim()].filter(Boolean);
+  }
+  return [user.username, user.displayName, user.name]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+}
+
+export function personLooksHr(person) {
+  if (!person) {
+    return false;
+  }
+  const board = String(person.board || "").trim().toLowerCase();
+  if (board === "hrtech") {
+    return ![person.department, person.center, person.role].some(textLooksTech);
+  }
+  return [person.department, person.center, person.role, person.board].some(textLooksHr);
+}
+
+function matchOrgPerson(user, people) {
+  const aliases = actorAliases(user);
+  return (
+    (Array.isArray(people) ? people : []).find(
+      (person) => aliases.includes(String(person.username || "")) || aliases.includes(String(person.name || ""))
+    ) || null
+  );
+}
+
+function underHrOrg(me, people) {
+  if (!me) {
+    return false;
+  }
+  if (personLooksHr(me)) {
+    return true;
+  }
+  const byId = new Map((Array.isArray(people) ? people : []).map((person) => [Number(person.id), person]));
+  const seen = new Set([Number(me.id)]);
+  let cur = me;
+  for (let i = 0; i < 16; i += 1) {
+    const mid = Number(cur.managerId);
+    if (!Number.isFinite(mid) || seen.has(mid)) {
+      break;
+    }
+    seen.add(mid);
+    const boss = byId.get(mid);
+    if (!boss) {
+      break;
+    }
+    if (canSeeStaffNav(boss)) {
+      break;
+    }
+    if (personLooksHr(boss)) {
+      return true;
+    }
+    cur = boss;
+  }
+  return false;
+}
+
+export function hrDeskFromOrg(user, people, memberMap) {
+  if (!user || canSeeStaffNav(user)) {
+    return "";
+  }
+  const list = Array.isArray(people) ? people : [];
+  const me = matchOrgPerson(user, list);
+  const codes = memberMap instanceof Map ? memberMap : new Map();
+  if (me && (codes.get(Number(me.id)) || "") === "hr") {
+    return "hr";
+  }
+  if (underHrOrg(me, list)) {
+    return "hr";
+  }
+  if (
+    personLooksHr({
+      board: user.board,
+      department: user.department,
+      center: user.center,
+      role: user.role
+    })
+  ) {
+    return "hr";
+  }
+  return "";
+}
+
 export function isHrDesk(user) {
   if (!user || canSeeStaffNav(user)) {
     return false;
   }
-  return String(user.desk || "") === "hr";
+  if (String(user.desk || "") === "hr") {
+    return true;
+  }
+  return personLooksHr(user);
 }
 
 export function deskHome(user) {
@@ -360,12 +476,6 @@ function mainItemsFor(user) {
   });
 }
 
-export const ACADEMY_CHILDREN = [
-  { href: "/academy/courses", label: "培训课程" },
-  { href: "/academy/exams", label: "培训考试" },
-  { href: "/academy/handbook", label: "运营手册" }
-];
-
 export const PEOPLE_CHILDREN = [];
 
 export const NAV_MAIN = [
@@ -375,9 +485,9 @@ export const NAV_MAIN = [
   { href: "/shen", label: "沈子晗运营中心", children: SHEN_CHILDREN },
   { href: "/han", label: "韩梦凯运营中心", children: HAN_CHILDREN },
   { href: "/stores", file: "stores.html", label: "店铺维护中心" },
-  { href: "/academy", label: "甄选商学院", children: ACADEMY_CHILDREN },
+  { href: "/academy", label: "甄选商学院" },
   { href: "/agents", file: "agents.html", label: "甄选智能体" },
-  { href: "/work", label: "工作汇报" },
+  { href: "/work", label: "工作中心" },
   { href: "/meeting", label: "月度大会" },
   { href: "/feedback", label: "需求与反馈" }
 ];
@@ -466,7 +576,9 @@ function attrMarkup(item) {
 function itemLink(item, activeHref, extraClass) {
   const key = hrefKey(activeHref);
   const on =
-    hrefKey(item.href) === key || (item.href === "/people" && (key === "/notices" || key.startsWith("/people?")));
+    hrefKey(item.href) === key ||
+    (item.href === "/people" && (key === "/notices" || key.startsWith("/people?"))) ||
+    (item.href === "/academy" && (key === "/academy" || key.startsWith("/academy/")));
   const current = on ? ' aria-current="page"' : "";
   const active = on ? " is-active" : "";
   const extra = extraClass ? ` ${extraClass}` : "";
@@ -476,7 +588,7 @@ function itemLink(item, activeHref, extraClass) {
 function groupMarkup(item, activeHref) {
   const open = childActive(item, activeHref);
   const kids = item.children.map((child) => itemLink(child, activeHref, "xm-menu-child")).join("");
-  return `<div class="xm-menu-group${open ? " is-open" : ""}" data-xm-group="${item.href}"><button type="button" class="xm-menu-item xm-menu-parent" aria-expanded="${open ? "true" : "false"}">${ico(item.href)}<span>${item.label}</span>${CARET}</button><div class="xm-submenu">${kids}</div></div>`;
+  return `<div class="xm-menu-group${open ? " is-open is-current" : ""}" data-xm-group="${item.href}"><button type="button" class="xm-menu-item xm-menu-parent${open ? " is-active" : ""}" aria-expanded="${open ? "true" : "false"}">${ico(item.href)}<span>${item.label}</span>${CARET}</button><div class="xm-submenu">${kids}</div></div>`;
 }
 
 export function navMarkup(activeHref, user) {
