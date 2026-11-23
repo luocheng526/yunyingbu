@@ -1,0 +1,109 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createGoodsBackfill, validGoodsBackfill, GOODS_REPORTS } from '../src/modules/bound/goods-backfill.js';
+import { createShopDayCollector } from '../src/modules/bound/shop-day.js';
+import { SHOP_DAY, shopDayRequest } from '../src/modules/bound/shop-day-contract.js';
+import { createSavedData } from '../src/modules/bound/saved-data.js';
+import { requestVisibleShops, requestGoodsBackfillReport, requestBatchShopDayReport, setBoundFetch } from '../src/modules/bound/collect.js';
+import { writeState, resetBoundStore } from '../src/modules/bound/persist.js';
+const today = () => '2026-11-23', selection = { from: '2026-10-03', to: '2026-10-04', shopKeys: ['JD:' + SHOP_DAY.shopId] };
+const table = rows => ({ columnInfo: [{ columnKey: 'gmv', columnName: '支付金额' }], columnData: rows });
+const success = data => ({ httpStatus: 200, payload: { code: 0, data } });
+async function temporary(work) { const directory = await mkdtemp(join(tmpdir(), 'bound-goods-backfill-')); try { await work(directory); } finally { await rm(directory, { recursive: true, force: true }); } }
+function fixtures(directory) {
+  const calls = []; let owner = 'one', fail = false;
+  const config = { directory, today, discover: async () => ({ ok: true, owner, shops: [SHOP_DAY] }), makeCollector: scope => createShopDayCollector({ directory, scope, concurrency: 2, intervalMs: 0, maxPages: 200, retryFailures: true, request: async input => {
+    calls.push({ scope, input });
+    if (fail) return { blocked: 'login_conflict' };
+    const spec = shopDayRequest(input, scope, 200);
+    if (input.reportId.endsWith('_page')) {
+      assert.equal(spec.body.pageNum, input.page); assert.equal(spec.body.shopList[0].shopId, scope.shopId); assert.equal(spec.body.startDate, scope.date);
+      const sku = input.reportId === 'shop_goods_page', total = sku ? 101 : 2;
+      const rows = Array.from({ length: Math.max(0, Math.min(100, total - (input.page - 1) * 100)) }, (_, i) => ({ ...scope, [sku ? 'goodsId' : 'spuid']: String((input.page - 1) * 100 + i + 1), gmv: 1 }));
+      return success({ ...table([{ sumLine: true, gmv: total }, ...rows]), total });
+    }
+    if (input.reportId.startsWith('shop_cards')) return success({ total: 0, cardInfos: [], hasNextPage: false });
+    return success(table([{ sumLine: true, gmv: 101 }]));
+  } }) };
+  return { config, calls, owner: value => { owner = value; }, fail: value => { fail = value; } };
+}
+
+test('historical goods scope is explicit, bounded, and never includes today or arbitrary shops', async () => temporary(async directory => {
+  for (const input of [{}, { ...selection, shopKeys: [] }, { ...selection, from: '2026-08-31' }, { ...selection, to: '2026-11-23' }, { ...selection, from: '2026-02-30' }, { ...selection, extra: true }, { ...selection, shopKeys: ['JD:1','JD:1'] }]) assert.equal(validGoodsBackfill(input, today()), false);
+  const job = createGoodsBackfill(fixtures(directory).config);
+  assert.equal((await job.start({ ...selection, shopKeys: ['JD:999'] })).reason, 'unknown_shop');
+  assert.equal(await job.status(), null);
+  const plan = await job.plan(selection); assert.equal(plan.total, 2); assert.equal(plan.indexed, 0); assert.equal(plan.owner, undefined); assert.equal(plan.tasks, undefined);
+}));
+
+test('backfill starts newest first, preserves successful archives, verifies all pages, and serves new dates', async () => temporary(async directory => {
+  const f = fixtures(directory);
+  const existing = f.config.makeCollector(SHOP_DAY);
+  await existing.collect({ reportId: 'shop_goods_page', page: 1 });
+  const filesBefore = f.calls.length;
+  const job = createGoodsBackfill(f.config);
+  assert.equal((await job.start(selection)).ok, true);
+  const run = await job.wait(); assert.equal(run.status, 'complete'); assert.equal(run.done, 2); assert.equal(run.failed, 0);
+  assert.equal(run.verifiedSku, 202); assert.equal(run.verifiedSpu, 4); assert.equal(run.cached, 1);
+  assert.equal(f.calls[filesBefore].scope.date, '2026-10-04');
+  assert.equal(f.calls.filter(c => c.scope.date === SHOP_DAY.date && c.input.reportId === 'shop_goods_page' && c.input.page === 1).length, 1);
+  const scopes = await job.scopes(); assert.equal(scopes.length, 2);
+  const saved = createSavedData({ collector: existing, scopedCollector: s => f.config.makeCollector(s), readScopes: () => job.scopes(), readHeads: async () => [], readSheets: async () => [] });
+  assert.equal((await saved.options()).latestDate, '2026-10-04');
+  const record = (await saved.record({ ...SHOP_DAY, date: '2026-10-04', reportId: 'shop_goods_page' })).record;
+  assert.equal(record.total, 101); assert.equal(record.nextPage, 2);
+  const before = f.calls.length;
+  const reloaded = createGoodsBackfill(f.config); await reloaded.start(selection);
+  assert.equal((await reloaded.wait()).done, 2); assert.equal(f.calls.length, before);
+  f.owner('two'); assert.equal((await reloaded.start(selection)).reason, 'identity_changed');
+}));
+
+test('login conflict halts immediately without indexing incomplete scopes; user can resume after login', async () => temporary(async directory => {
+  const f = fixtures(directory); f.fail(true); const job = createGoodsBackfill(f.config);
+  await job.start(selection); const state = await job.wait(); assert.equal(state.status, 'blocked'); assert.equal(state.reason, 'login_conflict');
+  assert.equal((await job.scopes()).length, 0); assert.ok(f.calls.length <= 2);
+  f.fail(false); await job.start(selection); assert.equal((await job.wait()).status, 'complete');
+}));
+
+test('duplicate/missing pages cannot become a completed scope even when a reader claims received', async () => temporary(async directory => {
+  const job = createGoodsBackfill({ directory, today, discover: async () => ({ ok: true, owner: 'one', shops: [SHOP_DAY] }), makeCollector: scope => ({ collect: async ({ reportId, page }) => ({ ok: true, record: { status: 'received', scope, reportId, page, total: 3, rows: [{ ...scope, goodsId: '1', spuid: '1' }], nextPage: page === 1 ? 2 : null } }) }) });
+  await job.start(selection); const state = await job.wait(); assert.equal(state.status, 'complete_with_errors'); assert.equal(state.done, 0); assert.equal((await job.scopes()).length, 0);
+  assert.equal(state.errors[0].failures[0].reason, 'pagination_identity_mismatch');
+}));
+
+test('restart resumes only a previously running job and retains its explicit shop/date selection', async () => temporary(async directory => {
+  const f = fixtures(directory), path = join(directory, 'goods-backfill-run.json');
+  await writeFile(path, JSON.stringify({ ...selection, status: 'running', owner: 'one', shops: [SHOP_DAY] }));
+  const job = createGoodsBackfill(f.config); await job.resume(); assert.equal((await job.wait()).done, 2);
+  const written = JSON.parse(await readFile(path)); written.status = 'paused'; await writeFile(path, JSON.stringify(written));
+  assert.equal((await createGoodsBackfill(f.config).resume()).resumed, false);
+}));
+
+test('pause waits for in-flight writes and never indexes a half-finished shop/day', async () => temporary(async directory => {
+  let release, entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  const pending = new Promise(resolve => { release = resolve; });
+  const job = createGoodsBackfill({ directory, today, discover: async () => ({ ok: true, owner: 'one', shops: [SHOP_DAY] }), makeCollector: scope => ({ collect: async ({ reportId, page }) => {
+    entered(); await pending;
+    return { ok: true, record: { status: 'empty', reportId, page, scope, rows: [], total: 0 } };
+  } }) });
+  await job.start(selection); await started; job.stop();
+  assert.equal(job.busy(), true); release();
+  assert.equal((await job.wait()).status, 'paused'); assert.equal((await job.scopes()).length, 0);
+}));
+
+test('historical transport keeps the old fixed-day contract closed and allows only verified goods requests', async () => {
+  resetBoundStore(); let calls = 0;
+  try {
+    await writeState('session', { provider: 'PASSWORD', phase: 'logged_in', cookies: { sid: 'test' }, passwordIdentity: { userId: 'one', companyId: 'company' } });
+    setBoundFetch(async () => { calls++; return new globalThis.Response(JSON.stringify({ code: 0, data: [{ channel: 'JD', shopList: [{ shopId: SHOP_DAY.shopId, shopName: SHOP_DAY.shopName }] }] }), { headers: { 'content-type': 'application/json' } }); });
+    const source = await requestVisibleShops(), scope = { ...SHOP_DAY, date: '2026-11-18' };
+    assert.equal((await requestBatchShopDayReport({ reportId: 'shop_goods_page' }, () => {}, scope, source.owner)).blocked, 'invalid_scope');
+    for (const input of [{ reportId: 'channel_operating' }, { reportId: GOODS_REPORTS[0], cardId: '1' }]) assert.equal((await requestGoodsBackfillReport(input, () => {}, scope, source.owner)).blocked, 'invalid_scope');
+    assert.equal((await requestGoodsBackfillReport({ reportId: 'shop_goods_page', page: 11 }, () => {}, scope, source.owner)).httpStatus, 200);
+    assert.equal(calls, 2);
+  } finally { setBoundFetch(); resetBoundStore(); }
+});

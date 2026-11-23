@@ -11,6 +11,7 @@ import { isSingleShopRequest } from "./probe-target.js";
 import { shopDayRequest, validShopDay } from "./shop-day-contract.js";
 import { visibleShops, BATCH_DATE } from "./shop-batch.js";
 import { createRequestPacer } from "./request-pacer.js";
+import { GOODS_REPORTS } from './goods-backfill.js';
 
 const QUIET_MODULES = new Set(["hp", "team"]);
 const QUIET_MASTERS = new Set(["goods", "teams", "members"]);
@@ -219,6 +220,14 @@ export async function requestBatchShopDayReport(input, onRequest, scope, owner) 
   if (ownerOf(await session()) !== owner) return { blocked: "identity_changed" };
   const spec = shopDayRequest(input, scope, 200);
   if (!spec) return { blocked: "invalid_scope" };
+  return batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner }, onRequest));
+}
+
+export async function requestGoodsBackfillReport(input, onRequest, scope, owner) {
+  if (!validShopDay(scope) || scope.date >= shanghaiToday() || !GOODS_REPORTS.includes(input?.reportId) || Object.keys(input).some(k => !['reportId', 'page'].includes(k)) || owner !== batchOwner || !batchShops.has(scope.platform + ':' + scope.shopId) || collectionStatus().batchEnabled) return { blocked: 'invalid_scope' };
+  if (ownerOf(await session()) !== owner) return { blocked: 'identity_changed' };
+  const spec = shopDayRequest(input, scope, 200);
+  if (!spec) return { blocked: 'invalid_scope' };
   return batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner }, onRequest));
 }
 

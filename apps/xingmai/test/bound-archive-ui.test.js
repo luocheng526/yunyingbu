@@ -33,7 +33,7 @@ function fixture() {
     product_area: [record("product_area", [{ province: "浙江", isProv: true, sumLine: true, gmv: "100" }, { province: "浙江", city: "杭州", gmv: "100" }])]
   };
 }
-async function harness({ records = fixture(), failedPage = false, search = "", inventory, products = {}, cardRecords = {}, extras = {}, run, saved, overview, marks = new Map(), annotationFailure = false, storage = new Map(), startAtDefault = false } = {}) {
+async function harness({ records = fixture(), failedPage = false, search = "", inventory, products = {}, cardRecords = {}, extras = {}, run, saved, overview, marks = new Map(), annotationFailure = false, storage = new Map(), startAtDefault = false, backfill = null } = {}) {
   const annotationApi = createAnnotations({ read: async keys => keys.filter(k => marks.has(k)).map(k => ({ rowKey:k, ...marks.get(k) })), list: async () => [...marks].map(([rowKey, value]) => ({ rowKey, ...value })), write: async (k,v) => { marks.set(k,v); } });
   const calls = [];
   const downloads = [], blobs = [];
@@ -49,6 +49,11 @@ async function harness({ records = fixture(), failedPage = false, search = "", i
     setInterval: () => 1, clearInterval() {},
     fetch(url, options = {}) {
       calls.push({ url, options });
+      if (url.startsWith('/api/bound/shop-day/goods-backfill')) {
+        if (url.endsWith('/stop')) backfill = { ...backfill, status: 'paused' };
+        if (url.endsWith('/start')) backfill = { ...backfill, status: 'running' };
+        return reply({ ok: true, run: backfill });
+      }
       if (url.startsWith("/api/bound/shop-day/annotations")) {
         if (annotationFailure) return reply({ok:false},false);
         const input = options.method === 'POST' ? JSON.parse(options.body) : Object.fromEntries(new URL(url,'http://localhost').searchParams);
@@ -220,6 +225,17 @@ test('快速切换日期时旧请求较晚返回不会覆盖新日期', async ()
   assert.match(h.root.innerHTML, /新日期店铺/);
   finishOld(); await new Promise(resolve => setTimeout(resolve, 20));
   assert.match(h.root.innerHTML, /新日期店铺/); assert.doesNotMatch(h.root.innerHTML, /旧日期店铺/);
+});
+
+test('商品补采显示实际范围进度，暂停与继续保持原店铺日期范围', async () => {
+  const h = await harness({ saved: savedFixture(), backfill: { id: 'backfill', status: 'running', from: '2026-09-01', to: '2026-11-18', done: 43, total: 3397, failed: 0, shops: [scope], current: scope } });
+  await h.click({ 'data-act': 'page', 'data-page': 'productOverview' });
+  assert.match(h.root.innerHTML, /商品补采：补采中/); assert.match(h.root.innerHTML, /43\/3397/);
+  await h.click({ 'data-act': 'goods-backfill-stop' }); assert.match(h.root.innerHTML, /商品补采：已暂停/);
+  await h.click({ 'data-act': 'goods-backfill-resume' });
+  const start = h.calls.find(c => c.url.endsWith('/goods-backfill/start'));
+  assert.deepEqual(JSON.parse(start.options.body), { from: '2026-09-01', to: '2026-11-18', shopKeys: ['JD:' + scope.shopId] });
+  assert.match(h.root.innerHTML, /商品补采：补采中/);
 });
 
 test('大表内联读取一次、菜单往返复用、未显示SPU不请求；标记全表一次读取且可保存', async () => {

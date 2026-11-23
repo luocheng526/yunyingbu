@@ -3,13 +3,14 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { createShopDayCollector } from "./shop-day.js";
 import { createFourPageJob } from "./four-page-job.js";
-import { requestShopDayReport, collectionStatus, requestVisibleShops, requestBatchShopDayReport } from "./collect.js";
+import { requestShopDayReport, collectionStatus, requestVisibleShops, requestBatchShopDayReport, requestGoodsBackfillReport } from "./collect.js";
 import { createArchiveImport } from "./archive-import.js";
 import { createAnnotations } from "./annotations.js";
 import { createSavedOverview } from "./saved-overview.js";
 import { createShopBatch } from "./shop-batch.js";
 import { createSavedData } from "./saved-data.js";
 import { sendSavedJson } from './saved-wire.js';
+import { createGoodsBackfill } from './goods-backfill.js';
 
 export function defaultArchiveDirectory() {
   return process.env.BOUND_DAY_ARCHIVE_DIR || (process.platform === "win32"
@@ -19,8 +20,9 @@ export function defaultArchiveDirectory() {
 
 // Mounted behind the module's existing Luo Cheng administrator gate. No raw
 // archive directory or upstream URL can be supplied by clients. Saved-data
-// GETs accept validated shop/date selectors; collection remains fixed-scope.
-export function createShopDayRouter({ directory = defaultArchiveDirectory(), request = requestShopDayReport, discover = requestVisibleShops, batchRequest = requestBatchShopDayReport } = {}) {
+// GETs accept validated selectors. Historical goods jobs require an explicit
+// date range and a selection from the current BI account's verified shops.
+export function createShopDayRouter({ directory = defaultArchiveDirectory(), request = requestShopDayReport, discover = requestVisibleShops, batchRequest = requestBatchShopDayReport, backfillRequest = requestGoodsBackfillReport } = {}) {
   const router = Router();
   const collector = createShopDayCollector({ directory, request });
   const job = createFourPageJob({ directory, collector });
@@ -41,16 +43,22 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
     source.shops.sort((a, b) => rank(b) - rank(a));
     return source;
   },
-    blocked: async () => collector.isBusy() || job.busy() || importer.busy(),
+    blocked: async () => collector.isBusy() || job.busy() || importer.busy() || goodsBackfill.busy(),
     makeJob: (scope, owner) => createFourPageJob({ directory, scope, concurrency: 2, collector: createShopDayCollector({ directory, scope, concurrency: 2, intervalMs: 0, retryFailures: true, maxPages: 200,
       request: (input, onRequest) => batchRequest(input, onRequest, scope, owner) }) }) });
+  const goodsBackfill = createGoodsBackfill({ directory, discover,
+    blocked: async () => collectionStatus().batchEnabled || collector.isBusy() || job.busy() || importer.busy() || batch.busy(),
+    makeCollector: (scope, owner) => createShopDayCollector({ directory, scope, maxPages: 200, concurrency: 2, intervalMs: 0, retryFailures: true,
+      request: (input, onRequest) => backfillRequest(input, onRequest, scope, owner) }) });
+  const readScopes = async () => [...await batch.scopes(), ...await goodsBackfill.scopes()];
   const annotations = createAnnotations();
   const savedOverview = createSavedOverview({ readScopes: () => batch.scopes(), readArchived: (scope, input) => scopedCollector(scope).getRecord(input) });
-  const saved = createSavedData({ collector, readRun: () => job.status(), scopedCollector, readScopes: () => batch.scopes() });
+  const saved = createSavedData({ collector, readRun: () => job.status(), scopedCollector, readScopes });
   // Warm only the local saved-data selector catalog; never contact BI.
   void saved.options().catch(() => {});
   const importer = createArchiveImport({ directory, blocked: async () =>
-    batch.busy() || job.busy() || collector.isBusy() });
+    batch.busy() || job.busy() || collector.isBusy() || goodsBackfill.busy() });
+  void goodsBackfill.resume().catch(() => {});
   router.use((req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     if (collectionStatus().batchEnabled) return res.status(409).json({ ok: false, reason: "pause_legacy_batch_first" });
@@ -61,6 +69,7 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
       if (req.path !== "/import" && importer.busy()) return res.status(409).json({ ok: false, reason: "archive_import_in_progress" });
     }
     if (req.method !== "GET" && batch.busy() && ["/collect", "/four-pages/start", "/import"].includes(req.path)) return res.status(409).json({ ok: false, reason: "collector_busy" });
+    if (req.method !== 'GET' && goodsBackfill.busy() && ['/collect', '/four-pages/start', '/import', '/batch/start'].includes(req.path)) return res.status(409).json({ ok: false, reason: 'collector_busy' });
     next();
   });
   const route = (method, path, action) => router[method](path, async (req, res) => {
@@ -86,6 +95,10 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
   });
   route("post", "/collect", async req => job.busy() ? { ok: false, statusCode: 409, reason: "collector_busy" } : collector.collect(req.body));
   route("get", "/batch", async () => ({ ok: true, run: await batch.status() }));
+  route('get', '/goods-backfill', async () => ({ ok: true, run: await goodsBackfill.status() }));
+  route('post', '/goods-backfill/plan', req => goodsBackfill.plan(req.body));
+  route('post', '/goods-backfill/start', req => goodsBackfill.start(req.body));
+  route('post', '/goods-backfill/stop', req => Object.keys(req.body || {}).length ? { ok: false, statusCode: 400, reason: 'invalid_scope' } : goodsBackfill.stop());
   route("post", "/batch/start", req => batch.start(req.body || {}));
   route("post", "/batch/stop", req => Object.keys(req.body || {}).length ? { ok: false, statusCode: 400, reason: "invalid_scope" } : batch.stop());
   route("get", "/run", async () => ({ ok: true, run: await job.status() }));

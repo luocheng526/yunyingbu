@@ -25,6 +25,8 @@
     autoReloginBusy: false,
     autoReloginMessage: "",
     batchRun: null,
+    goodsBackfill: null,
+    goodsBackfillBusy: false,
     batchBusy: false,
     batchError: "",
     loginEditing: false,
@@ -90,6 +92,28 @@
   var loadRevision = 0;
   var archivePromise = null, archiveKey = "", archiveScopeKey = "", archiveRevision = 0, savedOptionsPromise = null;
   var savedResponses = new Map(), archiveViews = new Map(), annotationIndexes = {};
+  var backfillPolling = false;
+  function backfillText(run) {
+    if (!run) return '';
+    var names = { running: '补采中', complete: '补采完成', complete_with_errors: '补采结束，有失败项', paused: '已暂停', interrupted: '待继续', blocked: '已停止，需处理失败原因' };
+    return '商品补采：' + (names[run.status] || run.status) + ' · ' + run.from + ' 至 ' + run.to + ' · 完成 ' + run.done + '/' + run.total + ' 项（按店铺、日期核验）' + (run.failed ? ' · 失败 ' + run.failed + ' 项' : '') + (run.status === 'running' && run.current ? ' · 当前 ' + run.current.shopName + ' ' + run.current.date : '');
+  }
+  function renderBackfill() {
+    var run = state.goodsBackfill;
+    if (!run) return '';
+    return '<section class="bd-block"><p data-backfill-progress>' + esc(backfillText(run)) + '</p>' + (run.status === 'complete' ? '' : '<button type="button" data-act="goods-backfill-' + (run.status === 'running' ? 'stop' : 'resume') + '"' + (state.goodsBackfillBusy ? ' disabled' : '') + '>' + (run.status === 'running' ? '暂停补采' : '继续补采') + '</button>') + (run.reason ? '<p>原因：' + esc({ server_login_required: '请先连接旧站', login_expired: '旧站登录已过期，请重新连接', login_conflict: '旧站登录冲突，请重新连接', upstream_unavailable: '旧站接口暂时不可用', identity_changed: '登录账号已变化' }[run.reason] || run.reason) + '</p>' : '') + '</section>';
+  }
+  function pollGoodsBackfill(root, token) {
+    if (backfillPolling) return;
+    backfillPolling = true;
+    Promise.resolve().then(function () { return fetch('/api/bound/shop-day/goods-backfill'); }).then(async function (r) {
+      if (!r.ok) return;
+      var body = await r.json(); if (!body.ok || token !== active) return;
+      var previous = state.goodsBackfill; state.goodsBackfill = body.run;
+      if (previous?.status !== body.run?.status || previous?.id !== body.run?.id) paint(root);
+      else { var label = root.querySelector && root.querySelector('[data-backfill-progress]'); if (label) label.textContent = backfillText(body.run); }
+    }).catch(function () {}).finally(function () { backfillPolling = false; });
+  }
   function restoreSavedRecord(record) {
     if (!record || !Array.isArray(record.rowAliases)) return record;
     record.rowAliases.forEach(function (path) {
@@ -1105,7 +1129,7 @@
       '<div class="bd-pager"><select data-act="archive-page-size" aria-label="每页条数">' + [20, 50, 100].map(function (n) { return '<option value="' + n + '"' + (data.pageSize === n ? ' selected' : '') + '>' + n + ' 条/页</option>'; }).join('') + '</select><button type="button" data-act="page-no" data-delta="-1"' + (data.pageNo <= 1 ? " disabled" : "") + '>上一页</button><span>第 ' + data.pageNo + ' / ' + Math.max(1, Math.ceil(data.total / data.pageSize)) + ' 页</span><button type="button" data-act="page-no" data-delta="1"' + (data.pageNo * data.pageSize >= data.total ? " disabled" : "") + '>下一页</button></div></section>';
     return '<section class="bd-main" data-bound-erp="false" data-local-archive="true" data-page="' + esc(data.page.id) + '">' +
       '<header class="bd-head"><div><h1>' + esc(data.page.label) + '</h1><p class="bd-sub">' + (state.localArchive.runtime === 'server' ? '服务器' : '本机') + '已采数据 · ' + esc(scope.platform) + ' · ' + esc(scope.shopName) + '</p></div><div class="bd-filters">' + shopPicker + renderDateBar(data) + '</div></header>' +
-      '<div class="bd-archive-progress"><span data-archive-progress>' + esc(archiveRunText()) + '</span><button type="button" data-act="archive-refresh"' + (state.archiveRefreshBusy ? ' disabled' : '') + '>' + (state.archiveRefreshBusy ? '正在刷新…' : '刷新已采数据') + '</button></div>' + selectProduct +
+      '<div class="bd-archive-progress"><span data-archive-progress>' + esc(archiveRunText()) + '</span><button type="button" data-act="archive-refresh"' + (state.archiveRefreshBusy ? ' disabled' : '') + '>' + (state.archiveRefreshBusy ? '正在刷新…' : '刷新已采数据') + '</button></div>' + (state.page === 'productOverview' ? renderBackfill() : '') + selectProduct +
       (state.error ? '<p class="bd-banner" role="alert">' + esc(state.error) + '</p>' : '') +
       (state.localArchive.failures.length ? '<p class="bd-banner">部分档案读取失败：' + esc(state.localArchive.failures.join("、")) + '</p>' : '') +
       (data.page.id === 'channelOverview' && !data.account ? '<p class="bd-banner">当前总览范围：' + esc(scope.platform) + ' · ' + esc(scope.shopName) + ' · ' + esc(scope.date) + '。可在店铺选择中切换“全部已存店铺”，查看历史渠道汇总。</p>' : '') +
@@ -2296,6 +2320,9 @@
   }
 
   function renderShopBatch() {
+    return renderBackfill() + renderShopBatchContent();
+  }
+  function renderShopBatchContent() {
     if (!state.localArchive || state.localArchive.runtime !== 'server') return '';
     var run = state.batchRun, busy = state.batchBusy || run && run.status === 'running';
     var names = { running: '采集中', queued: '等待采集', paused: '已暂停', interrupted: '服务重启后待续采', blocked: '已暂停，需处理异常', complete: '已完成', complete_with_errors: '本轮结束，部分店铺待处理', failed: '待处理' };
@@ -2489,6 +2516,7 @@
       }
     }
     if (!state.loginEditing && !state.passwordBusy) paint(root);
+    if (['productOverview', 'link'].includes(state.page)) pollGoodsBackfill(root, token);
   }
 
   // Poll only live status; do not reload archived reports/catalog every 3 seconds.
@@ -2543,6 +2571,18 @@
         return;
       }
       var act = node.getAttribute("data-act");
+      if (act === 'goods-backfill-stop' || act === 'goods-backfill-resume') {
+        var backfill = state.goodsBackfill;
+        if (!backfill || state.goodsBackfillBusy) return;
+        state.goodsBackfillBusy = true; paint(root);
+        var backfillBody = act === 'goods-backfill-stop' ? {} : { from: backfill.from, to: backfill.to, shopKeys: backfill.shops.map(function (s) { return s.platform + ':' + s.shopId; }) };
+        fetch('/api/bound/shop-day/goods-backfill/' + (act === 'goods-backfill-stop' ? 'stop' : 'start'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(backfillBody) }).then(async function (r) {
+          var result = await r.json();
+          if (!r.ok || !result.ok) throw Error(result.reason || 'request_failed');
+          if (result.run) state.goodsBackfill = result.run;
+        }).catch(function (error) { state.error = '补采操作未完成：' + ({ server_login_required: '请先连接旧站', collector_busy: '已有采集任务运行', login_expired: '旧站登录已过期' }[error.message] || error.message); }).finally(function () { state.goodsBackfillBusy = false; if (token === active) { paint(root); pollGoodsBackfill(root, token); } });
+        return;
+      }
       if (act === 'batch-start' || act === 'batch-stop') {
         if (!state.localArchive || state.localArchive.runtime !== 'server' || state.batchBusy) return;
         state.batchBusy = true; state.batchError = ""; paint(root);
@@ -3163,6 +3203,7 @@
             pollLinkProgress(root, token);
           }
           if (state.localArchive && ++archivePollTick % 10 === 0 && token === active) {
+            if (['productOverview', 'link'].includes(state.page)) pollGoodsBackfill(root, token);
             fetch("/api/bound/shop-day/run").then(function (r) { return r.ok ? r.json() : null; }).then(function (result) {
               if (!result || !result.ok || token !== active) return;
               state.localArchive.run = result.run;
