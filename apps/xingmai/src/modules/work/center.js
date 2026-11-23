@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { access, canAssign, canEditTask, canReviewTask, allowedReviewers, reviewerOptions, recordVisible, managedRecord, scopeSnapshot, WORK_ROLES, normalizedRole, roleLevel } from './center-access.js';
 import { visibleTasks } from './tasks.js';
 import { records, record, writeRecord, fault, copy, stamp, day, validDay } from './center-db.js';
-import { obligationBundle, diaryObligation } from './diary.js';
+import { eligibility } from './center-reporting.js';
+import { reminderStatus } from './reminders.js';
 import { exportWorkCenter } from './center-export.js';
 
 const MAX_RANGE=366;
@@ -57,20 +58,6 @@ function stats(tasks,from,to) {
     overdue:active.filter(t=>t.overdue).length,completionRate:rate(completed.length,due.length),onTimeSubmissionRate:rate(submitted.length,due.length),validSubmissionRate:rate(accepted.length,due.length),onTimeCompletionRate:rate(due.filter(t=>t.completed_at&&time(t.completed_at)<=time(t.due_at)).length,due.length),
     overdueRate:rate(due.filter(t=>t.overdue).length,due.length),reviewPassRate:rate(reviews.filter(e=>e.action==='检查通过').length,reviews.length),
     returnCount:active.reduce((n,t)=>n+(t.return_count||0),0)};
-}
-async function eligibility(ctx,date) {
-  const bundle=await obligationBundle(date);
-  const weekday=new Date(date+'T12:00:00+08:00').getUTCDay();
-  const eligible=new Map();
-  for(const p of ctx.active) {
-    const config=ctx.config;
-    const included=config.reportMembers.length?config.reportMembers.map(String).includes(p.id):config.reportRoles.includes(p.role);
-    const onDay=config.weekdays.includes(weekday)&&!config.restDays.includes(date);
-    const obligation=await diaryObligation({person:ctx.bundle.people.find(row=>String(row.id)===p.id)||p,date,onRoster:false,templateFilled:false,templateLabels:[],bundle:bundle.bundle,attendance:bundle.attendance});
-    const attendance=bundle.attendance.get(Number(p.id));
-    eligible.set(p.id,{required:included&&onDay&&!obligation.exempt&&!attendance?.pending,reason:!included?'岗位无需提交':!onDay?'非填报工作日':obligation.exempt?obligation.note:attendance?.pending?'考勤待核对':'',pending:Boolean(attendance?.pending)});
-  }
-  return eligible;
 }
 async function dailyDraft(ctx,allTasks,date,workRows,dailyRows=[],issueRows=[]) {
   const relevant=allTasks.filter(t=>localDay(t.created_at||t.events?.[0]?.at)<=date&&(within(t.created_at,date,date)||within(t.completed_at,date,date)||within(t.submitted_at,date,date)||(t.events||[]).some(e=>within(e.at,date,date))||(!terminal(t)&&localDay(t.start_at)<=date)));
@@ -183,10 +170,13 @@ export async function saveIssue(user,input) {
 }
 export async function saveSettings(user,input) {
   const ctx=await access(user);if(!ctx.director)fault('只有总监可以修改工作中心全局设置',403);
-  const next=copy(ctx.config),allowed=['categories','roleOverrides','teamOverrides','reportingOverrides','collaborations','taskTemplates','reportRoles','reportMembers','weekdays','restDays','deadline','allowLate','reviewHours','staleHours','requiredAttachmentCategories','reportFields'];
+  const next=copy(ctx.config),allowed=['categories','roleOverrides','teamOverrides','reportingOverrides','collaborations','taskTemplates','reportRoles','reportMembers','weekdays','restDays','deadline','allowLate','reviewHours','staleHours','requiredAttachmentCategories','reportFields','taskReminders','dailyReminders','dueSoonMinutes','repeatReminderAt'];
   for(const key of allowed)if(Object.hasOwn(input,key))next[key]=copy(input[key]);
   for(const key of ['roleOverrides','teamOverrides','reportingOverrides','reportFields'])if(!next[key]||typeof next[key]!=='object'||Array.isArray(next[key]))fault('设置格式不合法：'+key);
   for(const key of ['reportRoles','reportMembers','requiredAttachmentCategories','taskTemplates'])if(!Array.isArray(next[key]))fault('设置格式不合法：'+key);
+  if(typeof next.taskReminders!=='boolean'||typeof next.dailyReminders!=='boolean')fault('提醒开关不合法');
+  if(!Number.isInteger(next.dueSoonMinutes)||next.dueSoonMinutes<1||next.dueSoonMinutes>1440)fault('到期前提醒应为 1～1440 分钟');
+  if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(next.repeatReminderAt))fault('每日催办时间不合法');
   if(typeof next.allowLate!=='boolean')fault('补交设置不合法');
   if(next.reportRoles.some(r=>![...WORK_ROLES,'助理'].includes(r))||next.reportMembers.some(id=>!ctx.byId.has(String(id))))fault('日报人员或角色不合法');
   if(next.requiredAttachmentCategories.some(c=>!next.categories?.includes(c)))fault('必传附件分类应属于任务分类');
@@ -209,6 +199,7 @@ export async function saveSettings(user,input) {
 export const centerRouter=Router();
 const wrap=fn=>async(req,res)=>{try {const result=await fn(req,res);if(!res.headersSent)res.json(result);}catch(error){res.status(error.statusCode||500).json({ok:false,error:error.message});}};
 centerRouter.get('/',wrap(req=>centerData(req.user,req.query)));
+centerRouter.get('/reminders',wrap(async req=>{const ctx=await access(req.user);if(!ctx.director)fault('只有总监可以查看提醒状态',403);return reminderStatus(ctx);}));
 centerRouter.get('/tasks/:id',wrap(async req=>{
   const {ctx,rows}=await visibleTasks(req.user);const task=rows.find(t=>t.id===req.params.id);
   if(!task)fault('没有这条任务',404);

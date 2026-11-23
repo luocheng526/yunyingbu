@@ -13,17 +13,17 @@ import {
   activateDing,
   saveDingApp,
   saveDingBinds,
-  startDiaryReminder,
   syncDingBinds
 } from "./diary.js";
 import { getReport, getSettings, isWorkAdmin, myTodoCount, orgPeople, saveMembers, saveReport, saveTemplate, snapshot } from "./store.js";
 import { dingUserOf, popupTo, saveNotifyWebhook } from "./dingtalk.js";
 import { actTask, listTasks, publishTask, readTaskFile, taskContext, taskCounts } from "./tasks.js";
 import { centerRouter } from './center.js';
+import { startWorkReminders } from './reminders.js';
 
 export const workRouter = Router();
 workRouter.use('/center', centerRouter);
-startDiaryReminder();
+startWorkReminders();
 
 function sendResult(res, result, fallbackStatus = 400) {
   if (!result || result.ok === false) {

@@ -174,6 +174,15 @@ export async function visibleTasks(user) {
   }
   return { ctx, rows: [...tasks.values()].map(t => taskScope(t, ctx)).filter(t => taskVisible(ctx, t)).map(view) };
 }
+// Scheduler reads persisted tasks without impersonating an employee.
+export async function reminderTasks(id) {
+  await ready();
+  if (dbMode() === 'mysql') {
+    const [rows] = await query('SELECT body FROM work_report_task' + (id ? ' WHERE id = ?' : ''), id ? [id] : []);
+    return rows.map(row => JSON.parse(row.body));
+  }
+  return [...tasks.values()].filter(task => !id || task.id === id).map(copy);
+}
 export function exportTasks() { return { tasks: [...tasks.values()].map(copy), files: [...fileBytes.entries()].map(([id, bytes]) => [id, bytes.toString('base64')]) }; }
 export function importTasks(data) { tasks.clear(); fileBytes.clear(); for (const task of data?.tasks || []) tasks.set(task.id, copy(task)); for (const [id, bytes] of data?.files || []) fileBytes.set(id, Buffer.from(bytes,'base64')); }
 

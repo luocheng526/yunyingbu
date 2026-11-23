@@ -64,6 +64,7 @@ export const DEFAULT_SETTINGS = {
   roleOverrides: {}, teamOverrides: {}, reportingOverrides: {}, collaborations: [], taskTemplates: [],
   reportRoles: ['主管','运营','运营助理'], reportMembers: [], weekdays: [1,2,3,4,5], restDays: [],
   deadline: '18:00', allowLate: true, reviewHours: 24, staleHours: 48,
+  taskReminders: true, dailyReminders: true, dueSoonMinutes: 60, repeatReminderAt: '09:00',
   requiredAttachmentCategories: [],
   reportFields: { 主管: ['团队主要工作','主动发现的问题','已解决问题','未解决问题','员工指导与培养','明日团队计划','需要经理支持'], 运营: ['店铺经营','商品优化','选品测品','推广调整','退货治理','未完成原因','明日计划'], 助理: ['商品上架','主图与详情优化','商品维护','遇到的问题','明日计划'] }
 };
