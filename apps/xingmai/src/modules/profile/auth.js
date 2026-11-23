@@ -132,6 +132,31 @@ export const SCHEMA_SQL = [
     created_at BIGINT NOT NULL,
     expires_at BIGINT NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS xm_me_avatars (
+    username VARCHAR(64) NOT NULL PRIMARY KEY,
+    mime VARCHAR(64) NOT NULL,
+    body LONGBLOB NOT NULL,
+    updated_at BIGINT NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS xm_me_devices (
+    sid VARCHAR(128) NOT NULL PRIMARY KEY,
+    username VARCHAR(64) NOT NULL,
+    ua VARCHAR(512) NOT NULL DEFAULT '',
+    ip VARCHAR(64) NOT NULL DEFAULT '',
+    device VARCHAR(128) NOT NULL DEFAULT '',
+    city VARCHAR(64) NOT NULL DEFAULT '',
+    created_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS xm_me_notices (
+    id VARCHAR(64) NOT NULL PRIMARY KEY,
+    username VARCHAR(64) NOT NULL,
+    kind VARCHAR(32) NOT NULL,
+    title VARCHAR(128) NOT NULL,
+    detail VARCHAR(500) NOT NULL DEFAULT '',
+    created_at BIGINT NOT NULL,
+    read_flag TINYINT NOT NULL DEFAULT 0
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS release_tickets (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     version VARCHAR(128) NOT NULL,
@@ -299,6 +324,11 @@ export async function hydrateFromMysql() {
     } catch (err) {
       console.error("session hydrate failed", err);
     }
+    try {
+      await hydrateAvatarsFromMysql();
+    } catch (err) {
+      console.error("avatar hydrate failed", err);
+    }
     return;
   }
   for (const user of users.values()) {
@@ -308,6 +338,11 @@ export async function hydrateFromMysql() {
     await hydrateSessionsFromMysql();
   } catch (err) {
     console.error("session hydrate failed", err);
+  }
+  try {
+    await hydrateAvatarsFromMysql();
+  } catch (err) {
+    console.error("avatar hydrate failed", err);
   }
 }
 
@@ -332,6 +367,23 @@ async function hydrateSessionsFromMysql() {
       expiresAt: Number(row.expires_at)
     });
   }
+  try {
+    await ensureDeviceTable();
+    const [devices] = await query(
+      "SELECT sid, ua, ip, device, city FROM xm_me_devices WHERE expires_at >= ?",
+      [now]
+    );
+    for (const row of devices || []) {
+      const session = sessions.get(String(row.sid));
+      if (!session) continue;
+      session.ua = row.ua || "";
+      session.ip = row.ip || "";
+      session.device = row.device || "";
+      session.city = row.city || "";
+    }
+  } catch (err) {
+    console.error("device hydrate failed", err);
+  }
 }
 
 async function persistSession(sid, username, createdAt, expiresAt) {
@@ -354,13 +406,298 @@ async function dropSession(sid) {
     return;
   }
   await query("DELETE FROM xm_sessions WHERE sid = ?", [sid]);
+  try {
+    await ensureDeviceTable();
+    await query("DELETE FROM xm_me_devices WHERE sid = ?", [sid]);
+  } catch (err) {
+    console.error("device delete failed", err);
+  }
 }
+
+const DEVICE_TABLE_SQL = SCHEMA_SQL.find((sql) => sql.includes("xm_me_devices"));
+const NOTICE_TABLE_SQL = SCHEMA_SQL.find((sql) => sql.includes("xm_me_notices"));
+const AVATAR_TABLE_SQL = SCHEMA_SQL.find((sql) => sql.includes("xm_me_avatars"));
+const profileNotices = [];
+const avatars = new Map();
+let deviceTableReady = false;
+let noticeTableReady = false;
+let avatarTableReady = false;
+const AVATAR_MAX = 512 * 1024;
+const AVATAR_TYPES = {
+  "image/jpeg": true,
+  "image/jpg": true,
+  "image/png": true,
+  "image/gif": true,
+  "image/webp": true
+};
+
+async function ensureDeviceTable() {
+  if (deviceTableReady || dbMode() !== "mysql" || !DEVICE_TABLE_SQL) {
+    return;
+  }
+  await query(DEVICE_TABLE_SQL);
+  deviceTableReady = true;
+}
+
+async function ensureNoticeTable() {
+  if (noticeTableReady || dbMode() !== "mysql" || !NOTICE_TABLE_SQL) {
+    return;
+  }
+  await query(NOTICE_TABLE_SQL);
+  noticeTableReady = true;
+}
+
+async function ensureAvatarTable() {
+  if (avatarTableReady || dbMode() !== "mysql" || !AVATAR_TABLE_SQL) {
+    return;
+  }
+  await query(AVATAR_TABLE_SQL);
+  avatarTableReady = true;
+}
+
+function requestIp(req) {
+  const forwarded = String((req && req.headers && req.headers["x-forwarded-for"]) || "")
+    .split(",")[0]
+    .trim();
+  if (forwarded) {
+    return forwarded.slice(0, 64);
+  }
+  const addr = req && req.socket && req.socket.remoteAddress;
+  return String(addr || "").slice(0, 64);
+}
+
+function shanghaiTime(ms) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  })
+    .format(new Date(ms))
+    .replace(/\//g, "-");
+}
+
+function parseDevice(ua) {
+  const text = String(ua || "");
+  let os = "未知系统";
+  if (/iPhone/i.test(text)) os = "iPhone";
+  else if (/iPad/i.test(text)) os = "iPad";
+  else if (/Android/i.test(text)) os = "Android";
+  else if (/Mac OS X|Macintosh/i.test(text)) os = "Mac";
+  else if (/Windows/i.test(text)) os = "Windows";
+  else if (/Linux/i.test(text)) os = "Linux";
+  let browser = "未知浏览器";
+  if (/Edg\//i.test(text)) browser = "Edge";
+  else if (/Chrome\//i.test(text) && !/Edg\//i.test(text)) browser = "Chrome";
+  else if (/Firefox\//i.test(text)) browser = "Firefox";
+  else if (/Safari\//i.test(text) && !/Chrome/i.test(text)) browser = "Safari";
+  return os + " · " + browser;
+}
+
+function requestCity(req) {
+  const headers = (req && req.headers) || {};
+  const raw = headers["cf-ipcity"] || headers["x-appengine-city"] || headers["x-geo-city"] || "";
+  const city = String(raw).trim();
+  if (city && city !== "XX") {
+    try {
+      return decodeURIComponent(city).slice(0, 64);
+    } catch {
+      return city.slice(0, 64);
+    }
+  }
+  const ip = requestIp(req);
+  if (!ip || ip === "::1" || ip.startsWith("127.") || ip.includes("127.0.0.1")) {
+    return "本机";
+  }
+  return ip;
+}
+
+function liveSessionsFor(username) {
+  const now = Date.now();
+  const name = String(username || "");
+  const out = [];
+  for (const [sid, session] of sessions.entries()) {
+    if (!session || session.username !== name) continue;
+    if (session.expiresAt && Number(session.expiresAt) < now) continue;
+    out.push({ sid, ...session });
+  }
+  out.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+  return out;
+}
+
+function publicSession(session, currentSid) {
+  return {
+    sid: session.sid,
+    device: session.device || "未知设备",
+    city: session.city || session.ip || "未知地点",
+    ip: session.ip || "",
+    time: shanghaiTime(Number(session.createdAt) || Date.now()),
+    current: session.sid === currentSid,
+    kind: /iPhone|Android|iPad/i.test(String(session.device || "")) ? "phone" : "monitor"
+  };
+}
+
+async function persistDevice(sid, session) {
+  if (dbMode() !== "mysql" || !sid || !session) return;
+  await ensureDeviceTable();
+  await query(
+    `INSERT INTO xm_me_devices (sid, username, ua, ip, device, city, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       username = VALUES(username),
+       ua = VALUES(ua),
+       ip = VALUES(ip),
+       device = VALUES(device),
+       city = VALUES(city),
+       created_at = VALUES(created_at),
+       expires_at = VALUES(expires_at)`,
+    [sid, session.username, session.ua || "", session.ip || "", session.device || "", session.city || "", session.createdAt, session.expiresAt]
+  );
+}
+
+function addNotice(username, kind, title, detail) {
+  const item = {
+    id: `${Date.now().toString(36)}-${randomBytes(6).toString("hex")}`,
+    username,
+    kind,
+    title,
+    detail: String(detail || "").slice(0, 500),
+    createdAt: Date.now(),
+    read: false
+  };
+  profileNotices.unshift(item);
+  if (profileNotices.length > 500) profileNotices.length = 500;
+  persistNotice(item).catch(function (err) {
+    console.error("notice persist failed", err);
+  });
+  return item;
+}
+
+async function persistNotice(item) {
+  if (dbMode() !== "mysql") return;
+  await ensureNoticeTable();
+  await query(
+    `INSERT INTO xm_me_notices (id, username, kind, title, detail, created_at, read_flag)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [item.id, item.username, item.kind, item.title, item.detail, item.createdAt, item.read ? 1 : 0]
+  );
+}
+
+function listNotices(username) {
+  return profileNotices
+    .filter((item) => item.username === username)
+    .slice(0, 100)
+    .map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      title: item.title,
+      detail: item.detail,
+      time: shanghaiTime(item.createdAt),
+      at: item.createdAt,
+      read: Boolean(item.read)
+    }));
+}
+
+function markNoticesRead(username) {
+  for (const item of profileNotices) {
+    if (item.username === username) item.read = true;
+  }
+}
+
+function avatarPublicUrl(username) {
+  const row = avatars.get(String(username || "").trim());
+  if (!row) return "";
+  return "/api/profile/avatar?t=" + encodeURIComponent(String(row.updatedAt));
+}
+
+function parseAvatarDataUrl(image) {
+  const text = String(image || "").trim();
+  const match = text.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/);
+  if (!match) return { ok: false, error: "请上传图片文件" };
+  const mime = match[1].toLowerCase() === "image/jpg" ? "image/jpeg" : match[1].toLowerCase();
+  if (!AVATAR_TYPES[mime]) return { ok: false, error: "头像仅支持 jpg、png、gif、webp" };
+  let body;
+  try {
+    body = Buffer.from(match[2].replace(/\s+/g, ""), "base64");
+  } catch {
+    return { ok: false, error: "图片无法读取" };
+  }
+  if (!body.length) return { ok: false, error: "图片无法读取" };
+  if (body.length > AVATAR_MAX) return { ok: false, error: "头像请小于 512KB" };
+  return { ok: true, mime, body };
+}
+
+async function persistAvatarRow(username, row) {
+  if (dbMode() !== "mysql") return;
+  await ensureAvatarTable();
+  await query(
+    `INSERT INTO xm_me_avatars (username, mime, body, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE mime = VALUES(mime), body = VALUES(body), updated_at = VALUES(updated_at)`,
+    [username, row.mime, row.body, row.updatedAt]
+  );
+}
+
+async function clearAvatar(username) {
+  avatars.delete(username);
+  if (dbMode() !== "mysql") {
+    return { ok: true, avatarUrl: "" };
+  }
+  try {
+    await ensureAvatarTable();
+    await query("DELETE FROM xm_me_avatars WHERE username = ?", [username]);
+  } catch (err) {
+    console.error("avatar clear failed", err);
+  }
+  return { ok: true, avatarUrl: "" };
+}
+
+async function saveAvatar(username, image) {
+  if (!String(image || "").trim()) {
+    return clearAvatar(username);
+  }
+  const parsed = parseAvatarDataUrl(image);
+  if (!parsed.ok) return parsed;
+  const row = { mime: parsed.mime, body: parsed.body, updatedAt: Date.now() };
+  avatars.set(username, row);
+  try {
+    await persistAvatarRow(username, row);
+  } catch (err) {
+    console.error("avatar persist failed", err);
+  }
+  return { ok: true, avatarUrl: avatarPublicUrl(username) };
+}
+
+async function hydrateAvatarsFromMysql() {
+  if (dbMode() !== "mysql") return;
+  await ensureAvatarTable();
+  const [rows] = await query("SELECT username, mime, body, updated_at FROM xm_me_avatars");
+  avatars.clear();
+  for (const row of rows || []) {
+    if (!row.username || !row.body) continue;
+    avatars.set(row.username, {
+      mime: row.mime || "image/jpeg",
+      body: Buffer.isBuffer(row.body) ? row.body : Buffer.from(row.body),
+      updatedAt: Number(row.updated_at) || Date.now()
+    });
+  }
+}
+
 
 export function resetStoreForTests() {
   setPoolForTests(null);
   setDbMode("memory");
   users.clear();
   sessions.clear();
+  avatars.clear();
+  profileNotices.length = 0;
+  deviceTableReady = false;
+  noticeTableReady = false;
+  avatarTableReady = false;
   seed();
 }
 
@@ -393,8 +730,110 @@ export function publicProfile(user) {
     email: user.email,
     phone: user.phone,
     desk,
-    home: desk === "hr" ? "/hr" : "/data"
+    home: desk === "hr" ? "/hr" : "/home",
+    board: String(user.board || ""),
+    department: String(user.department || ""),
+    center: String(user.center || ""),
+    role: String(user.role || ""),
+    visibleShops: Array.isArray(user.visibleShops) ? user.visibleShops.map((item) => String(item)) : [],
+    avatarUrl: avatarPublicUrl(user.username)
   };
+}
+
+async function mergePeopleBoard(people) {
+  if (dbMode() !== "mysql") {
+    return Array.isArray(people) ? people : [];
+  }
+  const list = Array.isArray(people) ? people : [];
+  const tries = [
+    "SELECT id, name, username, board, role, center, department, manager_id FROM people",
+    "SELECT id, username, board, manager_id FROM people"
+  ];
+  for (const sql of tries) {
+    try {
+      const [rows] = await query(sql);
+      const extra = new Map(
+        (rows || []).map((row) => [
+          Number(row.id),
+          {
+            username: String(row.username || "").trim(),
+            board: String(row.board || "").trim(),
+            name: String(row.name || "").trim(),
+            role: String(row.role || "").trim(),
+            center: String(row.center || "").trim(),
+            department: String(row.department || "").trim(),
+            managerId: row.manager_id == null || row.manager_id === "" ? null : Number(row.manager_id)
+          }
+        ])
+      );
+      return list.map((person) => {
+        const patch = extra.get(Number(person.id)) || {};
+        return {
+          ...person,
+          username: person.username || patch.username || "",
+          board: person.board || patch.board || "",
+          role: person.role || patch.role || "",
+          center: person.center || patch.center || "",
+          department: person.department || patch.department || "",
+          managerId: person.managerId != null ? person.managerId : patch.managerId
+        };
+      });
+    } catch {
+      /* 组织中心表字段因版本不同，换一条 SQL */
+    }
+  }
+  return list;
+}
+
+export async function resolveDesk(user) {
+  if (!user) {
+    return "";
+  }
+  try {
+    const { canSeeStaffNav, hrDeskFromOrg } = await import("../home/nav-items.js");
+    if (canSeeStaffNav(user)) {
+      user.desk = "";
+      return "";
+    }
+    let people = [];
+    try {
+      const { listPeople } = await import("../people/store.js");
+      people = await listPeople();
+    } catch {
+      people = [];
+    }
+    people = await mergePeopleBoard(people);
+    let fromWork = "";
+    try {
+      const work = await import("../work/store.js");
+      if (typeof work.deskOf === "function") {
+        fromWork = String((await work.deskOf(user)) || "");
+      }
+    } catch {
+      fromWork = "";
+    }
+    const fromOrg = hrDeskFromOrg(user, people);
+    const desk = fromWork === "hr" || fromOrg === "hr" ? "hr" : "";
+    user.desk = desk;
+    const aliases = [user.username, user.displayName, user.name]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+    const me =
+      people.find(
+        (person) => aliases.includes(String(person.username || "")) || aliases.includes(String(person.name || ""))
+      ) || null;
+    if (me) {
+      user.board = String(me.board || user.board || "");
+      user.department = String(me.department || user.department || "");
+      user.center = String(me.center || user.center || "");
+      user.role = String(me.role || user.role || "");
+      user.visibleShops = Array.isArray(me.visibleShops) ? me.visibleShops.map((item) => String(item)) : [];
+    }
+    return desk;
+  } catch {
+    user.desk = user.desk || "";
+    return String(user.desk || "");
+  }
 }
 
 function parseCookies(req) {
@@ -471,7 +910,8 @@ function sendProfile(res, user) {
     email: profile.email,
     phone: profile.phone,
     desk: profile.desk,
-    home: profile.home
+    home: profile.home,
+    avatarUrl: profile.avatarUrl
   });
 }
 
@@ -504,17 +944,37 @@ authRouter.post("/login", async (req, res) => {
   const remember = Boolean(req.body?.remember);
   const maxAgeMs = remember ? SESSION_MS_REMEMBER : SESSION_MS_DEFAULT;
   const expiresAt = createdAt + maxAgeMs;
-  sessions.set(sid, { username: user.username, createdAt, expiresAt });
+  const others = liveSessionsFor(user.username);
+  const session = {
+    username: user.username,
+    createdAt,
+    expiresAt,
+    ua: String((req.headers && req.headers["user-agent"]) || "").slice(0, 512),
+    ip: requestIp(req),
+    device: parseDevice(req.headers && req.headers["user-agent"]),
+    city: requestCity(req)
+  };
+  sessions.set(sid, session);
   setSessionCookie(res, req, sid, Math.floor(maxAgeMs / 1000));
   persistSession(sid, user.username, createdAt, expiresAt).catch(function (err) {
     console.error("session persist failed", err);
   });
-  try {
-    const { deskOf } = await import("../work/store.js");
-    user.desk = await deskOf(user);
-  } catch {
-    user.desk = user.desk || "";
+  persistDevice(sid, session).catch(function (err) {
+    console.error("device persist failed", err);
+  });
+  if (others.length) {
+    addNotice(
+      user.username,
+      "multi",
+      "多客户端登录",
+      "本账号已有 " + others.length + " 个在线会话，本次从 " + session.device + "（" + session.city + "）登录"
+    );
+    const otherIps = others.map((item) => item.ip).filter(Boolean);
+    if (session.ip && otherIps.some((ip) => ip && ip !== session.ip)) {
+      addNotice(user.username, "remote", "异地登录", "检测到与已有会话不同的登录来源：" + session.device + " / " + session.city);
+    }
   }
+  await resolveDesk(user);
   res.json({ ok: true, remember, user: publicProfile(user) });
 });
 
@@ -530,12 +990,13 @@ authRouter.post("/logout", (req, res) => {
   res.json({ ok: true });
 });
 
-authRouter.get("/me", (req, res) => {
+authRouter.get("/me", async (req, res) => {
   const user = currentUser(req);
   if (!user) {
     res.status(401).json({ ok: false, error: "未登录" });
     return;
   }
+  await resolveDesk(user);
   sendProfile(res, user);
 });
 
@@ -585,4 +1046,87 @@ profileRouter.post("/password", async (req, res) => {
   req.user.passwordHash = await hashPassword(newPassword);
   await persistUser(req.user);
   res.json({ ok: true, message: "密码已更新" });
+});
+
+profileRouter.get("/avatar", (req, res) => {
+  const row = avatars.get(req.user.username);
+  if (!row) {
+    res.status(404).json({ ok: false, error: "暂无头像" });
+    return;
+  }
+  res.setHeader("Content-Type", row.mime);
+  res.setHeader("Cache-Control", "private, max-age=60");
+  res.send(row.body);
+});
+
+profileRouter.post("/avatar", async (req, res) => {
+  const result = await saveAvatar(req.user.username, req.body?.image);
+  if (!result.ok) {
+    res.status(400).json(result);
+    return;
+  }
+  res.json({ ok: true, avatarUrl: result.avatarUrl });
+});
+
+profileRouter.get("/sessions", (req, res) => {
+  const currentSid = parseCookies(req)[COOKIE_NAME] || "";
+  if (currentSid) {
+    let session = sessions.get(currentSid);
+    if (!session || session.username !== req.user.username) {
+      session = {
+        username: req.user.username,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + SESSION_MS_DEFAULT,
+        ua: "",
+        ip: "",
+        device: "",
+        city: ""
+      };
+      sessions.set(currentSid, session);
+    }
+    if (!session.device || !session.ip) {
+      session.ua = String((req.headers && req.headers["user-agent"]) || session.ua || "");
+      session.ip = requestIp(req) || session.ip || "";
+      session.device = parseDevice(session.ua);
+      session.city = requestCity(req);
+      persistDevice(currentSid, session).catch(function (err) {
+        console.error("device backfill failed", err);
+      });
+    }
+  }
+  const items = liveSessionsFor(req.user.username).map((item) => publicSession(item, currentSid));
+  res.json({ ok: true, currentSid, items });
+});
+
+profileRouter.delete("/sessions/:sid", (req, res) => {
+  const currentSid = parseCookies(req)[COOKIE_NAME] || "";
+  const sid = String(req.params.sid || "");
+  if (!sid) {
+    res.status(400).json({ ok: false, error: "缺少会话" });
+    return;
+  }
+  if (sid === currentSid) {
+    res.status(400).json({ ok: false, error: "不能退出当前设备" });
+    return;
+  }
+  const session = sessions.get(sid);
+  if (!session || session.username !== req.user.username) {
+    res.status(404).json({ ok: false, error: "会话不存在" });
+    return;
+  }
+  sessions.delete(sid);
+  dropSession(sid).catch(function (err) {
+    console.error("session delete failed", err);
+  });
+  res.json({ ok: true });
+});
+
+profileRouter.get("/notices", (req, res) => {
+  const items = listNotices(req.user.username);
+  res.json({ ok: true, unread: items.filter((item) => !item.read).length, items });
+});
+
+profileRouter.post("/notices/read", (req, res) => {
+  markNoticesRead(req.user.username);
+  res.json({ ok: true, unread: 0 });
 });
