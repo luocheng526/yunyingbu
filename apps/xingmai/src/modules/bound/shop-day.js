@@ -79,12 +79,14 @@ export function chooseSoldProduct(record, scope = SHOP_DAY) {
 }
 
 // Local disk archive only. Never writes the legacy bound_sheet key lacking shop identity.
-export function createShopDayCollector({ directory, request, intervalMs = 1500, scope = SHOP_DAY, retryFailures = false, maxPages = 10 }) {
+export function createShopDayCollector({ directory, request, intervalMs = 1500, scope = SHOP_DAY, retryFailures = false, maxPages = 10, concurrency = 1 }) {
+  if (![1, 2].includes(concurrency) || concurrency > 1 && intervalMs !== 0) throw new Error("invalid_concurrency");
   if (!validShopDay(scope)) throw new Error("invalid_scope");
   scope = Object.freeze({ ...scope });
   if (!directory || typeof request !== "function") throw new Error("单店采集配置无效");
   const dir = join(directory, scope.platform, scope.shopId, scope.date);
-  let busy = false;
+  let busy = 0;
+  const inFlight = new Set();
   let lastRequest = 0;
   async function read(name) {
     try { return JSON.parse(await readFile(join(dir, name), "utf8")); }
@@ -158,8 +160,8 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500, 
     const d = await describe(input);
     if (!d || d.blocked) return { ok: false, statusCode: 400, reason: d?.blocked || "invalid_scope" };
     if (d.report.requiresSelection && !input.categoryPath) return { ok: false, statusCode: 400, reason: "category_selection_contract_unverified" };
-    if (busy) return { ok: false, statusCode: 409, reason: "collector_busy" };
-    busy = true;
+    if (busy >= concurrency || inFlight.has(d.name)) return { ok: false, statusCode: 409, reason: "collector_busy" };
+    busy++; inFlight.add(d.name);
     try {
       const previous = await read(d.name);
       // Revalidate an archived key-card response after a parser upgrade; no upstream call is needed.
@@ -229,7 +231,7 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500, 
       record.finishedAt = new Date().toISOString();
       const saved = await save(d.name, record);
       return { ok: good.has(saved.status), cached: false, record: saved };
-    } finally { busy = false; }
+    } finally { busy--; inFlight.delete(d.name); }
   }
   async function selectProduct() {
     if (busy) return { ok: false, statusCode: 409, reason: "collector_busy" };
@@ -253,7 +255,7 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500, 
       reports.push({ id: report.id, label: report.label, product: !!report.product, requiresSelection: report.requiresSelection || null,
         status: pages.length ? pages.at(-1).nextPage ? "pagination_incomplete" : pages.at(-1).status : "not_collected", pages });
     }
-    return { ok: true, scope, busy, directory: dir, selected: await read("selection.json"), inventory: await inventory(), reports, exclusions: DAY_EXCLUSIONS, run: await runStatus() };
+    return { ok: true, scope, busy: busy > 0, directory: dir, selected: await read("selection.json"), inventory: await inventory(), reports, exclusions: DAY_EXCLUSIONS, run: await runStatus() };
   }
   async function fourPageStatus() {
     const graph = await getRecord({ reportId: "key_graph" });
@@ -329,5 +331,5 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500, 
     })();
     return { ok: true, run };
   }
-  return { collect, selectProduct, status, fourPageStatus, getRecord, inventory, startAll, stopAll, runStatus, isBusy: () => busy || runActive };
+  return { collect, selectProduct, status, fourPageStatus, getRecord, inventory, startAll, stopAll, runStatus, isBusy: () => busy > 0 || runActive };
 }

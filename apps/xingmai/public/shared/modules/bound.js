@@ -2207,7 +2207,12 @@
     var names = { running: '采集中', queued: '等待采集', paused: '已暂停', interrupted: '服务重启后待续采', blocked: '已暂停，需处理异常', complete: '已完成', complete_with_errors: '本轮结束，部分店铺待处理', failed: '待处理' };
     var reasons = { server_login_required: '请先登录旧站账号', login_expired: '登录已过期', login_conflict: '账号在其他位置登录', identity_changed: '登录账号发生变化', shop_list_unverified: '店铺列表结构待核验', shop_discovery_failed: '未取得旧站店铺列表', collector_busy: '已有采集任务运行', permission_denied: '接口权限不足', upstream_unavailable: '旧站接口连续异常', schema_unverified: '返回字段待核验', date_unverified: '日期待核验', timeout: '接口超时', request_failed: '接口请求失败' };
     var rows = run ? run.shops.map(function (item) {
-      return '<tr><td>' + esc(item.scope.shopName) + '</td><td>' + esc(item.scope.platform) + '</td><td>' + esc(names[item.status] || item.status) + '</td><td>' + esc(item.run ? item.run.done + '/' + item.run.total : '—') + '</td><td>' + esc(reasons[item.reason] || item.reason || '') + '</td></tr>';
+      var live = item.status === 'running' && run.currentRun && run.currentRun.scope
+        && run.currentRun.scope.platform === item.scope.platform && run.currentRun.scope.shopId === item.scope.shopId
+        ? run.currentRun : item.run;
+      var progress = live ? live.done + '/' + live.total : '—';
+      if (live && item.status === 'running' && live.inFlight && live.inFlight.length) progress += ' · 正在处理 ' + live.inFlight.length + ' 项';
+      return '<tr><td>' + esc(item.scope.shopName) + '</td><td>' + esc(item.scope.platform) + '</td><td>' + esc(names[item.status] || item.status) + '</td><td>' + esc(progress) + '</td><td>' + esc(reasons[item.reason] || item.reason || '') + '</td></tr>';
     }).join('') : '';
     return '<section class="bd-block"><h2>多店四页采集</h2>' + (state.batchError ? '<p role="alert">' + esc(state.batchError) + '</p>' : '') + '<p>' + esc(run && run.selection ? run.selection.label : '当前账号全部可见店铺') + ' · 2026-10-03</p>' + (run && run.selection ? '<p>本轮仅采选定的 ' + esc(run.total) + ' 家店铺；其他店铺已采数据保留，暂不继续采集。</p>' : '') + '<p>逐店采集渠道总览、渠道详情、关键指标分析和商品总览，已有成功结果直接复用。</p><p role="status">' + esc(run ? (names[run.status] || run.status) + ' · 完成 ' + run.done + '/' + run.total + ' 家 · 待处理 ' + run.failed + ' 家 · 请求 ' + run.requests + ' 次 · 复用 ' + run.cached + ' 项' : '尚未建立全店任务') + '</p>' + (run && run.current ? '<p>当前店铺：' + esc(run.current.shopName) + (run.currentRun ? ' · ' + esc(run.currentRun.done + '/' + run.currentRun.total) + ' 项' : '') + '</p>' : '') + '<button type="button" data-act="batch-start"' + (busy ? ' disabled' : '') + '>开始 / 继续本轮采集</button><button type="button" data-act="batch-stop"' + (!busy ? ' disabled' : '') + '>暂停本轮采集</button><p class="bd-status">关闭页面后服务器继续运行。暂停后可续采；登录冲突会停止。当前只采这一天，不启动九月以来的全量回补。</p>' + (rows ? '<div class="bd-table-wrap"><table><thead><tr><th>店铺</th><th>渠道</th><th>状态</th><th>本店任务</th><th>原因</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') + '</section>';
   }
@@ -2377,6 +2382,26 @@
       }
     }
     if (!state.loginEditing && !state.passwordBusy) paint(root);
+  }
+
+  // Poll only live status; do not reload archived reports/catalog every 3 seconds.
+  var linkPollBusy = false;
+  async function pollLinkProgress(root, token) {
+    if (linkPollBusy || token !== active || state.page !== 'link') return;
+    linkPollBusy = true;
+    var revision = loadRevision;
+    try {
+      var results = await Promise.all(['/api/bound/shop-day/batch', '/api/bound/shop-day/run', '/api/bound/link'].map(async function (url) {
+        var response = await fetch(url);
+        return response.ok ? response.json() : null;
+      }));
+      if (token !== active || revision !== loadRevision || state.page !== 'link' || state.loginEditing || state.passwordBusy || state.batchBusy) return;
+      if (results[0] && results[0].ok) state.batchRun = results[0].run;
+      if (results[1] && results[1].ok && state.localArchive) state.localArchive.run = results[1].run;
+      if (results[2]) state.link = results[2];
+      paint(root);
+    } catch { /* Keep the last confirmed progress during a network interruption. */ }
+    finally { linkPollBusy = false; }
   }
 
   function openPicker(root, preset) {
@@ -2974,7 +2999,7 @@
         var archivePollTick = 0;
         timer = setInterval(function () {
           if (state.page === "link" && state.admin && !state.loginEditing && !state.passwordBusy) {
-            load(root, token);
+            pollLinkProgress(root, token);
           }
           if (state.localArchive && ++archivePollTick % 10 === 0 && token === active) {
             fetch("/api/bound/shop-day/run").then(function (r) { return r.ok ? r.json() : null; }).then(function (result) {

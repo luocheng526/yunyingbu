@@ -69,6 +69,8 @@ export function createShopBatch({ directory, discover, makeJob, blocked = async 
     if (currentJob) {
       run.currentRun = await currentJob.status();
       run.requests += run.currentRun?.requests || 0; run.cached += run.currentRun?.cached || 0;
+      const current = run.shops.find(shop => shop.status === "running" && shopKey(shop.scope) === shopKey(run.current));
+      if (current) current.run = copy(run.currentRun);
     }
     return run;
   }
@@ -111,7 +113,7 @@ export function createShopBatch({ directory, discover, makeJob, blocked = async 
             shop.run = result;
             running.requests += result.requests || 0; running.cached += result.cached || 0;
             shop.status = result.status === "complete" ? "complete" : stopping ? "paused" : "failed";
-            shop.reason = result.errors?.at(-1)?.reason || (stopping ? "user_paused" : null);
+            shop.reason = result.errors?.find(error => fatal.has(error.reason))?.reason || result.errors?.at(-1)?.reason || (stopping ? "user_paused" : null);
             if (shop.status === "complete") running.done++; else if (shop.status === "failed") running.failed++;
             currentJob = null; await save();
             if (fatal.has(shop.reason)) { running.status = "blocked"; running.reason = shop.reason; break; }

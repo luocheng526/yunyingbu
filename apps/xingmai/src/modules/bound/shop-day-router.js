@@ -41,7 +41,7 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
     return source;
   },
     blocked: async () => collector.isBusy() || job.busy() || importer.busy(),
-    makeJob: (scope, owner) => createFourPageJob({ directory, scope, collector: createShopDayCollector({ directory, scope, retryFailures: true, maxPages: 200,
+    makeJob: (scope, owner) => createFourPageJob({ directory, scope, concurrency: 2, collector: createShopDayCollector({ directory, scope, concurrency: 2, intervalMs: 0, retryFailures: true, maxPages: 200,
       request: (input, onRequest) => batchRequest(input, onRequest, scope, owner) }) }) });
   const annotations = createAnnotations();
   const savedOverview = createSavedOverview({ readScopes: () => batch.scopes(), readArchived: (scope, input) => scopedCollector(scope).getRecord(input) });

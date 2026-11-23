@@ -8,7 +8,7 @@ import { createPasswordAuth } from "./password-login.js";
 import { isSingleShopRequest } from "./probe-target.js";
 import { shopDayRequest, validShopDay } from "./shop-day-contract.js";
 import { visibleShops, BATCH_DATE } from "./shop-batch.js";
-import { setTimeout as delay } from "node:timers/promises";
+import { createRequestPacer } from "./request-pacer.js";
 
 const QUIET_MODULES = new Set(["hp", "team"]);
 const QUIET_MASTERS = new Set(["goods", "teams", "members"]);
@@ -18,6 +18,13 @@ let fetchImpl = globalThis.fetch;
 let timer = null;
 let busy = false;
 let scopedReadBusy = false;
+let batchReads = 0, scopedWrites = Promise.resolve(), refreshedSession = null;
+const batchPacer = createRequestPacer();
+function withScopedWrite(action) {
+  const result = scopedWrites.then(action);
+  scopedWrites = result.catch(() => {});
+  return result;
+}
 const passwordAuth = createPasswordAuth({ readSession: session, saveSession, request: callUpstream, allowUserOnlyIdentity: () => !collectionStatus().batchEnabled });
 
 export function resetPasswordCredentials() { passwordAuth.forget(); }
@@ -83,6 +90,7 @@ function blankSession() {
 async function session() {
   const saved = await readState("session", null);
   const next = { ...blankSession(), ...(saved || {}) };
+  next.cookies = { ...next.cookies };
   if (!next.deviceId) {
     next.deviceId = randomBytes(16).toString("hex");
     await writeState("session", next);
@@ -142,13 +150,16 @@ async function callUpstream(current, spec) {
     ...(spec.redirect ? { redirect: spec.redirect } : {})
   });
   absorbCookies(current, response);
+  const retryAfter = response.headers.get("retry-after");
+  const retryAfterMs = retryAfter == null ? 0 : /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : Math.max(0, Date.parse(retryAfter) - Date.now());
+  const retryHint = Number.isFinite(retryAfterMs) && retryAfterMs > 0 ? { retryAfterMs } : {};
   const type = response.headers.get("content-type") || "";
   if (!type.includes("json")) {
     const buffer = Buffer.from(await response.arrayBuffer());
-    return { binary: true, type, buffer, status: response.status };
+    return { binary: true, type, buffer, status: response.status, httpStatus: response.status, ...retryHint };
   }
   const payload = await response.json();
-  return spec.withHttpStatus ? { httpStatus: response.status, payload } : payload;
+  return spec.withHttpStatus ? { httpStatus: response.status, payload, ...retryHint } : payload;
 }
 
 // Uses this module's server session only; a login in another browser is not a server login.
@@ -165,7 +176,7 @@ export async function requestShopDayReport(input, onRequest = () => {}) {
   return requestScopedRead(spec, onRequest);
 }
 
-let batchShops = new Set(), batchOwner = "", batchLastRequest = 0;
+let batchShops = new Set(), batchOwner = "";
 const ownerOf = current => current.passwordIdentity?.userId ? createHash("sha256").update(JSON.stringify(current.passwordIdentity)).digest("hex") : "";
 export async function requestVisibleShops() {
   const current = await session(), owner = ownerOf(current);
@@ -184,21 +195,21 @@ export async function requestBatchShopDayReport(input, onRequest, scope, owner) 
   if (ownerOf(await session()) !== owner) return { blocked: "identity_changed" };
   const spec = shopDayRequest(input, scope, 200);
   if (!spec) return { blocked: "invalid_scope" };
-  const wait = Math.max(0, batchLastRequest + 1500 - Date.now());
-  if (wait) await delay(wait);
-  batchLastRequest = Date.now();
-  return requestScopedRead({ ...spec, ownerHash: owner }, onRequest);
+  return batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner }, onRequest));
 }
 
 async function requestScopedRead(spec, onRequest = () => {}) {
-  if (scopedReadBusy) return { blocked: "collector_busy" };
-  scopedReadBusy = true;
+  const parallel = Boolean(spec.ownerHash);
+  if (scopedReadBusy || batchReads >= (parallel ? 2 : 1)) return { blocked: "collector_busy" };
+  if (parallel) batchReads++; else scopedReadBusy = true;
   try { return await performScopedRead(spec, onRequest); }
-  finally { scopedReadBusy = false; }
+  finally { if (parallel) batchReads--; else scopedReadBusy = false; }
 }
 
 async function performScopedRead(spec, onRequest) {
+  await scopedWrites;
   let current = await session();
+  let originalCookies = { ...current.cookies };
   if (spec.ownerHash && ownerOf(current) !== spec.ownerHash) return { blocked: "identity_changed" };
   if (passwordAuth.status().busy) return { blocked: "login_busy" };
   const canRefresh = current.provider === "PASSWORD" && passwordAuth.status().autoReloginReady;
@@ -218,35 +229,58 @@ async function performScopedRead(spec, onRequest) {
     });
   };
   let result = await send();
-  if ((await session()).authGeneration !== current.authGeneration) return { blocked: "session_changed" };
   const invalid = value => [-7, 9901, 1011].includes(value.payload?.code);
   const expired = value => value.payload?.code === -1 || value.httpStatus === 401;
-  if (invalid(result)) {
-    passwordAuth.forget();
-  } else if (expired(result) && current.provider === "PASSWORD" && passwordAuth.status().autoReloginReady) {
+  if (!invalid(result) && expired(result) && current.provider === "PASSWORD") {
     const reloginTrigger = { httpStatus: result.httpStatus || result.status || null, upstreamCode: typeof result.payload?.code === "number" ? result.payload.code : null };
-    const renewed = await passwordAuth.refresh();
-    result.relogin = { attempted: true, succeeded: renewed.ok };
-    result.reloginTrigger = reloginTrigger;
+    const renewed = await withScopedWrite(async () => {
+      const latest = await session();
+      if (latest.authGeneration !== current.authGeneration) {
+        // A sibling already refreshed this same session. Never sign in twice.
+        return refreshedSession?.from === current.authGeneration && refreshedSession.to === latest.authGeneration
+          && ownerOf(latest) === ownerOf(current) ? { ok: true } : { ok: false, blocked: "session_changed" };
+      }
+      if (!passwordAuth.status().autoReloginReady) return { ok: false };
+      const reply = await passwordAuth.refresh();
+      if (reply.ok) refreshedSession = { from: current.authGeneration, to: (await session()).authGeneration };
+      return { ...reply, attempted: true };
+    });
+    if (renewed.blocked) return { blocked: renewed.blocked };
+    if (renewed.attempted || renewed.ok) {
+      result.relogin = { attempted: true, succeeded: renewed.ok };
+      result.reloginTrigger = reloginTrigger;
+    }
     if (renewed.ok) {
       current = await session();
+      originalCookies = { ...current.cookies };
       result = { ...(await send()), relogin: { attempted: true, succeeded: true }, reloginTrigger };
-      if ((await session()).authGeneration !== current.authGeneration) return { blocked: "session_changed" };
+    } else if (renewed.attempted) {
+      // refresh() has already persisted the failure; do not restore its old cookie.
+      return result;
     }
   }
-  if (invalid(result) || expired(result)) {
-    passwordAuth.forget();
-    if ((await session()).authGeneration === current.authGeneration) {
-      current.phase = current.provider === "PASSWORD" ? "needs_password" : "needs_scan";
-      current.message = invalid(result) ? "旧站登录发生冲突、账号禁用或设备限制，已停止自动重登。" : "服务器会话已失效，请重新登录。";
-      await saveSession(current);
+  return withScopedWrite(async () => {
+    const latest = await session();
+    if (latest.authGeneration !== current.authGeneration) {
+      // An authenticated success from before our own refresh is still valid data,
+      // but its cookies must never overwrite the renewed session.
+      if (!invalid(result) && !expired(result) && refreshedSession?.from === current.authGeneration
+        && refreshedSession.to === latest.authGeneration && ownerOf(latest) === ownerOf(current)
+        && ["logged_in", "collecting"].includes(latest.phase)) return result;
+      return { blocked: "session_changed" };
     }
-  } else if ((await session()).authGeneration !== current.authGeneration) {
-    return { blocked: "session_changed" };
-  } else {
-    await saveSession(current);
-  }
-  return result;
+    if (invalid(result) || expired(result)) {
+      passwordAuth.forget();
+      await saveSession({ ...latest, authGeneration: randomBytes(16).toString("hex"),
+        phase: latest.provider === "PASSWORD" ? "needs_password" : "needs_scan",
+        message: invalid(result) ? "旧站登录发生冲突、账号禁用或设备限制，已停止自动重登。" : "服务器会话已失效，请重新登录。" });
+    } else {
+      const cookies = { ...latest.cookies };
+      for (const [key, value] of Object.entries(current.cookies)) if (originalCookies[key] !== value) cookies[key] = value;
+      await saveSession({ ...latest, cookies });
+    }
+    return result;
+  });
 }
 
 // Only the standalone loopback harness exposes this check. It clears this collector's
