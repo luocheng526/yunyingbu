@@ -1,6 +1,6 @@
 {
   "name": "zhenxuan-future-desktop",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "甄选未来员工桌面应用，使用真实系统毛玻璃窗口",
   "author": "甄选未来",
@@ -19,7 +19,7 @@
     "appId": "cn.xingmai.zhenxuan.desktop",
     "productName": "甄选未来",
     "directories": { "output": "dist" },
-    "files": ["main.cjs", "preload.cjs", "window-policy.cjs", "renderer/**/*", "assets/**/*", "package.json"],
+    "files": ["*.cjs", "renderer/**/*", "assets/**/*", "package.json"],
     "artifactName": "ZhenxuanFuture-${version}-${os}-${arch}.${ext}",
     "win": { "target": "portable", "executableName": "ZhenxuanFuture", "icon": "assets/icon.ico" },
     "mac": { "target": "zip", "icon": "assets/icon.icns", "category": "public.app-category.business", "hardenedRuntime": true }

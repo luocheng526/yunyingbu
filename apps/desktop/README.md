@@ -12,7 +12,10 @@
 - 表格不会撑出页面：实时表格默认按字段合理分配列宽；较窄窗口或更多字段使用可横向滚动的容器。表格出现在屏幕内时，内容区底部显示横向滑块及最左/最右按钮，不必先滚到长表格最底部。保留用户手动调整的列宽。
 - 筛选栏可换行，多列面板按窄窗口重排；统一约束 App 内容高度，避免网站模块的全屏样式将底部内容推到快捷栏后方。
 - `assets/logo-transparent.png` 为透明 PNG，`icon.ico` 和 `icon.icns` 使用同一素材转换。
-- 只向页面暴露四个窗口操作；无 Node.js 页面权限，开启沙箱和上下文隔离，校验 IPC 主框架和公司站点来源。
+- 右上角「App 更新」显示当前版本、更新说明和下载进度。启动后检查一次、运行期间每 6 小时检查；发现新版显示提醒，不自动下载或重启。员工点「下载更新」，校验完成后点「重启并更新」，再确认已保存工作。
+- Windows x64 免安装版可原位更新：更新程序等待当前 App 退出，将已校验的文件替换到原 EXE 路径后重新打开。准备失败时不退出 App，替换或启动失败时尝试恢复原文件。不会清除用户数据目录、登录会话或个人快捷菜单；文件夹需可写。
+- 更新信息只从公司网站 HTTPS 地址读取，安装包限制为本仓库 GitHub Release，逐次校验 CDN 跳转、大小、SHA256，安装前再次校验。不会向下载服务器发送网站登录凭据；禁止降级，渲染进程无法指定下载地址或文件路径。
+- 页面只获得固定窗口操作和受限更新方法；无 Node.js 页面权限，开启沙箱和上下文隔离，校验 IPC 主框架和公司站点来源。重启安装必须经过原生确认框。
 
 ## 开发与打包
 
@@ -26,10 +29,19 @@ pnpm dev
 pnpm pack:win
 ```
 
-Windows 免安装可执行文件位于 `dist/ZhenxuanFuture-0.2.2-win-x64.exe`。
+Windows 免安装可执行文件位于 `dist/ZhenxuanFuture-0.2.3-win-x64.exe`。
 Mac 包须在 macOS 上执行 `pnpm pack:mac`，正式分发需要公司的 Apple 签名和公证配置；未在 Mac 真机上验证。
 此目录不生成 Android 或 iOS 原生包。
 
 开发可设置 `XM_DESKTOP_PREVIEW=http://127.0.0.1:端口` 使用本地服务；预览使用独立用户目录，不干扰员工正在使用的 App。`XM_DESKTOP_LOGIN_PREVIEW=1` 打开登录页。打包后的应用忽略这些环境变量，固定连接正式公司站点。不要在客户端中加入管理员密码或会话。
 
 桌面二进制与网站的 `0.1.N` 发版单独管理。若修改原网站下载入口或任何 `apps/xingmai` 文件，仍须按仓库发布闸门交单；构建本地客户端本身不覆盖服务器文件。
+
+## 发布 App 更新
+
+1. 同步修改 `package.json` 与 `release-notes.json` 的版本号和面向员工的更新说明，执行 `pnpm test`、`pnpm pack:win`。
+2. 执行 `node scripts/update-manifest.cjs`，根据刚生成的 EXE 生成 `apps/xingmai/public/shared/app/desktop-update.json`；不要手填哈希或混用不同构建的文件。
+3. 提交源代码，上传到本仓库正式 Release `desktop-v版本号`，资产名称必须为 `ZhenxuanFuture-版本号-win-x64.exe`。验证公开下载成功且大小和哈希与 manifest 一致，之后才能发布更新信息。
+4. 网站更新单仅包含 `public/shared/app/desktop-update.json` 及 `public/shared/app/app-experience.js` 的下载链接改动，模块填「主框架」，`restart:false`。通过网站闸门后，员工才能收到该版本通知。不改网站业务 UI。
+
+0.2.2 及以前没有内置更新能力，员工需手动下载一次 0.2.3 或更新版本。App 内原位更新目前仅适用于已提供的 Windows x64 免安装包；macOS 尚未构建签名包，不能据此宣称支持 Mac 自动更新。

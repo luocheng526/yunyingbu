@@ -9,6 +9,19 @@ contextBridge.exposeInMainWorld('XmDesktop', Object.freeze({
   maximize: () => ipcRenderer.send('xm:window', 'maximize'),
   close: () => ipcRenderer.send('xm:window', 'close'),
   center: () => ipcRenderer.send('xm:window', 'center'),
+  updates: Object.freeze({
+    state: () => ipcRenderer.invoke('xm:update','state'),
+    check: () => ipcRenderer.invoke('xm:update','check'),
+    download: () => ipcRenderer.invoke('xm:update','download'),
+    cancel: () => ipcRenderer.invoke('xm:update','cancel'),
+    install: () => ipcRenderer.invoke('xm:update','install'),
+    onState: callback => {
+      if (typeof callback !== 'function') return () => {};
+      const listener = (_event,state) => callback(state);
+      ipcRenderer.on('xm:update-state',listener);
+      return () => ipcRenderer.removeListener('xm:update-state',listener);
+    },
+  }),
 }));
 window.addEventListener('DOMContentLoaded', () => {
   document.documentElement.classList.add('xm-native', 'xm-glass');
