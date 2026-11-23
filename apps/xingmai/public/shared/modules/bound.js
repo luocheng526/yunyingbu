@@ -2457,6 +2457,16 @@
         return;
       }
       var act = node.getAttribute("data-act");
+      if (act === 'batch-start' || act === 'batch-stop') {
+        if (!state.localArchive || state.localArchive.runtime !== 'server' || state.batchBusy) return;
+        state.batchBusy = true; state.batchError = ""; paint(root);
+        fetch('/api/bound/shop-day/batch/' + (act === 'batch-start' ? 'start' : 'stop'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(async function (r) {
+          var result = await r.json();
+          if (!r.ok || !result.ok) { state.batchError = '全店任务操作未完成：' + ({ server_login_required: '请先扫码或用账号密码登录', collector_busy: '已有采集任务运行', identity_changed: '采集账号与已有任务不一致', shop_list_unverified: '旧站店铺列表需要核验', shop_discovery_failed: '旧站店铺列表请求失败' }[result.reason] || result.reason || '请稍后重试'); return; }
+          if (result.run) state.batchRun = result.run;
+        }).catch(function () { state.batchError = '全店任务请求失败，请稍后重试。'; }).finally(function () { state.batchBusy = false; if (token === active) paint(root); });
+        return;
+      }
       if (state.localArchive && act.indexOf("archive-") === 0) {
         if (act === 'archive-annotation-open') { state.archiveAnnotationMode = node.getAttribute('data-field'); state.archiveAnnotationDraft = ''; state.panel = 'archive-annotation'; paint(root); return; }
         if (act === 'archive-annotation-close') { state.panel = ''; paint(root); return; }
@@ -2499,16 +2509,6 @@
         if (act === 'archive-column-move') {
           var order = archiveDisplayColumns(state.viewData).map(function (c) { return c.key; }), current = order.indexOf(node.getAttribute('data-key')), moveTarget = current + Number(node.getAttribute('data-delta'));
           if (current > 0 && moveTarget > 0 && moveTarget < order.length) { order.splice(moveTarget, 0, order.splice(current, 1)[0]); state.archiveColumnOrder[archiveDisplayId(state.viewData)] = order; saveArchiveDisplay(); paint(root); }
-          return;
-        }
-        if (act === 'batch-start' || act === 'batch-stop') {
-          if (state.batchBusy) return;
-          state.batchBusy = true; state.batchError = ""; paint(root);
-          fetch('/api/bound/shop-day/batch/' + (act === 'batch-start' ? 'start' : 'stop'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(async function (r) {
-            var result = await r.json();
-            if (!r.ok || !result.ok) { state.batchError = '全店任务未启动：' + ({ server_login_required: '请先用账号密码登录', collector_busy: '已有采集任务运行', identity_changed: '采集账号与已有任务不一致', shop_list_unverified: '旧站店铺列表需要核验', shop_discovery_failed: '旧站店铺列表请求失败' }[result.reason] || result.reason || '请稍后重试'); return; }
-            if (result.run) state.batchRun = result.run;
-          }).catch(function () { state.batchError = '全店任务请求失败，请稍后重试。'; }).finally(function () { state.batchBusy = false; if (token === active) paint(root); });
           return;
         }
         if (act === 'archive-job-start' || act === 'archive-job-stop') {
