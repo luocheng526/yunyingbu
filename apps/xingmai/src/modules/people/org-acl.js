@@ -110,7 +110,8 @@ function samePerson(actor, person) {
   return name === personName || (Boolean(username) && name === username);
 }
 
-/** 罗成看全部账号密码；沈子晗/韩梦凯看本组；运营只看自己的。 */
+// Credential fields follow explicit member-management permissions. The owner
+// account remains protected; unconfigured accounts retain their legacy scope.
 export function canSeeLogin(actor, person) {
   if (samePerson(actor, person)) {
     return true;
@@ -119,6 +120,8 @@ export function canSeeLogin(actor, person) {
   if (scope.key === "all") {
     return true;
   }
+  if (isAdministratorPerson(person)) return false;
+  if (isConfigured(actor)) return featureAllowed(actor, "people.members", "enter");
   if (scope.key === "shen" || scope.key === "han") {
     return canAssignPerson(actor, person);
   }
@@ -126,7 +129,14 @@ export function canSeeLogin(actor, person) {
 }
 
 export function canEditLogin(actor, person) {
+  if (scopeOf(actor).key === "all") return true;
+  if (isAdministratorPerson(person)) return false;
+  if (isConfigured(actor)) return featureAllowed(actor, "people.members", "edit");
   return canSeeLogin(actor, person);
+}
+
+function isAdministratorPerson(person) {
+  return Boolean(person && [person.name, person.username].some(value => ["罗成", "luocheng", "管理员"].includes(String(value || "").trim())));
 }
 
 export function canAssignSiteAcl(actor) {
