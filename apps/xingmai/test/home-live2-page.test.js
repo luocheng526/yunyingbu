@@ -5,9 +5,10 @@ import { patchExpiredShopLogin, patchLive2OfflineRelogin } from "../src/modules/
 
 const homeJs = readFileSync(new URL("../public/shared/modules/home.js", import.meta.url), "utf8");
 
-test("实时（新版） sits after 近七天业绩汇总 and stays independent of old live", () => {
+test("实时 has a single entry after 近七天业绩汇总 and uses live2", () => {
   const views = homeJs.slice(homeJs.indexOf("var VIEWS"), homeJs.indexOf("var OVERVIEW_PANES"));
-  assert.match(views, /key: "live", label: "实时" \},\s*\{ key: "week", label: "近七天业绩汇总" \},\s*\{ key: "live2", label: "实时（新版）" \}/);
+  assert.match(views, /key: "week", label: "近七天业绩汇总" \},\s*\{ key: "live2", label: "实时" \}/);
+  assert.doesNotMatch(views, /key: "live"|实时（新版）/);
   assert.match(homeJs, /live2: true/);
   assert.match(homeJs, /function adaptLive2Shops/);
   assert.match(homeJs, /xm-home-live2-/);
@@ -91,26 +92,28 @@ test("实时（新版） sits after 近七天业绩汇总 and stays independent 
   assert.match(panel, /live2Charts\(packed, scoped\)/);
   assert.match(panel, /live2Cards\(scoped, shops/);
   assert.match(homeJs, /function live2FilterHtml[\s\S]{0,280}visibleDutyTeams\(state, allShops\)/);
-  assert.match(homeJs, /xm-home-live2-yday/);
+  assert.match(homeJs, /function live2HistoryTotals/);
   assert.match(homeJs, /function live2Charts/);
 });
 
-test("opening 实时（新版） does not call old collect or login endpoints", () => {
-  const start = homeJs.indexOf("function refreshLive2");
+test("opening and refreshing 实时 reads published data without permission to start collection", () => {
+  const start = homeJs.indexOf("function watchLive2");
   const end = homeJs.indexOf("function pullLive");
   const body = homeJs.slice(start, end);
   assert.equal(start > 0, true);
-  assert.match(body, /\/api\/people\/org\/stores/);
-  assert.match(body, /\/api\/home\/live2/);
+  assert.match(body, /api\("\/api\/home\/live2\?_=" \+ Date\.now\(\), undefined, true\)\.then\(takeLive2\)/);
+  assert.match(body, /api\("\/api\/home\/live2", body, true\)/);
+  assert.doesNotMatch(body, /\/api\/people\/org\/stores/);
   assert.doesNotMatch(body, /local-paid|live-login|jingmai|erp-paid|\/api\/shen\/paid|\/api\/han\/paid/);
   const mount = homeJs.slice(homeJs.lastIndexOf("pullBoard();"));
-  assert.match(mount, /state\.view === "live2"[\s\S]*refreshLive2\(\)[\s\S]*pullLive\(\)/);
+  assert.match(mount, /state\.view === "live2"[\s\S]*watchLive2\(\)[\s\S]*pullLive\(\)/);
   assert.match(homeJs, /if \(state\.view === "live" \|\| state\.view === "company"\) \{\s*pullLive\(\);\s*\}/);
   assert.match(homeJs, /if \(state\.view === "live2"\) \{\s*watchLive2\(\);\s*\}/);
-  assert.match(homeJs, /function watchLive2\(\) \{\s*api\("\/api\/home\/live2\?_=" \+ Date\.now\(\)\)\.then\(takeLive2\);\s*\}/);
+  assert.match(homeJs, /closest\("\[data-refresh-live2\]"\)\) \{\s*watchLive2\(\);/);
+  assert.match(homeJs, /closest\("\[data-connect-live2\]"\)\) \{\s*startLive2\(\);/);
   const boot = homeJs.slice(homeJs.lastIndexOf("pullBoard();"), homeJs.lastIndexOf("poll = window.setInterval"));
   assert.match(boot, /state\.view === "live2"/);
-  assert.match(boot, /refreshLive2\(\)/);
+  assert.match(boot, /watchLive2\(\)/);
   assert.match(boot, /pullLive\(\)/);
   assert.doesNotMatch(boot, /view === "live2"[\s\S]{0,40}pullLive\(/);
 });
@@ -147,11 +150,8 @@ test("selecting a team or a shop changes the live2 totals", () => {
       pick("live2ScopeShops") +
       pick("asNum") +
       pick("live2Sums") +
-      pick("padHours") +
-      pick("shanghaiHour") +
-      pick("scaleHourList") +
-      pick("scaleLive2Day") +
-      "return {live2ScopeShops, live2Sums, scaleLive2Day, shanghaiHour};"
+      pick("live2HistoryTotals") +
+      "return {live2ScopeShops, live2Sums, live2HistoryTotals};"
   )("live2");
   const state = {
     teams: [{ name: "韩梦凯", shops: [{ shop: "B店" }, { shop: "C店" }] }],
@@ -159,8 +159,10 @@ test("selecting a team or a shop changes the live2 totals", () => {
     orgIdle: {}
   };
   const shops = [
-    { shop: "A店", liveAmount: "100", paidAmount: "10", paidDeal: "40", pendingCollect: false },
-    { shop: "B店", liveAmount: "50", paidAmount: "20", paidDeal: "30", pendingCollect: false },
+    { shop: "A店", liveAmount: "100", paidAmount: "10", paidDeal: "40", pendingCollect: false,
+      overviewHistory: { today: { deal: [100], spend: [10] } } },
+    { shop: "B店", liveAmount: "50", paidAmount: "20", paidDeal: "30", pendingCollect: false,
+      overviewHistory: { today: { deal: [50], spend: [20] } } },
     { shop: "C店", liveAmount: "25", paidAmount: "5", paidDeal: "8", pendingCollect: false }
   ];
   localStorage.setItem("xm-home-live2-filter", JSON.stringify({ team: "韩梦凯", shop: "" }));
@@ -174,18 +176,11 @@ test("selecting a team or a shop changes the live2 totals", () => {
     ["B店"]
   );
   localStorage.setItem("xm-home-live2-filter", JSON.stringify({ team: "", shop: "A店" }));
-  const one = fns.live2Sums(fns.live2ScopeShops(shops, state));
+  const selected = fns.live2ScopeShops(shops, state);
+  const one = fns.live2Sums(selected);
   assert.equal(one.deal, 100);
   assert.equal(one.spend, 10);
-  const all = fns.live2Sums(shops);
-  const hour = fns.shanghaiHour();
-  const scaled = fns.scaleLive2Day(
-    { jingmaiAt: [200, 300], spendAt: [20, 40] },
-    one.deal / all.deal,
-    one.spend / all.spend,
-    one
-  );
-  assert.equal(scaled.jingmaiAt[hour], 100);
-  assert.equal(scaled.spendAt[hour], 10);
-  assert.ok(scaled.jingmaiAt[0] < all.deal);
+  assert.equal(fns.live2HistoryTotals(selected, "today").deal[0], 100);
+  assert.equal(fns.live2HistoryTotals(selected, "today").spend[0], 10);
+  assert.equal(fns.live2HistoryTotals(shops, "today").deal[0], 150);
 });

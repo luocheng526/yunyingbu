@@ -2547,7 +2547,7 @@
     var pick = liveFilter();
     var cur = liveFilterValue(pick);
     var teams = visibleDutyTeams(state, allShops);
-    var updatedAt = state && state.live2Pack && state.live2Pack.updatedAt;
+    var updatedAt = allShops.length && state && state.live2Pack && state.live2Pack.updatedAt;
     var shops = liveFilterShopNames(allShops);
     return (
       '<div class="xm-hm-live-filter">' +
@@ -4102,13 +4102,14 @@
     return JSON.stringify(((pack && pack.records) || []).map(function (row) { return [row.shop, row.overviewHistory]; }));
   }
   function live2PanelHtml(state) {
-    var roster = adaptLive2Shops(state && state.dutyShops);
-    var packed = applyLive2Pack(roster, state && state.live2Pack);
+    var pack = state && state.live2Pack;
+    var roster = adaptLive2Shops(pack && pack.records);
+    var packed = applyLive2Pack(roster, pack);
     var scoped = live2ScopeShops(packed, state);
     var shops = filterLiveShops(packed, state);
     var charts = live2Charts(packed, scoped);
     var trio = liveChartHtml(charts.hero, true) + liveChartHtml(charts.paid, true) + liveChartHtml(charts.fee, true);
-    var cards = live2Cards(scoped, shops, state && state.live2Pack && state.live2Pack.updatedAt);
+    var cards = live2Cards(scoped, shops, roster.length ? pack.updatedAt : "");
     shops = sortLiveShops(feePickShops(shops, liveFeePick));
     var cardMap = {};
     cards.forEach(function (card) {
@@ -4319,7 +4320,7 @@
     syncHeadPop(root);
     restoreLiveSearchDraft(root, searchDraft);
   }
-  function api(path, body) {
+  function api(path, body, keepStatus) {
     return fetch(path, {
       method: body ? "POST" : "GET",
       credentials: "same-origin",
@@ -4332,7 +4333,7 @@
         return null;
       }
       if (!res.ok) {
-        return null;
+        return keepStatus ? { ok: false, status: res.status } : null;
       }
       return res.json().catch(function () {
         return null;
@@ -6240,7 +6241,7 @@
       }
       function finishDeskLogin(storeName) {
         if (state.view === "live2") {
-          refreshLive2(storeName || "");
+          startLive2(storeName);
           return;
         }
         pullLive();
@@ -6676,14 +6677,27 @@
         }
       }
       function takeLive2(pack) {
-        if (dead || state.view !== "live2" || !pack) {
+        if (dead || state.view !== "live2") {
+          return;
+        }
+        if (!pack || !pack.ok || !Array.isArray(pack.records)) {
+          if (pack && pack.status === 403) {
+            state.live2Pack = null;
+            state.live2Hint = "当前账号没有实时数据查看权限，请联系管理员核对首页实时权限。";
+          } else {
+            state.live2Hint = "暂时无法读取实时数据，请刷新重试。";
+          }
+          paintLive2();
           return;
         }
         var prev = state.live2Pack;
         var same = prev && prev.publishedAt === pack.publishedAt && prev.running === pack.running &&
           live2HistorySignature(prev) === live2HistorySignature(pack);
-        if (!same) {
-          state.live2Hint = pack.running ? "正在读取新一轮。页面仍显示上一轮的金额、排名和登录状态。" : "";
+        var hint = !pack.records.length
+          ? "当前账号暂无可查看的运营店铺，请联系管理员核对店铺数据权限。"
+          : pack.running ? "正在读取新一轮。页面仍显示上一轮的金额、排名和登录状态。" : "";
+        if (!same || state.live2Hint !== hint) {
+          state.live2Hint = hint;
           paintLive2(pack);
         }
         if (pack.running) {
@@ -6696,44 +6710,31 @@
           if (dead || state.view !== "live2") {
             return;
           }
-          api("/api/home/live2?_=" + Date.now()).then(takeLive2);
+          watchLive2();
         }, 4000);
       }
       function watchLive2() {
-        api("/api/home/live2?_=" + Date.now()).then(takeLive2);
+        return api("/api/home/live2?_=" + Date.now(), undefined, true).then(takeLive2);
       }
-      function refreshLive2(storeName) {
+      function startLive2(storeName) {
         useLiveScope("live2");
         state.live2Hint = storeName
           ? storeName + " 登录成功，正在读取成交金额和花费。"
           : "正在读取新一轮。页面仍显示上一轮的金额、排名和登录状态。";
         paint(root, state);
         var body = storeName ? { store: storeName } : {};
-        return api("/api/people/org/stores?live2=1&_=" + Date.now()).then(function (org) {
-          if (dead) {
-            return null;
-          }
-          if (org) {
-            state.dutyShops = dutyShopsFrom(org, { shops: [] });
-            state.orgIdle = orgIdleNames(org);
-          }
-          return api("/api/home/live2", body);
-        }).then(function (pack) {
+        return api("/api/home/live2", body, true).then(function (pack) {
           if (dead || state.view !== "live2") {
             return;
           }
-          if (!pack) {
-            state.live2Hint = "采集接口还没有返回数据。成交、花费、投产比和总订单金额仍显示为—。";
-            paint(root, state);
+          if (!pack || !pack.ok) {
+            state.live2Hint = pack && pack.status === 403
+              ? "当前账号没有发起实时采集的权限。"
+              : "暂时无法发起实时采集，请稍后重试。";
+            paintLive2();
             return;
           }
-          state.live2Hint = pack.running
-            ? (storeName ? storeName + " 登录成功，正在读取成交金额和花费。" : "正在读取新一轮。页面仍显示上一轮的金额、排名和登录状态。")
-            : "";
-          paintLive2(pack);
-          if (pack.running) {
-            pollLive2();
-          }
+          takeLive2(pack);
         });
       }
       function pullLive(blankFirst) {
@@ -6914,7 +6915,7 @@
             pullLive(true);
           }
           if (state.view === "live2") {
-            refreshLive2();
+            watchLive2();
           }
           if (state.view === "week") {
             pullWeek();
@@ -7028,11 +7029,11 @@
           return;
         }
         if (event.target.closest("[data-refresh-live2]")) {
-          refreshLive2();
+          watchLive2();
           return;
         }
         if (event.target.closest("[data-connect-live2]")) {
-          refreshLive2();
+          startLive2();
           return;
         }
         if (event.target.closest("[data-refresh-live]")) {
@@ -7044,7 +7045,7 @@
         }
         if (event.target.closest("[data-connect-jingmai]")) {
           if (state.view === "live2") {
-            refreshLive2();
+            startLive2();
             return;
           }
           openConnectJingmai();
@@ -7946,7 +7947,7 @@
       pullBoard();
       feeSync.start();
       if (state.view === "live2") {
-        refreshLive2();
+        watchLive2();
       } else {
         pullLive();
       }
