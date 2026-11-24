@@ -1753,7 +1753,7 @@
    return;
   }
   var script = document.createElement("script");
-  script.src = "/shared/modules/work-tasks.js?v=20261123-chat-input-1";
+  script.src = "/shared/modules/work-tasks.js";
   script.setAttribute("data-work-tasks", "");
   script.onload = run;
   script.onerror = function () {
@@ -2526,13 +2526,13 @@
     function run(){
       function mount(){if(!stopped){window.XmWorkRich.style();cleanup=window.XmWorkCenter.mount(root);}}
       if(window.XmWorkRich?.version==='chat-input-1'){mount();return;}
-      var editor=document.createElement('script');editor.src='/shared/modules/work-tasks.js?v=20261123-chat-input-1';editor.onload=mount;
+      var editor=document.createElement('script');editor.src='/shared/modules/work-tasks.js';editor.onload=mount;
       editor.onerror=function(){if(!stopped)root.innerHTML='输入组件加载失败，请刷新重试。';};document.head.appendChild(editor);
     }
     if(window.XmWorkCenter?.permissionVersion==='catalog-2')run();
     else {
       root.innerHTML='<div style="padding:32px">正在打开工作中心…</div>';
-      var script=document.createElement('script');script.src='/shared/modules/work-center.js?v=20261124-permission-catalog-2';script.onload=run;
+      var script=document.createElement('script');script.src='/shared/modules/work-center.js';script.onload=run;
       script.onerror=function(){if(!stopped)root.innerHTML='<div style="padding:32px">工作中心加载失败，请刷新页面重试。</div>';};
       document.head.appendChild(script);
     }
