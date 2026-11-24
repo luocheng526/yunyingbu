@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.1318-weekhead */
+/* xm-module-home 0.1.1319-weekbar */
 (function () {
-  var HOME_JS_STAMP = "0.1.1318-weekhead";
+  var HOME_JS_STAMP = "0.1.1319-weekbar";
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
@@ -1141,6 +1141,16 @@
     }
     return "";
   }
+  function weekBarKpis(team) {
+    return [
+      { key: "total", label: "业绩" },
+      { key: "shopAvg", label: "店均" },
+      { key: "orders", label: "订单数" },
+      { key: "shops", label: "运营店铺数量" }
+    ].map(function (item) {
+      return { label: item.label, value: weekKpiOf(team, item.key) };
+    });
+  }
   function weekSideKpis(team) {
     return [
       { key: "shopAvg", label: "店均" },
@@ -1285,8 +1295,17 @@
             escapeHtml((pack && pack.title) || "甄选五倍业绩统计") +
             "</th></tr>"
           : "";
+      var barKpis = weekBarKpis(team)
+        .map(function (item) {
+          return "<span>" + escapeHtml(item.label) + "<b>" + escapeHtml(weekCellText(item.value)) + "</b></span>";
+        })
+        .join("");
       return (
-        '<section class="xm-hm-week-team"><div class="xm-hm-week-tools"><button type="button" class="is-ghost" data-week-add="' +
+        '<section class="xm-hm-week-team"><div class="xm-hm-week-head"><span>' +
+        escapeHtml(team.totalLabel || team.label) +
+        '</span><div class="xm-hm-week-kpis">' +
+        barKpis +
+        '</div><button type="button" class="is-ghost" data-week-add="' +
         escapeHtml(team.key) +
         '">加一行</button></div><table class="xm-hm-week-table" style="min-width:' +
         tableW +
@@ -1341,7 +1360,7 @@
       });
       var height = 8;
       teams.forEach(function (team, teamIndex) {
-        height += (teamIndex === 0 ? titleH : 0) + headH + ((team.rows || []).length + (team.foot || []).length) * rowH + teamGap;
+        height += titleH + (teamIndex === 0 ? titleH : 0) + headH + ((team.rows || []).length + (team.foot || []).length) * rowH + teamGap;
       });
       var canvas = document.createElement("canvas");
       canvas.width = Math.max(width, 800) * scale;
@@ -1385,6 +1404,17 @@
       }
       var y = 4;
       teams.forEach(function (team, teamIndex) {
+        ctx.fillStyle = "#ffc000";
+        ctx.fillRect(0, y, width, titleH);
+        ctx.fillStyle = "#111";
+        ctx.font = 'bold 16px "Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.textAlign = "left";
+        var barText = (team.totalLabel || team.label || "") + "  " + weekBarKpis(team).map(function (item) {
+          var num = weekCellText(item.value);
+          return item.label + (num ? " " + num : "");
+        }).join("  ");
+        ctx.fillText(barText, 10, y + titleH / 2);
+        y += titleH;
         if (teamIndex === 0) {
           ctx.fillStyle = "#ffc000";
           ctx.fillRect(0, y, width, titleH);
@@ -2907,6 +2937,7 @@
       ".xm-hm-week-tools{display:flex;justify-content:flex-end;padding:4px 8px;background:#fff}" +
       ".xm-hm-week-tools button{border:0;background:transparent;color:var(--xm-primary);height:28px;padding:0 8px;cursor:pointer;font-size:12px}" +
       ".xm-hm-week-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:8px 10px;background:#ffc000;font-weight:700}" +
+      ".xm-hm-week-head button{margin-left:auto;border:1px solid #c48a00;background:#fff8e1;color:#333;border-radius:6px;height:28px;padding:0 12px;cursor:pointer;font-size:13px;font-weight:600}" +
       ".xm-hm-week-kpis{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;font-weight:600}" +
       ".xm-hm-week-kpis b{font-size:16px;margin-left:4px}" +
       ".xm-hm-week-table{border-collapse:separate;border-spacing:0;font-size:11px;table-layout:fixed}" +

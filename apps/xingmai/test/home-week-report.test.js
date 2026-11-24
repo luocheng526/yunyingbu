@@ -41,6 +41,9 @@ test("week tab sits beside 实时 and keeps the five-times spreadsheet headers",
   assert.match(homeJs, /过万店铺/);
   assert.match(homeJs, /韩梦凯五倍店铺/);
   assert.match(homeJs, /month === 6 \|\| month >= 8/);
+  assert.match(homeJs, /xm-hm-week-head/);
+  assert.match(homeJs, /function weekBarKpis/);
+  assert.match(homeJs, /运营店铺数量/);
 });
 
 test("last seven day labels and crawler seed plus manual overlay", () => {
