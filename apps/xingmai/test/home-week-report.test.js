@@ -18,10 +18,10 @@ import {
   seedRowsFromLive,
   seedRowsFromOrg,
   setWeekStorePath,
+  weekOwner,
   weekTeamKey
 } from "../src/modules/home/week-report.js";
 import { homeRouter } from "../src/modules/home/router.js";
-import { setJingmaiRequestOrigin } from "../src/modules/home/jingmai-runner.js";
 
 const homeJs = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "../public/shared/modules/home.js"),
@@ -146,6 +146,10 @@ test("week pack seeds operating org shops into han and shen", () => {
   setWeekStorePath(join(osTmp(), "home-week-test.json"));
   assert.equal(weekTeamKey({ team: "精铺组 韩梦凯" }), "han");
   assert.equal(weekTeamKey({ team: "沈子晗组" }), "shen");
+  assert.equal(weekOwner({ operator: "张航", reserve: "张文静", supervisor: "高丽男", manager: "沈子晗" }), "张航");
+  assert.equal(weekOwner({ operator: "", reserve: "张文静", supervisor: "高丽男", manager: "沈子晗" }), "张文静");
+  assert.equal(weekOwner({ operator: "—", reserve: "", supervisor: "高丽男", manager: "沈子晗" }), "高丽男");
+  assert.equal(weekOwner({ manager: "沈子晗" }), "沈子晗");
   const seeded = seedRowsFromOrg(
     [
       { store: "韩店A", team: "精铺组 韩梦凯", manager: "小韩", enabled: true },
@@ -235,8 +239,16 @@ test("week-report route fills shops from organization center", async () => {
     res.json({
       ok: true,
       stores: [
-        { storeName: "韩店", team: "精铺组 韩梦凯", manager: "韩梦凯", statusKey: "operating" },
-        { storeName: "沈店", team: "沈子晗组", manager: "沈子晗", statusKey: "operating" },
+        { storeName: "韩店", team: "精铺组 韩梦凯", operator: "小陈", manager: "韩梦凯", statusKey: "operating" },
+        {
+          storeName: "沈店",
+          team: "沈子晗组",
+          operator: "",
+          reserve: "张文静",
+          supervisor: "高丽男",
+          manager: "沈子晗",
+          statusKey: "operating"
+        },
         { storeName: "停店", team: "精铺组 韩梦凯", manager: "韩梦凯", statusKey: "closed" }
       ]
     });
@@ -247,7 +259,6 @@ test("week-report route fills shops from organization center", async () => {
   });
   try {
     const { port } = server.address();
-    setJingmaiRequestOrigin(`http://127.0.0.1:${port}`);
     const res = await fetch(`http://127.0.0.1:${port}/api/home/week-report`, {
       headers: { cookie: "sid=org-week" }
     });
@@ -257,10 +268,10 @@ test("week-report route fills shops from organization center", async () => {
     const shen = json.teams.find((team) => team.key === "shen");
     assert.equal(han.rows.map((row) => row.shop).join(), "韩店");
     assert.equal(shen.rows.map((row) => row.shop).join(), "沈店");
-    assert.equal(han.rows[0].cells.owner, "韩梦凯");
+    assert.equal(han.rows[0].cells.owner, "小陈");
+    assert.equal(shen.rows[0].cells.owner, "张文静");
     assert.equal(han.rows[0].source, "org");
   } finally {
-    setJingmaiRequestOrigin("");
     resetWeekStore();
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
@@ -277,13 +288,11 @@ test("week-report route returns 401 when org center is not logged in", async () 
   });
   try {
     const { port } = server.address();
-    setJingmaiRequestOrigin(`http://127.0.0.1:${port}`);
     const res = await fetch(`http://127.0.0.1:${port}/api/home/week-report`);
     assert.equal(res.status, 401);
     const json = await res.json();
     assert.equal(json.ok, false);
   } finally {
-    setJingmaiRequestOrigin("");
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
 });

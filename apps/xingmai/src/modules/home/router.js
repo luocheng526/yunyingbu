@@ -16,7 +16,6 @@ import {
   beginReloginAll,
   cancelRelogin,
   jingmaiCollectStatus,
-  loadOrgShops,
   reloginInput,
   reloginScreen,
   reloginState,
@@ -26,6 +25,7 @@ import { getLive2Board, noteLive2Cookie, startLive2Collector, startLive2Round } 
 import { readFeeGoals, saveFeeGoal } from "./fee-goals.js";
 import {
   buildWeekPack,
+  loadWeekOrgShops,
   saveWeekCells,
   dingWebhook,
   saveWeekShot,
@@ -514,7 +514,14 @@ export function homeRouter() {
   router.get("/week-report", async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     try {
-      const shops = await loadOrgShops(req.headers.cookie || "");
+      const host = String(req.get("x-forwarded-host") || req.get("host") || "")
+        .split(",")[0]
+        .trim();
+      const proto = String(req.headers["x-forwarded-proto"] || req.protocol || "http")
+        .split(",")[0]
+        .trim();
+      const origin = host ? `${proto}://${host}` : "";
+      const shops = await loadWeekOrgShops(req.headers.cookie || "", fetch, origin);
       return res.json(buildWeekPack(shops));
     } catch (err) {
       if (Number(err && err.statusCode) === 401) {

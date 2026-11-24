@@ -207,6 +207,62 @@ function shopEnabled(row) {
   return true;
 }
 
+function staffName(value) {
+  const name = String(value || "").trim();
+  if (!name || name === "-" || name === "—") {
+    return "";
+  }
+  return name;
+}
+
+export function weekOwner(row) {
+  return (
+    staffName(row && row.operator) ||
+    staffName(row && row.reserve) ||
+    staffName(row && row.supervisor) ||
+    staffName(row && row.manager)
+  );
+}
+
+export async function loadWeekOrgShops(cookie, fetchImpl = fetch, origin = "") {
+  const base = String(
+    origin ||
+      process.env.HOME_INTERNAL_ORIGIN ||
+      process.env.SHEN_INTERNAL_ORIGIN ||
+      "http://127.0.0.1:" + (process.env.PORT || 3000)
+  ).replace(/\/$/, "");
+  const response = await fetchImpl(base + "/api/people/org/stores", {
+    headers: { cookie: cookie || "", accept: "application/json" }
+  });
+  if (response.status === 401) {
+    const error = new Error("请先登录运营中心");
+    error.statusCode = 401;
+    throw error;
+  }
+  if (!response.ok) {
+    const error = new Error("无法读取组织中心店铺");
+    error.statusCode = 502;
+    throw error;
+  }
+  const data = await response.json();
+  return (data.stores || [])
+    .map(function (store) {
+      return {
+        store: String((store && store.storeName) || "").trim(),
+        team: String((store && store.team) || ""),
+        operator: staffName(store && store.operator),
+        reserve: staffName(store && store.reserve),
+        supervisor: staffName(store && store.supervisor),
+        manager: staffName(store && store.manager),
+        enabled: store.statusKey === "operating" || (store.statusKey == null && store.remark === "运营中"),
+        statusKey: String((store && store.statusKey) || "")
+      };
+    })
+    .filter(function (store) {
+      return store.store;
+    });
+}
+
 export function seedRowsFromOrg(shops, teamKey) {
   const rows = [];
   (shops || []).forEach((row) => {
@@ -222,7 +278,7 @@ export function seedRowsFromOrg(shops, teamKey) {
       source: "org",
       cells: {
         shop,
-        owner: String((row && (row.manager || row.owner || row.operator || row.chief)) || "").trim()
+        owner: weekOwner(row)
       }
     });
   });
