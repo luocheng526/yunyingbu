@@ -6,11 +6,15 @@ import { NAV_ITEMS, isHrDesk, orgNavFlags } from "./nav-items.js";
 import { hrRouter } from "../hr/router.js";
 import { workRouter } from "../work/router.js";
 import { feedbackRouter } from "../feedback/router.js";
+import { meetingRouter } from "../meeting/router.js";
+import { boundRouter } from "../bound/router.js";
 
 // xm-upgrade-mask 0.1.52  必须和 profile/middleware.js 成套发。
-// xm-fast-shell 0.1.772-feedback
+// xm-fast-shell 0.1.787-acadleaf
+// xm-ui 内容区公共组件随壳加载，必须和 profile/middleware.js 成套发。
 // xm-login-session 登录会话回读必须和 profile/middleware.js 成套发。
 // login.html 不走 HTML 内存缓存，必须和 profile/middleware.js 成套发。
+// 菜单脚本由 profileShell 统一生成可重新验证的 URL，避免桌面 App 沿用旧菜单缓存。
 
 function renderExistingPage(filePath) {
   if (typeof profileShell.readThemedHtml === "function") {
@@ -98,7 +102,7 @@ function bounceHrDesk(req, res) {
   if (path.startsWith("/api/")) {
     return false;
   }
-  if (path === "/hr" || path.startsWith("/hr/") || path === "/me" || path.startsWith("/me")) {
+  if (path === "/hr" || path.startsWith("/hr/") || path === "/me" || path.startsWith("/me/")) {
     return false;
   }
   if (/\.(?:js|css|png|jpe?g|svg|ico|webp|woff2?|map)$/i.test(path)) {
@@ -112,6 +116,8 @@ export function registerPageRoutes(app) {
   app.use("/api/hr", hrRouter);
   app.use("/api/work", workRouter);
   app.use("/api/feedback", feedbackRouter);
+  app.use("/api/meeting", meetingRouter);
+  app.use("/api/bound", boundRouter);
   app.use((req, res, next) => {
     const method = String(req.method || "GET").toUpperCase();
     const path = String(req.path || "").replace(/\/+$/, "") || "/";
@@ -130,6 +136,10 @@ export function registerPageRoutes(app) {
     }
     if ((method === "GET" || method === "HEAD") && path === "/data") {
       res.redirect(302, "/data/overview");
+      return;
+    }
+    if ((method === "GET" || method === "HEAD") && path === "/data/paid") {
+      res.redirect(302, "/home");
       return;
     }
     if ((method === "GET" || method === "HEAD") && path === "/shen") {
@@ -157,6 +167,9 @@ export function registerPageRoutes(app) {
   app.get("/data", (_req, res) => {
     res.redirect(302, "/data/overview");
   });
+  app.get("/data/paid", (_req, res) => {
+    res.redirect(302, "/home");
+  });
   app.get("/shen", (_req, res) => {
     res.redirect(302, "/shen/product");
   });
@@ -172,9 +185,11 @@ export function registerPageRoutes(app) {
   app.get("/han", (_req, res) => {
     res.redirect(302, "/han/selection");
   });
-  app.get("/academy", (_req, res) => {
-    res.redirect(302, "/academy/courses");
-  });
+  for (const href of ["/academy/courses", "/academy/exams", "/academy/handbook"]) {
+    app.get(href, (req, res) => {
+      res.status(200).type("html").set("Cache-Control", "private, no-store").send(renderRouteShell(href, req.user));
+    });
+  }
   for (const item of NAV_ITEMS) {
     app.get(item.href, (req, res) => {
       if (pageFiles.get(item.href) || typeof profileShell.renderAppShell === "function") {

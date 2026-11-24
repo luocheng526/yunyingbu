@@ -324,22 +324,8 @@ function attachGzip(req, res) {
     return send(gz);
   };
 }
-const HAN_API_CACHE_MS = 2500;
-const HAN_API_PATHS = new Set([
-  "/api/han/tasks",
-  "/api/han/brief",
-  "/api/data/overview",
-  "/api/shen/tasks",
-  "/api/shen/brief",
-  "/api/people",
-  "/api/auth/me",
-  "/api/releases",
-  "/api/releases/queue",
-  "/api/releases/lock",
-  "/api/releases/versions",
-  "/api/releases/readyz"
-]);
-const hanApiCache = new Map();
+// Authenticated API responses depend on the current account, permissions and
+// query. Never reuse a response by pathname before the route's access checks.
 
 function versionShellAssets(text) {
   return String(text || "")
@@ -692,40 +678,6 @@ async function attachDesk(user) {
   }
 }
 
-function dropHanApiCache(req) {
-  const method = String(req.method || "GET").toUpperCase();
-  const dest = normalizedPath(req);
-  if (method === "GET" || method === "HEAD") {
-    return;
-  }
-  if (dest.startsWith("/api/")) {
-    hanApiCache.clear();
-  }
-}
-
-function serveHanApiCache(req, res) {
-  if (!isReadMethod(req)) {
-    return false;
-  }
-  const dest = normalizedPath(req);
-  if (!HAN_API_PATHS.has(dest)) {
-    return false;
-  }
-  const hit = hanApiCache.get(dest);
-  if (!hit || Date.now() - hit.at >= HAN_API_CACHE_MS) {
-    const json = res.json.bind(res);
-    res.json = function cacheHanJson(body) {
-      if (res.statusCode === 200) {
-        hanApiCache.set(dest, { at: Date.now(), body });
-      }
-      return json(body);
-    };
-    return false;
-  }
-  res.status(200).type("json").set("X-Xm-Cache", "han").json(hit.body);
-  return true;
-}
-
 export function requireLoginUnlessPublic(req, res, next) {
   attachGzip(req, res);
   if (isPublicRequest(req)) {
@@ -749,11 +701,10 @@ export function requireLoginUnlessPublic(req, res, next) {
     req.user = user;
     Promise.resolve(attachDesk(user))
       .then(() => {
-        dropHanApiCache(req);
-        if (serveHomeIndex(req, res)) {
-          return;
+        if (normalizedPath(req).startsWith("/api/")) {
+          res.set("Cache-Control", "private, no-store");
         }
-        if (serveHanApiCache(req, res)) {
+        if (serveHomeIndex(req, res)) {
           return;
         }
         next();
