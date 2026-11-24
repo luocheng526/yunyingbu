@@ -18,8 +18,9 @@ import {
   seedRowsFromLive,
   seedRowsFromOrg,
   setWeekStorePath,
-  groupWeekRowsByOwner,
+  groupWeekRowsByLead,
   weekOwner,
+  weekLead,
   weekTeamKey
 } from "../src/modules/home/week-report.js";
 import { homeRouter } from "../src/modules/home/router.js";
@@ -182,28 +183,36 @@ test("week pack seeds operating org shops into han and shen", () => {
   assert.equal(han.rows[0].cells["gmv_2026-11-16"], undefined);
   assert.equal(han.foot.map((item) => item.label).join(), "韩梦凯精铺组近七天业绩,无清洁统计,清洁统计");
   assert.equal(han.kpis.some((item) => item.key === "over10k"), true);
-  const grouped = groupWeekRowsByOwner(
+  assert.equal(weekLead({ supervisor: "高丽男", operator: "杨禄", manager: "沈子晗" }), "高丽男");
+  assert.equal(weekLead({ reserve: "张文静", operator: "郭桂良", manager: "沈子晗" }), "张文静");
+  const grouped = groupWeekRowsByLead(
     seedRowsFromOrg(
       [
         { store: "HYEGIIR健康器械旗舰店", team: "沈子晗组", supervisor: "高丽男", manager: "沈子晗", enabled: true },
         { store: "DIKTT个护健康旗舰店", team: "沈子晗组", operator: "张航", manager: "沈子晗", enabled: true },
-        { store: "RASW家居旗舰店", team: "沈子晗组", operator: "张文静", manager: "沈子晗", enabled: true },
-        { store: "MGXEK旗舰店", team: "沈子晗组", operator: "王梓萱", manager: "沈子晗", enabled: true },
+        { store: "HYEGIIR官方旗舰店", team: "沈子晗组", supervisor: "高丽男", operator: "杨禄", manager: "沈子晗", enabled: true },
+        { store: "RASW家居旗舰店", team: "沈子晗组", reserve: "张文静", operator: "张文静", manager: "沈子晗", enabled: true },
+        { store: "MGXEK旗舰店", team: "沈子晗组", supervisor: "张鹏", operator: "王梓萱", manager: "沈子晗", enabled: true },
+        { store: "RASW健康电器旗舰店", team: "沈子晗组", reserve: "张文静", operator: "郭桂良", manager: "沈子晗", enabled: true },
         { store: "RASW栀悦专卖店", team: "沈子晗组", reserve: "张文静", manager: "沈子晗", enabled: true },
-        { store: "DIKTT两季电器旗舰店", team: "沈子晗组", operator: "张航", manager: "沈子晗", enabled: true }
+        { store: "DIKTT两季电器旗舰店", team: "沈子晗组", operator: "张航", manager: "沈子晗", enabled: true },
+        { store: "HYEGIIR养生器械旗舰店", team: "沈子晗组", supervisor: "高丽男", operator: "崔安琪", manager: "沈子晗", enabled: true }
       ],
       "shen"
     )
   );
   assert.deepEqual(
-    grouped.map((row) => `${row.cells.owner}|${row.shop}`),
+    grouped.map((row) => `${row.lead}|${row.cells.owner}|${row.shop}`),
     [
-      "高丽男|HYEGIIR健康器械旗舰店",
-      "张航|DIKTT个护健康旗舰店",
-      "张航|DIKTT两季电器旗舰店",
-      "张文静|RASW家居旗舰店",
-      "张文静|RASW栀悦专卖店",
-      "王梓萱|MGXEK旗舰店"
+      "高丽男|高丽男|HYEGIIR健康器械旗舰店",
+      "高丽男|杨禄|HYEGIIR官方旗舰店",
+      "高丽男|崔安琪|HYEGIIR养生器械旗舰店",
+      "张航|张航|DIKTT个护健康旗舰店",
+      "张航|张航|DIKTT两季电器旗舰店",
+      "张文静|张文静|RASW家居旗舰店",
+      "张文静|郭桂良|RASW健康电器旗舰店",
+      "张文静|张文静|RASW栀悦专卖店",
+      "张鹏|王梓萱|MGXEK旗舰店"
     ]
   );
   resetWeekStore();

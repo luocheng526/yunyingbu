@@ -224,6 +224,10 @@ export function weekOwner(row) {
   );
 }
 
+export function weekLead(row) {
+  return staffName(row && row.supervisor) || staffName(row && row.reserve) || weekOwner(row);
+}
+
 export async function loadWeekOrgShops(cookie, fetchImpl = fetch, origin = "") {
   const base = String(
     origin ||
@@ -276,6 +280,7 @@ export function seedRowsFromOrg(shops, teamKey) {
     rows.push({
       shop,
       source: "org",
+      lead: weekLead(row),
       cells: {
         shop,
         owner: weekOwner(row)
@@ -354,19 +359,19 @@ export function extraManualRows(cells, teamKey, known) {
   return Object.keys(shops).map((name) => shops[name]);
 }
 
-export function groupWeekRowsByOwner(rows) {
+export function groupWeekRowsByLead(rows) {
   const groups = new Map();
   const empty = [];
   (rows || []).forEach((row) => {
-    const owner = String((row && row.cells && row.cells.owner) || "").trim();
-    if (!owner) {
+    const lead = String((row && row.lead) || "").trim();
+    if (!lead) {
       empty.push(row);
       return;
     }
-    if (!groups.has(owner)) {
-      groups.set(owner, []);
+    if (!groups.has(lead)) {
+      groups.set(lead, []);
     }
-    groups.get(owner).push(row);
+    groups.get(lead).push(row);
   });
   return [...groups.values(), empty].flat();
 }
@@ -493,7 +498,7 @@ export function buildWeekPack(orgShops, ymd = shanghaiYmd()) {
   const teams = TEAMS.map((meta) => {
     const seeded = seedRowsFromOrg(orgShops, meta.key);
     const extras = extraManualRows(saved.cells, meta.key, seeded);
-    const rows = groupWeekRowsByOwner(applyManualCells(seeded.concat(extras), saved.cells, meta.key));
+    const rows = groupWeekRowsByLead(applyManualCells(seeded.concat(extras), saved.cells, meta.key));
     return {
       key: meta.key,
       label: meta.label,
