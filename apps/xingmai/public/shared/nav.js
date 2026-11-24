@@ -1,6 +1,26 @@
 /* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild 0.1.779-watermark 0.1.780-marklite 0.1.781-markwho 0.1.782-lightskin 0.1.783-navbold 0.1.784-homeloop 0.1.785-mever 0.1.787-acadleaf v0.4.18 — 个人中心脚本不进浏览器缓存 */
 (function () {
   const ASSET_VER = "0.1.787-acadleaf";
+  // Called by confirmed save handlers only; reads, pending jobs and errors do
+  // not trigger this feedback. Keep it outside module DOM that may be repainted.
+  (function installSaveFeedback() {
+    let node = null, timer = 0;
+    window.XmSaveFeedback = { saved: function () {
+      if (!document.body) return;
+      if (!node || !node.isConnected) {
+        node = document.createElement("div");
+        node.id = "xm-save-feedback";
+        node.setAttribute("role", "status");
+        node.setAttribute("aria-live", "polite");
+        node.style.cssText = "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483647;pointer-events:none;padding:18px 30px;border-radius:12px;background:var(--xm-card,#fff);color:var(--xm-ink,#1f2937);border:1px solid var(--xm-line,#dce5ef);box-shadow:0 12px 40px rgba(15,23,42,.18);font-size:16px;font-weight:600;max-width:calc(100vw - 40px);box-sizing:border-box;text-align:center";
+        document.body.appendChild(node);
+      }
+      clearTimeout(timer);
+      node.textContent = "✓ 数据已保存";
+      node.hidden = false;
+      timer = setTimeout(function () { node.hidden = true; }, 2500);
+    } };
+  })();
   function featureAllowed(feature, right) {
     const acl = (window.__xmBootUser || {}).siteAcl;
     if (!acl || !acl.configured) return true;
@@ -1857,7 +1877,7 @@
     }
     const src = "/shared/modules/" + id + ".js";
     const script = document.createElement("script");
-    script.src = document.querySelector('script[src^="' + src + '"]') ? src + "?r=" + Date.now() : src + "?v=" + ASSET_VER;
+    script.src = document.querySelector('script[src^="' + src + '"]') ? src + "?r=" + Date.now() : src;
     script.setAttribute("data-xm-mod", href);
     script.onload = function () {
       script.setAttribute("data-xm-loaded", "1");

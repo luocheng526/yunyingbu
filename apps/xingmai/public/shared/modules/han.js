@@ -1722,7 +1722,7 @@
         start();
       } else {
         const script = document.createElement("script");
-        script.src = "/shared/modules/han-center.js?v=" + centerVer;
+        script.src = "/shared/modules/han-center.js";
         script.onload = start;
         script.onerror = function () {
           if (!dead) root.innerHTML = page(title, "页面脚本没有加载出来。", "");

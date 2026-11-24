@@ -229,8 +229,8 @@ ${PHONE_HEAD}
     <link rel="shortcut icon" href="/favicon.ico?v=${SHELL_ASSET_VER}" />
 ${css}    <link rel="stylesheet" href="/shared/xm-ui.css?v=${SHELL_ASSET_VER}" />
     <script src="/shared/xm-ui.js?v=${SHELL_ASSET_VER}"></script>
-    <link rel="preload" href="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" as="script" />
-${boot}    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer data-xm-mod="${key}"></script>
+    <link rel="preload" href="/shared/modules/${id}.js" as="script" />
+${boot}    <script src="/shared/modules/${id}.js" defer data-xm-mod="${key}"></script>
   </head>
   <body class="xm-app xm-app-shell">
     <div class="xm-shell">
@@ -333,7 +333,7 @@ function versionShellAssets(text) {
     .replace(/\/shared\/nav\.js(?:\?[^"'>\s]*)?/g, NAV_SCRIPT_URL)
     .replace(/\/shared\/xm-ui\.css(?:\?[^"'>\s]*)?/g, `/shared/xm-ui.css?v=${SHELL_ASSET_VER}`)
     .replace(/\/shared\/xm-ui\.js(?:\?[^"'>\s]*)?/g, `/shared/xm-ui.js?v=${SHELL_ASSET_VER}`)
-    .replace(/\/shared\/modules\/([a-z]+)\.js(?:\?[^"'>\s]*)?/g, `/shared/modules/$1.js?v=${SHELL_ASSET_VER}`)
+    .replace(/\/shared\/modules\/([a-z][a-z0-9-]*)\.js(?:\?[^"'>\s]*)?/g, `/shared/modules/$1.js`)
     .replace(/\/releases\.css(?:\?[^"'>\s]*)?/g, `/releases.css?v=${SHELL_ASSET_VER}`);
 }
 
@@ -550,8 +550,8 @@ function shellAssetRel(pathname) {
   if (SHELL_ASSET_FILES[pathname]) {
     return SHELL_ASSET_FILES[pathname];
   }
-  const match = String(pathname || "").match(/^\/shared\/modules\/([a-z]+)\.js$/);
-  if (match && Object.values(APP_MODULES).includes(match[1])) {
+  const match = String(pathname || "").match(/^\/shared\/modules\/([a-z][a-z0-9-]*)\.js$/);
+  if (match && fs.existsSync(path.join(publicDir, "shared/modules", match[1] + ".js"))) {
     return `shared/modules/${match[1]}.js`;
   }
   return "";
@@ -565,7 +565,9 @@ function serveShellAsset(req, res) {
   if (!rel) {
     return false;
   }
-  const versioned = rel !== "shared/nav.js" && Boolean(req.query && req.query.v);
+  // Business modules are published independently of the fixed shell version.
+  // Revalidate old ?v URLs as well as new unversioned module URLs.
+  const versioned = rel !== "shared/nav.js" && !rel.startsWith("shared/modules/") && Boolean(req.query && req.query.v);
   const noStore = rel === "login.css" || rel === "shared/modules/me.js";
   res.setHeader(
     "Cache-Control",

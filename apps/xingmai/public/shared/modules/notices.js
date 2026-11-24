@@ -539,14 +539,15 @@
           if (dead) {
             return;
           }
-          if (!result.res.ok) {
+          if (!result.res.ok || result.data.ok === false) {
             window.alert(result.data.error || "保存失败");
             return;
           }
+          if (window.XmSaveFeedback) window.XmSaveFeedback.saved();
           mode = "list";
           current = null;
           load();
-        });
+        }).catch(function (error) { if (!dead) window.alert(error.message || "保存失败"); });
       });
       load();
       return function unmount() {

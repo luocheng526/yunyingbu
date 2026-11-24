@@ -2618,6 +2618,7 @@
             var result = await r.json(); if (!r.ok || !result.ok) throw Error('save_failed');
             Object.keys(result.marks).forEach(function (id) { annoCache[id] = Object.assign({ready:true},result.marks[id]); if (annoField !== 'target') Object.keys(state.archiveAnnotations).forEach(function (k) { if (state.archiveAnnotations[k][id] || annotationIndexes[k]?.ready) { var mark = state.archiveAnnotations[k][id] || (state.archiveAnnotations[k][id] = { ready: true }); mark[annoField] = result.marks[id][annoField]; } }); });
             if (annotationScopeKey() === annoScope) state.panel = '';
+            if (token === active && window.XmSaveFeedback) window.XmSaveFeedback.saved();
           }).catch(function () { state.error = '保存未完成，请刷新读取后核对；未修改旧站数据。'; }).finally(function () { state.archiveAnnotationBusy = false; if (token === active) paint(root); });
           return;
         }
