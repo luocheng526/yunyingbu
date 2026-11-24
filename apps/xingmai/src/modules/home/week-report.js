@@ -251,6 +251,9 @@ export function sheetMetricsToCells(sheetRows, webShops, days) {
       writeCell(cells, team, shop, `fee_${ymd}`, row.fee && row.fee[ymd]);
       writeCell(cells, team, shop, `feeRate_${ymd}`, row.feeRate && row.feeRate[ymd]);
     });
+    Object.entries(row.profit || {}).forEach(([month, value]) => {
+      writeCell(cells, team, shop, `profit_${String(month).padStart(2, "0")}`, value);
+    });
     matched.push({ sheet: row.shop, shop, team });
   });
   return { cells, matched, unmatched };
