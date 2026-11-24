@@ -181,6 +181,54 @@ function num(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+export function weekTeamKey(row) {
+  const blob = `${(row && row.team) || ""} ${(row && row.source) || ""} ${(row && row.center) || ""}`;
+  if (/沈子晗|\bshen\b/i.test(blob)) {
+    return "shen";
+  }
+  if (/韩梦凯|\bhan\b/i.test(blob)) {
+    return "han";
+  }
+  return "";
+}
+
+function shopNameOf(row) {
+  return String((row && (row.store || row.storeName || row.shopName || row.shop)) || "").trim();
+}
+
+function shopEnabled(row) {
+  if (!row || row.enabled === false) {
+    return false;
+  }
+  const status = String(row.statusKey || row.status || "").trim();
+  if (status && status !== "operating" && status !== "运营中") {
+    return false;
+  }
+  return true;
+}
+
+export function seedRowsFromOrg(shops, teamKey) {
+  const rows = [];
+  (shops || []).forEach((row) => {
+    if (!shopEnabled(row) || weekTeamKey(row) !== teamKey) {
+      return;
+    }
+    const shop = shopNameOf(row);
+    if (!shop) {
+      return;
+    }
+    rows.push({
+      shop,
+      source: "org",
+      cells: {
+        shop,
+        owner: String((row && (row.manager || row.owner || row.operator || row.chief)) || "").trim()
+      }
+    });
+  });
+  return rows;
+}
+
 export function seedRowsFromLive(records, teamKey, ymd = shanghaiYmd()) {
   const rows = [];
   (records || []).forEach((row) => {
@@ -191,7 +239,7 @@ export function seedRowsFromLive(records, teamKey, ymd = shanghaiYmd()) {
     if (teamKey === "shen" && source.indexOf("shen") === -1) {
       return;
     }
-    const shop = String((row && (row.shopName || row.shop || row.storeName)) || "").trim();
+    const shop = shopNameOf(row);
     if (!shop) {
       return;
     }
@@ -366,11 +414,11 @@ export function saveWeekCells(patch) {
   return writeWeekStore(cur);
 }
 
-export function buildWeekPack(liveRecords, ymd = shanghaiYmd()) {
+export function buildWeekPack(orgShops, ymd = shanghaiYmd()) {
   const layout = buildWeekColumns(ymd);
   const saved = readWeekStore();
   const teams = TEAMS.map((meta) => {
-    const seeded = seedRowsFromLive(liveRecords, meta.key, ymd);
+    const seeded = seedRowsFromOrg(orgShops, meta.key);
     const extras = extraManualRows(saved.cells, meta.key, seeded);
     const rows = applyManualCells(seeded.concat(extras), saved.cells, meta.key);
     return {
@@ -396,7 +444,7 @@ export function buildWeekPack(liveRecords, ymd = shanghaiYmd()) {
     teams,
     dingReady: Boolean(saved.webhook || process.env.HOME_WEEK_DING_WEBHOOK),
     updatedAt: saved.updatedAt || shanghaiNow(),
-    source: "han-shen-crawler+manual"
+    source: "org+manual"
   };
 }
 

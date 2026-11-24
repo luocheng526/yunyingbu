@@ -16,6 +16,7 @@ import {
   beginReloginAll,
   cancelRelogin,
   jingmaiCollectStatus,
+  loadOrgShops,
   reloginInput,
   reloginScreen,
   reloginState,
@@ -513,9 +514,12 @@ export function homeRouter() {
   router.get("/week-report", async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     try {
-      const live = await getHomeLocalPaid(req);
-      return res.json(buildWeekPack((live && live.records) || []));
-    } catch {
+      const shops = await loadOrgShops(req.headers.cookie || "");
+      return res.json(buildWeekPack(shops));
+    } catch (err) {
+      if (Number(err && err.statusCode) === 401) {
+        return res.status(401).json({ ok: false, error: err.message || "请先登录" });
+      }
       return res.json(buildWeekPack([]));
     }
   });
