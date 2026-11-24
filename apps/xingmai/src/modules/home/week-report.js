@@ -354,6 +354,23 @@ export function extraManualRows(cells, teamKey, known) {
   return Object.keys(shops).map((name) => shops[name]);
 }
 
+export function groupWeekRowsByOwner(rows) {
+  const groups = new Map();
+  const empty = [];
+  (rows || []).forEach((row) => {
+    const owner = String((row && row.cells && row.cells.owner) || "").trim();
+    if (!owner) {
+      empty.push(row);
+      return;
+    }
+    if (!groups.has(owner)) {
+      groups.set(owner, []);
+    }
+    groups.get(owner).push(row);
+  });
+  return [...groups.values(), empty].flat();
+}
+
 export function teamKpis(rows, ymd) {
   let gmv = 0;
   let orders = 0;
@@ -476,7 +493,7 @@ export function buildWeekPack(orgShops, ymd = shanghaiYmd()) {
   const teams = TEAMS.map((meta) => {
     const seeded = seedRowsFromOrg(orgShops, meta.key);
     const extras = extraManualRows(saved.cells, meta.key, seeded);
-    const rows = applyManualCells(seeded.concat(extras), saved.cells, meta.key);
+    const rows = groupWeekRowsByOwner(applyManualCells(seeded.concat(extras), saved.cells, meta.key));
     return {
       key: meta.key,
       label: meta.label,
