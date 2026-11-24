@@ -6,6 +6,7 @@ import { getHomeErpKpis } from "./erp-kpis.js";
 import { getHomeErpPaid } from "./erp-paid.js";
 import { HOME_JS_STAMP } from "./asset-ver.js";
 import { patchConnectPicker } from "./connect-patch.js";
+import { paintWeekInk } from "./week-ink-patch.js";
 import {
   getHomeLocalPaid,
   postHomeLocalPaid,
@@ -273,7 +274,7 @@ export function patchHomeClientSource(text) {
     .replaceAll("0.1.1039-loginpop", "0.1.1090-paidon")
     .replaceAll("0.1.1043-deskkeep", "0.1.1090-paidon")
     .replaceAll("0.1.1070-liveon", "0.1.1090-paidon");
-  return patchExpiredShopLogin(patchConnectPicker(patched));
+  return paintWeekInk(patchExpiredShopLogin(patchConnectPicker(patched)));
 }
 
 const EXPIRED_STALE_OLD =

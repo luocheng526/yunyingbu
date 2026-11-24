@@ -26,6 +26,7 @@ import {
   weekTeamKey
 } from "../src/modules/home/week-report.js";
 import { homeRouter } from "../src/modules/home/router.js";
+import { paintWeekInk } from "../src/modules/home/week-ink-patch.js";
 
 const homeJs = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "../public/shared/modules/home.js"),
@@ -51,6 +52,23 @@ test("week tab sits beside 实时 and keeps the five-times spreadsheet headers",
   assert.match(homeJs, /xm-hm-week-head/);
   assert.match(homeJs, /function weekBarKpis/);
   assert.match(homeJs, /运营店铺数量/);
+  assert.match(homeJs, /\.xm-hm-week-table td\.is-up\{background:#00b050;color:#000\}/);
+  assert.match(homeJs, /\.xm-hm-week-table td\.is-down\{background:#ff0000;color:#000\}/);
+  assert.match(homeJs, /ctx\.fillStyle = "#000";/);
+  assert.doesNotMatch(homeJs, /\.xm-hm-week-table td\.is-up\{background:#00b050;color:#fff\}/);
+});
+
+test("week ink patch turns green/red GMV numbers black", () => {
+  const old =
+    '.xm-hm-week-table td.is-up{background:#00b050;color:#fff}' +
+    '.xm-hm-week-table td.is-down{background:#ff0000;color:#fff}' +
+    'ctx.fillStyle = bg === "#00b050" || bg === "#ff0000" ? "#fff" : "#111";';
+  const next = paintWeekInk(old);
+  assert.match(next, /td\.is-up\{background:#00b050;color:#000\}/);
+  assert.match(next, /td\.is-down\{background:#ff0000;color:#000\}/);
+  assert.match(next, /ctx\.fillStyle = "#000";/);
+  assert.doesNotMatch(next, /td\.is-up\{background:#00b050;color:#fff\}/);
+  assert.doesNotMatch(next, /bg === "#00b050" \|\| bg === "#ff0000" \? "#fff"/);
 });
 
 test("last seven day labels and crawler seed plus manual overlay", () => {

@@ -1473,7 +1473,7 @@
             ctx.fillRect(x0, y, w, rowH);
             ctx.strokeStyle = "#333";
             ctx.strokeRect(x0, y, w, rowH);
-            ctx.fillStyle = bg === "#00b050" || bg === "#ff0000" || bg === "#5b9bd5" ? "#fff" : "#111";
+            ctx.fillStyle = "#000";
             ctx.font = '11px "Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
             var text = "";
             if (col.key === "_kpiName") {
@@ -2952,11 +2952,11 @@
       ".xm-hm-week-table th.is-profit,.xm-hm-week-table th.is-margin{background:#bdd7ee}" +
       ".xm-hm-week-table th.is-mtd{background:#f8cbad}" +
       ".xm-hm-week-table th.is-ops{background:#ffff00}" +
-      ".xm-hm-week-table td.is-up{background:#00b050;color:#fff}" +
-      ".xm-hm-week-table td.is-down{background:#ff0000;color:#fff}" +
+      ".xm-hm-week-table td.is-up{background:#00b050;color:#000}" +
+      ".xm-hm-week-table td.is-down{background:#ff0000;color:#000}" +
       ".xm-hm-week-table td.is-fine{background:#ffff00}" +
-      ".xm-hm-week-table td.is-noclean{background:#5b9bd5;color:#fff}" +
-      ".xm-hm-week-table td.is-clean{background:#00b050;color:#fff}" +
+      ".xm-hm-week-table td.is-noclean{background:#5b9bd5;color:#000}" +
+      ".xm-hm-week-table td.is-clean{background:#00b050;color:#000}" +
       ".xm-hm-week-table input{width:100%;border:0;background:transparent;text-align:center;font:inherit;color:inherit;padding:0}" +
       ".xm-hm-week-table .is-shop{text-align:left;font-weight:600}" +
       ".xm-hm-week-foot td{font-weight:700}" +
