@@ -1026,11 +1026,16 @@
   }
 
   let scopeKey = "";
+  let organizationRevision = "";
 
   function scopeSignature(user) {
     const who = user || {};
+    // A roster revision invalidates data caches, not the current page. Effective
+    // permissions and the signed-in person's scope still trigger a full reset.
+    const acl = who.siteAcl ? Object.assign({}, who.siteAcl) : null;
+    if (acl) delete acl.revision;
     const shops = Array.isArray(who.visibleShops) ? who.visibleShops.join(",") : "";
-    return [who.desk || "", who.board || "", who.department || "", who.center || "", who.role || "", who.lineManager || "", who.supervisor || "", who.director || "", shops, JSON.stringify(who.siteAcl || null)].join("|");
+    return [who.desk || "", who.board || "", who.department || "", who.center || "", who.role || "", who.lineManager || "", who.supervisor || "", who.director || "", shops, JSON.stringify(acl)].join("|");
   }
 
   function paintSider() {
@@ -3448,11 +3453,13 @@
     paintWatermark(nextUser);
     const next = scopeSignature(nextUser);
     const changed = Boolean(scopeKey && next !== scopeKey);
+    const revision = String(nextUser.siteAcl && nextUser.siteAcl.revision || "");
+    if (next !== scopeKey || revision !== organizationRevision) {
+      invalidateCenterScope();
+    }
+    organizationRevision = revision;
     if (!force && next === scopeKey) {
       return;
-    }
-    if (next !== scopeKey) {
-      invalidateCenterScope();
     }
     scopeKey = next;
     const flags = orgFlagsFromUser(nextUser);
