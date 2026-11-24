@@ -4,7 +4,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { shanghaiYmd, shanghaiNow } from "./local-paid.js";
-import { applyWpsPack, readWpsStore } from "./week-wps.js";
 
 const TEAMS = [
   { key: "han", label: "韩梦凯五倍店铺", totalLabel: "韩梦凯五倍店铺业绩" },
@@ -52,26 +51,20 @@ function monthLastDay(year, month) {
   return MONTH_DAYS[month] || 30;
 }
 
-function monthProfitLabel(year, month) {
+function monthRangeLabel(year, month, suffix) {
   const last = monthLastDay(year, month);
-  if (month === 6) {
-    return `6.1-${last}号利润`;
+  if (month === 6 || month >= 8) {
+    return `${month}.1-${last}号${suffix}`;
   }
-  if (month === 8 || month === 10) {
-    return `${month}.1-${last}号利润`;
-  }
-  return `${month}.1-${month}.${last}号利润`;
+  return `${month}.1-${month}.${last}号${suffix}`;
+}
+
+function monthProfitLabel(year, month) {
+  return monthRangeLabel(year, month, "利润");
 }
 
 function monthMarginLabel(year, month) {
-  const last = monthLastDay(year, month);
-  if (month === 6) {
-    return `6.1-${last}号大毛利率`;
-  }
-  if (month === 8 || month === 10) {
-    return `${month}.1-${last}号大毛利率`;
-  }
-  return `${month}.1-${month}.${last}号大毛利率`;
+  return monthRangeLabel(year, month, "大毛利率");
 }
 
 export function buildWeekColumns(ymd = shanghaiYmd()) {
@@ -143,16 +136,17 @@ export function buildWeekColumns(ymd = shanghaiYmd()) {
       edit: true
     });
   }
-  mtdDays.slice(-2).forEach((day) => {
+  const marginMtd = mtdDays[mtdDays.length - 1];
+  if (marginMtd) {
     cols.push({
-      key: `marginMtd_${day.ymd}`,
-      label: `${Number(parts[1])}.1-${Number(day.ymd.split("-")[2])}号大毛利率`,
+      key: `marginMtd_${marginMtd.ymd}`,
+      label: `${Number(parts[1])}.1-${Number(marginMtd.ymd.split("-")[2])}号大毛利率`,
       group: "margin",
       w: 72,
-      ymd: day.ymd,
+      ymd: marginMtd.ymd,
       edit: true
     });
-  });
+  }
   [
     { key: "visitors", label: "访客数", w: 56 },
     { key: "orders", label: "订单数", w: 56 },
@@ -179,12 +173,211 @@ export function cellKey(team, shop, col) {
   return `${team}|${shop}|${col}`;
 }
 
+export function normWeekShop(name) {
+  return String(name || "")
+    .replace(/\s+/g, "")
+    .replace(/[（(].*?[)）]/g, "")
+    .replace(/旗舰店$/, "旗舰")
+    .replace(/专卖店$/, "专卖")
+    .replace(/专营店$/, "专营")
+    .replace(/店$/, "");
+}
+
+const SHEET_ALIASES = {
+  LUCYLEE养生器械旗舰店: "LUCYLEE养生器械桦野曼专卖店",
+  LUCYLEE医疗保健旗舰店: "LUCYLEE智能健康旗舰店",
+  DIKTT潮流护理旗舰店: "DIKTT个护健康旗舰店",
+  RASW栀悦专卖店: "RASW栀砚专卖店"
+};
+
+export function matchWeekShop(sheetName, webShops) {
+  const raw = String(sheetName || "").trim();
+  if (!raw) {
+    return "";
+  }
+  const alias = SHEET_ALIASES[raw] || raw;
+  const names = [raw, alias];
+  const list = webShops || [];
+  const currentOf = (row) => String(row.shop || row.store || row.storeName || "").trim();
+  for (const name of names) {
+    const hit = list.find((row) => currentOf(row) === name);
+    if (hit) {
+      return currentOf(hit);
+    }
+  }
+  const want = new Set(names.map(normWeekShop).filter(Boolean));
+  const currentHits = list.filter((row) => want.has(normWeekShop(currentOf(row))));
+  if (currentHits.length === 1) {
+    return currentOf(currentHits[0]);
+  }
+  const prefixHits = list.filter((row) => {
+    const web = normWeekShop(currentOf(row));
+    return web && [...want].some((sheet) => web === sheet || web.startsWith(sheet) || sheet.startsWith(web));
+  });
+  if (prefixHits.length === 1) {
+    return currentOf(prefixHits[0]);
+  }
+  const liveNames = new Set(list.map(currentOf).filter(Boolean));
+  const formerHits = list.filter((row) => {
+    const former = String(row.formerNames || "")
+      .split(/[,，;；]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return former.some((item) => names.includes(item) || want.has(normWeekShop(item))) && !former.some((item) => liveNames.has(item));
+  });
+  if (formerHits.length === 1) {
+    return currentOf(formerHits[0]);
+  }
+  return "";
+}
+
+export function sheetMetricsToCells(sheetRows, webShops, days) {
+  const cells = {};
+  const matched = [];
+  const unmatched = [];
+  (sheetRows || []).forEach((row) => {
+    const shop = matchWeekShop(row.shop, webShops);
+    const web = (webShops || []).find((item) => shopNameOf(item) === shop);
+    const team = web && (web.team === "han" || web.team === "shen") ? web.team : row.team === "han" || row.team === "shen" ? row.team : "";
+    if (!shop || (team !== "han" && team !== "shen")) {
+      unmatched.push(row.shop);
+      return;
+    }
+    if (row.cat) {
+      cells[cellKey(team, shop, "cat")] = row.cat;
+    }
+    (days || []).forEach((ymd) => {
+      writeCell(cells, team, shop, `gmv_${ymd}`, row.gmv && row.gmv[ymd]);
+      writeCell(cells, team, shop, `fee_${ymd}`, row.fee && row.fee[ymd]);
+      writeCell(cells, team, shop, `feeRate_${ymd}`, row.feeRate && row.feeRate[ymd]);
+    });
+    matched.push({ sheet: row.shop, shop, team });
+  });
+  return { cells, matched, unmatched };
+}
+
+function writeCell(cells, team, shop, col, value) {
+  if (value == null || value === "") {
+    return;
+  }
+  cells[cellKey(team, shop, col)] = value;
+}
+
 function num(value) {
   if (value == null || value === "") {
     return null;
   }
   const n = Number(String(value).replace(/,/g, ""));
   return Number.isFinite(n) ? n : null;
+}
+
+export function weekTeamKey(row) {
+  const blob = `${(row && row.team) || ""} ${(row && row.source) || ""} ${(row && row.center) || ""}`;
+  if (/沈子晗|\bshen\b/i.test(blob)) {
+    return "shen";
+  }
+  if (/韩梦凯|\bhan\b/i.test(blob)) {
+    return "han";
+  }
+  return "";
+}
+
+function shopNameOf(row) {
+  return String((row && (row.store || row.storeName || row.shopName || row.shop)) || "").trim();
+}
+
+function shopEnabled(row) {
+  if (!row || row.enabled === false) {
+    return false;
+  }
+  const status = String(row.statusKey || row.status || "").trim();
+  if (status && status !== "operating" && status !== "运营中") {
+    return false;
+  }
+  return true;
+}
+
+function staffName(value) {
+  const name = String(value || "").trim();
+  if (!name || name === "-" || name === "—") {
+    return "";
+  }
+  return name;
+}
+
+export function weekOwner(row) {
+  return (
+    staffName(row && row.operator) ||
+    staffName(row && row.reserve) ||
+    staffName(row && row.supervisor) ||
+    staffName(row && row.manager)
+  );
+}
+
+export function weekLead(row) {
+  return staffName(row && row.supervisor) || staffName(row && row.reserve) || weekOwner(row);
+}
+
+export async function loadWeekOrgShops(cookie, fetchImpl = fetch, origin = "") {
+  const base = String(
+    origin ||
+      process.env.HOME_INTERNAL_ORIGIN ||
+      process.env.SHEN_INTERNAL_ORIGIN ||
+      "http://127.0.0.1:" + (process.env.PORT || 3000)
+  ).replace(/\/$/, "");
+  const response = await fetchImpl(base + "/api/people/org/stores", {
+    headers: { cookie: cookie || "", accept: "application/json" }
+  });
+  if (response.status === 401) {
+    const error = new Error("请先登录运营中心");
+    error.statusCode = 401;
+    throw error;
+  }
+  if (!response.ok) {
+    const error = new Error("无法读取组织中心店铺");
+    error.statusCode = 502;
+    throw error;
+  }
+  const data = await response.json();
+  return (data.stores || [])
+    .map(function (store) {
+      return {
+        store: String((store && store.storeName) || "").trim(),
+        team: String((store && store.team) || ""),
+        operator: staffName(store && store.operator),
+        reserve: staffName(store && store.reserve),
+        supervisor: staffName(store && store.supervisor),
+        manager: staffName(store && store.manager),
+        enabled: store.statusKey === "operating" || (store.statusKey == null && store.remark === "运营中"),
+        statusKey: String((store && store.statusKey) || "")
+      };
+    })
+    .filter(function (store) {
+      return store.store;
+    });
+}
+
+export function seedRowsFromOrg(shops, teamKey) {
+  const rows = [];
+  (shops || []).forEach((row) => {
+    if (!shopEnabled(row) || weekTeamKey(row) !== teamKey) {
+      return;
+    }
+    const shop = shopNameOf(row);
+    if (!shop) {
+      return;
+    }
+    rows.push({
+      shop,
+      source: "org",
+      lead: weekLead(row),
+      cells: {
+        shop,
+        owner: weekOwner(row)
+      }
+    });
+  });
+  return rows;
 }
 
 export function seedRowsFromLive(records, teamKey, ymd = shanghaiYmd()) {
@@ -197,7 +390,7 @@ export function seedRowsFromLive(records, teamKey, ymd = shanghaiYmd()) {
     if (teamKey === "shen" && source.indexOf("shen") === -1) {
       return;
     }
-    const shop = String((row && (row.shopName || row.shop || row.storeName)) || "").trim();
+    const shop = shopNameOf(row);
     if (!shop) {
       return;
     }
@@ -256,26 +449,56 @@ export function extraManualRows(cells, teamKey, known) {
   return Object.keys(shops).map((name) => shops[name]);
 }
 
+export function groupWeekRowsByLead(rows) {
+  const groups = new Map();
+  const empty = [];
+  (rows || []).forEach((row) => {
+    const lead = String((row && row.lead) || "").trim();
+    if (!lead) {
+      empty.push(row);
+      return;
+    }
+    if (!groups.has(lead)) {
+      groups.set(lead, []);
+    }
+    groups.get(lead).push(row);
+  });
+  return [...groups.values(), empty].flat();
+}
+
 export function teamKpis(rows, ymd) {
   let gmv = 0;
   let orders = 0;
   let n = 0;
+  let over = 0;
+  const owners = {};
   (rows || []).forEach((row) => {
     const pay = num(row.cells && row.cells[`gmv_${ymd}`]);
     if (pay != null) {
       gmv += pay;
+      if (pay >= 10000) {
+        over += 1;
+      }
     }
     const od = num(row.cells && row.cells.orders);
     if (od != null) {
       orders += od;
+    }
+    const owner = String((row.cells && row.cells.owner) || "").trim();
+    if (owner) {
+      owners[owner] = true;
     }
     n += 1;
   });
   return [
     { key: "total", label: "业绩", value: gmv || "" },
     { key: "shopAvg", label: "店均", value: n ? Math.round(gmv / n) : "" },
+    { key: "unitPrice", label: "客单价", value: "" },
+    { key: "cvr", label: "转化率", value: "" },
     { key: "orders", label: "订单数", value: orders || "" },
-    { key: "shops", label: "运营店铺数量", value: n }
+    { key: "staff", label: "运营人数", value: Object.keys(owners).length || "" },
+    { key: "shops", label: "运营店铺数量", value: n },
+    { key: "over10k", label: "过万店铺", value: over }
   ];
 }
 
@@ -359,13 +582,13 @@ export function saveWeekCells(patch) {
   return writeWeekStore(cur);
 }
 
-export function buildWeekPack(liveRecords, ymd = shanghaiYmd()) {
+export function buildWeekPack(orgShops, ymd = shanghaiYmd()) {
   const layout = buildWeekColumns(ymd);
   const saved = readWeekStore();
   const teams = TEAMS.map((meta) => {
-    const seeded = seedRowsFromLive(liveRecords, meta.key, ymd);
+    const seeded = seedRowsFromOrg(orgShops, meta.key);
     const extras = extraManualRows(saved.cells, meta.key, seeded);
-    const rows = applyManualCells(seeded.concat(extras), saved.cells, meta.key);
+    const rows = groupWeekRowsByLead(applyManualCells(seeded.concat(extras), saved.cells, meta.key));
     return {
       key: meta.key,
       label: meta.label,
@@ -375,11 +598,11 @@ export function buildWeekPack(liveRecords, ymd = shanghaiYmd()) {
       foot: [
         { key: "fine", label: `${meta.label.replace("五倍店铺", "")}精铺组近七天业绩`, kind: "fine" },
         { key: "noclean", label: "无清洁统计", kind: "noclean" },
-        { key: "clean", label: "清洁店铺统计", kind: "clean" }
+        { key: "clean", label: "清洁统计", kind: "clean" }
       ]
     };
   });
-  return applyWpsPack({
+  return {
     ok: true,
     title: "甄选五倍业绩统计",
     ymd: layout.ymd,
@@ -389,8 +612,8 @@ export function buildWeekPack(liveRecords, ymd = shanghaiYmd()) {
     teams,
     dingReady: Boolean(saved.webhook || process.env.HOME_WEEK_DING_WEBHOOK),
     updatedAt: saved.updatedAt || shanghaiNow(),
-    source: "han-shen-crawler+manual"
-  }, readWpsStore(), ymd);
+    source: "org+manual"
+  };
 }
 
 function token() {
@@ -419,8 +642,8 @@ export function dingWebhook() {
 
 export async function postDingTalk({ webhook, title, text, picUrl }) {
   const url = String(webhook || "").trim();
-  if (!url || !/^https:\/\/oapi\.dingtalk\.com\/robot\/send\?/i.test(url)) {
-    return { ok: false, definiteFailure: true, error: "未配置钉钉机器人 webhook" };
+  if (!url || !/^https:\/\/[a-z0-9.-]*dingtalk\.com\//i.test(url)) {
+    return { ok: false, error: "未配置钉钉机器人 webhook" };
   }
   const body = picUrl
     ? {
@@ -437,12 +660,11 @@ export async function postDingTalk({ webhook, title, text, picUrl }) {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(20000)
+    body: JSON.stringify(body)
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.errcode !== 0) {
-    return { ok: false, definiteFailure: res.ok && typeof data.errcode === "number" && data.errcode !== 0, error: "钉钉发送未确认成功" };
+  if (!res.ok || data.errcode) {
+    return { ok: false, error: data.errmsg || `钉钉 ${res.status}`, data };
   }
   return { ok: true, data };
 }

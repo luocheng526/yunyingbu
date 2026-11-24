@@ -1,0 +1,19 @@
+[
+  {
+    "shopName": "RASW潮流生活京选菀瑶专卖店",
+    "shopId": "16501691",
+    "platform": "JD",
+    "date": "2026-11-19",
+    "metric": "支付金额(支付)",
+    "pageDisplay": "3,759"
+  },
+  {
+    "shopName": "RASW潮流生活京选菀瑶专卖店",
+    "shopId": "16501691",
+    "platform": "JD",
+    "date": "2026-10-03",
+    "metric": "广告花费",
+    "pageDisplay": "9,606.63",
+    "pageConfirmation": { "source": "user", "confirmedOn": "2026-11-21" }
+  }
+]
