@@ -3,25 +3,42 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { navMarkup } from "../home/nav-items.js";
-import { currentUser, publicProfile } from "./auth.js";
+import { currentUser, publicProfile, resolveDesk } from "./auth.js";
 import { APP_ICON_PNG } from "./app-icon-png.js";
+import { PWA_ICONS } from "./app-pwa-icons.js";
 
 // xm-upgrade-mask 0.1.52  必须和 home/pages.js 成套发，禁止只换本文件。
-// xm-fast-shell 0.1.772-feedback
+// xm-fast-shell 0.1.787-acadleaf
 // login.html 不走 HTML 内存缓存；login.css 禁止 immutable。必须和 home/pages.js 成套发。
 
-export const SHELL_ASSET_VER = "0.1.772-feedback";
+export const SHELL_ASSET_VER = "0.1.1361-glass-app";
+// Navigation changes independently of the shell release. Revalidate it on each
+// page load, including in the persistent cache retained by desktop App updates.
+export const NAV_SCRIPT_URL = "/shared/nav.js";
 export const WEB_MANIFEST = {
-  name: "星脉甄选运营中心",
-  short_name: "星脉甄选",
-  start_url: "/home",
-  scope: "/",
-  display: "standalone",
-  background_color: "#f0f2f5",
-  theme_color: "#1677ff",
-  icons: [
-    { src: `/apple-touch-icon.png?v=${SHELL_ASSET_VER}`, sizes: "180x180", type: "image/png", purpose: "any" },
-    { src: `/shared/tab-icon.png?v=${SHELL_ASSET_VER}`, sizes: "32x32", type: "image/png", purpose: "any" }
+  "id": "/home",
+  "name": "星脉甄选运营中心",
+  "short_name": "星脉甄选",
+  "description": "甄选未来员工工作台，与网站共用账号、业务和数据。",
+  "lang": "zh-CN",
+  "start_url": "/home?app=glass",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#d8c8b5",
+  "theme_color": "#d8c8b5",
+  "icons": [
+    {
+      "src": "/shared/app/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/shared/app/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 };
 const PHONE_HEAD =
@@ -33,6 +50,7 @@ const PHONE_HEAD =
   `    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=${SHELL_ASSET_VER}" />\n` +
   '    <link rel="manifest" href="/manifest.webmanifest" />\n';
 const APP_ICON_PATHS = new Set([
+  ...Object.keys(PWA_ICONS),
   "/apple-touch-icon.png",
   "/apple-touch-icon-precomposed.png",
   "/apple-touch-icon-180x180.png",
@@ -52,6 +70,7 @@ const TAB_ICON_ICO = Buffer.from(
 );
 export const APP_MODULES = {
   "/home": "home",
+  "/bound": "bound",
   "/data": "data",
   "/data/overview": "data",
   "/data/shops": "data",
@@ -83,6 +102,7 @@ export const APP_MODULES = {
   "/academy/handbook": "academy",
   "/agents": "agents",
   "/work": "work",
+  "/meeting": "meeting",
   "/feedback": "feedback",
   "/releases": "releases",
   "/me": "me",
@@ -90,7 +110,8 @@ export const APP_MODULES = {
 };
 const SHELL_TITLES = {
   "/home": "首页",
-  "/data": "数据中心",
+  "/bound": "边界数据中心",
+  "/data": "星脉数据中心",
   "/data/overview": "数据总揽",
   "/data/shops": "店铺数据",
   "/data/goods": "商品数据",
@@ -121,6 +142,7 @@ const SHELL_TITLES = {
   "/academy/handbook": "运营手册",
   "/agents": "甄选智能体",
   "/work": "工作汇报",
+  "/meeting": "月度大会",
   "/feedback": "需求与反馈",
   "/releases": "版本发布中心",
   "/me": "个人中心",
@@ -135,12 +157,48 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
+const WATERMARK_CELLS = 80;
+
+export function watermarkLabel(user) {
+  const name = String((user && (user.displayName || user.username)) || "").trim();
+  return name ? `甄选：${name}` : "";
+}
+
+export function injectWatermark(html, user) {
+  const text = String(html || "");
+  const label = watermarkLabel(user);
+  if (!label || isLoginHtml(text) || text.includes('class="xm-watermark"')) {
+    return text;
+  }
+  const safe = escapeHtml(label);
+  const cells = Array.from({ length: WATERMARK_CELLS }, () => `<span>${safe}</span>`).join("");
+  const block =
+    `<div class="xm-watermark" data-xm-watermark="${safe}" aria-hidden="true">` +
+    `<div class="xm-watermark-sheet">${cells}</div></div>\n`;
+  if (text.includes("</body>")) {
+    return text.replace("</body>", `${block}  </body>`);
+  }
+  return text + block;
+}
+
+function bootProfile(user) {
+  const profile = publicProfile(user);
+  if (!profile) {
+    return profile;
+  }
+  profile.prefs =
+    user.prefs && typeof user.prefs === "object"
+      ? user.prefs
+      : { theme: "light", siderCollapsed: false, tabs: { hrefs: [], active: "" } };
+  return profile;
+}
+
 export function injectBootUser(html, user) {
   const text = String(html || "");
   if (!user || !user.username || text.includes("__xmBootUser")) {
     return text;
   }
-  const tag = `    <script>window.__xmBootUser=${JSON.stringify(publicProfile(user))};</script>\n`;
+  const tag = `    <script>window.__xmBootUser=${JSON.stringify(bootProfile(user))};</script>\n`;
   if (text.includes("</head>")) {
     return text.replace("</head>", tag + "  </head>");
   }
@@ -157,7 +215,7 @@ export function renderAppShell(href, user) {
       : "";
   const boot =
     user && user.username
-      ? `    <script>window.__xmBootUser=${JSON.stringify(publicProfile(user))};</script>\n`
+      ? `    <script>window.__xmBootUser=${JSON.stringify(bootProfile(user))};</script>\n`
       : "";
   const userName = escapeHtml((user && (user.displayName || user.username)) || "用户");
   return withSharedShell(`<!DOCTYPE html>
@@ -169,7 +227,9 @@ export function renderAppShell(href, user) {
 ${PHONE_HEAD}
     <link rel="icon" type="image/png" sizes="32x32" href="${TAB_ICON}" />
     <link rel="shortcut icon" href="/favicon.ico?v=${SHELL_ASSET_VER}" />
-${css}    <link rel="preload" href="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" as="script" />
+${css}    <link rel="stylesheet" href="/shared/xm-ui.css?v=${SHELL_ASSET_VER}" />
+    <script src="/shared/xm-ui.js?v=${SHELL_ASSET_VER}"></script>
+    <link rel="preload" href="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" as="script" />
 ${boot}    <script src="/shared/modules/${id}.js?v=${SHELL_ASSET_VER}" defer data-xm-mod="${key}"></script>
   </head>
   <body class="xm-app xm-app-shell">
@@ -215,6 +275,8 @@ const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..
 const SHELL_ASSET_FILES = {
   "/shared/nav.js": "shared/nav.js",
   "/shared/layout.css": "shared/layout.css",
+  "/shared/xm-ui.css": "shared/xm-ui.css",
+  "/shared/xm-ui.js": "shared/xm-ui.js",
   "/login.css": "login.css",
   "/releases.css": "releases.css"
 };
@@ -282,7 +344,9 @@ const hanApiCache = new Map();
 function versionShellAssets(text) {
   return String(text || "")
     .replace(/\/shared\/layout\.css(?:\?[^"'>\s]*)?/g, `/shared/layout.css?v=${SHELL_ASSET_VER}`)
-    .replace(/\/shared\/nav\.js(?:\?[^"'>\s]*)?/g, `/shared/nav.js?v=${SHELL_ASSET_VER}`)
+    .replace(/\/shared\/nav\.js(?:\?[^"'>\s]*)?/g, NAV_SCRIPT_URL)
+    .replace(/\/shared\/xm-ui\.css(?:\?[^"'>\s]*)?/g, `/shared/xm-ui.css?v=${SHELL_ASSET_VER}`)
+    .replace(/\/shared\/xm-ui\.js(?:\?[^"'>\s]*)?/g, `/shared/xm-ui.js?v=${SHELL_ASSET_VER}`)
     .replace(/\/shared\/modules\/([a-z]+)\.js(?:\?[^"'>\s]*)?/g, `/shared/modules/$1.js?v=${SHELL_ASSET_VER}`)
     .replace(/\/releases\.css(?:\?[^"'>\s]*)?/g, `/releases.css?v=${SHELL_ASSET_VER}`);
 }
@@ -318,15 +382,18 @@ export function isPublicRequest(req) {
 }
 
 const THEME_BOOT =
+  '    <script>try{var u=window.__xmBootUser;var t=u&&u.prefs&&u.prefs.theme;if(t!=="dark"&&t!=="light"&&t!=="pink")t="light";document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t==="dark"?"dark":"light";}catch(e){}</script>\n';
+const LOGIN_THEME_BOOT =
   '    <script>try{var t=localStorage.getItem("xm-theme");if(t==="dark"||t==="light"||t==="pink"){document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t==="dark"?"dark":"light";}}catch(e){}</script>\n';
 
 export function withThemeBoot(html) {
   const text = String(html || "");
-  if (text.includes('localStorage.getItem("xm-theme")')) {
+  if (text.includes('localStorage.getItem("xm-theme")') || text.includes("u&&u.prefs&&u.prefs.theme")) {
     return text;
   }
+  const boot = isLoginHtml(text) ? LOGIN_THEME_BOOT : THEME_BOOT;
   if (text.includes("</head>")) {
-    return text.replace("</head>", THEME_BOOT + "  </head>");
+    return text.replace("</head>", boot + "  </head>");
   }
   return text;
 }
@@ -373,24 +440,37 @@ export function isLoginHtml(html) {
   );
 }
 
+export function isUiShowcaseHtml(html) {
+  return /xm-ui-showcase/.test(String(html || ""));
+}
+
 export function withSharedShell(html) {
   const text = String(html || "");
   if (isLoginHtml(text)) {
     return versionShellAssets(withThemeBoot(applyPhoneHead(applyTabIcon(text))));
   }
+  if (isUiShowcaseHtml(text)) {
+    return versionShellAssets(applyPhoneHead(applyTabIcon(text)));
+  }
   let out = applyPhoneHead(text);
   if (out.includes("</head>")) {
     const extras = [];
+    if (!out.includes("/shared/xm-ui.css")) {
+      extras.push(`    <link rel="stylesheet" href="/shared/xm-ui.css?v=${SHELL_ASSET_VER}" />`);
+    }
+    if (!out.includes("/shared/xm-ui.js")) {
+      extras.push(`    <script src="/shared/xm-ui.js?v=${SHELL_ASSET_VER}"></script>`);
+    }
     if (!out.includes("/shared/layout.css")) {
       extras.push(`    <link rel="stylesheet" href="/shared/layout.css?v=${SHELL_ASSET_VER}" />`);
     } else if (!out.includes('rel="preload" href="/shared/layout.css')) {
       extras.push(`    <link rel="preload" href="/shared/layout.css?v=${SHELL_ASSET_VER}" as="style" />`);
     }
     if (!out.includes("/shared/nav.js")) {
-      extras.push(`    <link rel="preload" href="/shared/nav.js?v=${SHELL_ASSET_VER}" as="script" />`);
-      extras.push(`    <script src="/shared/nav.js?v=${SHELL_ASSET_VER}" defer></script>`);
+      extras.push(`    <link rel="preload" href="${NAV_SCRIPT_URL}" as="script" />`);
+      extras.push(`    <script src="${NAV_SCRIPT_URL}" defer></script>`);
     } else if (!out.includes('rel="preload" href="/shared/nav.js')) {
-      extras.push(`    <link rel="preload" href="/shared/nav.js?v=${SHELL_ASSET_VER}" as="script" />`);
+      extras.push(`    <link rel="preload" href="${NAV_SCRIPT_URL}" as="script" />`);
     }
     if (!/rel=["']icon["']/.test(out)) {
       extras.push(`    ${tabIconTag()}`);
@@ -402,7 +482,7 @@ export function withSharedShell(html) {
     }
     out = out.replace(/<title>[^<]*<\/title>/, `<title>${TAB_TITLE}</title>`);
   } else if (!out.includes("/shared/nav.js") && out.includes("</body>")) {
-    out = out.replace("</body>", `    <script src="/shared/nav.js?v=${SHELL_ASSET_VER}"></script>\n  </body>`);
+    out = out.replace("</body>", `    <script src="${NAV_SCRIPT_URL}"></script>\n  </body>`);
   }
   return versionShellAssets(withThemeBoot(out));
 }
@@ -439,13 +519,14 @@ export function injectHtmlShell(req, res, next) {
       res.setHeader("Cache-Control", "private, no-store");
       let html = body;
       if (
-        !html.includes(`/shared/nav.js?v=${SHELL_ASSET_VER}`) &&
+        !html.includes(`src="${NAV_SCRIPT_URL}"`) &&
         !isLoginHtml(html)
       ) {
         html = withSharedShell(html);
       }
       if (req.user) {
         html = injectBootUser(html, req.user);
+        html = injectWatermark(html, req.user);
       }
       return send(html);
     }
@@ -498,10 +579,11 @@ function serveShellAsset(req, res) {
   if (!rel) {
     return false;
   }
-  const versioned = Boolean(req.query && req.query.v);
+  const versioned = rel !== "shared/nav.js" && Boolean(req.query && req.query.v);
+  const noStore = rel === "login.css" || rel === "shared/modules/me.js";
   res.setHeader(
     "Cache-Control",
-    rel === "login.css"
+    noStore
       ? "private, no-store"
       : versioned
         ? "public, max-age=86400, immutable"
@@ -556,7 +638,7 @@ function serveAppIcon(req, res) {
   const versioned = Boolean(req.query && req.query.v);
   res.setHeader("Cache-Control", versioned ? "public, max-age=86400, immutable" : "no-cache");
   res.type("png");
-  res.send(APP_ICON_PNG);
+  res.send(PWA_ICONS[dest] || APP_ICON_PNG);
   return true;
 }
 
@@ -598,10 +680,15 @@ async function attachDesk(user) {
     return;
   }
   try {
-    const { deskOf } = await import("../work/store.js");
-    user.desk = await deskOf(user);
+    await resolveDesk(user);
   } catch {
     user.desk = user.desk || "";
+  }
+  try {
+    const { loadPrefs } = await import("./prefs.js");
+    user.prefs = await loadPrefs(user.username);
+  } catch {
+    user.prefs = user.prefs || { theme: "light", siderCollapsed: false, tabs: { hrefs: [], active: "" } };
   }
 }
 
