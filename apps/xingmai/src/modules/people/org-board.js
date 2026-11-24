@@ -1,8 +1,10 @@
+import { stateSync } from "./state-sync.js";
+const sync = stateSync();
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertCanImportRow, assertCanWrite, canEditStore, groupIdOf, normalizeGroupId, rowMatchesScope, scopeOf } from "./org-acl.js";
-import { listPeople, orgLineOf } from "./store.js";
+import { listPeople, orgLineOf, patchPerson, registerOrgStoreSource } from "./store.js";
 
 const STATUSES = {
   operating: "运营中",
@@ -233,7 +235,7 @@ function snapshotBoard() {
 }
 
 function applyBoardSnapshot(data) {
-  if (!data || !Array.isArray(data.rows) || !data.rows.length) {
+  if (!data || !Array.isArray(data.rows)) {
     return false;
   }
   rows = data.rows.map((row) => ({
@@ -264,13 +266,13 @@ function readPersistFile() {
   }
 }
 
-function writePersistFile() {
+function writePersistFile(snapshot = snapshotBoard()) {
   if (runningUnderNodeTest()) {
     return false;
   }
   try {
     fs.mkdirSync(path.dirname(persistFile), { recursive: true });
-    fs.writeFileSync(persistFile, JSON.stringify(snapshotBoard()) + "\n", "utf8");
+    fs.writeFileSync(persistFile, JSON.stringify(snapshot) + "\n", "utf8");
     return true;
   } catch {
     return false;
@@ -307,13 +309,13 @@ async function readMysqlBoard() {
   return parsed && typeof parsed === "object" ? parsed : null;
 }
 
-async function writeMysqlBoard() {
+async function writeMysqlBoard(snapshot) {
   const auth = await mysqlAuth();
   if (!auth) {
     return false;
   }
   const { query } = auth;
-  const payload = JSON.stringify(snapshotBoard());
+  const payload = JSON.stringify(snapshot);
   await query(
     "CREATE TABLE IF NOT EXISTS org_store_board (id TINYINT NOT NULL PRIMARY KEY, payload LONGTEXT NOT NULL, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)"
   );
@@ -328,51 +330,33 @@ export function orgStoresPersistMode() {
 }
 
 export async function hydrateOrgStores() {
-  if (runningUnderNodeTest()) {
-    persistMode = "memory";
-    hydrated = true;
-    return { ok: true, mode: persistMode, stores: rows.length };
-  }
-  try {
-    const fromMysql = await readMysqlBoard();
-    if (applyBoardSnapshot(fromMysql)) {
-      persistMode = "mysql";
-      hydrated = true;
-      return { ok: true, mode: persistMode, stores: rows.length };
+  if (runningUnderNodeTest()) return { ok: true, mode: persistMode, stores: rows.length };
+  await sync.read(async () => {
+    const mysql = await mysqlAuth();
+    if (mysql) {
+      // A database failure must not revive stale file permissions.
+      const data = await readMysqlBoard();
+      if (data) return { data, mode: "mysql" };
     }
-  } catch {
-    /* fall through to file / memory */
-  }
-  if (applyBoardSnapshot(readPersistFile())) {
-    persistMode = "file";
-    hydrated = true;
-    return { ok: true, mode: persistMode, stores: rows.length };
-  }
-  persistMode = persistMode || "memory";
-  hydrated = true;
+    return { data: readPersistFile(), mode: "file" };
+  }, result => { if (applyBoardSnapshot(result.data)) persistMode = result.mode; });
   return { ok: true, mode: persistMode, stores: rows.length };
 }
 
 export async function persistOrgStores() {
-  if (runningUnderNodeTest()) {
-    persistMode = "memory";
-    return { ok: true, mode: persistMode };
-  }
-  try {
-    if (await writeMysqlBoard()) {
-      persistMode = "mysql";
-      writePersistFile();
-      return { ok: true, mode: persistMode };
+  if (runningUnderNodeTest()) return { ok: true, mode: persistMode };
+  return sync.write(snapshotBoard(), async snapshot => {
+    try {
+      if (await writeMysqlBoard(snapshot)) {
+        persistMode = "mysql"; writePersistFile(snapshot);
+        return { ok: true, mode: persistMode };
+      }
+    } catch { throw Object.assign(new Error("组织中心保存失败，数据库未确认写入"), { statusCode: 503 }); }
+    if (writePersistFile(snapshot)) {
+      persistMode = "file"; return { ok: true, mode: persistMode };
     }
-  } catch {
-    /* keep file fallback */
-  }
-  if (writePersistFile()) {
-    persistMode = "file";
-    return { ok: true, mode: persistMode };
-  }
-  persistMode = "memory";
-  return { ok: true, mode: persistMode };
+    throw Object.assign(new Error("组织中心保存失败，无法持久化"), { statusCode: 503 });
+  });
 }
 
 function addLog(action, detail) {
@@ -435,7 +419,7 @@ function collectRoster() {
 }
 
 function roleOfName(name, byName) {
-  return rightsPins[name] || mapBoardRole(byName[name] && byName[name].role) || "运营";
+  return mapBoardRole(byName[name] && byName[name].role) || rightsPins[name] || "运营";
 }
 
 function managerBranchOfStore(row) {
@@ -569,7 +553,7 @@ function isLeadRole(role) {
 
 function rosterLineRole(person, line, byName) {
   const name = cleanName(person && person.name);
-  if (rightsPins[name]) {
+  if (!person && rightsPins[name]) {
     return rightsPins[name];
   }
   const owns = (value, seat) => {
@@ -989,7 +973,7 @@ export function listRightsBoard() {
   };
 }
 
-export function pinRightsName(name, role) {
+export async function pinRightsName(name, role) {
   const who = String(name || "").trim();
   const next = String(role || "").trim();
   if (!who) {
@@ -999,11 +983,17 @@ export function pinRightsName(name, role) {
     return { ok: false, statusCode: 400, error: "职位不在责权栏中" };
   }
   rightsPins[who] = next;
+  const person = listPeople().find(row => row.name === who);
+  if (person) {
+    const changed = await patchPerson(person.id, { role: next });
+    if (!changed.ok) return changed;
+  }
   addLog("指定责权", who + " → " + next);
+  await persistOrgStores();
   return listRightsBoard();
 }
 
-export function unpinRightsName(name) {
+export async function unpinRightsName(name) {
   const who = String(name || "").trim();
   if (!who) {
     return { ok: false, statusCode: 400, error: "请填写姓名" };
@@ -1013,6 +1003,7 @@ export function unpinRightsName(name) {
     rightsPins[who] = DEFAULT_PINS[who];
   }
   addLog("取消指定", who);
+  await persistOrgStores();
   return listRightsBoard();
 }
 
@@ -1038,6 +1029,10 @@ export function resetOrgBoard() {
 export function listTeams() {
   return ["沈子晗组", "精铺组 韩梦凯"];
 }
+
+// All consumers of the roster use the same maintained shop assignments.
+// Keep historical demo fixtures only when no real master data has been loaded.
+registerOrgStoreSource(() => persistMode !== "memory" || rows.some(row => !row.demo) ? rows.map(clone) : null);
 
 export function summarizeOrg(actor) {
   const stores = listOrgStores({}, actor);

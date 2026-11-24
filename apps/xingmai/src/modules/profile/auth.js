@@ -770,17 +770,25 @@ export function publicProfile(user) {
     return null;
   }
   const desk = String(user.desk || "");
+  const preferred = desk === "hr" ? "/hr" : "/home";
+  const accessPaths = user.siteAcl?.paths || {};
+  const home = !user.siteAcl?.configured || accessPaths[preferred]?.enter ? preferred
+    : Object.keys(accessPaths).find(key => key !== "/me" && accessPaths[key].enter) || "/me";
   return {
     username: user.username,
     displayName: user.displayName,
     email: user.email,
     phone: user.phone,
     desk,
-    home: desk === "hr" ? "/hr" : "/home",
+    home,
     board: String(user.board || ""),
     department: String(user.department || ""),
     center: String(user.center || ""),
     role: String(user.role || ""),
+    lineManager: String(user.lineManager || ""),
+    supervisor: String(user.supervisor || ""),
+    director: String(user.director || ""),
+    siteAcl: user.siteAcl || null,
     visibleShops: Array.isArray(user.visibleShops) ? user.visibleShops.map((item) => String(item)) : [],
     avatarUrl: avatarPublicUrl(user.username)
   };
@@ -837,6 +845,13 @@ export async function resolveDesk(user) {
   }
   try {
     const { canSeeStaffNav, hrDeskFromOrg } = await import("../home/nav-items.js");
+    const roster = await import("../people/store.js");
+    const org = await import("../people/org-board.js");
+    const acl = await import("../people/site-acl.js");
+    await roster.hydratePeopleRoster();
+    await org.hydrateOrgStores();
+    await acl.hydrateSiteAcl();
+    user.siteAcl = acl.navVisibility(user.username);
     if (canSeeStaffNav(user)) {
       user.desk = "";
       return "";
@@ -848,7 +863,7 @@ export async function resolveDesk(user) {
     } catch {
       people = [];
     }
-    people = await mergePeopleBoard(people);
+    // The maintained roster is authoritative; legacy people rows can be stale.
     let fromWork = "";
     try {
       const work = await import("../work/store.js");
@@ -858,9 +873,6 @@ export async function resolveDesk(user) {
     } catch {
       fromWork = "";
     }
-    const fromOrg = hrDeskFromOrg(user, people);
-    const desk = fromWork === "hr" || fromOrg === "hr" ? "hr" : "";
-    user.desk = desk;
     const aliases = [user.username, user.displayName, user.name]
       .map((value) => String(value || "").trim())
       .filter(Boolean);
@@ -869,12 +881,18 @@ export async function resolveDesk(user) {
         (person) => aliases.includes(String(person.username || "")) || aliases.includes(String(person.name || ""))
       ) || null;
     if (me) {
-      user.board = String(me.board || user.board || "");
-      user.department = String(me.department || user.department || "");
-      user.center = String(me.center || user.center || "");
-      user.role = String(me.role || user.role || "");
+      user.board = String(me.board || "");
+      user.department = String(me.department || "");
+      user.center = String(me.center || "");
+      user.role = String(me.role || "");
+      user.lineManager = String(me.lineManager || "");
+      user.supervisor = String(me.supervisor || "");
+      user.director = String(me.director || "");
       user.visibleShops = Array.isArray(me.visibleShops) ? me.visibleShops.map((item) => String(item)) : [];
     }
+    const fromOrg = hrDeskFromOrg(user, people);
+    const desk = (me ? fromOrg : fromWork) === "hr" ? "hr" : "";
+    user.desk = desk;
     return desk;
   } catch {
     user.desk = user.desk || "";
@@ -949,16 +967,8 @@ function clearSessionCookie(res, req) {
 
 function sendProfile(res, user) {
   const profile = publicProfile(user);
-  res.json({
-    ok: true,
-    username: profile.username,
-    displayName: profile.displayName,
-    email: profile.email,
-    phone: profile.phone,
-    desk: profile.desk,
-    home: profile.home,
-    avatarUrl: profile.avatarUrl
-  });
+  res.set("Cache-Control", "private, no-store");
+  res.json({ ok: true, ...profile });
 }
 
 export function requireAuth(req, res, next) {

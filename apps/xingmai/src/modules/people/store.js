@@ -1,3 +1,5 @@
+import { stateSync } from "./state-sync.js";
+const sync = stateSync();
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -148,6 +150,14 @@ const rosterFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "data
 let loginOverlay = loadLoginOverlay();
 applyLoginOverlay();
 let rosterPersistMode = "memory";
+let orgStoreSource = () => null;
+export function registerOrgStoreSource(read) { orgStoreSource = read; }
+function masterStores() { return orgStoreSource(); }
+function assignedStore(person, row) {
+  if (person.status !== "在职") return false;
+  return ["director", "manager", "supervisor", "reserve", "operator", "assistant"]
+    .some(key => String(row[key] || "").trim() === person.name);
+}
 
 function loadLoginOverlay() {
   try {
@@ -230,7 +240,7 @@ function snapshotRoster() {
 }
 
 function applyRosterSnapshot(data) {
-  if (!data || !Array.isArray(data.people) || !data.people.length) {
+  if (!data || !Array.isArray(data.people)) {
     return false;
   }
   people = data.people.map((row) => {
@@ -265,13 +275,13 @@ function readRosterFile() {
   }
 }
 
-function writeRosterFile() {
+function writeRosterFile(snapshot = snapshotRoster()) {
   if (runningUnderNodeTest()) {
     return false;
   }
   try {
     fs.mkdirSync(path.dirname(rosterFile), { recursive: true });
-    fs.writeFileSync(rosterFile, JSON.stringify(snapshotRoster()) + "\n", "utf8");
+    fs.writeFileSync(rosterFile, JSON.stringify(snapshot) + "\n", "utf8");
     return true;
   } catch {
     return false;
@@ -308,13 +318,13 @@ async function readMysqlRoster() {
   return parsed && typeof parsed === "object" ? parsed : null;
 }
 
-async function writeMysqlRoster() {
+async function writeMysqlRoster(snapshot) {
   const auth = await mysqlAuth();
   if (!auth) {
     return false;
   }
   const { query } = auth;
-  const payload = JSON.stringify(snapshotRoster());
+  const payload = JSON.stringify(snapshot);
   await query(
     "CREATE TABLE IF NOT EXISTS people_roster_board (id TINYINT NOT NULL PRIMARY KEY, payload LONGTEXT NOT NULL, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)"
   );
@@ -330,47 +340,33 @@ export function peopleRosterPersistMode() {
 }
 
 export async function hydratePeopleRoster() {
-  if (runningUnderNodeTest()) {
-    rosterPersistMode = "memory";
-    return { ok: true, mode: rosterPersistMode, people: people.length };
-  }
-  try {
-    const fromMysql = await readMysqlRoster();
-    if (applyRosterSnapshot(fromMysql)) {
-      rosterPersistMode = "mysql";
-      return { ok: true, mode: rosterPersistMode, people: people.length };
+  if (runningUnderNodeTest()) return { ok: true, mode: rosterPersistMode, people: people.length };
+  await sync.read(async () => {
+    const mysql = await mysqlAuth();
+    if (mysql) {
+      // A database failure must not revive stale file permissions.
+      const data = await readMysqlRoster();
+      if (data) return { data, mode: "mysql" };
     }
-  } catch {
-    /* fall through */
-  }
-  if (applyRosterSnapshot(readRosterFile())) {
-    rosterPersistMode = "file";
-    return { ok: true, mode: rosterPersistMode, people: people.length };
-  }
-  rosterPersistMode = "memory";
+    return { data: readRosterFile(), mode: "file" };
+  }, result => { if (applyRosterSnapshot(result.data)) rosterPersistMode = result.mode; });
   return { ok: true, mode: rosterPersistMode, people: people.length };
 }
 
 export async function persistPeopleRoster() {
-  if (runningUnderNodeTest()) {
-    rosterPersistMode = "memory";
-    return { ok: true, mode: rosterPersistMode };
-  }
-  try {
-    if (await writeMysqlRoster()) {
-      rosterPersistMode = "mysql";
-      writeRosterFile();
-      return { ok: true, mode: rosterPersistMode };
+  if (runningUnderNodeTest()) return { ok: true, mode: rosterPersistMode };
+  return sync.write(snapshotRoster(), async snapshot => {
+    try {
+      if (await writeMysqlRoster(snapshot)) {
+        rosterPersistMode = "mysql"; writeRosterFile(snapshot);
+        return { ok: true, mode: rosterPersistMode };
+      }
+    } catch { throw Object.assign(new Error("组织中心保存失败，数据库未确认写入"), { statusCode: 503 }); }
+    if (writeRosterFile(snapshot)) {
+      rosterPersistMode = "file"; return { ok: true, mode: rosterPersistMode };
     }
-  } catch {
-    /* file fallback */
-  }
-  if (writeRosterFile()) {
-    rosterPersistMode = "file";
-    return { ok: true, mode: rosterPersistMode };
-  }
-  rosterPersistMode = "memory";
-  return { ok: true, mode: rosterPersistMode };
+    throw Object.assign(new Error("组织中心保存失败，无法持久化"), { statusCode: 503 });
+  });
 }
 
 function findPerson(id) {
@@ -503,6 +499,26 @@ function stampOrgLine(person, line, options = {}) {
 }
 
 function applyLinePatch(found, input) {
+  input = { ...input };
+  const fields = { 总监: "director", 经理: "lineManager", 主管: "supervisor", 储备: "reserve", 运营: "operator", 助理: "assistant" };
+  const explicitRole = mapLineRole(input.role) || Object.keys(fields).find(role =>
+    [fields[role], role].some(key => Object.hasOwn(input, key) && String(input[key]).trim() === found.name));
+  if (explicitRole && fields[explicitRole]) {
+    for (const field of Object.values(fields)) {
+      if (field !== fields[explicitRole] && found[field] === found.name && !Object.hasOwn(input, field)) input[field] = "";
+    }
+    input[fields[explicitRole]] = found.name;
+    found.role = explicitRole;
+  }
+  const managerChanged = ["lineManager", "manager", "经理"].some(key => Object.hasOwn(input, key));
+  if (managerChanged) {
+    const manager = input.lineManager ?? input.manager ?? input.经理;
+    const nextCenter = centerOfManager(manager) || "其他";
+    if (!Object.hasOwn(input, "center")) {
+      if (found.department === found.center) found.department = nextCenter;
+      found.center = nextCenter;
+    }
+  }
   const aliases = [
     "director",
     "lineManager",
@@ -682,6 +698,8 @@ function expandShopNames(shop) {
 }
 
 function visibleShopsOf(person) {
+  const current = masterStores();
+  if (current !== null && !person.demo) return [...new Set(current.filter(row => assignedStore(person, row)).map(row => row.storeName).filter(Boolean))];
   const names = [];
   for (const grant of grants) {
     if (grant.personId !== person.id || !grantActive(grant, person)) {
@@ -729,10 +747,17 @@ export function listPeople() {
 }
 
 export function listShops() {
+  const current = masterStores();
+  if (current !== null) return current.map(row => ({ id: row.id, name: row.storeName, kind: "店铺", pack: "", bundle: "", demo: false }));
   return shops.map(clone);
 }
 
 export function listGrants() {
+  const current = masterStores();
+  if (current !== null) return people.filter(person => !person.demo).flatMap(person => current.filter(row => assignedStore(person, row)).map(row => ({
+    id: `org-${person.id}-${row.id}`, personId: person.id, shopId: row.id, personName: person.name,
+    shopName: row.storeName, role: person.role, startOn: "", endOn: "", revoked: false, active: true
+  })));
   return grants.map(presentGrant);
 }
 
@@ -851,6 +876,7 @@ export async function importPeople(rows, board) {
       found.department = department || found.department || center;
       found.managerId = managerId;
       found.board = boardId;
+      found.orgRevision = Number(found.orgRevision || 0) + 1;
       stampOrgLine(found, org, { skipEmpty: true });
       rememberLogin(withLogin(found));
       updated += 1;
@@ -941,6 +967,12 @@ function applyPatchPerson(id, input) {
     found.role = input.role.trim();
   }
   applyLinePatch(found, input);
+  if (["role", "director", "lineManager", "manager", "supervisor", "reserve", "operator", "assistant", "board", "department", "center", "总监", "经理", "主管", "储备", "运营", "助理"].some(key => Object.hasOwn(input, key))) found.orgRevision = Number(found.orgRevision || 0) + 1;
+  for (const key of ["department", "center"]) {
+    if (Object.hasOwn(input, key)) found[key] = String(input[key] ?? "").trim();
+  }
+  if (Object.hasOwn(input, "board")) found.board = normalizeBoard(input.board);
+  rememberLogin(withLogin(found));
   if (
     Object.prototype.hasOwnProperty.call(input, "username") ||
     Object.prototype.hasOwnProperty.call(input, "password") ||
@@ -952,6 +984,13 @@ function applyPatchPerson(id, input) {
 }
 
 export async function patchPerson(id, input) {
+  if (Object.hasOwn(input, "name") || Object.hasOwn(input, "姓名")) {
+    const previous = findPerson(id);
+    if (previous) {
+      const { preservePersonAcl } = await import("./site-acl.js");
+      await preservePersonAcl(previous);
+    }
+  }
   const result = applyPatchPerson(id, input);
   if (result.ok) {
     await persistPeopleRoster();
@@ -1042,7 +1081,7 @@ export async function removePeople(ids) {
   return { ok: true, removed: removed.length, people: removed, skipped };
 }
 
-export function createShop(input) {
+export async function createShop(input) {
   const name = typeof input.name === "string" ? input.name.trim() : "";
   const kind = typeof input.kind === "string" ? input.kind.trim() : "店铺";
   const pack = typeof input.pack === "string" ? input.pack.trim() : "";
@@ -1055,10 +1094,11 @@ export function createShop(input) {
   }
   const shop = { id: nextShopId++, name, kind, pack, bundle, demo: false };
   shops.push(shop);
+  await persistPeopleRoster();
   return { ok: true, shop: clone(shop) };
 }
 
-export function createGrant(input) {
+export async function createGrant(input) {
   const person = findPerson(input.personId);
   const shop = findShop(input.shopId);
   const role = typeof input.role === "string" ? input.role.trim() : "运营";
@@ -1075,6 +1115,7 @@ export function createGrant(input) {
     revoked: false
   };
   grants.push(grant);
+  await persistPeopleRoster();
   return { ok: true, grant: presentGrant(grant) };
 }
 

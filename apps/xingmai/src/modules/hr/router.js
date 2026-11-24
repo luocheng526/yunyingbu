@@ -91,12 +91,18 @@ hrRouter.use(requireUser);
 const accessCache = new Map();
 
 async function viewerAllowed(req) {
+  const { hydratePeopleRoster } = await import("../people/store.js");
+  const { hydrateSiteAcl, navVisibility } = await import("../people/site-acl.js");
+  await hydratePeopleRoster();
+  await hydrateSiteAcl();
+  const visibility = navVisibility(req.user?.username);
+  if (visibility.configured) return Boolean(visibility.paths["/hr"]?.enter);
   if (canSeeHr(req.user)) return true;
   const key = [req.user?.username, req.user?.displayName, req.user?.name, req.user?.department]
     .map((value) => String(value || ""))
     .join("|");
   const hit = accessCache.get(key);
-  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.allowed;
+  if (hit && Date.now() - hit.at < 1500) return hit.allowed;
   const [people, users] = await Promise.all([
     loadRoster().catch(() => []),
     listDingUsers().catch(() => [])

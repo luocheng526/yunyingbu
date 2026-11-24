@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { permissionsFor, noticeFeature } from "../people/feature-policy.js";
 import {
   bannerNotices,
   getNotice,
@@ -10,6 +11,31 @@ import {
 } from "./store.js";
 
 export const noticesRouter = Router();
+
+noticesRouter.use(async (req, res, next) => {
+  try {
+    if (["/banner", "/popup"].includes(req.path)) return next();
+    const user = await resolveUser(req);
+    const policy = permissionsFor(user, "notices");
+    if (!policy.configured) return next();
+    await hydrateNotices();
+    const write = !["GET", "HEAD"].includes(req.method);
+    const right = write ? "edit" : "enter";
+    const existing = req.path !== "/" ? getNotice(req.path.slice(1)) : null;
+    const permitted = category => policy.can("all", right) || policy.can(noticeFeature(category), right);
+    if (!policy.any(right) || (existing && !permitted(existing.category)) || (write && !permitted(req.body?.category || existing?.category))) return res.status(403).json({ ok: false, error: "未授予此公告分类的权限" });
+    const json = res.json.bind(res);
+    res.json = body => {
+      if (Array.isArray(body?.items)) {
+        body = { ...body, items: body.items.filter(item => permitted(item.category)) };
+        if (body.stats) body.stats = { ...body.stats, active: body.items.filter(item => item.status === "active").length };
+        if (body.categories) body.categories = body.categories.filter(item => permitted(item.id));
+      }
+      return json(body);
+    };
+    next();
+  } catch (err) { next(err); }
+});
 
 const mountedOn = new WeakSet();
 

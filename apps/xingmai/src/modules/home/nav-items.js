@@ -154,6 +154,7 @@ export function hrDeskFromOrg(user, people, memberMap) {
 }
 
 export function isHrDesk(user) {
+  if (user?.siteAcl?.configured) return false;
   if (!user || canSeeStaffNav(user)) {
     return false;
   }
@@ -164,10 +165,16 @@ export function isHrDesk(user) {
 }
 
 export function deskHome(user) {
+  if (user?.siteAcl?.configured) {
+    const paths = user.siteAcl.paths || {};
+    const preferred = user.desk === "hr" ? "/hr" : "/home";
+    return paths[preferred]?.enter ? preferred : Object.keys(paths).find(key => key !== "/me" && paths[key].enter) || "/me";
+  }
   return isHrDesk(user) ? "/hr" : "/home";
 }
 
 export function orgNavFlags(user) {
+  if (user?.siteAcl?.configured) return { shen: Boolean(user.siteAcl.paths?.["/shen"]?.enter), han: Boolean(user.siteAcl.paths?.["/han"]?.enter), staff: false, known: true };
   if (canSeeStaffNav(user)) {
     return { shen: true, han: true, staff: true, known: true };
   }
@@ -451,6 +458,7 @@ export function filterCenterPayload(data, allow, storeQuery) {
 }
 
 function footItemsFor(user) {
+  if (user?.siteAcl?.configured) return NAV_FOOT.filter(item => user.siteAcl.paths?.[item.href]?.see);
   if (isHrDesk(user)) {
     return NAV_FOOT.filter((item) => item.href === "/me");
   }
@@ -461,6 +469,8 @@ function footItemsFor(user) {
 }
 
 function mainItemsFor(user) {
+  if (user?.siteAcl?.configured) return NAV_MAIN.filter(item => user.siteAcl.paths?.[item.href]?.see).map(item => ({ ...item,
+    ...(item.children ? { children: item.children.filter(child => user.siteAcl.paths?.[child.href]?.see) } : {}) }));
   if (isHrDesk(user)) {
     return [{ href: "/hr", label: "智能人事" }];
   }

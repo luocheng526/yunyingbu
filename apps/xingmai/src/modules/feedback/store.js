@@ -1,5 +1,6 @@
 import { dbMode, query } from "../profile/auth.js";
 import { listPeople } from "../people/store.js";
+import { permissionsFor, feedbackFeature } from "../people/feature-policy.js";
 
 const KINDS = new Set(["request", "feedback"]);
 const STATUSES = new Set(["review", "doing", "accept", "closed", "mine", "rejected"]);
@@ -37,6 +38,8 @@ function namesOf(user) {
 }
 
 export function isFeedbackAdmin(user) {
+  const policy = permissionsFor(user, "feedback");
+  if (policy.configured) return policy.any("edit");
   return namesOf(user).some((name) => name === "罗成" || name.toLowerCase() === "luocheng");
 }
 
@@ -44,7 +47,7 @@ function denied(user) {
   if (!user) {
     return { ok: false, statusCode: 401, error: "未登录" };
   }
-  if (!isFeedbackAdmin(user) && text(user.desk) === "hr") {
+  if (!permissionsFor(user, "feedback").configured && !isFeedbackAdmin(user) && text(user.desk) === "hr") {
     return { ok: false, statusCode: 403, error: "人事账号只使用智能人事和个人中心" };
   }
   return null;
@@ -283,6 +286,7 @@ export async function listItems(user, query) {
   const rawStatus = text(query && query.status);
   const status = rawStatus ? normalizeStatus(rawStatus) : "";
   const itemsOut = visibleItems(user)
+    .filter(item => permissionsFor(user, "feedback").can(feedbackFeature(item.status)))
     .filter((item) => !kind || item.kind === kind)
     .filter((item) => !status || item.status === status)
     .map(cloneItem);
@@ -290,6 +294,7 @@ export async function listItems(user, query) {
 }
 
 export async function createItem(user, body) {
+  if (!permissionsFor(user, "feedback").can("open", "edit")) return { ok: false, statusCode: 403, error: "未授予需求创建权限" };
   const block = denied(user);
   if (block) {
     return block;
@@ -429,6 +434,8 @@ export async function updateItem(user, rawId, body) {
   if (!current) {
     return { ok: false, statusCode: 404, error: "记录不存在" };
   }
+  const policy = permissionsFor(user, "feedback");
+  if (!policy.can(feedbackFeature(current.status), "edit") || !policy.can(feedbackFeature(status), "edit")) return { ok: false, statusCode: 403, error: "未授予此状态的处理权限" };
   const stamp = nowStamp();
   const next = {
     ...current,

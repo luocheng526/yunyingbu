@@ -1,3 +1,10 @@
+let canonicalActor = value => value;
+let featureAllowed = () => false;
+let isConfigured = () => false;
+let storeAllowed = () => false;
+export function registerOrganizationPermissions(source) {
+  ({ canonicalActor, featureAllowed, isConfigured, storeAllowed } = source);
+}
 const FULL = new Set(["罗成", "管理员"]);
 const LINE_LEADERS = new Set(["罗成", "沈子晗", "韩梦凯", "管理员"]);
 
@@ -29,7 +36,7 @@ export function groupIdOf(row = {}) {
 }
 
 export function actorKey(actor) {
-  const name = normalizeGroupId(actor);
+  const name = normalizeGroupId(canonicalActor(actor));
   if (name === "luocheng") {
     return "罗成";
   }
@@ -38,7 +45,7 @@ export function actorKey(actor) {
 
 export function scopeOf(actor) {
   const name = actorKey(actor);
-  if (!name || FULL.has(name) || name.includes("罗成")) {
+  if (FULL.has(name)) {
     return { key: "all", actor: name || "罗成", groupId: "", label: "可改全部团队" };
   }
   if (name.includes("沈子晗")) {
@@ -59,7 +66,7 @@ export function rowMatchesScope(row, scope) {
     return true;
   }
   if (scope.key === "group") {
-    return groupIdOf(row) === scope.groupId;
+    return groupIdOf(row) === scope.groupId || ["director", "manager", "supervisor", "reserve", "operator", "assistant"].some(key => normalizeGroupId(row[key]) === scope.actor);
   }
   const blob = teamBlob(row);
   if (scope.key === "shen") {
@@ -78,7 +85,7 @@ export function canEditStore(actor, row) {
 /** 成员表五级线：只有罗成、韩梦凯、沈子晗能双击改。 */
 export function canEditRoster(actor) {
   const name = actorKey(actor);
-  return name.includes("罗成") || name.includes("沈子晗") || name.includes("韩梦凯");
+  return ["罗成", "沈子晗", "韩梦凯"].includes(name) || (isConfigured(name) && featureAllowed(name, "people.members", "edit"));
 }
 
 function samePerson(actor, person) {
@@ -111,7 +118,8 @@ export function canEditLogin(actor, person) {
 }
 
 export function canAssignSiteAcl(actor) {
-  return canEditRoster(actor);
+  const name = actorKey(actor);
+  return ["罗成", "沈子晗", "韩梦凯"].includes(name) || (isConfigured(name) && featureAllowed(name, "people.acl", "edit"));
 }
 
 export function personBranch(person) {
@@ -146,6 +154,7 @@ export function canAssignPerson(actor, person) {
     return false;
   }
   const scope = scopeOf(actor);
+  if (isConfigured(actor) && featureAllowed(actor, "people.acl", "edit") && !["沈子晗", "韩梦凯"].includes(actorKey(actor))) return true;
   if (scope.key === "all") {
     return true;
   }

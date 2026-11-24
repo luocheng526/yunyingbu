@@ -20,7 +20,7 @@ export async function organizationContext(){
   const people=listed.map(person=>{
     const original=bundle.people.find(p=>String(p.id)===String(person.id))||{};
     const p={...person,id:String(person.id),managerId:String(original.managerId||''),orgRole:person.role,
-      role:normalizedRole(config.roleOverrides[person.id]||person.role),department:cleanDepartment(person),boardName:orgBoardName(person.board)||person.board||'未归属板块'};
+      role:normalizedRole(person.organizationManaged ? person.role : config.roleOverrides[person.id]||person.role),department:cleanDepartment(person),boardName:orgBoardName(person.board)||person.board||'未归属板块'};
     // Business director rights do not grant system administrator rights.
     if(owner(p)){p.role='总监';if(p.name==='管理员')p.name='罗成';}
     return p;
@@ -30,14 +30,14 @@ export async function organizationContext(){
   const higher=(p,candidate)=>candidate&&candidate.id!==p.id&&candidate.status!=='离职'&&roleLevel(candidate.role)>roleLevel(p.role);
   for(const p of people){
     let parent=null;const explicit=config.reportingOverrides[p.id];
-    if(explicit&&higher(p,byId.get(String(explicit))))parent=byId.get(String(explicit));
-    if(!parent&&higher(p,byId.get(String(config.teamOverrides[p.id]||''))))parent=byId.get(String(config.teamOverrides[p.id]));
+    if(!p.organizationManaged&&explicit&&higher(p,byId.get(String(explicit))))parent=byId.get(String(explicit));
+    if(!p.organizationManaged&&!parent&&higher(p,byId.get(String(config.teamOverrides[p.id]||''))))parent=byId.get(String(config.teamOverrides[p.id]));
     if(!parent&&higher(p,named(p.supervisor,'主管')))parent=named(p.supervisor,'主管');
-    let original=byId.get(p.managerId);const seen=new Set([p.id]);
-    while(!parent&&original&&!seen.has(original.id)){seen.add(original.id);if(higher(p,original))parent=original;original=byId.get(original.managerId);}
     if(!parent&&higher(p,named(p.operator,'运营')))parent=named(p.operator,'运营');
     if(!parent&&higher(p,named(p.lineManager,'经理')))parent=named(p.lineManager,'经理');
     if(!parent&&higher(p,named(p.director,'总监')))parent=named(p.director,'总监');
+    let original=byId.get(p.managerId);const seen=new Set([p.id]);
+    while(!parent&&original&&!seen.has(original.id)){seen.add(original.id);if(higher(p,original))parent=original;original=byId.get(original.managerId);}
     p.parentId=parent?.id||'';
   }
   for(const p of people){

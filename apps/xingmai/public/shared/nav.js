@@ -1,6 +1,80 @@
 /* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild 0.1.779-watermark 0.1.780-marklite 0.1.781-markwho 0.1.782-lightskin 0.1.783-navbold 0.1.784-homeloop 0.1.785-mever 0.1.787-acadleaf v0.4.18 — 个人中心脚本不进浏览器缓存 */
 (function () {
   const ASSET_VER = "0.1.787-acadleaf";
+  function featureAllowed(feature, right) {
+    const acl = (window.__xmBootUser || {}).siteAcl;
+    if (!acl || !acl.configured) return true;
+    const mod = acl.modules && acl.modules[feature.split(".")[0]];
+    return Boolean(mod && mod[right || "enter"] && mod.features && mod.features[feature] && mod.features[feature][right || "enter"]);
+  }
+  window.XmAccess = { can: featureAllowed };
+  function bindFeatureAccess(root, route) {
+    if (root.__xmAccessObserver) root.__xmAccessObserver.disconnect();
+    const prefix = route.split("/")[1];
+    const maps = {
+      people: [".org-tab[data-pane]", "data-pane", {stores:"people.stores",members:"people.members",rights:"people.rights",acl:"people.acl",logs:"people.logs",notices:"people.notices"}],
+      home: ["button[data-view]", "data-view", {company:"home.company",overview:"home.workbench",week:"home.week",live2:"home.realtime"}],
+      hr: [".hr-tab[data-tab]", "data-tab", {attendance:"hr.attendance",overtime:"hr.overtime",recruit:"hr.recruit",staff:"hr.staff",clock:"hr.attendance",pay:"hr.staff",train:"hr.staff",org:"hr.staff"}],
+      work: ['[data-action="tab"]', "data-id", {overview:"work.today",people:"work.duty",tasks:"work.today",reports:"work.today",supervisors:"work.summary",acceptance:"work.duty",statistics:"work.summary",settings:"work.settings"}],
+      feedback: ["[data-xm-ui-tab]", "data-xm-ui-tab", {all:"feedback.open",review:"feedback.open",doing:"feedback.doing",accept:"feedback.doing",closed:"feedback.closed",mine:"feedback.open",rejected:"feedback.reject"}],
+      notices: ["[data-tab]", "data-tab", {all:"notices.all",hr:"notices.hr",promotion:"notices.promotion",board:"notices.board",values:"notices.values",daily:"notices.daily"}],
+      stores: ["[data-page]", "data-page", {reviews:"shopkeep.reviews",violations:"shopkeep.violations",shipping:"shopkeep.shipping",inventory:"shopkeep.stock"}]
+    };
+    const entry = maps[prefix];
+    function constrain(node, feature, tab) {
+      if (!feature) return;
+      node.dataset.xmFeature = feature;
+      const visible = featureAllowed(feature, "see");
+      node.style.setProperty("display", visible ? "" : "none", visible ? "" : "important");
+      node.setAttribute("aria-hidden", visible ? "false" : "true");
+      if (tab) {
+        node.disabled = !featureAllowed(feature, "enter");
+        node.setAttribute("aria-disabled", node.disabled ? "true" : "false");
+        if (node.disabled) node.title = "组织中心未授予进入权限";
+      }
+    }
+    function apply() {
+      if (!(window.__xmBootUser || {}).siteAcl?.configured) return;
+      if (entry) {
+        const tabs = Array.from(root.querySelectorAll(entry[0]));
+        tabs.forEach(node => constrain(node, entry[2][node.getAttribute(entry[1])], true));
+        const active = tabs.find(node => node.classList.contains("is-active") || node.classList.contains("active") || node.getAttribute("aria-selected") === "true");
+        if (active && active.disabled) {
+          const first = tabs.find(node => !node.disabled && entry[2][node.getAttribute(entry[1])]);
+          if (first) first.click();
+        }
+      }
+      if (prefix === "people") {
+        root.querySelectorAll(".org-pane[data-pane]").forEach(node => {
+          const feature = "people." + node.dataset.pane;
+          if (!featureAllowed(feature, "enter")) node.style.setProperty("display", "none", "important");
+          node.dataset.xmFeature = feature;
+          if (!featureAllowed(feature, "edit")) node.querySelectorAll('button,input[type="file"]').forEach(button => {
+            if (/保存|新增|导入|删除|设置密码|清空|取消指定/.test(button.textContent || button.title || "") || button.type === "file") {
+              button.disabled = true; button.title = "组织中心未授予修改权限"; button.style.opacity = "0.45";
+            }
+          });
+        });
+      }
+      const controls = {
+        home: {'[data-over-open="team"]':"home.workbench",'[data-over-open="chief"]':"home.lead",'[data-over-open="board"]':"home.board",'[data-refresh-teams]':"home.team"},
+        agents: {'#agents-connect':"agent.connect",'#agents-sessions':"agent.history",'#agents-ask-card':"agent.chat",'#agents-form':"agent.chat"},
+        bound: {'[data-page="link"]':"bound.link",'[data-panel="cards"]':"bound.cards",'[data-act="export-selected"],[data-act="archive-export"]':"bound.export"}
+      };
+      Object.entries(controls[prefix] || {}).forEach(([selector,feature]) => root.querySelectorAll(selector).forEach(node => constrain(node,feature,node.tagName === "BUTTON")));
+    }
+    if (!root.__xmAccessEvents) {
+      root.__xmAccessEvents = true;
+      ["click", "dblclick", "submit"].forEach(type => root.addEventListener(type, event => {
+        if (type === "submit" && /search|filter/.test(event.target.id || "")) return;
+        const node = event.target.closest("[data-xm-feature]");
+        if (node && !featureAllowed(node.dataset.xmFeature, type === "click" ? "enter" : "edit")) { event.preventDefault(); event.stopImmediatePropagation(); }
+      }, true));
+    }
+    apply();
+    root.__xmAccessObserver = new MutationObserver(apply);
+    root.__xmAccessObserver.observe(root, {childList:true,subtree:true});
+  }
   const origFetch = window.fetch ? window.fetch.bind(window) : null;
   if (origFetch) {
     window.fetch = function (input, init) {
@@ -236,6 +310,7 @@
 
   function isHrDesk(user) {
     const who = user || currentStaffUser();
+    if (who && who.siteAcl && who.siteAcl.configured) return false;
     if (!who || canSeeStaffNav(who)) {
       return false;
     }
@@ -246,10 +321,28 @@
   }
 
   function deskHome(user) {
+    const who = user || currentStaffUser();
+    if (who && who.siteAcl && who.siteAcl.configured) {
+      const paths = who.siteAcl.paths || {};
+      const preferred = who.desk === "hr" ? "/hr" : "/home";
+      return paths[preferred] && paths[preferred].enter ? preferred : Object.keys(paths).find(function (key) { return key !== "/me" && paths[key].enter; }) || "/me";
+    }
     return isHrDesk(user) ? "/hr" : "/home";
   }
 
+  function allowSiteRoute(href, capability, user) {
+    const who = user || currentStaffUser();
+    const acl = who && who.siteAcl;
+    if (!acl || !acl.configured) return true;
+    const key = normalize(href);
+    if (key === "/me") return true;
+    const hit = Object.keys(acl.paths || {}).filter(function (path) { return key === path || key.indexOf(path + "/") === 0; })
+      .sort(function (a, b) { return b.length - a.length; })[0];
+    return Boolean(hit && acl.paths[hit][capability || "enter"]);
+  }
+
   function allowDeskRoute(href) {
+    if (!allowSiteRoute(href, "enter")) return false;
     if (!isHrDesk()) {
       return true;
     }
@@ -258,6 +351,7 @@
   }
 
   function footVisible(user) {
+    if (user && user.siteAcl && user.siteAcl.configured) return FOOT.filter(function (item) { return allowSiteRoute(item.href, "see", user); });
     if (isHrDesk(user)) {
       return FOOT.filter(function (item) {
         return item.href === "/me";
@@ -332,6 +426,7 @@
   }
 
   function itemHtml(item, extraClass) {
+    if (!allowSiteRoute(item.href, "see")) return "";
     const cls =
       "xm-menu-item" +
       (extraClass ? " " + extraClass : "") +
@@ -884,6 +979,7 @@
   let orgFlags = { shen: true, han: true, known: false, resolved: false };
 
   function mainVisible(user, flags) {
+    if (user && user.siteAcl && user.siteAcl.configured) return MAIN.filter(function (item) { return allowSiteRoute(item.href, "see", user); });
     if (isHrDesk(user)) {
       return [{ href: "/hr", label: "智能人事" }];
     }
@@ -934,7 +1030,7 @@
   function scopeSignature(user) {
     const who = user || {};
     const shops = Array.isArray(who.visibleShops) ? who.visibleShops.join(",") : "";
-    return [who.desk || "", who.board || "", who.department || "", who.center || "", who.role || "", shops].join("|");
+    return [who.desk || "", who.board || "", who.department || "", who.center || "", who.role || "", who.lineManager || "", who.supervisor || "", who.director || "", shops, JSON.stringify(who.siteAcl || null)].join("|");
   }
 
   function paintSider() {
@@ -1825,6 +1921,7 @@
       return;
     }
     if (alreadyMounted(root, key)) {
+      bindFeatureAccess(root, key);
       if (!unmounts[key] && typeof window.__xmUnmount === "function") {
         unmounts[key] = window.__xmUnmount;
       }
@@ -1836,6 +1933,7 @@
     }
     try {
       const stop = mod.mount(root);
+      bindFeatureAccess(root, key);
       root.setAttribute("data-xm-mounted", key);
       if (key === "/releases") {
         root.setAttribute("data-xm-rel-mounted", "1");
@@ -2779,6 +2877,10 @@
   }
 
   function go(href, push) {
+    if (!allowSiteRoute(href, "enter")) {
+      if (normalize(href) !== "/me") go("/me", push);
+      return;
+    }
     if (normalize(href) === "/notices") {
       window.__xmOrgPane = "notices";
       href = "/people";
@@ -2789,7 +2891,9 @@
       return;
     }
     if (PARENT_HOME[key]) {
-      go(PARENT_HOME[key], push);
+      const children = (items.find(function (item) { return item.href === key; }) || {}).children || [];
+      const first = children.find(function (item) { return allowSiteRoute(item.href, "enter"); });
+      go(first ? first.href : "/me", push);
       return;
     }
     if (key === "/") {
@@ -3343,6 +3447,7 @@
     rememberStaffUser(nextUser);
     paintWatermark(nextUser);
     const next = scopeSignature(nextUser);
+    const changed = Boolean(scopeKey && next !== scopeKey);
     if (!force && next === scopeKey) {
       return;
     }
@@ -3350,10 +3455,17 @@
       invalidateCenterScope();
     }
     scopeKey = next;
+    const flags = orgFlagsFromUser(nextUser);
+    orgFlags = { shen: flags.shen, han: flags.han, known: flags.known, resolved: true };
     paintSider();
     relinkSider();
     ensureOpenTabs();
     paintTabs();
+    if (changed && !force) {
+      // Clear mounted module snapshots, including revoked pages and old teams.
+      window.location.reload();
+      return;
+    }
     if (isHrDesk(nextUser) && !allowDeskRoute(current)) {
       go(deskHome(nextUser));
     }
@@ -3440,6 +3552,7 @@
   }
 
   function allowCenter(which) {
+    if (currentStaffUser()?.siteAcl?.configured) return allowSiteRoute("/" + which, "enter");
     if (!which) {
       return true;
     }
@@ -3474,6 +3587,10 @@
   }
 
   function loadOrgAndApply(user) {
+    if (user && user.siteAcl && user.siteAcl.configured) {
+      applyScopeUser(user);
+      return;
+    }
     if (canSeeStaffNav(user)) {
       applyOrgNav({ shen: true, han: true, known: true, resolved: true });
       return;
@@ -3555,6 +3672,10 @@
           (child.href === "/shen/recharge-rules"
             ? sub.querySelector('a[href="/shen/recharge-rules/index.html"]')
             : null);
+        if (!allowSiteRoute(child.href, "see")) {
+          if (link) link.remove();
+          return;
+        }
         if (!link) {
           const wrap = document.createElement("div");
           wrap.innerHTML = itemHtml(child, "xm-menu-child");

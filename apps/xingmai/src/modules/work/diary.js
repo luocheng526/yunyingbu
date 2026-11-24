@@ -1,6 +1,7 @@
 /* 工作汇报店铺日报。 */
 import { dbMode, query } from "../profile/auth.js";
-import { listGrants, listPeople, listShops } from "../people/store.js";
+import { listGrants, listPeople, listShops, hydratePeopleRoster } from "../people/store.js";
+import { hydrateOrgStores } from "../people/org-board.js";
 import {
   claimReminder,
   confirmedBinds,
@@ -237,8 +238,9 @@ export function loadOrg() {
   if (orgMemo && now < orgUntil) {
     return orgMemo;
   }
-  orgUntil = now + 1500;
-  orgMemo = Promise.all([listPeople(), listShops(), listGrants()])
+  orgUntil = now;
+  orgMemo = Promise.all([hydratePeopleRoster(), hydrateOrgStores()])
+    .then(() => Promise.all([listPeople(), listShops(), listGrants()]))
     .then(([people, shops, grants]) => ({ people, shops, grants }))
     .catch((error) => {
       orgMemo = null;

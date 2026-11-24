@@ -1,7 +1,7 @@
 import test,{beforeEach} from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { resetPeopleStore, createPerson } from '../src/modules/people/store.js';
+import { resetPeopleStore, createPerson, patchPerson } from '../src/modules/people/store.js';
 import { resetWorkStore } from '../src/modules/work/store.js';
 import { resetOrgMemo } from '../src/modules/work/diary.js';
 import { resetCenterRecords, day, record, settings } from '../src/modules/work/center-db.js';
@@ -201,4 +201,13 @@ test('invalid dates and unrelated users are rejected by public routes',async()=>
     const body=await (await fetch(base+'/api/work/center')).json();assert.equal(body.canManage,false);assert.equal(JSON.stringify(body).includes('password'),false);
     const denied=await fetch(base+'/api/work/center/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:1})});assert.equal(denied.status,403);
   }finally{await new Promise(resolve=>server.close(resolve));}
+});
+
+test('current organization roles and reporting lines override stale local settings for real members',async()=>{
+ const made=await createPerson({name:'真实成员',username:'real-member',role:'助理',supervisor:'杨润泽',lineManager:'沈子晗',director:'罗成'});
+ const id=String(made.person.id),config=await settings();
+ await saveSettings(users.director,{revision:config.revision,roleOverrides:{[id]:'运营'},reportingOverrides:{[id]:'2'}});
+ let me=(await access({username:'real-member'})).me;assert.equal(me.role,'运营助理');assert.equal(me.parentId,'8');
+ await patchPerson(id,{role:'主管',supervisor:'真实成员',lineManager:'韩梦凯'});
+ me=(await access({username:'real-member'})).me;assert.equal(me.role,'主管');assert.equal(me.parentId,'2');
 });

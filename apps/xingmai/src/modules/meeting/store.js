@@ -1,4 +1,5 @@
 import { dbMode, query } from "../profile/auth.js";
+import { permissionsFor, filterMeetingBoard, meetingSections, meetingKpis } from "../people/feature-policy.js";
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 const KPI_KEYS = ["hours", "rank", "profit", "new", "star"];
@@ -36,6 +37,8 @@ function namesOf(user) {
 }
 
 export function isMeetingAdmin(user) {
+  const policy = permissionsFor(user, "meeting");
+  if (policy.configured) return policy.any("edit");
   return namesOf(user).some((name) => name === "罗成" || name.toLowerCase() === "luocheng");
 }
 
@@ -183,7 +186,7 @@ export async function getBoard(user, month) {
   await readyStore();
   const key = MONTH_RE.test(String(month || "")) ? String(month) : currentMonth();
   const board = boards.get(key) || blankBoard(key);
-  return { ok: true, admin: isMeetingAdmin(user), board, months: listMonths() };
+  return { ok: true, admin: isMeetingAdmin(user), board: filterMeetingBoard(board, permissionsFor(user, "meeting")), months: listMonths() };
 }
 
 export async function saveBoard(user, body) {
@@ -198,8 +201,13 @@ export async function saveBoard(user, body) {
     return { ok: false, statusCode: 400, error: "请选择月份" };
   }
   await readyStore();
+  const policy = permissionsFor(user, "meeting");
   const board = normalizeBoard(month, body?.board || body);
-  boards.set(month, board);
+  if (policy.configured) {
+    const previous = boards.get(month) || blankBoard(month);
+    for (const [key, feature] of Object.entries(meetingSections)) if (!policy.can(feature, "edit")) board[key] = previous[key];
+    board.kpis = board.kpis.map(item => policy.can(meetingKpis[item.key], "edit") ? item : previous.kpis.find(old => old.key === item.key));
+  }
   if (dbMode() === "mysql") {
     await query(
       `INSERT INTO meeting_boards (month, payload_json, updated_at) VALUES (?, ?, ?)
@@ -207,5 +215,6 @@ export async function saveBoard(user, body) {
       [month, JSON.stringify(board), nowStamp()]
     );
   }
-  return { ok: true, admin: true, board, months: listMonths() };
+  boards.set(month, board);
+  return { ok: true, admin: true, board: filterMeetingBoard(board, policy), months: listMonths() };
 }
