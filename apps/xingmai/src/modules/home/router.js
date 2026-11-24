@@ -24,6 +24,7 @@ import { getLive2Board, startLive2Collector, startLive2Round } from "./live2-col
 import { readFeeGoals, saveFeeGoal } from "./fee-goals.js";
 import {
   buildWeekPack,
+  loadWeekOrgShops,
   saveWeekCells,
   dingWebhook,
   getWeekShot,
@@ -32,7 +33,6 @@ import {
 
 import { registerWeekManagement } from "./week-management.js";
 import { reportRevision, publicHistoryImage } from "./week-history.js";
-import { wpsEnabled } from "./week-storage.js";
 
 const homeJsPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -747,25 +747,29 @@ export function homeRouter(deps = {}) {
   });
 
   async function currentWeekPack(req) {
-    if (wpsEnabled()) return buildWeekPack([]);
-    try { const live = await getHomeLocalPaid(req); return buildWeekPack(live?.records || []); }
-    catch { return buildWeekPack([]); }
+    const origin = process.env.HOME_INTERNAL_ORIGIN || process.env.SHEN_INTERNAL_ORIGIN || "http://127.0.0.1:" + req.socket.localPort;
+    try { return buildWeekPack(await loadWeekOrgShops(req.headers.cookie, fetch, origin)); }
+    catch (error) {
+      if (error.statusCode === 401) throw error;
+      return buildWeekPack([]);
+    }
   }
   router.get("/week-report", async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
-    const pack = await currentWeekPack(req);
-    res.json({ ...pack, revision: reportRevision(pack) });
+    try {
+      const pack = await currentWeekPack(req);
+      return res.json({ ...pack, revision: reportRevision(pack) });
+    } catch (error) { return res.status(error.statusCode || 500).json({ ok: false, error: error.message }); }
   });
   registerWeekManagement(router, { getPack: currentWeekPack });
 
   router.post("/week-report", (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "webhook")) return res.status(403).json({ ok: false, error: "请由管理员通过钉钉配置入口保存机器人" });
-    if (wpsEnabled() && req.body?.cells) {
-      return res.status(409).json({ ok: false, error: "WPS 同步数据请在原表修改" });
-    }
-    const saved = saveWeekCells(req.body || {});
-    return res.json({ ok: true, updatedAt: saved.updatedAt, dingReady: Boolean(saved.webhook || dingWebhook()) });
+    try {
+      const saved = saveWeekCells(req.body || {});
+      return res.json({ ok: true, updatedAt: saved.updatedAt, dingReady: Boolean(saved.webhook || dingWebhook()) });
+    } catch { return res.status(500).json({ ok: false, error: "业绩表保存失败，请检查存储后重试" }); }
   });
 
   router.get("/week-shot/:id.png", (req, res) => {

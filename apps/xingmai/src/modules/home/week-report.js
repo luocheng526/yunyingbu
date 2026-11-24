@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { shanghaiYmd, shanghaiNow } from "./local-paid.js";
+import { atomicJson } from "./week-storage.js";
 
 const TEAMS = [
   { key: "han", label: "韩梦凯五倍店铺", totalLabel: "韩梦凯五倍店铺业绩" },
@@ -72,7 +73,7 @@ export function buildWeekColumns(ymd = shanghaiYmd()) {
   const parts = today.split("-").map(Number);
   const year = parts[0] || 2026;
   const month = parts[1] || 1;
-  const days = lastDays(7, today);
+  const days = lastDays(7, shiftYmd(today, -1));
   const feeDays = days.slice(-3);
   const cols = [
     { key: "takeDate", label: "拿店日期", group: "id", sticky: true, w: 72, edit: true },
@@ -115,11 +116,11 @@ export function buildWeekColumns(ymd = shanghaiYmd()) {
       edit: true
     });
   }
-  const mtdDays = lastDays(6, shiftYmd(today, -1)).slice(-5);
+  const mtdDays = lastDays(5, shiftYmd(today, -1));
   mtdDays.forEach((day) => {
     cols.push({
       key: `mtd_${day.ymd}`,
-      label: `${Number(parts[1])}.1-${Number(day.ymd.split("-")[2])}号利润`,
+      label: `${Number(day.ymd.split("-")[1])}.1-${Number(day.ymd.split("-")[2])}号利润`,
       group: "mtd",
       w: 70,
       ymd: day.ymd,
@@ -140,7 +141,7 @@ export function buildWeekColumns(ymd = shanghaiYmd()) {
   if (marginMtd) {
     cols.push({
       key: `marginMtd_${marginMtd.ymd}`,
-      label: `${Number(parts[1])}.1-${Number(marginMtd.ymd.split("-")[2])}号大毛利率`,
+      label: `${Number(marginMtd.ymd.split("-")[1])}.1-${Number(marginMtd.ymd.split("-")[2])}号大毛利率`,
       group: "margin",
       w: 72,
       ymd: marginMtd.ymd,
@@ -540,31 +541,29 @@ function emptyStore() {
   return { cells: {}, webhook: "", updatedAt: "" };
 }
 
-export function readWeekStore() {
+export function readWeekStore({ strict = false } = {}) {
   try {
     const raw = JSON.parse(fs.readFileSync(resolveStorePath(), "utf8"));
-    if (!raw || typeof raw !== "object") {
-      return emptyStore();
-    }
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("业绩表存储格式不正确");
+    if (raw.cells != null && (typeof raw.cells !== "object" || Array.isArray(raw.cells))) throw new Error("业绩表单元格存储格式不正确");
     return {
-      cells: raw.cells && typeof raw.cells === "object" ? raw.cells : {},
+      cells: raw.cells || {},
       webhook: String(raw.webhook || "").trim(),
       updatedAt: String(raw.updatedAt || "")
     };
-  } catch {
+  } catch (error) {
+    if (strict && error.code !== "ENOENT") throw error;
     return emptyStore();
   }
 }
 
 function writeWeekStore(next) {
-  const file = resolveStorePath();
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(next, null, 2));
+  atomicJson(resolveStorePath(), next);
   return next;
 }
 
 export function saveWeekCells(patch) {
-  const cur = readWeekStore();
+  const cur = readWeekStore({ strict: true });
   const cells = { ...cur.cells };
   Object.keys((patch && patch.cells) || {}).forEach((key) => {
     const val = patch.cells[key];
@@ -589,11 +588,17 @@ export function buildWeekPack(orgShops, ymd = shanghaiYmd()) {
     const seeded = seedRowsFromOrg(orgShops, meta.key);
     const extras = extraManualRows(saved.cells, meta.key, seeded);
     const rows = groupWeekRowsByLead(applyManualCells(seeded.concat(extras), saved.cells, meta.key));
+    const latest = layout.days.at(-1).ymd;
+    for (const row of rows) {
+      for (const key of ["orders", "visitors", "monthSpend", "monthFee"]) {
+        if (row.cells[key] == null && row.cells[key + "_" + latest] != null) row.cells[key] = row.cells[key + "_" + latest];
+      }
+    }
     return {
       key: meta.key,
       label: meta.label,
       totalLabel: meta.totalLabel,
-      kpis: teamKpis(rows, ymd),
+      kpis: teamKpis(rows, latest),
       rows,
       foot: [
         { key: "fine", label: `${meta.label.replace("五倍店铺", "")}精铺组近七天业绩`, kind: "fine" },

@@ -203,10 +203,13 @@ const verifiedLogin = current => current.provider === "PASSWORD" || (QR_PROVIDER
   && Boolean(current.authGeneration) && current.qrIdentityGeneration === current.authGeneration);
 // Keep the legacy field and hash shape to preserve ownership of existing jobs.
 const ownerOf = current => current.passwordIdentity?.userId ? createHash("sha256").update(JSON.stringify(current.passwordIdentity)).digest("hex") : "";
-export async function requestVisibleShops() {
+export async function requestVisibleShops({ forDailyPerformance = false } = {}) {
   const current = await session(), owner = ownerOf(current);
   if (collectionStatus().batchEnabled || !owner || !verifiedLogin(current)) return { ok: false, statusCode: 409, reason: "server_login_required" };
-  const response = await requestScopedRead({ method: "get", path: "/v2/channel/getAllChannelList", access: "", referer: ORIGIN + "/workTable/channelOverview" });
+  const spec = { method: "get", path: "/v2/channel/getAllChannelList", access: "", referer: ORIGIN + "/workTable/channelOverview" };
+  const response = forDailyPerformance
+    ? await batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner, parallelLimit: GOODS_BACKFILL_CONCURRENCY }))
+    : await requestScopedRead(spec);
   if (response.blocked) return { ok: false, statusCode: 409, reason: response.blocked };
   if (response.httpStatus !== 200 || response.payload?.code !== 0) return { ok: false, statusCode: 502, reason: "shop_discovery_failed" };
   if (ownerOf(await session()) !== owner) return { ok: false, statusCode: 409, reason: "identity_changed" };
@@ -229,6 +232,16 @@ export async function requestGoodsBackfillReport(input, onRequest, scope, owner)
   const spec = shopDayRequest(input, scope, 200);
   if (!spec) return { blocked: 'invalid_scope' };
   return batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner, parallelLimit: GOODS_BACKFILL_CONCURRENCY }, onRequest));
+}
+
+// The performance sheet shares the backfill's authenticated session and pacing.
+export async function requestDailyPerformance(scope, owner) {
+  if (!validShopDay(scope) || scope.date >= shanghaiToday() || !owner || owner !== batchOwner ||
+    !batchShops.has(scope.platform + ":" + scope.shopId) || collectionStatus().batchEnabled) {
+    return { blocked: "invalid_scope" };
+  }
+  const spec = shopDayRequest({ reportId: "channel_shop_table" }, scope);
+  return batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner, parallelLimit: GOODS_BACKFILL_CONCURRENCY }));
 }
 
 async function requestScopedRead(spec, onRequest = () => {}) {

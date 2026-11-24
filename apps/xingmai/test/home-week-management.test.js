@@ -71,7 +71,7 @@ test("send transaction archives immutable table/XLSX/PNG, deduplicates, versions
   const app = express(); app.use(express.json());
   const router = express.Router();
   registerWeekManagement(router, { getUser: req => req.get("x-test-user") ? { username: req.get("x-test-user") } : null,
-    getPack: async () => pack, wps: { busy: () => false }, ding: {
+    getPack: async () => pack, ding: {
     target: async () => { if (!haveWebhook) throw new Error("请先配置钉钉机器人"); return { destination: { key: "mock-group", channel: "group" } }; },
     send: async ({ picUrl }) => {
       sends++;
@@ -88,8 +88,12 @@ test("send transaction archives immutable table/XLSX/PNG, deduplicates, versions
   const request = (route, method = "GET", body, extra = {}) => fetch(base + route, { method, headers: { "x-test-user": "luocheng", ...(body ? { "Content-Type": "application/octet-stream", "X-Week-Revision": reportRevision(pack) } : {}), ...extra }, body });
   try {
     assert.equal((await read("/week-history", "")).status, 401);
-    assert.equal((await request("/week-wps/config", "GET", null, { "x-test-user": "employee" })).status, 403);
-    assert.equal((await request("/week-wps/auth", "POST", null, { Origin: "https://evil.test" })).status, 403);
+    assert.equal((await request("/week-schedule", "GET", null, { "x-test-user": "employee" })).status, 403);
+    assert.equal((await request("/week-schedule", "POST", null, { Origin: "https://evil.test" })).status, 403);
+    assert.equal((await request("/week-wps/config")).status, 404);
+    assert.equal((await (await request("/week-schedule")).json()).config.time, "09:00");
+    const time = await request("/week-schedule", "POST", JSON.stringify({ time: "15:30" }), { "Content-Type": "application/json" });
+    assert.equal((await time.json()).config.time, "15:30");
     assert.equal((await request("/week-send", "POST", png, { "X-Week-Revision": "stale" })).status, 409);
     pack.sync.testOnly = true;
     assert.equal((await request("/week-send", "POST", png)).status, 409);

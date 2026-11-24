@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
@@ -37,7 +38,8 @@ test("week tab sits beside 实时 and keeps the five-times spreadsheet headers",
   assert.match(homeJs, /label: "近七天业绩汇总"/);
   assert.match(homeJs, /function weekTableHtml/);
   assert.match(homeJs, /function drawWeekPng/);
-  assert.match(homeJs, /function weekMonthHead/);
+  assert.match(homeJs, /data-week-schedule/);
+  assert.doesNotMatch(homeJs, /data-week-wps/);
   assert.match(homeJs, /一键发送图片/);
   assert.match(homeJs, /id="xm-hm-week"/);
   assert.match(homeJs, /data-week-send/);
@@ -45,17 +47,11 @@ test("week tab sits beside 实时 and keeps the five-times spreadsheet headers",
   assert.match(homeJs, /店铺所在类目/);
   assert.match(homeJs, /推广费用占比/);
   assert.match(homeJs, /面板总业绩/);
-  assert.match(homeJs, /is-banner/);
-  assert.match(homeJs, /过万店铺/);
   assert.match(homeJs, /韩梦凯五倍店铺/);
-  assert.match(homeJs, /month === 6 \|\| month >= 8/);
-  assert.match(homeJs, /xm-hm-week-head/);
-  assert.match(homeJs, /function weekBarKpis/);
-  assert.match(homeJs, /运营店铺数量/);
-  assert.match(homeJs, /\.xm-hm-week-table td\.is-up\{background:#00b050;color:#000\}/);
-  assert.match(homeJs, /\.xm-hm-week-table td\.is-down\{background:#ff0000;color:#000\}/);
-  assert.match(homeJs, /ctx\.fillStyle = "#000";/);
-  assert.doesNotMatch(homeJs, /\.xm-hm-week-table td\.is-up\{background:#00b050;color:#fff\}/);
+  assert.match(paintWeekInk(homeJs), /\.xm-hm-week-table td\.is-up\{background:#00b050;color:#000\}/);
+  assert.match(paintWeekInk(homeJs), /\.xm-hm-week-table td\.is-down\{background:#ff0000;color:#000\}/);
+  assert.match(paintWeekInk(homeJs), /ctx\.fillStyle = "#000";/);
+  assert.doesNotMatch(paintWeekInk(homeJs), /\.xm-hm-week-table td\.is-up\{background:#00b050;color:#fff\}/);
 });
 
 test("week ink patch turns green/red GMV numbers black", () => {
@@ -79,8 +75,8 @@ test("last seven day labels and crawler seed plus manual overlay", () => {
   const keys = layout.columns.map((col) => col.key);
   assert.equal(keys.includes("shop"), true);
   assert.equal(keys.includes("gmv_2026-11-10"), true);
-  assert.equal(keys.includes("gmv_2026-11-16"), true);
-  assert.equal(keys.includes("fee_2026-11-16"), true);
+  assert.equal(keys.includes("gmv_2026-11-16"), false);
+  assert.equal(keys.includes("fee_2026-11-15"), true);
   assert.equal(keys.includes("feeRate_2026-11-14"), true);
   assert.equal(keys.includes("monthFee"), true);
   assert.equal(keys.includes("profit_01"), true);
@@ -112,19 +108,19 @@ test("headers match the 甄选五倍业绩统计 spreadsheet on 2026-11-22", () 
     "店铺阶段",
     "店铺名称",
     "店铺所在类目",
+    "11.15号",
     "11.16号",
     "11.17号",
     "11.18号",
     "11.19号",
     "11.20号",
     "11.21号",
-    "11.22号",
+    "11.19号推广费用",
     "11.20号推广费用",
     "11.21号推广费用",
-    "11.22号推广费用",
+    "11.19号推广费用占比",
     "11.20号推广费用占比",
     "11.21号推广费用占比",
-    "11.22号推广费用占比",
     "当月费比",
     "1.1-1.31号利润",
     "2.1-2.28号利润",
@@ -272,7 +268,7 @@ test("sheet rows match webpage shops by name not row order", () => {
 });
 
 function osTmp() {
-  return process.env.TMPDIR || "/tmp";
+  return tmpdir();
 }
 
 test("week-report route and png shot", async () => {
@@ -306,9 +302,9 @@ test("week-report route and png shot", async () => {
       body: Buffer.from("png-bytes")
     });
     const sent = await send.json();
-    assert.equal(sent.ok, true);
-    assert.equal(sent.sent, false);
-    assert.match(String(sent.error || ""), /钉钉/);
+    assert.equal(send.status, 401);
+    assert.equal(sent.ok, false);
+    assert.match(String(sent.error || ""), /登录/);
   } finally {
     resetWeekStore();
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));

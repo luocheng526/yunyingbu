@@ -1,11 +1,12 @@
 import { raw } from "express";
 import { Buffer } from "node:buffer";
 import { currentUser } from "../profile/auth.js";
-import { createWpsService, publicWpsConfig, saveWpsConfig } from "./week-wps-config.js";
+import { createWeekSchedule } from "./week-schedule.js";
 import { listWeekHistory, readWeekHistory, historyFile, prepareWeekHistory, finishWeekHistory, reportRevision } from "./week-history.js";
 import { createDingService } from "./week-ding.js";
 
-export function registerWeekManagement(router, { getPack, getUser = req => req.user || currentUser(req), wps = createWpsService(), ding = createDingService() } = {}) {
+export function registerWeekManagement(router, { getPack, getUser = req => req.user || currentUser(req), ding = createDingService(), schedule = createWeekSchedule({ ding }) } = {}) {
+  if (!process.env.MENGKAI_SMOKE_LIVE && !process.env.NODE_TEST_CONTEXT) schedule.start();
   const login = (req, res, next) => {
     res.set("Cache-Control", "private, no-store");
     const user = getUser(req);
@@ -27,18 +28,8 @@ export function registerWeekManagement(router, { getPack, getUser = req => req.u
   router.get("/week-ding/config", login, admin, run(async (_req, res) => res.json({ ok: true, config: await ding.publicConfig() })));
   router.post("/week-ding/config/:channel", login, admin, run(async (req, res) => res.json({ ok: true, config: await ding.save(req.params.channel, req.body || {}) })));
   router.post("/week-ding/check/:channel", login, admin, run(async (req, res) => res.json(await ding.check(req.params.channel))));
-  router.get("/week-wps/config", login, admin, run(async (_req, res) => res.json({ ok: true, config: publicWpsConfig(), auth: await wps.status(), authorization: wps.authState() })));
-  router.post("/week-wps/config", login, admin, run(async (req, res) => {
-    if (wps.busy()) throw new Error("正在同步或授权，请完成后再保存配置");
-    res.json({ ok: true, config: saveWpsConfig(req.body || {}) });
-  }));
-  router.post("/week-wps/auth", login, admin, run(async (_req, res) => res.json({ ok: true, authorization: await wps.startAuth() })));
-  router.get("/week-wps/auth", login, admin, run(async (_req, res) => res.json({ ok: true, authorization: wps.authState() })));
-  router.post("/week-wps/check", login, admin, run(async (req, res) => res.json(await wps.check(req.body || {}))));
-  router.post("/week-wps/sync", login, admin, run(async (_req, res) => {
-    const state = await wps.sync();
-    res.json({ ok: !state.error, error: state.error, failures: state.failures, teams: Object.values(state.teams).map(t => ({ team: t.team, counts: t.counts })) });
-  }));
+  router.get("/week-schedule", login, admin, run(async (_req, res) => res.json({ ok: true, config: schedule.config() })));
+  router.post("/week-schedule", login, admin, run(async (req, res) => res.json({ ok: true, config: schedule.saveConfig(req.body) })));
   router.get("/week-history", login, run(async (req, res) => res.json({ ok: true, items: listWeekHistory({ from: req.query.from, to: req.query.to }) })));
   router.get("/week-history/:id", login, run(async (req, res) => res.json({ ok: true, ...readWeekHistory(req.params.id) })));
   router.get("/week-history/:id/export/:format", login, run(async (req, res) => {

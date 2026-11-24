@@ -153,6 +153,17 @@ export function createDingService({ fetcher = globalThis.fetch, loadExisting = e
     validate(channel, config);
     return { channel, config, destination: destination(channel, config) };
   }
+  async function automaticTargets() {
+    const { config, existing, legacy } = await snapshot();
+    const channel = config.defaultChannel;
+    const resolved = resolve(config, channel, existing, legacy);
+    validate(channel, resolved);
+    if (channel === "group") return [{ channel, config: resolved, destination: destination(channel, resolved) }];
+    return resolved.userIds.map(userId => {
+      const config = { ...resolved, userIds: [userId] };
+      return { channel, config, destination: destination(channel, config) };
+    });
+  }
   async function request(url, options, sending = false) {
     try {
       const response = await fetcher(url, { ...options, redirect: "error", signal: globalThis.AbortSignal.timeout(25000) });
@@ -188,22 +199,28 @@ export function createDingService({ fetcher = globalThis.fetch, loadExisting = e
         url.searchParams.set("sign", createHmac("sha256", c.secret).update(`${timestamp}\n${c.secret}`).digest("base64"));
       }
       const heading = `${c.keyword ? c.keyword + " · " : ""}${title}`;
-      const result = await request(url.toString(), json({ msgtype: "markdown", markdown: { title: heading, text: `### ${heading}\n${text}\n\n![业绩报表](${picUrl})` } }), true);
+      const result = await request(url.toString(), json({ msgtype: "markdown", markdown: { title: heading, text: `### ${heading}\n${text}${picUrl ? "\n\n![业绩报表](" + picUrl + ")" : ""}` } }), true);
       return result.ok && result.body.errcode === 0 ? { ok: true, status: "sent" } : result.ok ? { ok: false, definiteFailure: false } : result;
     }
     const auth = await token(c);
     if (!auth.ok) return auth;
     const accessToken = auth.body.accessToken;
-    const form = new globalThis.FormData(); form.append("media", new globalThis.Blob([image], { type: "image/png" }), "report.png");
-    const upload = await request(`https://oapi.dingtalk.com/media/upload?access_token=${encodeURIComponent(accessToken)}&type=image`, { method: "POST", body: form });
-    if (!upload.ok) return upload;
-    if (upload.body.errcode !== 0 || !upload.body.media_id) return { ok: false, definiteFailure: true, error: "图片上传未成功，尚未发送消息" };
+    let mediaId;
+    if (image) {
+      const form = new globalThis.FormData();
+      form.append("media", new globalThis.Blob([image], { type: "image/png" }), "report.png");
+      const upload = await request(`https://oapi.dingtalk.com/media/upload?access_token=${encodeURIComponent(accessToken)}&type=image`, { method: "POST", body: form });
+      if (!upload.ok) return upload;
+      mediaId = upload.body.media_id;
+      if (upload.body.errcode !== 0 || !mediaId) return { ok: false, definiteFailure: true, error: "图片上传未成功，尚未发送消息" };
+    }
+    const content = title + "\n" + text;
     if (t.channel === "notice") {
       const result = await request(`https://oapi.dingtalk.com/topapi/message/corpconversation/asyncsend_v2?access_token=${encodeURIComponent(accessToken)}`,
-        json({ agent_id: Number(c.agentId), userid_list: c.userIds.join(","), to_all_user: false, msg: { msgtype: "image", image: { media_id: upload.body.media_id } } }), true);
+        json({ agent_id: Number(c.agentId), userid_list: c.userIds.join(","), to_all_user: false, msg: mediaId ? { msgtype: "image", image: { media_id: mediaId } } : { msgtype: "text", text: { content } } }), true);
       return result.ok && result.body.errcode === 0 && result.body.task_id ? { ok: true, status: "accepted", receipt: String(result.body.task_id) } : result.ok ? { ok: false, definiteFailure: false } : result;
     }
-    const options = json({ robotCode: c.robotCode, userIds: c.userIds, msgKey: "sampleImageMsg", msgParam: JSON.stringify({ photoURL: upload.body.media_id }) });
+    const options = json({ robotCode: c.robotCode, userIds: c.userIds, msgKey: mediaId ? "sampleImageMsg" : "sampleText", msgParam: JSON.stringify(mediaId ? { photoURL: mediaId } : { content }) });
     options.headers["x-acs-dingtalk-access-token"] = accessToken;
     const result = await request("https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend", options, true);
     if (!result.ok) return result;
@@ -211,5 +228,5 @@ export function createDingService({ fetcher = globalThis.fetch, loadExisting = e
     if (result.body.processQueryKey) return { ok: true, status: rejected.length ? "partial" : "accepted", receipt: String(result.body.processQueryKey), rejected };
     return { ok: false, definiteFailure: rejected.length === c.userIds.length, error: "单聊接口未返回发送凭证，请核对机器人能力与接收人范围" };
   }
-  return { publicConfig, save, target, check, send };
+  return { publicConfig, save, target, automaticTargets, check, send };
 }
