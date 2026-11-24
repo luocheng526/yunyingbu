@@ -15,8 +15,8 @@ export function normalizedRole(role){
 }
 const owner=p=>p.employeeNo==='XM001'&&['罗成','管理员'].includes(p.name)||['罗成','luocheng'].includes(p.username)&&['罗成','管理员'].includes(p.name);
 const cleanDepartment=p=>!p.department||['其他','未分配'].includes(p.department)?orgBoardName(p.board)||'未归属部门':p.department;
-export async function access(user){
-  const [listed,bundle,config,matched]=await Promise.all([orgPeople(),loadOrg(),settings(),matchPerson(user)]);
+export async function organizationContext(){
+  const [listed,bundle,config]=await Promise.all([orgPeople(),loadOrg(),settings()]);
   const people=listed.map(person=>{
     const original=bundle.people.find(p=>String(p.id)===String(person.id))||{};
     const p={...person,id:String(person.id),managerId:String(original.managerId||''),orgRole:person.role,
@@ -49,11 +49,15 @@ export async function access(user){
     p.teamId=p.role==='总监'?'':lead?'team-'+lead.id:manager?'manager-'+manager.id:'department:'+encodeURIComponent(p.board+':'+p.department);
     p.teamName=p.role==='总监'?'公司管理':lead?lead.name+'团队':manager?manager.name+'直属团队':p.department;
   }
+  return {people,active:people.filter(p=>p.status!=='离职'),byId,config,bundle};
+}
+export async function access(user){
+  const [{people,active,byId,config,bundle},matched]=await Promise.all([organizationContext(),matchPerson(user)]);
   const login=String(user?.username||'').trim(),exact=people.filter(p=>p.username===login),candidates=exact.length?exact:people.filter(p=>p.name===login);
   const legacyOwner=['罗成','luocheng'].includes(login)&&matched&&[matched.username,matched.name,matched.employeeNo].some(v=>['罗成','luocheng','XM001'].includes(v));
   const me=candidates.length===1?candidates[0]:legacyOwner?byId.get(String(matched.id)):null;
   if(!me||me.status==='离职')fault('当前账号未关联在职员工，请先核对组织中心',403);
-  const active=people.filter(p=>p.status!=='离职'),ctx={me,people,active,byId,config,bundle,director:me.role==='总监',manager:me.role==='经理',management:['总监','经理','主管'].includes(me.role)};
+  const ctx={me,people,active,byId,config,bundle,director:me.role==='总监',manager:me.role==='经理',management:['总监','经理','主管'].includes(me.role)};
   ctx.visiblePeople=active.filter(p=>canSeePerson(ctx,p));ctx.boards=ORG_BOARDS.filter(b=>ctx.director||ctx.visiblePeople.some(p=>p.board===b.code));return ctx;
 }
 export function canSeePerson(ctx,p){return Boolean(p)&&(ctx.director||p.id===ctx.me.id||(ctx.management&&p.ancestorIds.includes(ctx.me.id)));}
