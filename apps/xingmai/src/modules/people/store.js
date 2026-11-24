@@ -604,6 +604,11 @@ function inferRoleFromLine(name, line, fallback) {
   return fallback || "";
 }
 
+export function orgRoleOf(person, line = orgLineOf(person)) {
+  const name = String(person.name || "").trim();
+  return name ? inferRoleFromLine(name, line, person.role) : person.role || "";
+}
+
 function resolveManagerIdByName(managerName) {
   const name = String(managerName || "").trim();
   if (!name || name.includes("罗成")) {

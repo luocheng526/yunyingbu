@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { canAssignPerson, canAssignSiteAcl, personBranch, scopeOf, registerOrganizationPermissions } from "./org-acl.js";
 import { listOrgStores } from "./org-board.js";
-import { listPeople, orgLineOf } from "./store.js";
+import { listPeople, orgLineOf, orgRoleOf } from "./store.js";
 
 export const SITE_MODULES = [
   {
@@ -594,7 +594,7 @@ function presentPerson(person) {
   return {
     id: person.id,
     name: person.name,
-    role: person.role,
+    role: orgRoleOf(person, line),
     status: person.status,
     center: person.center,
     lineManager: line.manager || person.lineManager || "",
