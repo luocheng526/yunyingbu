@@ -248,8 +248,8 @@ async function readyStore() {
   ready = true;
 }
 
-export async function orgPeople() {
-  const packed = await loadOrg();
+export async function orgPeople(org) {
+  const packed = org || await loadOrg();
   const list = packed.people;
   let usernameById = new Map();
   if (dbMode() === "mysql") {
@@ -268,7 +268,7 @@ export async function orgPeople() {
     const board = String(person.board || person.orgBoard || "").trim();
     return {
       id: Number(person.id),
-      organizationManaged: person.demo !== true || Number(person.orgRevision || 0) > 0,
+      managerId: String(person.managerId || ""),
       name: String(person.name || ""),
       role: String(person.role || ""),
       center: String(person.center || ""),

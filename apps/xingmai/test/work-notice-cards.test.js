@@ -1,6 +1,6 @@
 import test, { beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { resetPeopleStore } from '../src/modules/people/store.js';
+import { resetPeopleStore, patchPerson } from '../src/modules/people/store.js';
 import { setPoolForTests } from '../src/modules/profile/auth.js';
 import { resetWorkStore } from '../src/modules/work/store.js';
 import { resetOrgMemo } from '../src/modules/work/diary.js';
@@ -18,7 +18,10 @@ const capture = async (personId, title, text, url, card) => { calls.push({ perso
 beforeEach(async () => {
   resetPeopleStore(); resetWorkStore(); resetOrgMemo(); resetTaskStore(); resetCenterRecords(); resetDingStore();
   calls = []; setTaskNotifier(capture);
-  await saveSettings(director, { revision: 0, teamOverrides: { '4': '8', '5': '8' }, weekdays: [0,1,2,3,4,5,6], reportMembers: ['4'] });
+  await patchPerson(3,{name:'罗成',username:'罗成',role:'总监'});
+  await patchPerson(4,{supervisor:'杨润泽'});
+  await patchPerson(5,{supervisor:'杨润泽'});
+  await saveSettings(director, { revision: 0, weekdays: [0,1,2,3,4,5,6], reportMembers: ['4'] });
 });
 afterEach(() => {
   setPoolForTests(null);

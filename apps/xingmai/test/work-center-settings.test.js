@@ -13,11 +13,11 @@ test('工作设置显示组织中心直属上级和工作中心所属团队', as
     orgRole: '助理',
     role: '运营助理',
     managerId: '4',
-    managerName: '测试带教',
+    managerName: '',
+    parentName: '测试带教',
     parentId: '1',
     teamId: 'manager-1',
     teamName: '测试经理直属团队',
-    organizationManaged: true
   };
   const legacyMember = {
     id: '8',
@@ -28,7 +28,6 @@ test('工作设置显示组织中心直属上级和工作中心所属团队', as
     parentId: '1',
     teamId: 'manager-1',
     teamName: '测试经理直属团队',
-    organizationManaged: false
   };
   const people = [assistant, legacyMember];
   const data = {
@@ -58,7 +57,8 @@ test('工作设置显示组织中心直属上级和工作中心所属团队', as
   const unmount = window.XmWorkCenter.mount(root);
   await setImmediate();
   assert.match(root.innerHTML, /<th>直属上级<\/th><th>所属团队<\/th>/);
-  assert.match(root.innerHTML, /<td>测试助理<\/td><td>助理<\/td><td>运营助理<\/td><td>测试带教<\/td><td>测试经理直属团队<\/td><td><span class="wc-muted">组织中心维护<\/span>/);
-  assert.match(root.innerHTML, /<td>旧名册员工<\/td><td>员工<\/td><td>员工<\/td><td>—<\/td><td>测试经理直属团队<\/td><td><button[^>]*data-action="personSettings" data-id="8"/);
+  assert.match(root.innerHTML, /<td>测试助理<\/td><td>助理<\/td><td>运营助理<\/td><td>测试带教<\/td><td>测试经理直属团队<\/td><\/tr>/);
+  assert.match(root.innerHTML, /<td>旧名册员工<\/td><td>员工<\/td><td>员工<\/td><td>—<\/td><td>测试经理直属团队<\/td><\/tr>/);
+  assert.doesNotMatch(root.innerHTML, /调整关联|personSettings/);
   unmount();
 });

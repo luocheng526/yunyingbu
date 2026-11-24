@@ -1,10 +1,10 @@
 import test,{beforeEach} from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { resetPeopleStore, createPerson } from '../src/modules/people/store.js';
+import { resetPeopleStore, createPerson, patchPerson } from '../src/modules/people/store.js';
 import { resetWorkStore } from '../src/modules/work/store.js';
 import { resetOrgMemo } from '../src/modules/work/diary.js';
-import { resetCenterRecords, day, record, settings } from '../src/modules/work/center-db.js';
+import { resetCenterRecords, day, record, settings, writeRecord } from '../src/modules/work/center-db.js';
 import { access, normalizedRole } from '../src/modules/work/center-access.js';
 import { publishTask,listTasks,actTask,readTaskFile,resetTaskStore,setTaskNotifier,exportTasks,importTasks } from '../src/modules/work/tasks.js';
 import { centerData,saveDaily,saveWork,saveIssue,saveSettings } from '../src/modules/work/center.js';
@@ -13,7 +13,13 @@ const users={director:{username:'罗成'},managerB:{username:'韩梦凯'},manage
 const today=()=>day();
 beforeEach(async()=>{
   resetPeopleStore();resetWorkStore();resetOrgMemo();resetCenterRecords();resetTaskStore();setTaskNotifier(async()=>false);
-  await saveSettings(users.director,{revision:0,roleOverrides:{'11':'主管','5':'助理','7':'助理'},teamOverrides:{'4':'8','5':'8','6':'11','7':'11'},weekdays:[0,1,2,3,4,5,6],deadline:'23:59'});
+  await patchPerson(3,{name:'罗成',username:'罗成',role:'总监'});
+  await patchPerson(11,{role:'主管'});
+  await patchPerson(4,{supervisor:'杨润泽'});
+  await patchPerson(5,{role:'助理',supervisor:'杨润泽'});
+  await patchPerson(6,{supervisor:'高丽男'});
+  await patchPerson(7,{role:'助理',supervisor:'高丽男'});
+  await saveSettings(users.director,{revision:0,weekdays:[0,1,2,3,4,5,6],deadline:'23:59'});
 });
 const draft=(overrides={})=>({title:'测试任务',assignee:'5',start_at:today()+'T09:00',due_at:today()+'T23:59',...overrides});
 async function create(user=users.manager,overrides={}){const result=await publishTask(user,draft(overrides));assert.equal(result.ok,true,result.error);return result.task;}
@@ -51,15 +57,38 @@ test('director tasks reach managers and supervisors without granting core edit p
 });
 test('manager transfer preserves task and daily management snapshots',async()=>{
   const old=await create(users.director);await saveDaily(users.assistant,{date:today(),submit:true});
-  const s=await settings();await saveSettings(users.director,{revision:s.revision,reportingOverrides:{'8':'2'}});
+  await patchPerson(8,{lineManager:'韩梦凯'});
   const fresh=await create(users.director);assert.deepEqual(old.manager_ids,['1']);assert.deepEqual(fresh.manager_ids,['2']);
   assert.deepEqual((await listTasks(users.manager,'all')).rows.map(t=>t.id),[old.id]);assert.deepEqual((await listTasks(users.managerB,'all')).rows.map(t=>t.id),[fresh.id]);
   assert.equal((await centerData(users.manager)).dailies.length,1);assert.equal((await centerData(users.managerB)).dailies.length,0);
 });
-test('reporting configuration rejects peer and downward manager relationships',async()=>{
-  const s=await settings();for(const relation of [{'1':'2'},{'1':'8'},{'8':'5'},{'4':'missing'}])await assert.rejects(()=>saveSettings(users.director,{revision:s.revision,reportingOverrides:relation}),/更高层级/);
+test('organization assignments supersede stored work overrides and cannot be changed in work settings',async()=>{
+  const s=await settings();
+  const overrides={roleOverrides:{'5':'经理'},reportingOverrides:{'5':'2'},teamOverrides:{'5':'11'}};
+  await writeRecord('settings','settings',{...s,...overrides},s.revision);
+  const {me}=await access(users.assistant);
+  assert.equal(me.role,'运营助理');
+  assert.equal(me.parentName,'杨润泽');
+  assert.equal(me.teamId,'team-8');
+  const revision=(await settings()).revision;
+  for(const [key,value] of Object.entries(overrides)){
+    await assert.rejects(()=>saveSettings(users.director,{revision,[key]:value}),/组织中心维护/);
+  }
+  await saveSettings(users.director,{revision,deadline:'19:00'});
 });
 
+test('direct reporting follows organization level columns and skips gaps',async()=>{
+  const lead=await createPerson({name:'新团队主管',role:'运营',supervisor:'新团队主管',lineManager:'韩梦凯'});
+  const reserve=await createPerson({name:'新团队储备',role:'储备',reserve:'新团队储备',supervisor:'新团队主管',lineManager:'韩梦凯'});
+  const operator=await createPerson({name:'新团队运营',role:'运营',supervisor:'新团队主管',lineManager:'韩梦凯',managerId:2});
+  const assistant=await createPerson({name:'新团队助理',role:'助理',operator:'无',reserve:'新团队储备',supervisor:'新团队主管',lineManager:'韩梦凯'});
+  const byId=(await access(users.director)).byId;
+  assert.equal(byId.get(String(operator.person.id)).parentName,lead.person.name);
+  assert.equal(byId.get(String(operator.person.id)).teamName,lead.person.name+'团队');
+  assert.equal(byId.get(String(assistant.person.id)).parentName,reserve.person.name);
+  assert.equal(byId.get(String(lead.person.id)).role,'运营');
+  assert.equal(byId.get(String(lead.person.id)).parentName,'韩梦凯');
+});
 test('manager direct assignment belongs to employee team without increasing supervisor publication',async()=>{
   const t=await create();assert.equal(t.publisher,'1');assert.equal(t.team_id,'team-8');assert.equal(t.reviewer,'1');
   assert.equal((await listTasks(users.lead,'all')).rows.length,1);
@@ -104,7 +133,7 @@ test('parent cannot submit before children accepted and never auto-completes',as
   const data=await centerData(users.manager);assert.equal(data.counts.roots,1);assert.equal(data.counts.children,1);
 });
 test('team reassignment preserves old task snapshot, new tasks follow new team',async()=>{
-  const old=await create();const s=await settings();await saveSettings(users.director,{revision:s.revision,teamOverrides:{...s.teamOverrides,'5':'11'}});
+  const old=await create();await patchPerson(5,{supervisor:'高丽男'});
   const fresh=await create();assert.equal(fresh.team_id,'team-11');assert.equal((await listTasks(users.lead,'all')).rows.find(t=>t.id===old.id).team_id,'team-8');assert.equal((await listTasks(users.leadB,'all')).rows.length,1);
 });
 test('supervisor cannot edit manager requirements; manager extension keeps old deadline',async()=>{

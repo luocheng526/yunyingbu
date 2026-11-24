@@ -189,9 +189,10 @@ export async function saveIssue(user,input) {
 export async function saveSettings(user,input) {
   if(!permissionsFor(user,'work').can('settings','edit'))fault('组织中心未授予此操作权限',403);
   const ctx=await access(user);if(!ctx.director)fault('只有总监可以修改工作中心全局设置',403);
-  const next=copy(ctx.config),allowed=['categories','roleOverrides','teamOverrides','reportingOverrides','collaborations','taskTemplates','reportRoles','reportMembers','weekdays','restDays','deadline','allowLate','reviewHours','staleHours','requiredAttachmentCategories','reportFields','taskReminders','dailyReminders','dueSoonMinutes','repeatReminderAt'];
+  if(['roleOverrides','teamOverrides','reportingOverrides'].some(key=>Object.hasOwn(input,key)))fault('人员角色和汇报关系请在组织中心维护');
+  const next=copy(ctx.config),allowed=['categories','collaborations','taskTemplates','reportRoles','reportMembers','weekdays','restDays','deadline','allowLate','reviewHours','staleHours','requiredAttachmentCategories','reportFields','taskReminders','dailyReminders','dueSoonMinutes','repeatReminderAt'];
   for(const key of allowed)if(Object.hasOwn(input,key))next[key]=copy(input[key]);
-  for(const key of ['roleOverrides','teamOverrides','reportingOverrides','reportFields'])if(!next[key]||typeof next[key]!=='object'||Array.isArray(next[key]))fault('设置格式不合法：'+key);
+  if(!next.reportFields||typeof next.reportFields!=='object'||Array.isArray(next.reportFields))fault('日报模板格式不合法');
   for(const key of ['reportRoles','reportMembers','requiredAttachmentCategories','taskTemplates'])if(!Array.isArray(next[key]))fault('设置格式不合法：'+key);
   if(typeof next.taskReminders!=='boolean'||typeof next.dailyReminders!=='boolean')fault('提醒开关不合法');
   if(!Number.isInteger(next.dueSoonMinutes)||next.dueSoonMinutes<1||next.dueSoonMinutes>1440)fault('到期前提醒应为 1～1440 分钟');
@@ -206,11 +207,8 @@ export async function saveSettings(user,input) {
   if(!Array.isArray(next.weekdays)||next.weekdays.some(n=>!Number.isInteger(n)||n<0||n>6))fault('工作日不合法');
   if(!Array.isArray(next.restDays)||next.restDays.some(d=>!validDay(d)))fault('休息日期不合法');
   for(const key of ['reviewHours','staleHours'])if(!(Number(next[key])>0&&Number(next[key])<=720))fault('提醒时长应为 1～720 小时');
-  for(const [id,role] of Object.entries(next.roleOverrides))if(!ctx.byId.has(id)||![...WORK_ROLES,'助理'].includes(role))fault('岗位配置不合法');
-  for(const [id,parentId]of Object.entries(next.reportingOverrides)){const child=ctx.byId.get(id),parent=ctx.byId.get(String(parentId));if(!child||parentId&&(!parent||parent.status==='离职'||roleLevel(normalizedRole(next.roleOverrides[parentId]||parent.role))<=roleLevel(normalizedRole(next.roleOverrides[id]||child.role))))fault('直属上级必须是在职的更高层级人员');}
-  for(const [id,lead]of Object.entries(next.teamOverrides))if(!ctx.byId.has(id)||lead&&((next.roleOverrides[lead]||ctx.byId.get(String(lead))?.role)!=='主管'))fault('团队应关联主管');
   if(!Array.isArray(next.collaborations))fault('协作授权格式不合法');
-  for(const c of next.collaborations)if(!c||typeof c!=='object'||(next.roleOverrides[c.operatorId]||ctx.byId.get(String(c.operatorId))?.role)!=='运营'||normalizedRole(next.roleOverrides[c.assistantId]||ctx.byId.get(String(c.assistantId))?.role)!=='运营助理'||(c.startOn&&!validDay(c.startOn))||(c.endOn&&!validDay(c.endOn))||(c.startOn&&c.endOn&&c.startOn>c.endOn))fault('协作授权对象或日期不合法');
+  if(Object.hasOwn(input,'collaborations'))for(const c of next.collaborations)if(!c||typeof c!=='object'||(c.enabled!==false&&(ctx.byId.get(String(c.operatorId))?.role!=='运营'||ctx.byId.get(String(c.assistantId))?.role!=='运营助理'))||(c.startOn&&!validDay(c.startOn))||(c.endOn&&!validDay(c.endOn))||(c.startOn&&c.endOn&&c.startOn>c.endOn))fault('协作授权对象或日期不合法');
   for(const c of next.collaborations) {c.authorizedBy=ctx.me.id;c.updatedAt=stamp();}
   for(const template of next.taskTemplates) template.composerImages=await saveComposerImages(template.composerImages,['description','criteria'],ctx.config.taskTemplates.flatMap(t=>t.composerImages||[]),ctx.me.id);
   const composerImages=await saveComposerImages(input.composerImages,['reason','categories','requiredAttachmentCategories',...Object.keys(next.reportFields).map(k=>'fields_'+k)],[],ctx.me.id);

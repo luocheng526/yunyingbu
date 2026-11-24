@@ -1,7 +1,7 @@
 import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { resetPeopleStore } from '../src/modules/people/store.js';
+import { resetPeopleStore, patchPerson } from '../src/modules/people/store.js';
 import { resetWorkStore, getSettings } from '../src/modules/work/store.js';
 import { resetOrgMemo, saveDiaryRest } from '../src/modules/work/diary.js';
 import { resetCenterRecords, record, records, writeRecord, exportCenterRecords, importCenterRecords, DEFAULT_SETTINGS } from '../src/modules/work/center-db.js';
@@ -20,6 +20,7 @@ const item = extra => ({ id: 'reminder:test', reminderKind: 'task_due', personId
 
 beforeEach(async () => {
   resetPeopleStore(); resetWorkStore(); resetOrgMemo(); resetCenterRecords(); resetTaskStore(); resetDingStore();
+  await patchPerson(3,{name:'罗成',username:'罗成',role:'总监'});
   setTaskNotifier(async () => false);
   await saveBinds([{ personId: 4, userid: 'ding-test-4' }, { personId: 8, userid: 'ding-test-8' }]);
 });

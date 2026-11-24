@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { parseRichContent, bindRichFiles, richPlainText } from "../src/modules/work/rich-content.js";
 import { publishTask, listTasks, readTaskFile, resetTaskStore, setTaskNotifier } from "../src/modules/work/tasks.js";
-import { resetPeopleStore } from "../src/modules/people/store.js";
+import { resetPeopleStore, patchPerson } from "../src/modules/people/store.js";
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aY9sAAAAASUVORK5CYII=", "base64");
 const files = [{ name: "inline.png", mime: "image/png", bytes: png }];
 
@@ -29,6 +29,7 @@ test("rejects arbitrary HTML, URLs, foreign image IDs and mismatched image conte
 
 test("task save/read keeps rich content and file access permissions; rejected input creates no task", async () => {
   resetPeopleStore(); resetTaskStore(); setTaskNotifier(async()=>true);
+  await patchPerson(3,{name:'罗成',username:'罗成',role:'总监'});
   const user={username:"罗成",displayName:"罗成"};
   const draft={id:"task-rich-test-01",title:"图文任务",description:"fallback",criteria:"旧要求",assignee:"4",reviewer:"3",start_at:"2026-11-21T09:00",due_at:"2026-11-22T18:00",files,description_doc:JSON.stringify([{type:"text",text:"图前"},{type:"image",upload:0},{type:"text",text:"图后"}]),criteria_doc:JSON.stringify([{type:"text",text:"验收文字"}])};
   try{

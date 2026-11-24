@@ -14,38 +14,46 @@ export function normalizedRole(role){
   if(['助理','运营助理'].includes(value))return '运营助理';
   return '员工';
 }
-const owner=p=>p.employeeNo==='XM001'&&['罗成','管理员'].includes(p.name)||['罗成','luocheng'].includes(p.username)&&['罗成','管理员'].includes(p.name);
 const cleanDepartment=p=>!p.department||['其他','未分配'].includes(p.department)?orgBoardName(p.board)||'未归属部门':p.department;
+const ORG_REPORTING_LINE=[
+  ['director','总监'],['lineManager','经理'],['supervisor','主管'],
+  ['reserve','储备'],['operator','运营'],['assistant','运营助理']
+];
+function reportingRank(person){
+  const role=person.orgRole==='储备'?'储备':person.role;
+  const rank=ORG_REPORTING_LINE.findIndex(([field,post])=>role===post||(person.name&&person[field]===person.name));
+  return rank<0?ORG_REPORTING_LINE.length:rank;
+}
 export async function organizationContext(){
-  const [listed,bundle,config]=await Promise.all([orgPeople(),loadOrg(),settings()]);
-  const people=listed.map(person=>{
-    const original=bundle.people.find(p=>String(p.id)===String(person.id))||{};
-    const p={...person,id:String(person.id),managerId:String(original.managerId||''),orgRole:person.role,
-      role:normalizedRole(person.organizationManaged ? person.role : config.roleOverrides[person.id]||person.role),department:cleanDepartment(person),boardName:orgBoardName(person.board)||person.board||'未归属板块'};
-    // Business director rights do not grant system administrator rights.
-    if(owner(p)){p.role='总监';if(p.name==='管理员')p.name='罗成';}
-    return p;
-  });
+  const [bundle,config]=await Promise.all([loadOrg(),settings()]);
+  const listed=await orgPeople(bundle);
+  const people=listed.map(person=>({...person,id:String(person.id),orgRole:person.role,
+    role:normalizedRole(person.role),department:cleanDepartment(person),boardName:orgBoardName(person.board)||person.board||'未归属板块'}));
+  // Older rosters may assign the top-level director responsibility separately from the position title.
+  const directors=people.filter(p=>p.status!=='离职'&&p.role==='经理'&&p.name&&p.director===p.name&&!p.managerId&&!p.lineManager);
+  if(directors.length===1)directors[0].role='总监';
   const byId=new Map(people.map(p=>[p.id,p]));
-  const named=(name,role)=>{const rows=people.filter(p=>p.name===name&&p.role===role&&p.status!=='离职');return rows.length===1?rows[0]:null;};
-  const higher=(p,candidate)=>candidate&&candidate.id!==p.id&&candidate.status!=='离职'&&roleLevel(candidate.role)>roleLevel(p.role);
+  const activeByName=new Map();
+  for(const person of people.filter(p=>p.status!=='离职'&&p.name)){
+    activeByName.set(person.name,activeByName.has(person.name)?null:person);
+  }
+  const ranks=new Map(people.map(p=>[p.id,reportingRank(p)]));
   for(const p of people){
-    let parent=null;const explicit=config.reportingOverrides[p.id];
-    if(!p.organizationManaged&&explicit&&higher(p,byId.get(String(explicit))))parent=byId.get(String(explicit));
-    if(!p.organizationManaged&&!parent&&higher(p,byId.get(String(config.teamOverrides[p.id]||''))))parent=byId.get(String(config.teamOverrides[p.id]));
-    if(!parent&&higher(p,named(p.supervisor,'主管')))parent=named(p.supervisor,'主管');
-    if(!parent&&higher(p,named(p.operator,'运营')))parent=named(p.operator,'运营');
-    if(!parent&&higher(p,named(p.lineManager,'经理')))parent=named(p.lineManager,'经理');
-    if(!parent&&higher(p,named(p.director,'总监')))parent=named(p.director,'总监');
-    let original=byId.get(p.managerId);const seen=new Set([p.id]);
-    while(!parent&&original&&!seen.has(original.id)){seen.add(original.id);if(higher(p,original))parent=original;original=byId.get(original.managerId);}
-    p.parentId=parent?.id||'';
+    const rank=ranks.get(p.id);
+    const eligible=candidate=>candidate&&candidate.status!=='离职'&&ranks.get(candidate.id)<rank;
+    const parent=ORG_REPORTING_LINE.slice(0,rank).reverse()
+      .map(([field])=>activeByName.get(p[field])).find(eligible);
+    const recorded=byId.get(p.managerId);
+    const direct=parent||(eligible(recorded)?recorded:null);
+    p.parentId=direct?.id||'';
+    p.parentName=direct?.name||'';
   }
   for(const p of people){
     const ancestors=[];let next=byId.get(p.parentId);const seen=new Set([p.id]);
     while(next&&!seen.has(next.id)){seen.add(next.id);ancestors.push(next);next=byId.get(next.parentId);}
     p.ancestorIds=ancestors.map(a=>a.id);p.scopeIds=ancestors.filter(a=>['总监','经理','主管'].includes(a.role)).map(a=>a.id);p.managerIds=ancestors.filter(a=>a.role==='经理').map(a=>a.id);
-    const lead=p.role==='主管'?p:ancestors.find(a=>a.role==='主管'),manager=p.role==='经理'?p:ancestors.find(a=>a.role==='经理');
+    const isLead=a=>ORG_REPORTING_LINE[ranks.get(a.id)]?.[1]==='主管';
+    const lead=isLead(p)?p:ancestors.find(isLead),manager=p.role==='经理'?p:ancestors.find(a=>a.role==='经理');
     p.supervisorId=lead?.id||'';p.teamLeaderId=lead?.id||manager?.id||'';p.teamKind=lead?'主管团队':manager?'经理直属团队':'部门';
     p.teamId=p.role==='总监'?'':lead?'team-'+lead.id:manager?'manager-'+manager.id:'department:'+encodeURIComponent(p.board+':'+p.department);
     p.teamName=p.role==='总监'?'公司管理':lead?lead.name+'团队':manager?manager.name+'直属团队':p.department;

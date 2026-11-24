@@ -6,7 +6,7 @@ import { SITE_MODULES, SITE_NAV, SITE_FEATURE_PATHS, resetSiteAcl, savePersonSit
 import { featureForRequest } from '../src/modules/people/access-policy.js';
 import { siteAclGuard } from '../src/modules/people/site-acl-guard.js';
 import { WORK_FEATURES, migrateWorkCap } from '../src/modules/people/work-permissions.js';
-import { resetPeopleStore } from '../src/modules/people/store.js';
+import { resetPeopleStore, patchPerson } from '../src/modules/people/store.js';
 import { resetWorkStore } from '../src/modules/work/store.js';
 import { resetOrgMemo } from '../src/modules/work/diary.js';
 import { resetCenterRecords, day } from '../src/modules/work/center-db.js';
@@ -21,7 +21,7 @@ async function grant(name, module, features, cap=on){
   const result=await savePersonSiteAcl('罗成',name,{modules:{[module]:{...cap,catalogVersion:2,features}}});
   assert.equal(result.ok,true,result.error);return result.sheet;
 }
-beforeEach(()=>{resetPeopleStore();resetWorkStore();resetOrgMemo();resetCenterRecords();resetTaskStore();resetSiteAcl();setTaskNotifier(async()=>false);});
+beforeEach(async()=>{resetPeopleStore();resetWorkStore();resetOrgMemo();resetCenterRecords();resetTaskStore();resetSiteAcl();setTaskNotifier(async()=>false);await patchPerson(3,{name:'罗成',username:'罗成',role:'总监'});});
 test('all 16 module names and routed feature names agree with navigation',()=>{
   assert.equal(SITE_MODULES.length,16);
   const nav=fs.readFileSync(new URL('../src/modules/home/nav-items.js',import.meta.url),'utf8');
