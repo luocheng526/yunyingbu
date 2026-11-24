@@ -173,6 +173,91 @@ export function cellKey(team, shop, col) {
   return `${team}|${shop}|${col}`;
 }
 
+export function normWeekShop(name) {
+  return String(name || "")
+    .replace(/\s+/g, "")
+    .replace(/[（(].*?[)）]/g, "")
+    .replace(/旗舰店$/, "旗舰")
+    .replace(/专卖店$/, "专卖")
+    .replace(/专营店$/, "专营")
+    .replace(/店$/, "");
+}
+
+const SHEET_ALIASES = {
+  LUCYLEE养生器械旗舰店: "LUCYLEE养生器械桦野曼专卖店",
+  LUCYLEE医疗保健旗舰店: "LUCYLEE智能健康旗舰店",
+  DIKTT潮流护理旗舰店: "DIKTT个护健康旗舰店",
+  RASW栀悦专卖店: "RASW栀砚专卖店"
+};
+
+export function matchWeekShop(sheetName, webShops) {
+  const raw = String(sheetName || "").trim();
+  if (!raw) {
+    return "";
+  }
+  const alias = SHEET_ALIASES[raw] || raw;
+  const names = [raw, alias];
+  const list = webShops || [];
+  const currentOf = (row) => String(row.shop || row.store || row.storeName || "").trim();
+  for (const name of names) {
+    const hit = list.find((row) => currentOf(row) === name);
+    if (hit) {
+      return currentOf(hit);
+    }
+  }
+  const want = new Set(names.map(normWeekShop).filter(Boolean));
+  const currentHits = list.filter((row) => want.has(normWeekShop(currentOf(row))));
+  if (currentHits.length === 1) {
+    return currentOf(currentHits[0]);
+  }
+  const prefixHits = list.filter((row) => {
+    const web = normWeekShop(currentOf(row));
+    return web && [...want].some((sheet) => web === sheet || web.startsWith(sheet) || sheet.startsWith(web));
+  });
+  if (prefixHits.length === 1) {
+    return currentOf(prefixHits[0]);
+  }
+  const liveNames = new Set(list.map(currentOf).filter(Boolean));
+  const formerHits = list.filter((row) => {
+    const former = String(row.formerNames || "")
+      .split(/[,，;；]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return former.some((item) => names.includes(item) || want.has(normWeekShop(item))) && !former.some((item) => liveNames.has(item));
+  });
+  if (formerHits.length === 1) {
+    return currentOf(formerHits[0]);
+  }
+  return "";
+}
+
+export function sheetMetricsToCells(sheetRows, webShops, days) {
+  const cells = {};
+  const matched = [];
+  const unmatched = [];
+  (sheetRows || []).forEach((row) => {
+    const shop = matchWeekShop(row.shop, webShops);
+    const web = (webShops || []).find((item) => shopNameOf(item) === shop);
+    const team = web && (web.team === "han" || web.team === "shen") ? web.team : row.team === "han" || row.team === "shen" ? row.team : "";
+    if (!shop || (team !== "han" && team !== "shen")) {
+      unmatched.push(row.shop);
+      return;
+    }
+    if (row.cat) {
+      cells[cellKey(team, shop, "cat")] = row.cat;
+    }
+    (days || []).forEach((ymd) => {
+      const value = row.gmv && row.gmv[ymd];
+      if (value == null || value === "") {
+        return;
+      }
+      cells[cellKey(team, shop, `gmv_${ymd}`)] = value;
+    });
+    matched.push({ sheet: row.shop, shop, team });
+  });
+  return { cells, matched, unmatched };
+}
+
 function num(value) {
   if (value == null || value === "") {
     return null;

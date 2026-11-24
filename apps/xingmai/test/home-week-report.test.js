@@ -19,6 +19,8 @@ import {
   seedRowsFromOrg,
   setWeekStorePath,
   groupWeekRowsByLead,
+  matchWeekShop,
+  sheetMetricsToCells,
   weekOwner,
   weekLead,
   weekTeamKey
@@ -216,6 +218,35 @@ test("week pack seeds operating org shops into han and shen", () => {
     ]
   );
   resetWeekStore();
+});
+
+test("sheet rows match webpage shops by name not row order", () => {
+  const web = [
+    { shop: "HYEGIIR官方旗舰店", team: "shen", formerNames: "HYEGIIR医疗保健旗舰店" },
+    { shop: "HYEGIIR医疗保健旗舰店", team: "shen" },
+    { shop: "LUCYLEE养生器械桦野曼专卖店", team: "han" },
+    { shop: "DIKTT个护健康旗舰店", team: "shen" },
+    { shop: "RASW生活电器旗舰", team: "shen" },
+    { shop: "RASW栀砚专卖店", team: "shen" }
+  ];
+  assert.equal(matchWeekShop("HYEGIIR医疗保健旗舰店", web), "HYEGIIR医疗保健旗舰店");
+  assert.equal(matchWeekShop("HYEGIIR官方旗舰店", web), "HYEGIIR官方旗舰店");
+  assert.equal(matchWeekShop("LUCYLEE养生器械旗舰店", web), "LUCYLEE养生器械桦野曼专卖店");
+  assert.equal(matchWeekShop("DIKTT潮流护理旗舰店", web), "DIKTT个护健康旗舰店");
+  assert.equal(matchWeekShop("RASW生活电器旗舰店", web), "RASW生活电器旗舰");
+  assert.equal(matchWeekShop("RASW栀悦专卖店", web), "RASW栀砚专卖店");
+  const patched = sheetMetricsToCells(
+    [
+      { shop: "DIKTT潮流护理旗舰店", team: "shen", cat: "个护健康", gmv: { "2026-11-18": 14653 } },
+      { shop: "RASW栀悦专卖店", team: "shen", cat: "厨房卫浴", gmv: { "2026-11-22": 6667 } }
+    ],
+    web,
+    ["2026-11-18", "2026-11-22"]
+  );
+  assert.equal(patched.unmatched.length, 0);
+  assert.equal(patched.cells["shen|DIKTT个护健康旗舰店|gmv_2026-11-18"], 14653);
+  assert.equal(patched.cells["shen|DIKTT个护健康旗舰店|cat"], "个护健康");
+  assert.equal(patched.cells["shen|RASW栀砚专卖店|gmv_2026-11-22"], 6667);
 });
 
 function osTmp() {
