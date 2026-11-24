@@ -78,8 +78,20 @@ export function rowMatchesScope(row, scope) {
   return false;
 }
 
+// Explicit organization master-data access is independent of operational
+// responsibility and downstream business-data grants.
+export function storeScopeOf(actor, cap = "enter") {
+  const scope = scopeOf(actor);
+  if (scope.key === "all") return scope;
+  if (isConfigured(actor) && featureAllowed(actor, "people.stores", cap)) {
+    return { key: "all", actor: scope.actor, groupId: "", label: cap === "edit" ? "可管理全部店铺主数据" : "可查看全部店铺主数据" };
+  }
+  return scope;
+}
+
 export function canEditStore(actor, row) {
-  return rowMatchesScope(row, scopeOf(actor));
+  if (scopeOf(actor).key !== "all" && isConfigured(actor) && !featureAllowed(actor, "people.stores", "edit")) return false;
+  return rowMatchesScope(row, storeScopeOf(actor, "edit"));
 }
 
 /** 成员表五级线：只有罗成、韩梦凯、沈子晗能双击改。 */
@@ -179,7 +191,7 @@ export function assertCanWrite(actor, row, next = null) {
 }
 
 export function assertCanImportRow(actor, row, selectedGroupId = "") {
-  const scope = scopeOf(actor);
+  const scope = storeScopeOf(actor, "edit");
   const gid = groupIdOf(row);
   const picked = normalizeGroupId(selectedGroupId);
   if (picked && gid !== picked) {

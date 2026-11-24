@@ -3,7 +3,7 @@ const sync = stateSync();
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertCanImportRow, assertCanWrite, canEditStore, groupIdOf, normalizeGroupId, rowMatchesScope, scopeOf } from "./org-acl.js";
+import { assertCanImportRow, assertCanWrite, canEditStore, groupIdOf, normalizeGroupId, rowMatchesScope, storeScopeOf } from "./org-acl.js";
 import { listPeople, orgLineOf, patchPerson, registerOrgStoreSource } from "./store.js";
 
 const STATUSES = {
@@ -1064,7 +1064,7 @@ export function listOrgStores(query = {}, actor) {
   const team = typeof query.team === "string" ? query.team.trim() : "";
   const status = typeof query.status === "string" ? query.status.trim() : "";
   const q = typeof query.q === "string" ? query.q.trim().toLowerCase() : "";
-  const scope = scopeOf(actor);
+  const scope = storeScopeOf(actor);
   rows.forEach((row) => {
     const roles = syncStoreRoles({}, row);
     ["director", "manager", "supervisor", "operator", "assistant", "groupId"].forEach((key) => {
@@ -1228,7 +1228,7 @@ function filledImport(input = {}) {
 }
 
 function importPool(actor, selectedGroupId = "") {
-  const scope = scopeOf(actor);
+  const scope = storeScopeOf(actor);
   const forced = normalizeGroupId(selectedGroupId) || (scope.key === "group" ? scope.groupId : "");
   return rows.filter((row) => {
     if (forced) {
@@ -1252,7 +1252,7 @@ function findExistingStore(input, actor, selectedGroupId = "") {
   const pool = importPool(actor, selectedGroupId);
   const gid =
     normalizeGroupId(selectedGroupId) ||
-    (scopeOf(actor).key === "group" ? scopeOf(actor).groupId : "") ||
+    (storeScopeOf(actor).key === "group" ? storeScopeOf(actor).groupId : "") ||
     groupIdOf(input);
   const useGroup = Boolean(gid) && !["罗成", "沈子晗", "韩梦凯"].includes(gid);
   const storeId = storeIdOf(input);
@@ -1334,7 +1334,7 @@ export function mapImportRow(raw = {}) {
 export async function importOrgStores(items, actor, options = {}) {
   const list = Array.isArray(items) ? items : [];
   const selectedGroupId = normalizeGroupId(options.groupId);
-  const scope = scopeOf(actor);
+  const scope = storeScopeOf(actor);
   const forcedGroup = scope.key === "group" ? scope.groupId : selectedGroupId;
   const created = [];
   const updated = [];

@@ -253,7 +253,9 @@ export function canonicalPerson(value) {
 }
 export function canonicalActor(value) {
   const key = String(value || "").trim();
-  if (key === "luocheng") return "罗成";
+  // Reserved administrator identities must not be replaced by the legacy
+  // roster display name (username 罗成, name 管理员).
+  if (["罗成", "luocheng", "管理员"].includes(key)) return "罗成";
   return canonicalPerson(key)?.name || key;
 }
 

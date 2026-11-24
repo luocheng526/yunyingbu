@@ -22,7 +22,7 @@ import {
   reconcilePeople,
   removePeople
 } from "./store.js";
-import { canAssignSiteAcl, canEditLogin, canEditRoster, canSeeLogin, scopeOf } from "./org-acl.js";
+import { canAssignSiteAcl, canEditLogin, canEditRoster, canSeeLogin, scopeOf, storeScopeOf } from "./org-acl.js";
 import {
   hydrateSiteAcl,
   listSiteAclBoard,
@@ -31,7 +31,7 @@ import {
   savePersonSiteAcl,
   siteAclPersistMode
 } from "./site-acl.js";
-import { canonicalActor, featureAllowed } from "./site-acl.js";
+import { canonicalActor, featureAllowed, isConfigured } from "./site-acl.js";
 import { attachSiteAclGuard } from "./site-acl-guard.js";
 import {
   STORE_IMPORT_HEADERS,
@@ -182,7 +182,7 @@ peopleRouter.get("/org/summary", async (req, res) => {
   await hydrateOrgStores();
   await hydrateSiteAcl();
   const actor = await resolveActor(req);
-  const scope = scopeOf(actor);
+  const scope = storeScopeOf(actor);
   res.json({
     ok: true,
     demo: true,
@@ -200,7 +200,7 @@ peopleRouter.get("/org/stores", async (req, res) => {
   await hydrateOrgStores();
   await hydrateSiteAcl();
   const actor = await resolveActor(req);
-  const scope = scopeOf(actor);
+  const scope = storeScopeOf(actor);
   res.json({
     ok: true,
     demo: true,
@@ -208,7 +208,7 @@ peopleRouter.get("/org/stores", async (req, res) => {
     scope: scope.key,
     scopeLabel: scope.label,
     persist: orgStoresPersistMode(),
-    canCreate: scope.key !== "none",
+    canCreate: scopeOf(actor).key === "all" || !isConfigured(actor) || featureAllowed(actor, "people.stores", "edit"),
     teams: listTeams(),
     stores: listOrgStores(req.query || {}, actor)
   });
