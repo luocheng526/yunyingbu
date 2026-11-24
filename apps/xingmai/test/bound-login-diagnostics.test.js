@@ -33,6 +33,12 @@ test("传输错误和账号限制分开说明，不把上游正文或密码带�
     [{ httpStatus: 200, payload: { code: -7 } }, "login_conflict"],
     [{ httpStatus: 200, payload: { code: 9901 } }, "account_disabled"],
     [{ httpStatus: 200, payload: { code: "1011" } }, "device_restricted"],
+    [{ httpStatus: 200, payload: { code: 1000101, content: "test-secret" } }, "credentials_rejected"],
+    [{ httpStatus: 200, payload: { code: "1000101" } }, "credentials_rejected"],
+    [{ httpStatus: 200, payload: { code: 1000104 } }, "account_unavailable"],
+    [{ httpStatus: 200, payload: { code: 1000105 } }, "phone_not_registered"],
+    [{ httpStatus: 503, payload: { code: 1000101 } }, "login_service_unavailable"],
+    [{ httpStatus: 200, payload: { code: 1000101, content: "手机号登录今日失败次数已达上限，请明天再试" } }, "login_daily_limit"],
     [{ httpStatus: 200, payload: { code: 0, data: { needSelect: true } } }, "company_selection_required"],
     [{ httpStatus: 200, payload: { code: 1001, content: "test-secret", message: "<script>secret-token</script>" } }, "login_failed"]
   ];
@@ -45,6 +51,20 @@ test("传输错误和账号限制分开说明，不把上游正文或密码带�
   const timeout = Object.assign(new Error("test-secret"), { name: "TimeoutError" });
   assert.deepEqual(loginDiagnostic("profile", null, timeout).errorType, "timeout");
   assert.doesNotMatch(JSON.stringify(loginDiagnostic("profile", null, timeout)), /test-secret/);
+});
+
+test("明确账号密码拒绝时仅提交一次，不重试、不留自动重登凭据、不误判为当日上限", async () => {
+  let calls = 0, saved = { cookies: {}, deviceId: 'test-device' };
+  const auth = createPasswordAuth({ readSession: async () => saved, saveSession: async value => { saved = value; },
+    request: async () => { calls++; return { httpStatus: 200, payload: { code: 1000101, content: 'test-secret' } }; }
+  });
+  const result = await auth.signIn({ userName: 'one', password: 'test-secret', autoRelogin: true });
+  assert.equal(result.reason, 'credentials_rejected');
+  assert.match(result.message, /用户名或密码错误/);
+  assert.equal(result.loginRetryAfter, null);
+  assert.equal((await auth.refresh()).reason, 'credentials_unavailable');
+  assert.equal(calls, 1);
+  assert.doesNotMatch(JSON.stringify(saved), /test-secret/);
 });
 
 test("诊断标注失败阶段，重新登录成功后清除旧故障信息", async () => {

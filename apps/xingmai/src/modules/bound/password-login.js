@@ -2,7 +2,7 @@ import { createCipheriv, randomUUID } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { classifyLoginFailure, loginDiagnostic, nextShanghaiDay, passwordLoginHold } from "./login-diagnostics.js";
 
-// Wire format used by the official hejun.ecbis.cn login client (shared-DUVJACM6.js).
+// Wire format verified against hejun.ecbis.cn shared-BRAVGqD7.js (2026-11-24).
 // This public protocol key is NOT encryption for storing credentials.
 export function encodeLoginPassword(password) {
   const cipher = createCipheriv("aes-128-ecb", Buffer.from("xishuiwangluoMDF", "utf8"), null);
@@ -41,11 +41,14 @@ export function createPasswordAuth({ readSession, saveSession, request, allowUse
 
   async function signIn(input, automatic = false) {
     if (!input || typeof input.userName !== "string" || !input.userName.trim() || input.userName.length > 80
-      || typeof input.password !== "string" || !input.password || input.password.length > 256
+      || typeof input.password !== "string" || !input.password.trim() || input.password.length > 256
       || /[\r\n]/.test(input.userName) || typeof input.autoRelogin !== "boolean") {
       return { ok: false, statusCode: 400, reason: "invalid_credentials", message: "请填写旧站账号、密码及自动重登选项。" };
     }
     if (busy) return { ok: false, statusCode: 409, reason: "login_busy", message: "正在登录，请稍候。" };
+    // Official Login-7yHdo_By.js trims both fields before encryption. Do this once
+    // for the explicit attempt and retain the same value for an enabled refresh.
+    const password = input.password.trim();
     busy = true;
     const version = disableVersion;
     try {
@@ -75,7 +78,7 @@ export function createPasswordAuth({ readSession, saveSession, request, allowUse
         }
         const reply = await send("login", {
           method: "form", path: "/auth/login", withHttpStatus: true, redirect: "error", signal: globalThis.AbortSignal.timeout(15000),
-          body: { userName: current.userName, password: encodeLoginPassword(input.password), deviceId: current.deviceId, domain: "hejun.ecbis.cn", agreementStatus: true }
+          body: { userName: current.userName, password: encodeLoginPassword(password), deviceId: current.deviceId, domain: "hejun.ecbis.cn", agreementStatus: true }
         });
         const code = reply.payload?.code;
         if (reply.httpStatus !== 200 || code !== 0 || reply.payload?.data?.needSelect) {
@@ -102,7 +105,7 @@ export function createPasswordAuth({ readSession, saveSession, request, allowUse
         current.message = "账号密码登录成功，批量采集保持暂停。";
         if (input.autoRelogin && version === disableVersion && (identity.companyId || allowUserOnlyIdentity())) {
           const identityScope = identity.companyId ? "user_and_company" : "user_and_fixed_shop";
-          credentials = { userName: input.userName.trim(), password: input.password, autoRelogin: true, identityScope };
+          credentials = { userName: input.userName.trim(), password, autoRelogin: true, identityScope };
           current.message += "自动重登已就绪，仅用于已授权的采集任务。";
           if (!identity.companyId) current.message += "旧站未返回企业标识，将严格核对同一用户及其可见店铺。";
         } else if (input.autoRelogin && version === disableVersion) {

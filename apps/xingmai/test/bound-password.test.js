@@ -75,6 +75,29 @@ test("正常过期只重新登录一次并补发同一请求，记录实际请�
   assert.equal(result.record.metricVerified, false);
 });
 
+test("与旧站浏览器一致去除密码首尾空格，保留内部空格和表单特殊字符，重登使用同一密码", async () => {
+  const calls = setup(() => json({ code: -1 }));
+  const password = "A b+&=中123";
+  assert.equal((await loginWithPassword({ userName: "  test-account  ", password: "\t " + password + " \u3000\r\n", autoRelogin: true })).ok, true);
+  await runSingleProbe(input);
+  const logins = calls.filter(call => call.path.endsWith("/auth/login"));
+  assert.equal(logins.length, 2);
+  for (const call of logins) {
+    const body = new URLSearchParams(call.options.body);
+    assert.equal(body.get("userName"), "test-account");
+    const decipher = createDecipheriv("aes-128-ecb", Buffer.from("xishuiwangluoMDF"), null);
+    assert.equal(Buffer.concat([decipher.update(Buffer.from(body.get("password"), "base64")), decipher.final()]).toString("utf8"), password);
+  }
+  assert.doesNotMatch(JSON.stringify(await readState("session")), /A b/);
+});
+
+test("仅含空白的密码在本地拒绝，不消耗旧站登录次数", async () => {
+  const calls = setup();
+  const result = await loginWithPassword({ ...credentials, password: " \t\u3000\n" });
+  assert.equal(result.statusCode, 400);
+  assert.equal(calls.length, 0);
+});
+
 test("异地登录和账号禁用不重登；重登后再次过期也立即停止", async () => {
   for (const code of [-7, 9901, 1011, -1]) {
     resetBoundStore();

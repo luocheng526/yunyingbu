@@ -2351,6 +2351,13 @@
     var autoRelogin = state.autoReloginChoice === null ? link.autoReloginEnabled === true : state.autoReloginChoice;
     var password = '<div class="bd-login" data-bound-password><label>旧站账号<input name="bound-user-name" autocomplete="username" value="' + esc(link.userName || "") + '"></label><label>旧站密码<input name="bound-password" type="password" autocomplete="current-password"></label><label class="bd-auto"><input name="bound-auto-relogin" data-act="auto-relogin" type="checkbox"' + (autoRelogin ? ' checked' : '') + (state.autoReloginBusy ? ' disabled' : '') + '>登录正常过期后自动重新登录</label><p class="bd-status" data-auto-relogin-status role="status">' + esc(state.autoReloginMessage) + '</p><button class="bd-primary" type="button" data-act="password-login"' + (state.passwordBusy || state.qrBusy || state.autoReloginBusy || dailyHold ? ' disabled' : '') + '>' + (state.passwordBusy ? "正在登录…" : dailyHold ? "今日登录已达上限" : "账号密码登录") + '</button><p class="bd-status">取消勾选立即关闭自动重登；勾选后需下次登录成功才会启用。密码仅在服务运行期间保留，服务重启后需重新输入。异地登录、账号禁用或重新登录失败时会停止。</p></div>';
     var diagnostic = link.authDiagnostic;
+    // Explain retained failures as well as new ones without sending another login.
+    var credentialsRejected = link.phase === "needs_password" && (link.authFailure === "credentials_rejected"
+      || link.authFailure === "login_failed" && diagnostic && diagnostic.stage === "login" && diagnostic.httpStatus === 200 && String(diagnostic.upstreamCode) === "1000101");
+    var linkMessage = credentialsRejected
+      ? '旧站返回“用户名或密码错误”（1000101）。请核对与 hejun.ecbis.cn 登录页相同的账号密码，或使用已绑定账号扫码连接。已停止自动重登。'
+      : link.message || '';
+    password += '<p class="bd-status">连接地址：<a href="https://hejun.ecbis.cn/login" target="_blank" rel="noopener noreferrer">hejun.ecbis.cn</a>。此处需要单独建立采集会话，浏览器已登录状态不会自动同步。账号和密码首尾空格会按旧站规则去除。</p>';
     if (diagnostic) password += '<details><summary>查看登录诊断</summary><p class="bd-status">'
       + esc(({ login: '账号验证', session: '会话校验', profile: '身份校验' }[diagnostic.stage] || '登录')
         + ' · HTTP ' + (diagnostic.httpStatus == null ? '未取得响应' : diagnostic.httpStatus)
@@ -2361,7 +2368,7 @@
     var qrButtons = [['WECHAT', '微信'], ['FEISHU', '飞书'], ['DINGTALK', '钉钉'], ['QYWX', '企业微信']].map(function (p) {
       return '<button type="button" data-act="scan" data-provider="' + p[0] + '"' + (state.qrBusy || state.passwordBusy ? ' disabled' : '') + '>' + p[1] + '</button>';
     }).join('');
-    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>连接旧站</h1><p class="bd-sub">使用旧站账号密码或扫码建立采集会话。</p><p class="bd-status">采集期间查看本系统已采数据，避免在其他设备重复登录旧站导致会话失效。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + '</p></div></header><section class="bd-block"><p role="status">' + esc(link.message || "") + '</p>' + password + '<details data-bound-qr' + (state.qrOpen || showQr || link.phase === 'choose_account' ? ' open' : '') + '><summary>扫码登录（可续采）</summary><p>使用旧站已绑定的账号扫码。身份核验成功后，点击“开始 / 继续本轮采集”；已完成的数据会复用。登录过期时停止并保留进度，重新扫码后可继续。</p>' + (state.qrBusy ? '<p role="status">正在处理扫码登录…</p>' : '') + qr + '<div class="bd-tools">' + qrButtons + accounts + '</div></details></section>' + (archive ? '' : renderProbe()) + renderShopBatch() + scoped + '</section>';
+    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>连接旧站</h1><p class="bd-sub">使用旧站账号密码或扫码建立采集会话。</p><p class="bd-status">采集期间查看本系统已采数据，避免在其他设备重复登录旧站导致会话失效。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + '</p></div></header><section class="bd-block"><p role="status">' + esc(linkMessage) + '</p>' + password + '<details data-bound-qr' + (state.qrOpen || showQr || credentialsRejected || link.phase === 'choose_account' ? ' open' : '') + '><summary>扫码登录（可续采）</summary><p>使用旧站已绑定的账号扫码。身份核验成功后，点击“开始 / 继续本轮采集”；已完成的数据会复用。登录过期时停止并保留进度，重新扫码后可继续。</p>' + (state.qrBusy ? '<p role="status">正在处理扫码登录…</p>' : '') + qr + '<div class="bd-tools">' + qrButtons + accounts + '</div></details></section>' + (archive ? '' : renderProbe()) + renderShopBatch() + scoped + '</section>';
   }
 
   function renderMain() {
@@ -2836,12 +2843,12 @@
         var userField = root.querySelector('[name="bound-user-name"]');
         var passwordField = root.querySelector('[name="bound-password"]');
         var autoField = root.querySelector('[name="bound-auto-relogin"]');
-        if (!userField || !passwordField || !userField.value.trim() || !passwordField.value) {
+        if (!userField || !passwordField || !userField.value.trim() || !passwordField.value.trim()) {
           state.error = "请填写旧站账号和密码。";
           paint(root);
           return;
         }
-        var loginBody = JSON.stringify({ userName: userField.value.trim(), password: passwordField.value, autoRelogin: Boolean(autoField && autoField.checked) });
+        var loginBody = JSON.stringify({ userName: userField.value.trim(), password: passwordField.value.trim(), autoRelogin: Boolean(autoField && autoField.checked) });
         state.autoReloginChoice = Boolean(autoField && autoField.checked);
         passwordField.value = "";
         state.loginEditing = false;
