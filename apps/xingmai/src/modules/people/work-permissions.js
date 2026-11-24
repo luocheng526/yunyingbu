@@ -39,7 +39,11 @@ export function workTaskActionFeature(action) {
 }
 
 export function workRequestFeature(tail, query = {}) {
-  if (/^center\/?$/.test(tail) || /^tasks\/(action|context|file)$/.test(tail) || /^center\/(tasks\/|image\/)/.test(tail)) return '';
+  // Bootstrap and mutation bodies are checked by the work domain after parsing.
+  if (/^center\/?$/.test(tail) || tail === 'tasks/action') return '';
+  if (tail === 'tasks/context') return ['work.publish', 'work.tasks', 'work.acceptance'];
+  if (tail === 'tasks/file' || /^center\/tasks\//.test(tail)) return ['work.tasks', 'work.acceptance', 'work.reports', 'work.overview', 'work.people', 'work.management', 'work.statistics', 'work.export'];
+  if (/^center\/image\//.test(tail)) return ['work.tasks', 'work.acceptance', 'work.reports', 'work.records', 'work.overview', 'work.people', 'work.management', 'work.statistics', 'work.settings'];
   if (/^center\/notices/.test(tail)) return 'work.messages';
   if (/^center\/export/.test(tail)) return 'work.export';
   if (/^center\/(settings|reminders)/.test(tail)) return 'work.settings';

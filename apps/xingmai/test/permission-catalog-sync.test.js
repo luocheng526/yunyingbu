@@ -102,6 +102,8 @@ test('HTTP guard blocks custom-content task mutation and settings, permits only 
     assert.equal((await fetch(url+'/api/work/center/export')).status,403);
     assert.equal((await fetch(url+'/api/work/center/settings',{method:'PUT',headers:{'Content-Type':'application/vnd.xm-work+json'},body:'{}'})).status,403);
     assert.equal((await fetch(url+'/api/work/tasks/action',{method:'POST',headers:{'Content-Type':'application/vnd.xm-work+json'},body:JSON.stringify({id:task.id,revision:task.revision,action:'start'})})).status,403);
+    await grant('陈明婧','work',{'work.messages':read},read);
+    for(const path of ['/tasks/context','/tasks/file?id=any','/center/tasks/'+task.id,'/center/image/any']) assert.equal((await fetch(url+'/api/work'+path)).status,403,path);
   }finally{await new Promise(resolve=>server.close(resolve));}
 });
 test('organization-only HR read returns no employee contact or emergency data',async()=>{
