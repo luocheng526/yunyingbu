@@ -1020,7 +1020,7 @@
     var parts = today.split("-").map(Number);
     var year = parts[0] || 2026;
     var month = parts[1] || 1;
-    var days = weekLastDays(7, weekShiftYmd(today, -1));
+    var days = weekLastDays(7, today);
     var feeDays = days.slice(-3);
     var cols = [
       { key: "takeDate", label: "拿店日期", group: "id", w: 72 },
@@ -1052,7 +1052,7 @@
     weekLastDays(6, weekShiftYmd(today, -1)).slice(-5).forEach(function (day) {
       cols.push({
         key: "mtd_" + day.ymd,
-        label: Number(day.ymd.split("-")[1]) + ".1-" + Number(day.ymd.split("-")[2]) + "号利润",
+        label: Number(parts[1]) + ".1-" + Number(day.ymd.split("-")[2]) + "号利润",
         group: "mtd",
         w: 70,
         ymd: day.ymd
@@ -1259,7 +1259,7 @@
     return (
       '<div class="xm-hm-week-bar"><div><h2>' +
       escapeHtml((pack && pack.title) || "甄选五倍业绩统计") +
-      "</h2><p>" + escapeHtml(pack.note || "数据来自业绩表。历史数据可手填，昨日数据按设置从 BI 更新。") + "</p></div><span style=\"" + (pack.historical ? "display:none" : "") + "\"><button type=\"button\" data-week-schedule>抓取时间</button><button type=\"button\" data-week-ding-config>钉钉配置</button><button type=\"button\" data-week-history>历史数据</button><button type=\"button\" data-week-preview>预览图片</button><button type=\"button\" data-week-send>" +
+      "</h2><p>" + escapeHtml(pack.note || "表头按原五倍表。店铺和当天成交/花费先接韩梦凯实时付费、沈子晗付费中心；其余格子可手填，保存到服务器。发送时保存表格和图片。") + "</p></div><span style=\"" + (pack.historical ? "display:none" : "") + "\"><button type=\"button\" data-week-wps>WPS 配置</button><button type=\"button\" data-week-ding-config>钉钉配置</button><button type=\"button\" data-week-history>历史数据</button><button type=\"button\" data-week-preview>预览图片</button><button type=\"button\" data-week-send " + (pack.source === "wps" && (pack.sync.testOnly || !pack.readyToSend) ? 'disabled title="本地测试或数据尚未完整"' : '') + ">" +
       (weekSending ? "发送中…" : "发送图片") +
       "</button></span></div>" +
       teams.join("")
@@ -1564,52 +1564,74 @@
       };
     } catch (error) { weekNotice(content, error.message, true); }
   }
-  async function openWeekSchedule(refresh) {
-    var dialog = weekDialog("业绩抓取时间"), content = dialog.querySelector("[data-dialog-content]");
-    dialog.classList.add("is-schedule");
-    content.innerHTML = '<form><label>每天抓取时间（北京时间）<input type="time" name="time" required step="60" disabled /></label>' +
-      '<p>到点抓取昨天的业绩，写入业绩表后按钉钉默认发送方式推送日报。</p><p data-week-next></p><p data-week-run role="status"></p>' +
-      '<div class="xm-hm-week-form-actions"><button type="submit" disabled>保存时间</button></div><p data-week-schedule-status role="status"></p></form>';
-    var form = content.querySelector("form"), time = form.elements.time, button = form.querySelector("button");
-    var status = content.querySelector("[data-week-schedule-status]");
-    var lastRun = "", saving = false;
-    function render(config, loadTime) {
-      if (loadTime) time.value = config.time;
-      content.querySelector("[data-week-next]").textContent = "下次计划抓取 " + config.nextDate + " " + config.time;
-      var run = config.lastRun;
-      var text = run ? "最近任务（" + run.date + "） " + run.message : "暂无运行记录";
-      if (run && run.nextAttemptAt) text += "，将于 " + new Date(run.nextAttemptAt).toLocaleTimeString("zh-CN", { timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit", hour12: false }) + " 重试";
-      content.querySelector("[data-week-run]").textContent = text;
-      if (run && lastRun && lastRun !== text && run.phase !== "collect" && refresh) refresh();
-      lastRun = text;
-    }
-    async function load(initial) {
-      if (saving) return;
-      try {
-        var data = await weekRequest("/api/home/week-schedule");
-        if (!dialog.isConnected || saving) return;
-        render(data.config, initial);
-        if (initial) time.disabled = button.disabled = false;
-      } catch (error) {
-        if (initial && dialog.isConnected) weekNotice(status, error.message, true);
+  async function openWeekWps(refresh) {
+    var dialog = weekDialog("WPS 账号与表格配置"), content = dialog.querySelector("[data-dialog-content]");
+    content.innerHTML = '<p role="status">正在读取配置…</p>';
+    try {
+      var data = await weekRequest("/api/home/week-wps/config"), config = data.config;
+      if (!dialog.isConnected) return;
+      function field(label, key, value, placeholder) {
+        return '<label>' + label + '<input data-wps-field="' + key + '" value="' + escapeHtml(value == null ? "" : value) + '" placeholder="' + escapeHtml(placeholder || "") + '" /></label>';
       }
-    }
-    form.addEventListener("submit", async function (event) {
-      event.preventDefault();
-      saving = button.disabled = true;
-      weekNotice(status, "正在保存…");
-      try {
-        var data = await weekRequest("/api/home/week-schedule", { time: time.value });
-        render(data.config, true);
-        weekNotice(status, "抓取时间已保存");
-      } catch (error) { weekNotice(status, error.message, true); }
-      finally { saving = button.disabled = false; }
-    });
-    await load(true);
-    if (dialog.isConnected && !time.disabled) {
-      var poll = setInterval(function () { void load(false); }, 10000);
-      dialog.addEventListener("close", function () { clearInterval(poll); }, { once: true });
-    }
+      content.innerHTML = '<div class="xm-hm-week-account"><div><b>WPS 官方授权</b><p data-auth-status>' + escapeHtml(data.auth.message) + '</p><p>使用有两张表读取权限的 WPS 个人账号。账号备注便于识别，实际账号以授权页为准。</p></div><button type="button" data-wps-connect>连接 / 更换账号</button><a data-auth-link target="_blank" rel="noopener noreferrer" hidden>打开 WPS 授权页 ↗</a></div>' +
+        '<label class="xm-hm-week-account-label">账号备注<input data-wps-account value="' + escapeHtml(config.accountLabel) + '" placeholder="例如：运营报表专用账号" /></label><div class="xm-hm-week-config-grid">' + config.sources.map(function (s) {
+          return '<section data-wps-team="' + s.team + '"><h3>' + (s.team === "han" ? "韩梦凯组" : "沈子晗组") + '</h3>' +
+            field("WPS 共享链接", "url", s.url, "https://www.kdocs.cn/l/…") + field("工作表名称", "sheetName", s.sheetName) +
+            '<button type="button" class="is-secondary" data-wps-check>检查读取权限</button><p data-check-status></p><details><summary>读取范围与分类汇总</summary><p>仅同步登记日期为当天的店铺，读到“登记日期”列为止。请指定可见行列；原表隐藏范围变化后需在这里更新。</p>' +
+            '<div class="xm-hm-week-range-grid">' + field("表头行", "headerRow", s.headerRow, "2") + field("店铺行", "rows", s.rows, "3-19") +
+            field("可见列", "columns", s.columns, "A:H,MG:NT") + field("分类汇总行", "footerRows", s.footerRows, "28-29") +
+            field("左侧汇总行", "summaryRows", s.summaryRows, "3-8") + field("汇总名称列", "summaryLabelColumn", s.summaryLabelColumn, "A") + field("汇总数值列", "summaryValueColumn", s.summaryValueColumn, "B") + '</div>' +
+            '<label class="xm-hm-week-check"><input type="checkbox" data-wps-verified ' + (s.verified ? "checked" : "") + ' />我已核对以上范围，仅包含需要同步的可见数据</label></details></section>';
+        }).join("") + '</div><p class="xm-hm-week-notice" data-config-status role="status">配置保存在当前服务端，换电脑登录后仍可使用。留空共享链接表示暂不接入该组。</p><footer><button type="button" class="is-secondary" data-wps-save>保存配置</button><button type="button" data-wps-sync>保存并立即同步</button></footer>';
+      var notice = content.querySelector("[data-config-status]");
+      function form() {
+        return { accountLabel: content.querySelector("[data-wps-account]").value, sources: Array.from(content.querySelectorAll("[data-wps-team]")).map(function (section) {
+          var item = { team: section.dataset.wpsTeam, verified: section.querySelector("[data-wps-verified]").checked };
+          section.querySelectorAll("[data-wps-field]").forEach(function (el) { item[el.dataset.wpsField] = el.value; });
+          return item;
+        }) };
+      }
+      var timer;
+      dialog.addEventListener("close", function () { clearTimeout(timer); });
+      function showAuth(state) {
+        var label = content.querySelector("[data-auth-status]"), link = content.querySelector("[data-auth-link]");
+        label.textContent = state.message || "正在生成授权链接…";
+        link.hidden = !state.url;
+        if (state.url && /^https:\/\/mcp-center\.wps\.cn\/kdocs-auth\/auth-guide\?auth_code=[\w-]+$/.test(state.url)) link.href = state.url;
+        content.querySelector("[data-wps-connect]").disabled = ["starting", "waiting"].includes(state.status);
+        if (["starting", "waiting"].includes(state.status)) timer = setTimeout(async function () {
+          if (!dialog.isConnected) return;
+          try { var result = await weekRequest("/api/home/week-wps/auth"); if (dialog.isConnected) showAuth(result.authorization); }
+          catch (err) { if (dialog.isConnected) { label.textContent = err.message; content.querySelector("[data-wps-connect]").disabled = false; } }
+        }, 2000);
+      }
+      if (["starting", "waiting"].includes(data.authorization.status)) showAuth(data.authorization);
+      content.addEventListener("click", async function (event) {
+        var button = event.target.closest("button");
+        if (!button || button.disabled) return;
+        button.disabled = true;
+        try {
+          if (button.hasAttribute("data-wps-connect")) { var result = await weekRequest("/api/home/week-wps/auth", {}); showAuth(result.authorization); return; }
+          if (button.hasAttribute("data-wps-check")) {
+            var section = button.closest("[data-wps-team]"), status = section.querySelector("[data-check-status]");
+            weekNotice(status, "正在检查…");
+            try { var check = await weekRequest("/api/home/week-wps/check", form().sources.find(function (s) { return s.team === section.dataset.wpsTeam; })); weekNotice(status, check.message); }
+            catch (err) { weekNotice(status, err.message, true); }
+          }
+          if (button.hasAttribute("data-wps-save") || button.hasAttribute("data-wps-sync")) {
+            weekNotice(notice, "正在保存…");
+            await weekRequest("/api/home/week-wps/config", form());
+            if (button.hasAttribute("data-wps-sync")) {
+              weekNotice(notice, "配置已保存，正在读取 WPS 数据，请稍候…");
+              await weekRequest("/api/home/week-wps/sync", {});
+              weekNotice(notice, "同步完成，页面已刷新。只有两组当天数据完整时才能发送。");
+              if (refresh) refresh();
+            } else weekNotice(notice, "配置已保存");
+          }
+        } catch (err) { weekNotice(notice, err.message, true); if (button.hasAttribute("data-wps-connect")) button.disabled = false; }
+        finally { if (!button.hasAttribute("data-wps-connect")) button.disabled = false; }
+      });
+    } catch (err) { content.innerHTML = '<p class="xm-hm-week-notice is-error">' + escapeHtml(err.message) + '</p>'; }
   }
   async function openWeekHistory() {
     var dialog = weekDialog("历史数据"), content = dialog.querySelector("[data-dialog-content]");
@@ -1646,7 +1668,7 @@
   }
   function weekManagementClick(event, refresh) {
     if (event.target.closest("[data-week-ding-config]")) { openWeekDing(); return true; }
-    if (event.target.closest("[data-week-schedule]")) { openWeekSchedule(refresh); return true; }
+    if (event.target.closest("[data-week-wps]")) { openWeekWps(refresh); return true; }
     if (event.target.closest("[data-week-history]")) { openWeekHistory(); return true; }
     return false;
   }
@@ -3270,7 +3292,7 @@
       ".xm-hm.is-live .xm-hm-kpis-shell,.xm-hm.is-live2 .xm-hm-kpis-shell,.xm-hm.is-board .xm-hm-kpis-shell,.xm-hm.is-team .xm-hm-kpis-shell,.xm-hm.is-overview .xm-hm-kpis-shell,.xm-hm.is-week .xm-hm-kpis-shell,.xm-hm.is-live .xm-hm-set,.xm-hm.is-live2 .xm-hm-set,.xm-hm.is-board .xm-hm-set,.xm-hm.is-live .xm-hm-ranges,.xm-hm.is-live2 .xm-hm-ranges,.xm-hm.is-week .xm-hm-ranges{display:none}" +
       ".xm-hm-live-refresh[data-connect-live2]{opacity:.55}" +
       ".xm-hm-live[hidden],.xm-hm-board[hidden],.xm-hm-teams[hidden],.xm-hm-week[hidden]{display:none}" +
-      ".xm-hm-week-dialog{box-sizing:border-box;width:min(1180px,94vw);max-height:90vh;padding:0;border:1px solid #dbe3ef;border-radius:16px;background:var(--xm-card,#fff);color:var(--xm-text,#16253d);box-shadow:0 20px 80px #12233c40;font:14px 'Microsoft YaHei',sans-serif}.xm-hm-week-dialog.is-schedule{width:min(490px,94vw)}.xm-hm-week-dialog.is-schedule input[type=time]{max-width:180px}.xm-hm-week-dialog[open]{display:flex;flex-direction:column;overflow:hidden}.xm-hm-week-dialog [hidden]{display:none!important}.xm-hm-week-dialog::backdrop{background:#132c4b66}.xm-hm-week-dialog *{box-sizing:border-box}.xm-hm-week-dialog>header{flex-shrink:0;position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:20px 26px;border-bottom:1px solid #e3e9f2;background:var(--xm-card,#fff)}.xm-hm-week-dialog h2{margin:5px 0 0;font-size:21px}.xm-hm-week-dialog small{color:#64748b;font-size:12px}.xm-hm-week-dialog [data-dialog-content]{padding:24px;overflow:auto;min-height:0}.xm-hm-week-dialog button,.xm-hm-week-dialog a{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid #2673df;background:#2673df;color:white;border-radius:7px;padding:9px 14px;cursor:pointer;text-decoration:none;font-size:13px}.xm-hm-week-dialog button:disabled{opacity:.55;cursor:wait}.xm-hm-week-dialog button.is-secondary,.xm-hm-week-dialog a{background:var(--xm-card,#fff);color:#2673df;border-color:#c7d8ed}.xm-hm-week-dialog [data-dialog-close]{font-size:25px;border:0;background:transparent;color:#64748b;padding:0 6px}.xm-hm-week-dialog label{display:flex;flex-direction:column;gap:7px;font-size:13px;font-weight:500}.xm-hm-week-dialog input{font:inherit;width:100%;min-width:0;padding:10px;border:1px solid #ced9e6;border-radius:7px;color:inherit;background:var(--xm-card,#fff)}.xm-hm-week-dialog p{line-height:1.6;color:#63738b;font-size:13px}.xm-hm-week-account{background:#edf5ff;border:1px solid #d3e6ff;border-radius:10px;padding:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;color:#16253d}.xm-hm-week-account>div{flex:1;min-width:240px}.xm-hm-week-account p{margin:6px 0}.xm-hm-week-account [hidden]{display:none}.xm-hm-week-account-label{max-width:500px;margin:20px 0}.xm-hm-week-config-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.xm-hm-week-config-grid>section{padding:20px;border:1px solid #dbe3ef;border-radius:10px;min-width:0}.xm-hm-week-config-grid h3{margin:0 0 18px}.xm-hm-week-config-grid label{margin-bottom:16px}.xm-hm-week-config-grid details{border-top:1px solid #e3e9f2;padding-top:14px}.xm-hm-week-config-grid summary{cursor:pointer;color:#2673df}.xm-hm-week-range-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.xm-hm-week-dialog .xm-hm-week-check{display:flex;flex-direction:row;align-items:flex-start;font-size:12px;line-height:1.6;font-weight:400}.xm-hm-week-check input{width:16px;height:16px;flex:none}.xm-hm-week-notice{padding:12px 15px;background:#eef7f2;border-radius:7px;color:#236341!important}.xm-hm-week-notice.is-error{background:#fff1ef;color:#b63222!important}.xm-hm-week-dialog footer{display:flex;gap:12px;justify-content:flex-end;margin-top:18px}.xm-hm-week-history-filter{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:20px}.xm-hm-week-history-filter p{flex:1;min-width:200px;margin:0 0 5px}.xm-hm-week-history-list{display:flex;flex-direction:column;gap:12px}.xm-hm-week-history-list article{display:flex;justify-content:space-between;align-items:center;gap:16px;border:1px solid #dbe3ef;padding:18px;border-radius:10px;flex-wrap:wrap}.xm-hm-week-history-list p{margin:8px 0}.xm-hm-week-history-actions{display:flex;gap:8px;flex-wrap:wrap}.xm-hm-week-status{font-size:12px;background:#fff4dc;color:#925d0a;padding:4px 8px;border-radius:5px}.xm-hm-week-status.is-sent{background:#e6f5ec;color:#237647}.xm-hm-week-empty{text-align:center;padding:65px 20px;border:1px dashed #ccd8e7;border-radius:12px;background:#f8fafc;color:#16253d}.xm-hm-week-empty b{font-size:18px}.xm-hm-week-history-preview{overflow:auto;max-height:55vh;border:1px solid #dbe3ef;border-radius:8px;padding:12px}.xm-hm-week-history-preview img{max-width:none;width:1900px;height:auto}.xm-hm-week-history-preview .xm-hm-week-bar{display:none}.xm-hm-week-history-preview .xm-hm-week-head{position:static}.xm-hm-week-history-preview .xm-hm-week-team{margin-bottom:20px}@media(max-width:720px){.xm-hm-week-config-grid{grid-template-columns:1fr}.xm-hm-week-dialog [data-dialog-content]{padding:16px}.xm-hm-week-dialog>header{padding:16px}}" +
+      ".xm-hm-week-dialog{box-sizing:border-box;width:min(1180px,94vw);max-height:90vh;padding:0;border:1px solid #dbe3ef;border-radius:16px;background:var(--xm-card,#fff);color:var(--xm-text,#16253d);box-shadow:0 20px 80px #12233c40;font:14px 'Microsoft YaHei',sans-serif}.xm-hm-week-dialog[open]{display:flex;flex-direction:column;overflow:hidden}.xm-hm-week-dialog [hidden]{display:none!important}.xm-hm-week-dialog::backdrop{background:#132c4b66}.xm-hm-week-dialog *{box-sizing:border-box}.xm-hm-week-dialog>header{flex-shrink:0;position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:20px 26px;border-bottom:1px solid #e3e9f2;background:var(--xm-card,#fff)}.xm-hm-week-dialog h2{margin:5px 0 0;font-size:21px}.xm-hm-week-dialog small{color:#64748b;font-size:12px}.xm-hm-week-dialog [data-dialog-content]{padding:24px;overflow:auto;min-height:0}.xm-hm-week-dialog button,.xm-hm-week-dialog a{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid #2673df;background:#2673df;color:white;border-radius:7px;padding:9px 14px;cursor:pointer;text-decoration:none;font-size:13px}.xm-hm-week-dialog button:disabled{opacity:.55;cursor:wait}.xm-hm-week-dialog button.is-secondary,.xm-hm-week-dialog a{background:var(--xm-card,#fff);color:#2673df;border-color:#c7d8ed}.xm-hm-week-dialog [data-dialog-close]{font-size:25px;border:0;background:transparent;color:#64748b;padding:0 6px}.xm-hm-week-dialog label{display:flex;flex-direction:column;gap:7px;font-size:13px;font-weight:500}.xm-hm-week-dialog input{font:inherit;width:100%;min-width:0;padding:10px;border:1px solid #ced9e6;border-radius:7px;color:inherit;background:var(--xm-card,#fff)}.xm-hm-week-dialog p{line-height:1.6;color:#63738b;font-size:13px}.xm-hm-week-account{background:#edf5ff;border:1px solid #d3e6ff;border-radius:10px;padding:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;color:#16253d}.xm-hm-week-account>div{flex:1;min-width:240px}.xm-hm-week-account p{margin:6px 0}.xm-hm-week-account [hidden]{display:none}.xm-hm-week-account-label{max-width:500px;margin:20px 0}.xm-hm-week-config-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.xm-hm-week-config-grid>section{padding:20px;border:1px solid #dbe3ef;border-radius:10px;min-width:0}.xm-hm-week-config-grid h3{margin:0 0 18px}.xm-hm-week-config-grid label{margin-bottom:16px}.xm-hm-week-config-grid details{border-top:1px solid #e3e9f2;padding-top:14px}.xm-hm-week-config-grid summary{cursor:pointer;color:#2673df}.xm-hm-week-range-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.xm-hm-week-dialog .xm-hm-week-check{display:flex;flex-direction:row;align-items:flex-start;font-size:12px;line-height:1.6;font-weight:400}.xm-hm-week-check input{width:16px;height:16px;flex:none}.xm-hm-week-notice{padding:12px 15px;background:#eef7f2;border-radius:7px;color:#236341!important}.xm-hm-week-notice.is-error{background:#fff1ef;color:#b63222!important}.xm-hm-week-dialog footer{display:flex;gap:12px;justify-content:flex-end;margin-top:18px}.xm-hm-week-history-filter{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:20px}.xm-hm-week-history-filter p{flex:1;min-width:200px;margin:0 0 5px}.xm-hm-week-history-list{display:flex;flex-direction:column;gap:12px}.xm-hm-week-history-list article{display:flex;justify-content:space-between;align-items:center;gap:16px;border:1px solid #dbe3ef;padding:18px;border-radius:10px;flex-wrap:wrap}.xm-hm-week-history-list p{margin:8px 0}.xm-hm-week-history-actions{display:flex;gap:8px;flex-wrap:wrap}.xm-hm-week-status{font-size:12px;background:#fff4dc;color:#925d0a;padding:4px 8px;border-radius:5px}.xm-hm-week-status.is-sent{background:#e6f5ec;color:#237647}.xm-hm-week-empty{text-align:center;padding:65px 20px;border:1px dashed #ccd8e7;border-radius:12px;background:#f8fafc;color:#16253d}.xm-hm-week-empty b{font-size:18px}.xm-hm-week-history-preview{overflow:auto;max-height:55vh;border:1px solid #dbe3ef;border-radius:8px;padding:12px}.xm-hm-week-history-preview img{max-width:none;width:1900px;height:auto}.xm-hm-week-history-preview .xm-hm-week-bar{display:none}.xm-hm-week-history-preview .xm-hm-week-head{position:static}.xm-hm-week-history-preview .xm-hm-week-team{margin-bottom:20px}@media(max-width:720px){.xm-hm-week-config-grid{grid-template-columns:1fr}.xm-hm-week-dialog [data-dialog-content]{padding:16px}.xm-hm-week-dialog>header{padding:16px}}" +
       ".xm-hm-week-ding-tabs{display:flex;gap:10px;margin:20px 0;flex-wrap:wrap}.xm-hm-week-ding-tabs button[aria-selected=false]{background:var(--xm-card,#fff);color:#426080;border-color:#d3deeb}.xm-hm-week-dialog select,.xm-hm-week-dialog textarea{font:inherit;width:100%;min-width:0;padding:10px;border:1px solid #ced9e6;border-radius:7px;color:inherit;background:var(--xm-card,#fff)}.xm-hm-week-dialog textarea{resize:vertical}.xm-hm-week-dialog [data-ding-panel]>.xm-hm-week-config-grid{max-width:960px}.xm-hm-week-dialog [data-ding-manual],.xm-hm-week-dialog [data-ding-reuse]{grid-column:1/-1}.xm-hm-week-dialog [data-ding-panel] label{min-width:0}.xm-hm-week-form-actions{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0 12px}.xm-hm-week-ding-choices{display:flex;flex-direction:column;gap:12px;margin:24px 0}.xm-hm-week-ding-choices label{flex-direction:row;align-items:flex-start;padding:16px;border:1px solid #d3deeb;border-radius:10px}.xm-hm-week-ding-choices input{width:18px;flex:none;margin-top:3px}.xm-hm-week-ding-choices small{display:block;line-height:1.7;margin-top:6px;overflow-wrap:anywhere}.xm-hm-week-ding-choices label:has(input:checked){background:#edf5ff;border-color:#2673df}@media(max-width:720px){.xm-hm-week-ding-tabs{gap:6px}.xm-hm-week-ding-tabs button{flex:1;min-width:85px;padding:9px 7px}}" +
       ".xm-hm-week{display:flex;flex-direction:column;gap:12px}" +
       ".xm-hm-week-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}" +
@@ -4260,7 +4282,7 @@
         : state.view === "live2"
           ? state.live2Hint || "实时用组织中心账号在服务器登录。实时成交金额取京麦经营数据的成交金额；实时付费金额、实时付费ROI、实时付费成交额取京准通当天的花费、投产比、总订单金额。实时费比 =（实时付费金额 / 实时成交金额）× 100%。还没有读到的格子显示—或待接入。"
         : state.view === "week"
-          ? "近七天业绩汇总从业绩表取数，支持一键发送图片到钉钉。"
+          ? "近七天业绩汇总：爬虫填店铺和当天数字，其余可手填；一键发送图片发到钉钉。"
           : "数字来自星脉 ERP。";
     root.querySelector("#xm-hm-pop h3").textContent =
       "卡片设置 · " + (viewKey === "team" ? "经理团队" : viewKey === "chief" ? "主管/储备" : "数据总揽");

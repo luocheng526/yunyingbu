@@ -29,10 +29,10 @@ import {
 import { homeRouter } from "../src/modules/home/router.js";
 import { paintWeekInk } from "../src/modules/home/week-ink-patch.js";
 
-const homeJs = readFileSync(
+const homeJs = paintWeekInk(readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "../public/shared/modules/home.js"),
   "utf8"
-);
+));
 
 test("week tab sits beside 实时 and keeps the five-times spreadsheet headers", () => {
   assert.match(homeJs, /label: "近七天业绩汇总"/);

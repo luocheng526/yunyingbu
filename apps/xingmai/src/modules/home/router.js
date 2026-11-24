@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { getHomeErpKpis } from "./erp-kpis.js";
 import { getHomeErpPaid } from "./erp-paid.js";
 import { HOME_JS_STAMP } from "./asset-ver.js";
+import { paintWeekInk } from "./week-ink-patch.js";
 import { patchConnectPicker } from "./connect-patch.js";
 import {
   getHomeLocalPaid,
@@ -565,7 +566,7 @@ export function homeRouter(deps = {}) {
   router.get("/client.js", (_req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     res.type("application/javascript");
-    res.send(homeClientSource());
+    res.send(paintWeekInk(homeClientSource()));
   });
 
   router.get("/erp-kpis", async (req, res) => {

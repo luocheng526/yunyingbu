@@ -1,5 +1,7 @@
+import { applyWeekScheduleUi } from "./week-schedule-ui.js";
+
 export function paintWeekInk(text) {
-  return String(text || "")
+  return applyWeekScheduleUi(String(text || ""))
     .replaceAll(
       ".xm-hm-week-table td.is-up{background:#00b050;color:#fff}",
       ".xm-hm-week-table td.is-up{background:#00b050;color:#000}"
