@@ -40,9 +40,10 @@ function mapShops(roster, visible) {
   });
 }
 
-export async function collectWeekBi(date, { loadRoster = orgStores, services, collectSaved = {} } = {}) {
+export async function collectWeekBi(date, { loadRoster = orgStores, services, collectSaved = {}, shouldContinue = () => true } = {}) {
   const roster = await loadRoster();
   const { discover, request, inspect } = services || await boundServices();
+  if (!shouldContinue()) return;
   const visible = await discover();
   if (!visible.ok) {
     const message = {
@@ -61,6 +62,7 @@ export async function collectWeekBi(date, { loadRoster = orgStores, services, co
     const scope = { platform: shop.platform, shopId: shop.shopId, date };
     let data = collectSaved[id];
     if (!data) {
+      if (!shouldContinue()) return;
       let result, response;
       try {
         response = await request(scope, visible.owner);

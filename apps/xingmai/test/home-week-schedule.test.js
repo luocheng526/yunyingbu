@@ -85,8 +85,13 @@ test("Shanghai time setting writes once per slot, retries only unsent targets, a
   };
   let schedule = createWeekSchedule(options);
   assert.equal(schedule.config().time, "09:00");
+  assert.equal(schedule.config().enabled, false);
+  assert.equal(schedule.config().nextDate, null);
   assert.throws(() => schedule.saveConfig({ time: "25:30" }), /北京时间/);
+  assert.throws(() => schedule.saveConfig({ time: "15:30", enabled: "false" }), /开启或关闭/);
   schedule.saveConfig({ time: "15:30" });
+  assert.equal(schedule.config().enabled, false);
+  schedule.saveConfig({ time: "15:30", enabled: true });
   now = new Date("2026-11-24T15:29:59+08:00");
   await schedule.tick();
   assert.equal(collections, 0);
@@ -122,4 +127,47 @@ test("Shanghai time setting writes once per slot, retries only unsent targets, a
   assert.equal(report.teams[0].rows[0].cells["gmv_2026-11-22"], 55);
   assert.equal(report.teams[0].kpis.find(kpi => kpi.key === "total").value, 500);
   assert.equal(buildWeekColumns("2026-12-01").days.at(-1).ymd, "2026-11-30");
+});
+
+test("legacy time-only settings remain disabled and switching off prevents work across restarts", async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "week-schedule-disabled-"));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const settings = path.join(directory, "bi-schedule.json");
+  let collected = 0, wrote = 0, sent = 0;
+  let resume, isStillEnabled;
+  let started;
+  const whenStarted = new Promise(resolve => { started = resolve; });
+  const options = {
+    directory, now: () => new Date("2026-11-24T09:00:00+08:00"),
+    getCells: () => ({}),
+    save: () => { wrote++; },
+    collect: async (_date, { shouldContinue }) => {
+      collected++;
+      isStillEnabled = shouldContinue;
+      await new Promise(resolve => { resume = resolve; started(); });
+      return { shops: [], records: {}, error: "" };
+    },
+    ding: { automaticTargets: async () => [{ destination: { key: "target" } }], send: async () => { sent++; } }
+  };
+  let schedule = createWeekSchedule(options);
+  await schedule.tick();
+  assert.equal(fs.existsSync(settings), false);
+  fs.writeFileSync(settings, JSON.stringify({ time: "09:00", effectiveOn: "2026-11-24" }));
+  await schedule.tick();
+  assert.equal(collected, 0);
+  assert.equal(schedule.config().enabled, false);
+
+  schedule.saveConfig({ time: "09:00", enabled: true });
+  const running = schedule.tick();
+  await whenStarted;
+  assert.equal(isStillEnabled(), true);
+  schedule.saveConfig({ time: "09:00", enabled: false });
+  assert.equal(isStillEnabled(), false);
+  resume();
+  await running;
+  schedule = createWeekSchedule(options);
+  await schedule.tick();
+  assert.equal(schedule.config().nextDate, null);
+  assert.equal(schedule.config().lastRun.nextAttemptAt, null);
+  assert.deepEqual([collected, wrote, sent], [1, 0, 0]);
 });

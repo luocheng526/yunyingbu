@@ -2,15 +2,21 @@
 const scheduleDialog = String.raw`async function openWeekSchedule(refresh) {
     var dialog = weekDialog("业绩抓取时间"), content = dialog.querySelector("[data-dialog-content]");
     dialog.classList.add("is-schedule");
-    content.innerHTML = '<form><label>每天抓取时间（北京时间）<input type="time" name="time" required step="60" disabled /></label>' +
-      '<p>到点抓取昨天的业绩，写入业绩表后按钉钉默认发送方式推送日报。</p><p data-week-next></p><p data-week-run role="status"></p>' +
-      '<div class="xm-hm-week-form-actions"><button type="submit" disabled>保存时间</button></div><p data-week-schedule-status role="status"></p></form>';
-    var form = content.querySelector("form"), time = form.elements.time, button = form.querySelector("button");
+    content.innerHTML = '<form><label class="xm-hm-week-check"><input type="checkbox" role="switch" name="enabled" disabled />开启定时抓取</label>' +
+      '<label>每天抓取时间（北京时间）<input type="time" name="time" required step="60" disabled /></label>' +
+      '<p>请先确认 BI 采集字段。开启后按设置抓取昨天的业绩，写入业绩表后通过钉钉推送。</p><p data-week-next></p><p data-week-run role="status"></p>' +
+      '<div class="xm-hm-week-form-actions"><button type="submit" disabled>保存设置</button></div><p data-week-schedule-status role="status"></p></form>';
+    var form = content.querySelector("form"), time = form.elements.time, enabled = form.elements.enabled, button = form.querySelector("button");
     var status = content.querySelector("[data-week-schedule-status]");
     var lastRun = "", saving = false;
     function render(config, loadTime) {
-      if (loadTime) time.value = config.time;
-      content.querySelector("[data-week-next]").textContent = "下次计划抓取 " + config.nextDate + " " + config.time;
+      if (loadTime) {
+        time.value = config.time;
+        enabled.checked = config.enabled;
+      }
+      content.querySelector("[data-week-next]").textContent = config.enabled
+        ? "下次计划抓取 " + config.nextDate + " " + config.time
+        : "定时抓取已关闭";
       var run = config.lastRun;
       var text = run ? "最近任务（" + run.date + "） " + run.message : "暂无运行记录";
       if (run && run.nextAttemptAt) text += "，将于 " + new Date(run.nextAttemptAt).toLocaleTimeString("zh-CN", { timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit", hour12: false }) + " 重试";
@@ -24,7 +30,7 @@ const scheduleDialog = String.raw`async function openWeekSchedule(refresh) {
         var data = await weekRequest("/api/home/week-schedule");
         if (!dialog.isConnected || saving) return;
         render(data.config, initial);
-        if (initial) time.disabled = button.disabled = false;
+        if (initial) enabled.disabled = time.disabled = button.disabled = false;
       } catch (error) {
         if (initial && dialog.isConnected) weekNotice(status, error.message, true);
       }
@@ -34,9 +40,9 @@ const scheduleDialog = String.raw`async function openWeekSchedule(refresh) {
       saving = button.disabled = true;
       weekNotice(status, "正在保存…");
       try {
-        var data = await weekRequest("/api/home/week-schedule", { time: time.value });
+        var data = await weekRequest("/api/home/week-schedule", { time: time.value, enabled: enabled.checked });
         render(data.config, true);
-        weekNotice(status, "抓取时间已保存");
+        weekNotice(status, "抓取设置已保存");
       } catch (error) { weekNotice(status, error.message, true); }
       finally { saving = button.disabled = false; }
     });
@@ -53,7 +59,7 @@ const replacements = [
   ["      \"</h2><p>\" + escapeHtml(pack.note || \"表头按原五倍表。店铺和当天成交/花费先接韩梦凯实时付费、沈子晗付费中心；其余格子可手填，保存到服务器。发送时保存表格和图片。\") + \"</p></div><span style=\\\"\" + (pack.historical ? \"display:none\" : \"\") + \"\\\"><button type=\\\"button\\\" data-week-wps>WPS 配置</button><button type=\\\"button\\\" data-week-ding-config>钉钉配置</button><button type=\\\"button\\\" data-week-history>历史数据</button><button type=\\\"button\\\" data-week-preview>预览图片</button><button type=\\\"button\\\" data-week-send \" + (pack.source === \"wps\" && (pack.sync.testOnly || !pack.readyToSend) ? 'disabled title=\"本地测试或数据尚未完整\"' : '') + \">\" +", "      \"</h2><p>\" + escapeHtml(pack.note || \"数据来自业绩表。历史数据可手填，昨日数据按设置从 BI 更新。\") + \"</p></div><span style=\\\"\" + (pack.historical ? \"display:none\" : \"\") + \"\\\"><button type=\\\"button\\\" data-week-schedule>抓取时间</button><button type=\\\"button\\\" data-week-ding-config>钉钉配置</button><button type=\\\"button\\\" data-week-history>历史数据</button><button type=\\\"button\\\" data-week-preview>预览图片</button><button type=\\\"button\\\" data-week-send>\" +"],
   ["    if (event.target.closest(\"[data-week-wps]\")) { openWeekWps(refresh); return true; }", "    if (event.target.closest(\"[data-week-schedule]\")) { openWeekSchedule(refresh); return true; }"],
   ["近七天业绩汇总：爬虫填店铺和当天数字，其余可手填；一键发送图片发到钉钉。", "近七天业绩汇总从业绩表取数，支持一键发送图片到钉钉。"],
-  [".xm-hm-week-dialog[open]{display:flex;", ".xm-hm-week-dialog.is-schedule{width:min(490px,94vw)}.xm-hm-week-dialog.is-schedule input[type=time]{max-width:180px}.xm-hm-week-dialog[open]{display:flex;"],
+  [".xm-hm-week-dialog[open]{display:flex;", ".xm-hm-week-dialog.is-schedule{width:min(490px,94vw)}.xm-hm-week-dialog.is-schedule input[type=time]{max-width:180px}.xm-hm-week-dialog.is-schedule .xm-hm-week-check{margin-bottom:16px}.xm-hm-week-dialog[open]{display:flex;"],
 ];
 
 export function applyWeekScheduleUi(source) {

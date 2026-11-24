@@ -91,9 +91,14 @@ test("send transaction archives immutable table/XLSX/PNG, deduplicates, versions
     assert.equal((await request("/week-schedule", "GET", null, { "x-test-user": "employee" })).status, 403);
     assert.equal((await request("/week-schedule", "POST", null, { Origin: "https://evil.test" })).status, 403);
     assert.equal((await request("/week-wps/config")).status, 404);
-    assert.equal((await (await request("/week-schedule")).json()).config.time, "09:00");
+    const initial = (await (await request("/week-schedule")).json()).config;
+    assert.equal(initial.time, "09:00");
+    assert.equal(initial.enabled, false);
+    assert.equal(initial.nextDate, null);
     const time = await request("/week-schedule", "POST", JSON.stringify({ time: "15:30" }), { "Content-Type": "application/json" });
-    assert.equal((await time.json()).config.time, "15:30");
+    const savedConfig = (await time.json()).config;
+    assert.equal(savedConfig.time, "15:30");
+    assert.equal(savedConfig.enabled, false);
     assert.equal((await request("/week-send", "POST", png, { "X-Week-Revision": "stale" })).status, 409);
     pack.sync.testOnly = true;
     assert.equal((await request("/week-send", "POST", png)).status, 409);

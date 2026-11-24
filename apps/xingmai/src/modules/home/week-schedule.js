@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { shanghaiYmd } from "./local-paid.js";
 import { atomicJson, weekDataDir } from "./week-storage.js";
 import { readWeekStore, saveWeekCells, shiftYmd } from "./week-report.js";
@@ -26,7 +27,10 @@ export function createWeekSchedule({ ding, directory = weekDataDir(), now = () =
   const stateFile = path.join(directory, "bi-runs.json");
   let active = false;
   let timer;
-  const readSettings = () => read(settingsFile, { time: "09:00", effectiveOn: nextDay("09:00", now()) });
+  function readSettings() {
+    const settings = read(settingsFile, { time: "09:00" });
+    return { ...settings, enabled: settings.enabled === true && Boolean(settings.activation) };
+  }
   const readState = () => read(stateFile, { jobs: {}, deliveries: {} });
 
   function config() {
@@ -35,18 +39,24 @@ export function createWeekSchedule({ ding, directory = weekDataDir(), now = () =
     const last = Object.values(state.jobs).sort((a, b) => b.startedAt - a.startedAt)[0];
     const current = now();
     const today = shanghaiYmd(current);
-    const ranToday = state.jobs[shiftYmd(today, -1)]?.time === settings.time;
+    const currentJob = state.jobs[shiftYmd(today, -1)];
+    const ranToday = currentJob?.time === settings.time && currentJob.activation === settings.activation;
     const next = ranToday ? shiftYmd(today, 1) : nextDay(settings.time, current);
-    const date = [settings.effectiveOn, next].sort().at(-1);
-    return { time: settings.time, nextDate: date, timeZone: "Asia/Shanghai", lastRun: last ?
-      { date: last.date, phase: last.phase, message: last.message, nextAttemptAt: last.nextAttemptAt || null } : null };
+    const nextDate = settings.enabled ? [settings.effectiveOn, next].sort().at(-1) : null;
+    const retry = settings.enabled && last?.activation === settings.activation ? last.nextAttemptAt : null;
+    return { enabled: settings.enabled, time: settings.time, nextDate, timeZone: "Asia/Shanghai", lastRun: last ?
+      { date: last.date, phase: last.phase, message: last.message, nextAttemptAt: retry || null } : null };
   }
 
   function saveConfig(input) {
     const time = input?.time;
     if (typeof time !== "string" || !timePattern.test(time)) throw new Error("请输入有效的北京时间，格式如 09:00");
-    if (!fs.existsSync(settingsFile) || readSettings().time !== time) {
-      atomicJson(settingsFile, { time, effectiveOn: nextDay(time, now()) });
+    if (input.enabled !== undefined && typeof input.enabled !== "boolean") throw new Error("请选择开启或关闭定时抓取");
+    const previous = readSettings();
+    const enabled = input.enabled ?? previous.enabled;
+    if (!fs.existsSync(settingsFile) || previous.time !== time || previous.enabled !== enabled) {
+      atomicJson(settingsFile, { enabled, time, effectiveOn: enabled ? nextDay(time, now()) : null,
+        activation: enabled ? (previous.enabled ? previous.activation : randomUUID()) : null });
     }
     return config();
   }
@@ -58,16 +68,24 @@ export function createWeekSchedule({ ding, directory = weekDataDir(), now = () =
       const time = now();
       const today = shanghaiYmd(time);
       const settings = readSettings();
-      if (!fs.existsSync(settingsFile)) atomicJson(settingsFile, settings);
+      if (!settings.enabled) return;
+      const stillEnabled = () => {
+        const latest = readSettings();
+        return latest.enabled && latest.activation === settings.activation;
+      };
       const state = readState();
       const persist = () => atomicJson(stateFile, state);
       const date = shiftYmd(today, -1);
-      if (today >= settings.effectiveOn && chinaTime.format(time) >= settings.time && state.jobs[date]?.time !== settings.time) {
-        state.jobs[date] = { date, time: settings.time, phase: "collect", startedAt: +time, records: {}, message: "等待抓取昨日业绩" };
+      const currentJob = state.jobs[date];
+      if (today >= settings.effectiveOn && chinaTime.format(time) >= settings.time &&
+        (currentJob?.time !== settings.time || currentJob.activation !== settings.activation)) {
+        state.jobs[date] = { date, time: settings.time, activation: settings.activation,
+          phase: "collect", startedAt: +time, records: {}, message: "等待抓取昨日业绩" };
         persist();
       }
       const jobs = Object.values(state.jobs).sort((a, b) => b.date.localeCompare(a.date));
-      const job = jobs.find(item => ["collect", "send"].includes(item.phase) && +time >= (item.nextAttemptAt || 0) &&
+      const job = jobs.find(item => item.activation === settings.activation &&
+        ["collect", "send"].includes(item.phase) && +time >= (item.nextAttemptAt || 0) &&
         (item.date !== date || item.time === settings.time));
       if (!job) return;
       if (+time - job.startedAt >= retryFor) {
@@ -81,7 +99,8 @@ export function createWeekSchedule({ ding, directory = weekDataDir(), now = () =
 
       try {
         if (job.phase === "collect") {
-          const result = await collect(job.date, { collectSaved: job.records });
+          const result = await collect(job.date, { collectSaved: job.records, shouldContinue: stillEnabled });
+          if (!stillEnabled()) return;
           job.records = result.records;
           if (result.error) throw new Error(result.error);
           save({ cells: weekBiCells(job.date, result.shops, result.records, getCells()) });
@@ -97,6 +116,7 @@ export function createWeekSchedule({ ding, directory = weekDataDir(), now = () =
         const deliveries = state.deliveries[job.date] ||= {};
         let delivered = 0, review = 0, failed = 0;
         for (const target of targets) {
+          if (!stillEnabled()) return;
           const key = target.destination.key;
           const status = deliveries[key];
           if (status === "sent" || status === "accepted") { delivered++; continue; }
@@ -124,6 +144,7 @@ export function createWeekSchedule({ ding, directory = weekDataDir(), now = () =
         job.message = review ? "业绩已写入，" + review + " 个钉钉接收目标结果待核对" :
           "业绩已写入，钉钉已发送或受理（" + delivered + " 个接收目标）";
       } catch (error) {
+        if (!stillEnabled()) return;
         job.message = error.message || "业绩任务运行失败";
         job.nextAttemptAt = +now() + retryAfter;
       }
