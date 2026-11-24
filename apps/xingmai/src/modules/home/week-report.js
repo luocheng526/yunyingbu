@@ -254,6 +254,15 @@ export function sheetMetricsToCells(sheetRows, webShops, days) {
     Object.entries(row.profit || {}).forEach(([month, value]) => {
       writeCell(cells, team, shop, `profit_${String(month).padStart(2, "0")}`, value);
     });
+    Object.entries(row.mtd || {}).forEach(([ymd, value]) => {
+      writeCell(cells, team, shop, `mtd_${ymd}`, value);
+    });
+    Object.entries(row.margin || {}).forEach(([month, value]) => {
+      writeCell(cells, team, shop, `margin_${String(month).padStart(2, "0")}`, value);
+    });
+    Object.entries(row.marginMtd || {}).forEach(([ymd, value]) => {
+      writeCell(cells, team, shop, `marginMtd_${ymd}`, value);
+    });
     matched.push({ sheet: row.shop, shop, team });
   });
   return { cells, matched, unmatched };
