@@ -21,7 +21,7 @@ const ORG_REPORTING_LINE=[
 ];
 function reportingRank(person){
   const role=person.orgRole==='储备'?'储备':person.role;
-  const rank=ORG_REPORTING_LINE.findIndex(([field,post])=>role===post||(person.name&&person[field]===person.name));
+  const rank=ORG_REPORTING_LINE.findIndex(([,post])=>role===post);
   return rank<0?ORG_REPORTING_LINE.length:rank;
 }
 export async function organizationContext(){
@@ -29,9 +29,6 @@ export async function organizationContext(){
   const listed=await orgPeople(bundle);
   const people=listed.map(person=>({...person,id:String(person.id),orgRole:person.role,
     role:normalizedRole(person.role),department:cleanDepartment(person),boardName:orgBoardName(person.board)||person.board||'未归属板块'}));
-  // Older rosters may assign the top-level director responsibility separately from the position title.
-  const directors=people.filter(p=>p.status!=='离职'&&p.role==='经理'&&p.name&&p.director===p.name&&!p.managerId&&!p.lineManager);
-  if(directors.length===1)directors[0].role='总监';
   const byId=new Map(people.map(p=>[p.id,p]));
   const activeByName=new Map();
   for(const person of people.filter(p=>p.status!=='离职'&&p.name)){

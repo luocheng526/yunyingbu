@@ -1,5 +1,6 @@
 /* 工作汇报填报。 */
 import { dbMode, query } from "../profile/auth.js";
+import { orgRoleOf } from "../people/store.js";
 import { bindRoster, diaryObligation, loadOrg, noteMemberAdded, obligationBundle, readyDiary, resetDiaryStore } from "./diary.js";
 import { releaseReminder } from "./dingtalk.js";
 import { resetTaskStore } from "./tasks.js";
@@ -270,7 +271,7 @@ export async function orgPeople(org) {
       id: Number(person.id),
       managerId: String(person.managerId || ""),
       name: String(person.name || ""),
-      role: String(person.role || ""),
+      role: orgRoleOf(person),
       center: String(person.center || ""),
       department: String(person.department || ""),
       employeeNo: String(person.employeeNo || ""),

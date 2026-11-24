@@ -79,6 +79,7 @@ test('organization assignments supersede stored work overrides and cannot be cha
 
 test('direct reporting follows organization level columns and skips gaps',async()=>{
   const lead=await createPerson({name:'新团队主管',role:'运营',supervisor:'新团队主管',lineManager:'韩梦凯'});
+  await patchPerson(lead.person.id,{operator:''});
   const reserve=await createPerson({name:'新团队储备',role:'储备',reserve:'新团队储备',supervisor:'新团队主管',lineManager:'韩梦凯'});
   const operator=await createPerson({name:'新团队运营',role:'运营',supervisor:'新团队主管',lineManager:'韩梦凯',managerId:2});
   const assistant=await createPerson({name:'新团队助理',role:'助理',operator:'无',reserve:'新团队储备',supervisor:'新团队主管',lineManager:'韩梦凯'});
@@ -86,8 +87,16 @@ test('direct reporting follows organization level columns and skips gaps',async(
   assert.equal(byId.get(String(operator.person.id)).parentName,lead.person.name);
   assert.equal(byId.get(String(operator.person.id)).teamName,lead.person.name+'团队');
   assert.equal(byId.get(String(assistant.person.id)).parentName,reserve.person.name);
-  assert.equal(byId.get(String(lead.person.id)).role,'运营');
+  assert.equal(byId.get(String(lead.person.id)).role,'主管');
   assert.equal(byId.get(String(lead.person.id)).parentName,'韩梦凯');
+  const user={username:lead.person.name};
+  const data=await centerData(user);
+  assert.equal(data.me.role,'主管');
+  assert.equal(data.canPublish,true);
+  assert.deepEqual(data.options.assignees.map(p=>p.id).sort(),[reserve,operator,assistant].map(result=>String(result.person.id)).sort());
+  const task=await create(user,{assignee:String(operator.person.id)});
+  assert.equal(task.publisher_role,'主管');
+  assert.equal((await publishTask(user,draft({assignee:'4'}))).statusCode,403);
 });
 test('manager direct assignment belongs to employee team without increasing supervisor publication',async()=>{
   const t=await create();assert.equal(t.publisher,'1');assert.equal(t.team_id,'team-8');assert.equal(t.reviewer,'1');
