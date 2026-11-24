@@ -1,5 +1,5 @@
 /* 工作汇报接口。 */
-import { Router } from "express";
+import { Router, json } from "express";
 import {
   diaryDuty,
   diarySummary,
@@ -22,6 +22,8 @@ import { centerRouter } from './center.js';
 import { startWorkReminders } from './reminders.js';
 
 export const workRouter = Router();
+// Module-scoped image payloads bypass the site's 100 KB application/json parser.
+workRouter.use(json({ type: 'application/vnd.xm-work+json', limit: '8mb' }));
 workRouter.use('/center', centerRouter);
 startWorkReminders();
 

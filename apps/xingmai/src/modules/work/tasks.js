@@ -1,3 +1,5 @@
+import { workTaskActionFeature } from '../people/work-permissions.js';
+import { saveComposerImages } from './composer-images.js';
 /* 工作任务：发布、执行、检查走同一条记录。 */
 import { randomUUID } from "node:crypto";
 import { dbMode, query, getPool } from "../profile/auth.js";
@@ -242,6 +244,8 @@ export async function listTasks(user, queue) {
 }
 
 export async function publishTask(user, input) {
+  const permission = (await access(user)).permissions;
+  if (!permission.can("publish", "edit")) return fail("组织中心未授予发布与管理任务权限",403);
   await ready();
   const ctx = await access(user); const me = ctx.me;
   const id = cleanId(input?.id) || randomUUID();
@@ -356,7 +360,7 @@ export async function actTask(user, input) {
     const original=tasks.get(id); if(!original || !taskVisible(ctx,original)) return fail('没有这条任务',404);
     const task=copy(original); const revision=Number(input?.revision);
     if(revision!==task.revision) return fail('任务已经更新，请刷新后再操作',409);
-    const action=String(input?.action||''); const note=clip(input?.note,2000); const now=shanghaiStamp();
+    const action=String(input?.action||''); if(!ctx.permissions.can(workTaskActionFeature(action),'edit'))return fail('组织中心未授予此任务操作权限',403); const note=clip(input?.note,2000); const now=shanghaiStamp();
     const terminal=['已完成','已取消'].includes(task.status); const editor=canEditTask(ctx,task);
     const actor=task.assignee===me.id; const reviewer=task.reviewer===me.id;
     const changed={}; let stored=[];
@@ -374,7 +378,7 @@ export async function actTask(user, input) {
       requireNote();
       if([...tasks.values()].some(t=>t.parent_id===id&&!['已完成','已取消'].includes(t.status))) return fail('请先完成所有子任务的验收');
       const packed=takeFiles(input); if(!packed.ok)return packed;
-      if(ctx.config.requiredAttachmentCategories.includes(task.category)&&!packed.files.length) return fail('此类任务提交成果时必须附带文件');
+      if(ctx.config.requiredAttachmentCategories.includes(task.category)&&!packed.files.length&&!input.composerImages?.length) return fail('此类任务提交成果时必须附带文件');
       stored=packed.files.map(f=>({...f,id:randomUUID(),taskId:id}));
       const links=Array.isArray(input?.links)?input.links:[];
       if(links.some(link=>!/^https?:\/\//i.test(String(link)))) return fail('成果链接必须使用 http 或 https');
@@ -418,9 +422,16 @@ export async function actTask(user, input) {
       changed.team_id={before:'',after:lead.teamId};task.team_id=lead.teamId;task.team_name=lead.teamName;task.supervisor_id=lead.id;
       task.scope_ids=[lead.id,...lead.scopeIds];task.manager_ids=[...lead.managerIds];task.team_leader_id=lead.id;task.department=lead.department;task.board=lead.board;
     } else return fail('不支持此操作');
+    const composerImages=await saveComposerImages(input.composerImages,action==='edit'?['description','criteria','note']:['note'],action==='edit'?task.composerImages||[]:[],me.id);
+    if(stored.length+composerImages.length>3||stored.reduce((n,f)=>n+f.bytes.length,0)+composerImages.reduce((n,f)=>n+f.size,0)>3*1024*1024)return fail('图片和附件合计最多 3 个、3 MB');
+    if(action==='edit'&&input.composerImages!==undefined) {
+      for(const key of ['description','criteria']) {changed[key] ||= {before:task[key]||'',after:task[key]||''};changed[key].beforeDoc ||= copy(original[key+'_doc']||null);task[key+'_doc']=[{type:'text',text:task[key]||''}];}
+      changed.composerImages={before:copy(task.composerImages||[]),after:composerImages.filter(i=>i.field!=='note')};
+      task.composerImages=composerImages.filter(i=>i.field!=='note');
+    }
     const labels={start:'开始执行',progress:'更新进度',submit:'提交检查',approve:'检查通过',return:'退回修改',edit:'修改任务',cancel:'取消任务',review:me.role+'复核',confirmTeam:'确认历史归属'};
     task.revision++;task.updated_at=now;
-    task.events.push({id:randomUUID(),action:labels[action],actor:me.id,actor_name:me.name,at:now,note,changes:changed,files:stored.map(f=>({id:f.id,name:f.name,mime:f.mime}))});
+    task.events.push({id:randomUUID(),action:labels[action],actor:me.id,actor_name:me.name,at:now,note,composerImages,changes:changed,files:stored.map(f=>({id:f.id,name:f.name,mime:f.mime}))});
     const notices = taskNoticePlan(action, task, original, task.events.at(-1), ctx);
     await saveTask(task,stored,revision,notices);
     await dispatchNotices(notices,ctx);

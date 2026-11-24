@@ -1,3 +1,6 @@
+import { WORK_FEATURES, workTaskActionFeature } from '../people/work-permissions.js';
+import { permissionsFor } from '../people/feature-policy.js';
+import { saveComposerImages, containsComposerImage } from './composer-images.js';
 import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
 import { access, canAssign, canEditTask, canReviewTask, allowedReviewers, reviewerOptions, recordVisible, managedRecord, scopeSnapshot, WORK_ROLES, normalizedRole, roleLevel } from './center-access.js';
@@ -35,7 +38,7 @@ function actionOptions(ctx,t) {
   if((ctx.director||ctx.manager&&managedRecord(ctx,t)||t.assignee===ctx.me.id)&&!terminal(t)&&t.status!=='待检查'&&ctx.active.some(p=>canAssign(ctx,p)))actions.push('split');
   if(canReviewTask(ctx,t)&&t.status==='已完成')actions.push('review');
   if(ctx.director&&!t.team_id)actions.push('confirmTeam');
-  return actions;
+  return actions.filter(action=>ctx.permissions.can(workTaskActionFeature(action),"edit"));
 }
 function decorate(ctx,t,now=Date.now()) {
   const overdue=!terminal(t)&&time(t.due_at)<now;
@@ -73,6 +76,7 @@ async function dailyDraft(ctx,allTasks,date,workRows,dailyRows=[],issueRows=[]) 
   return result;
 }
 export async function centerData(user,query={}) {
+  const policy=permissionsFor(user,'work');if(!policy.any())fault('组织中心未授予工作中心功能权限',403);
   const {ctx,rows}=await visibleTasks(user); const {from,to}=range(query);
   const [daily,works,issues,notices,absence]=await Promise.all([records('daily'),records('work'),records('issue'),records('notice'),eligibility(ctx,to)]);
   let tasks=rows.map(t=>decorate(ctx,t)).filter(t=>localDay(t.created_at||t.events?.[0]?.at)<=to && (within(t.due_at,from,to)||within(t.created_at||t.events?.[0]?.at,from,to)||within(t.completed_at,from,to)||(!terminal(t)&&localDay(t.start_at)<=to)));
@@ -127,10 +131,21 @@ export async function centerData(user,query={}) {
     people:ctx.visiblePeople.map(p=>({id:p.id,name:p.name,role:p.role,orgRole:p.orgRole,teamId:p.teamId,teamName:p.teamName,parentId:p.parentId,board:p.board,department:p.department})),
     assignees:ctx.active.filter(p=>canAssign(ctx,p)).map(p=>({id:p.id,name:p.name,role:p.role,teamId:p.teamId,teamName:p.teamName,supervisorId:p.supervisorId,shops:p.visibleShops,reviewerIds:allowedReviewers(ctx,p).map(r=>r.id)})),
     reviewers:reviewerOptions(ctx).map(p=>({id:p.id,name:p.name})),shops:ctx.bundle.shops.filter(s=>s.kind!=='店群'&&(ctx.director||ctx.visiblePeople.some(p=>p.visibleShops.includes(s.name)))).map(s=>({id:String(s.id),name:s.name}))};
-  return {ok:true,from,to,today:day(),me:{id:ctx.me.id,name:ctx.me.name,role:ctx.me.role,teamId:ctx.me.teamId},counts,teams,departments,managers,people,tasks,publishedTasks,timeline,trend,alerts,works:visibleWork,issues:visibleIssues,dailies:visibleDaily,draft,currentDaily,notices:notices.filter(n=>n.personId===ctx.me.id),options,
-    settings:ctx.director?ctx.config:{categories:ctx.config.categories,taskTemplates:ctx.config.taskTemplates,reportFields:ctx.config.reportFields,deadline:ctx.config.deadline,reviewHours:ctx.config.reviewHours},canManage:ctx.director,canViewManagement:ctx.management,canPublish:options.assignees.length>0};
+  const result={ok:true,from,to,today:day(),me:{id:ctx.me.id,name:ctx.me.name,role:ctx.me.role,teamId:ctx.me.teamId},counts,teams,departments,managers,people,tasks,publishedTasks,timeline,trend,alerts,works:visibleWork,issues:visibleIssues,dailies:visibleDaily,draft,currentDaily,notices:notices.filter(n=>n.personId===ctx.me.id),options,
+    permissions:Object.fromEntries(WORK_FEATURES.map(f=>[f.id,Object.fromEntries(["see","enter","edit"].map(right=>[right,ctx.permissions.can(f.id.slice(5),right)]))])),tabs:WORK_FEATURES.filter(f=>f.tab).map(({id,name,tab})=>({id,name,tab})),
+    settings:ctx.director&&ctx.permissions.can("settings")?ctx.config:{categories:ctx.config.categories,taskTemplates:ctx.config.taskTemplates,reportFields:ctx.config.reportFields,deadline:ctx.config.deadline,reviewHours:ctx.config.reviewHours},canManage:ctx.director&&ctx.permissions.can("settings"),canViewManagement:ctx.management&&ctx.permissions.can("management"),canPublish:options.assignees.length>0&&ctx.permissions.can("publish","edit")};
+  const summary=['overview','people','management','statistics','export'].some(f=>policy.can(f));
+  if(!summary&&!policy.can('tasks')&&!policy.can('acceptance')&&!policy.can('reports')){result.tasks=[];result.publishedTasks=[];result.alerts=[];result.timeline=[];}
+  if(!summary&&!policy.can('reports')){result.dailies=[];result.currentDaily=null;result.draft={tasks:[],work:[]};}
+  if(!summary&&!policy.can('reports')&&!policy.can('records'))result.works=[];
+  if(!summary&&!policy.can('records'))result.issues=[];
+  if(!summary){result.teams=[];result.departments=[];result.managers=[];result.trend=[];result.people=result.people.filter(p=>p.id===ctx.me.id);}
+  if(!policy.can('messages'))result.notices=[];
+  if(!policy.can('publish')){result.options.assignees=[];result.options.reviewers=[];}
+  return result;
 }
 export async function saveDaily(user,input) {
+  if(!permissionsFor(user,'work').can('reports','edit'))fault('组织中心未授予此操作权限',403);
   const {ctx,rows}=await visibleTasks(user);const date=clean(input.date,10);
   if(!validDay(date)||date>day())fault('请选择今天或之前的工作日期');
   const id='daily:'+ctx.me.id+':'+date,previous=await record(id);
@@ -143,32 +158,36 @@ export async function saveDaily(user,input) {
   const snapshot=await dailyDraft(ctx,rows,date,workRows,dailyRows,issueRows);
   if(submit&&snapshot.team) {const me=snapshot.team.members.find(p=>p.id===ctx.me.id);if(me)me.submitted=true;}
   const history=copy(previous?.history||[]);if(previous)history.push({...previous,history:undefined});
-  return writeRecord('daily',id,{...personSnapshot(ctx.me),date,notes,snapshot,createdAt:previous?.createdAt||now,
+  return writeRecord('daily',id,{...personSnapshot(ctx.me),date,notes,composerImages:await saveComposerImages(input.composerImages,Object.keys(notes),previous?.composerImages,ctx.me.id),snapshot,createdAt:previous?.createdAt||now,
     submittedAt:previous?.submittedAt||(submit?now:null),late:previous?.submittedAt?previous.late:submit&&late,
     lastSubmittedAt:submit?now:previous?.lastSubmittedAt||null,history},revision);
 }
 export async function saveWork(user,input) {
+  if(!permissionsFor(user,'work').can('records','edit'))fault('组织中心未授予此操作权限',403);
   const ctx=await access(user);const title=clean(input.title,200), date=clean(input.date,10);
   if(!title||!validDay(date)||date>day())fault('请填写事项和有效工作日期');
   const id=clean(input.id,80)||randomUUID(),old=await record(id);
   if(old&&(old.kind!=='work'||old.personId!==ctx.me.id))fault('无权修改此工作',403);
   const shopId=clean(input.shopId,80);if(shopId&&!ctx.bundle.shops.some(s=>String(s.id)===shopId&&ctx.me.visibleShops.includes(s.name)))fault('店铺不在本人职责范围内',403);
   const history=copy(old?.history||[]);if(old)history.push({...old,history:undefined});
-  return writeRecord('work',id,{...personSnapshot(ctx.me),title,date,content:clean(input.content),result:clean(input.result),category:clean(input.category,80)||'自主工作',shopId,shopName:ctx.bundle.shops.find(s=>String(s.id)===shopId)?.name||'',completedAt:clean(input.completedAt,40),createdAt:old?.createdAt||stamp(),history},Number(input.revision)||0);
+  return writeRecord('work',id,{...personSnapshot(ctx.me),title,date,composerImages:await saveComposerImages(input.composerImages,['content','result'],old?.composerImages,ctx.me.id),content:clean(input.content),result:clean(input.result),category:clean(input.category,80)||'自主工作',shopId,shopName:ctx.bundle.shops.find(s=>String(s.id)===shopId)?.name||'',completedAt:clean(input.completedAt,40),createdAt:old?.createdAt||stamp(),history},Number(input.revision)||0);
 }
 export async function saveIssue(user,input) {
+  if(!permissionsFor(user,'work').can('records','edit'))fault('组织中心未授予此操作权限',403);
   const ctx=await access(user);const id=clean(input.id,80)||randomUUID(),old=await record(id);
   if(old) {
     if(old.kind!=='issue'||!visibleRecord(ctx,old))fault('没有这个问题',404);
     if(!ctx.management&&ctx.me.id!==old.personId)fault('无权处理此问题',403);
     if(!clean(input.resolution))fault('请填写处理措施');
-    return writeRecord('issue',id,{...old,status:input.status==='已解决'?'已解决':'处理中',resolution:clean(input.resolution),history:[...(old.history||[]),{at:stamp(),actor:ctx.me.id,resolution:clean(input.resolution),status:input.status}]},Number(input.revision)||0);
+    const resolutionImages=await saveComposerImages(input.composerImages,['resolution'],(old.composerImages||[]).filter(i=>i.field==='resolution'),ctx.me.id);
+    return writeRecord('issue',id,{...old,composerImages:[...(old.composerImages||[]).filter(i=>i.field!=='resolution'),...resolutionImages],status:input.status==='已解决'?'已解决':'处理中',resolution:clean(input.resolution),history:[...(old.history||[]),{at:stamp(),actor:ctx.me.id,composerImages:resolutionImages,resolution:clean(input.resolution),status:input.status}]},Number(input.revision)||0);
   }
   if(!clean(input.title))fault('请填写问题标题');
   if(input.taskId) {const {rows}=await visibleTasks(user);if(!rows.some(t=>t.id===input.taskId))fault('无权关联此任务',403);}
-  return writeRecord('issue',id,{...personSnapshot(ctx.me),title:clean(input.title,200),date:day(),createdAt:stamp(),taskId:clean(input.taskId,80),description:clean(input.description),impact:clean(input.impact),attempts:clean(input.attempts),assistance:clean(input.assistance),escalated:Boolean(input.escalated),status:'待处理',history:[]});
+  return writeRecord('issue',id,{...personSnapshot(ctx.me),title:clean(input.title,200),composerImages:await saveComposerImages(input.composerImages,['description','impact','attempts','assistance'],[],ctx.me.id),date:day(),createdAt:stamp(),taskId:clean(input.taskId,80),description:clean(input.description),impact:clean(input.impact),attempts:clean(input.attempts),assistance:clean(input.assistance),escalated:Boolean(input.escalated),status:'待处理',history:[]});
 }
 export async function saveSettings(user,input) {
+  if(!permissionsFor(user,'work').can('settings','edit'))fault('组织中心未授予此操作权限',403);
   const ctx=await access(user);if(!ctx.director)fault('只有总监可以修改工作中心全局设置',403);
   const next=copy(ctx.config),allowed=['categories','roleOverrides','teamOverrides','reportingOverrides','collaborations','taskTemplates','reportRoles','reportMembers','weekdays','restDays','deadline','allowLate','reviewHours','staleHours','requiredAttachmentCategories','reportFields','taskReminders','dailyReminders','dueSoonMinutes','repeatReminderAt'];
   for(const key of allowed)if(Object.hasOwn(input,key))next[key]=copy(input[key]);
@@ -193,14 +212,27 @@ export async function saveSettings(user,input) {
   if(!Array.isArray(next.collaborations))fault('协作授权格式不合法');
   for(const c of next.collaborations)if(!c||typeof c!=='object'||(next.roleOverrides[c.operatorId]||ctx.byId.get(String(c.operatorId))?.role)!=='运营'||normalizedRole(next.roleOverrides[c.assistantId]||ctx.byId.get(String(c.assistantId))?.role)!=='运营助理'||(c.startOn&&!validDay(c.startOn))||(c.endOn&&!validDay(c.endOn))||(c.startOn&&c.endOn&&c.startOn>c.endOn))fault('协作授权对象或日期不合法');
   for(const c of next.collaborations) {c.authorizedBy=ctx.me.id;c.updatedAt=stamp();}
-  next.history=[...(ctx.config.history||[]),{at:stamp(),actor:ctx.me.id,reason:clean(input.reason,500)||'调整工作设置',before:Object.fromEntries(allowed.map(k=>[k,ctx.config[k]])),after:Object.fromEntries(allowed.map(k=>[k,next[k]]))}];
+  for(const template of next.taskTemplates) template.composerImages=await saveComposerImages(template.composerImages,['description','criteria'],ctx.config.taskTemplates.flatMap(t=>t.composerImages||[]),ctx.me.id);
+  const composerImages=await saveComposerImages(input.composerImages,['reason','categories','requiredAttachmentCategories',...Object.keys(next.reportFields).map(k=>'fields_'+k)],[],ctx.me.id);
+  next.history=[...(ctx.config.history||[]),{at:stamp(),actor:ctx.me.id,composerImages,reason:clean(input.reason,500)||'调整工作设置',before:Object.fromEntries(allowed.map(k=>[k,ctx.config[k]])),after:Object.fromEntries(allowed.map(k=>[k,next[k]]))}];
   return writeRecord('settings','settings',next,Number(input.revision)||0);
+}
+export async function readComposerImage(user,id,parentId,taskId) {
+  const ctx=await access(user);let parent;
+  if(taskId) { const {rows}=await visibleTasks(user);parent=rows.find(t=>t.id===taskId); }
+  else if(parentId==='settings') parent=ctx.director?ctx.config:{taskTemplates:ctx.config.taskTemplates};
+  else {parent=await record(String(parentId||''));if(!parent||!['work','daily','issue'].includes(parent.kind)||!visibleRecord(ctx,parent))parent=null;}
+  if(!parent||!containsComposerImage(parent,id))fault('没有这张图片',404);
+  const image=await record(id);if(image?.kind!=='compose-image')fault('没有这张图片',404);
+  return image;
 }
 export const centerRouter=Router();
 const wrap=fn=>async(req,res)=>{try {const result=await fn(req,res);if(!res.headersSent)res.json(result);}catch(error){res.status(error.statusCode||500).json({ok:false,error:error.message});}};
+centerRouter.get('/image/:id',wrap(async(req,res)=>{const image=await readComposerImage(req.user,req.params.id,req.query.record,req.query.task);res.set('Cache-Control','private, no-store');res.set('X-Content-Type-Options','nosniff');res.type(image.mime).send(Buffer.from(image.data,'base64'));}));
 centerRouter.get('/',wrap(req=>centerData(req.user,req.query)));
 centerRouter.get('/reminders',wrap(async req=>{const ctx=await access(req.user);if(!ctx.director)fault('只有总监可以查看提醒状态',403);return reminderStatus(ctx);}));
 centerRouter.get('/tasks/:id',wrap(async req=>{
+  if(!['tasks','acceptance','overview','people','management','reports','statistics'].some(f=>permissionsFor(req.user,'work').can(f)))fault('组织中心未授予查看任务权限',403);
   const {ctx,rows}=await visibleTasks(req.user);const task=rows.find(t=>t.id===req.params.id);
   if(!task)fault('没有这条任务',404);
   return {ok:true,task:decorate(ctx,task),children:rows.filter(t=>t.parent_id===task.id).map(t=>decorate(ctx,t))};

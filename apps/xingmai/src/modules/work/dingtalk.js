@@ -1,7 +1,7 @@
 /* 工作汇报的钉钉排班、请假和工作通知。密钥只读环境变量。 */
 import { dbMode, query } from "../profile/auth.js";
 
-import { cardMarkdown, legacyCard } from './notice-cards.js';
+import { cardMarkdown, cardOA, legacyCard } from './notice-cards.js';
 
 const WORK_URL = "https://zx.xingmaierp.cc/work";
 
@@ -809,7 +809,7 @@ async function sendRobotCard(userid, title, markdown, url, button, robotCode) {
   }
 }
 
-async function sendCorpCard(userid, title, markdown, url, button) {
+async function sendCorpCard(userid, title, markdown, url, button, card = null) {
   const agentId = currentAgentId();
   if (!agentId) {
     throw dingFail("待配置工作通知 AgentId");
@@ -817,15 +817,8 @@ async function sendCorpCard(userid, title, markdown, url, button) {
   const accepted = await oapi("/topapi/message/corpconversation/asyncsend_v2", {
     agent_id: Number(agentId) || agentId,
     userid_list: userid,
-    msg: {
-      msgtype: "action_card",
-      action_card: {
-        title: String(title || "工作任务").slice(0, 64),
-        markdown: String(markdown || ""),
-        single_title: button || "去处理",
-        single_url: url || WORK_URL
-      }
-    }
+    msg: { msgtype: "oa", oa: cardOA({ ...(card || legacyCard(title, markdown, url, button, '')),
+      url: url || WORK_URL, button: button || '去处理' }) }
   });
   if (!accepted?.task_id) throw dingFail("工作通知未返回受理编号");
 }
@@ -837,7 +830,7 @@ export async function sendTaskNotice(userid, title, markdown, url, button = "去
   // Prefer the official enterprise Work Notifications inbox. A robot direct
   // message, then a targeted group mention, are fallbacks for unavailable apps.
   try {
-    await sendCorpCard(userid, title, formatted, url, button);
+    await sendCorpCard(userid, title, formatted, url, button, content);
     lastPopup = { channel: 'work', error: '' }; return 'work';
   } catch {
     try {

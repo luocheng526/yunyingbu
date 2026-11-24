@@ -1753,7 +1753,7 @@
    return;
   }
   var script = document.createElement("script");
-  script.src = "/shared/modules/work-tasks.js?v=task8-paste-remove";
+  script.src = "/shared/modules/work-tasks.js?v=20261123-chat-input-1";
   script.setAttribute("data-work-tasks", "");
   script.onload = run;
   script.onerror = function () {
@@ -2517,16 +2517,22 @@
   }
  };
  window.XmModules['/work'] = {
+  permissionVersion: 'catalog-2',
   mount: function(root) {
     var stopped=false, cleanup=null;
     if (!document.getElementById('work-center-css')) {
-      var css=document.createElement('link'); css.id='work-center-css';css.rel='stylesheet';css.href='/shared/modules/work-center.css?v=20261123-v2';document.head.appendChild(css);
+      var css=document.createElement('link'); css.id='work-center-css';css.rel='stylesheet';css.href='/shared/modules/work-center.css?v=20261123-chat-input-1';document.head.appendChild(css);
     }
-    function run(){if(!stopped)cleanup=window.XmWorkCenter.mount(root);}
-    if(window.XmWorkCenter)run();
+    function run(){
+      function mount(){if(!stopped){window.XmWorkRich.style();cleanup=window.XmWorkCenter.mount(root);}}
+      if(window.XmWorkRich?.version==='chat-input-1'){mount();return;}
+      var editor=document.createElement('script');editor.src='/shared/modules/work-tasks.js?v=20261123-chat-input-1';editor.onload=mount;
+      editor.onerror=function(){if(!stopped)root.innerHTML='输入组件加载失败，请刷新重试。';};document.head.appendChild(editor);
+    }
+    if(window.XmWorkCenter?.permissionVersion==='catalog-2')run();
     else {
       root.innerHTML='<div style="padding:32px">正在打开工作中心…</div>';
-      var script=document.createElement('script');script.src='/shared/modules/work-center.js?v=20261123-v2';script.onload=run;
+      var script=document.createElement('script');script.src='/shared/modules/work-center.js?v=20261124-permission-catalog-2';script.onload=run;
       script.onerror=function(){if(!stopped)root.innerHTML='<div style="padding:32px">工作中心加载失败，请刷新页面重试。</div>';};
       document.head.appendChild(script);
     }

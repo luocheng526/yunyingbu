@@ -22,7 +22,7 @@ import {
   reconcilePeople,
   removePeople
 } from "./store.js";
-import { canAssignSiteAcl, canEditLogin, canEditRoster, canSeeLogin, scopeOf } from "./org-acl.js";
+import { canAssignSiteAcl, canEditLogin, canEditRoster, canSeeLogin, scopeOf, storeScopeOf } from "./org-acl.js";
 import {
   hydrateSiteAcl,
   listSiteAclBoard,
@@ -31,6 +31,7 @@ import {
   savePersonSiteAcl,
   siteAclPersistMode
 } from "./site-acl.js";
+import { canonicalActor, featureAllowed, isConfigured } from "./site-acl.js";
 import { attachSiteAclGuard } from "./site-acl-guard.js";
 import {
   STORE_IMPORT_HEADERS,
@@ -61,23 +62,30 @@ async function resolveActor(req) {
   const fromQuery = typeof req.query?.actor === "string" ? req.query.actor.trim() : "";
   const header = typeof req.headers["x-actor"] === "string" ? req.headers["x-actor"].trim() : "";
   if (req.user && req.user.username) {
-    return String(req.user.username);
+    return canonicalActor(req.user.username);
   }
   try {
     const auth = await import("../profile/auth.js");
     if (typeof auth.currentUser === "function") {
       const user = auth.currentUser(req);
       if (user && user.username) {
-        return String(user.username);
+        return canonicalActor(user.username);
       }
     }
-    return fromQuery || header || "";
+    return "";
   } catch {
-    return fromQuery || header || "罗成";
+    return "";
   }
 }
 
 export const peopleRouter = Router();
+// Express 4 does not forward rejected async route handlers automatically.
+for (const method of ["get", "post", "put", "patch", "delete"]) {
+  const register = peopleRouter[method].bind(peopleRouter);
+  peopleRouter[method] = (route, ...handlers) => register(route, ...handlers.map(handler => (req, res, next) => {
+    try { Promise.resolve(handler(req, res, next)).catch(next); } catch (error) { next(error); }
+  }));
+}
 peopleRouter.use("/notices", noticesRouter);
 
 function patchExpressUse(target) {
@@ -170,9 +178,11 @@ peopleRouter.get("/charter", (_req, res) => {
 });
 
 peopleRouter.get("/org/summary", async (req, res) => {
+  await hydratePeopleRoster();
   await hydrateOrgStores();
+  await hydrateSiteAcl();
   const actor = await resolveActor(req);
-  const scope = scopeOf(actor);
+  const scope = storeScopeOf(actor);
   res.json({
     ok: true,
     demo: true,
@@ -186,9 +196,11 @@ peopleRouter.get("/org/summary", async (req, res) => {
 });
 
 peopleRouter.get("/org/stores", async (req, res) => {
+  await hydratePeopleRoster();
   await hydrateOrgStores();
+  await hydrateSiteAcl();
   const actor = await resolveActor(req);
-  const scope = scopeOf(actor);
+  const scope = storeScopeOf(actor);
   res.json({
     ok: true,
     demo: true,
@@ -196,7 +208,7 @@ peopleRouter.get("/org/stores", async (req, res) => {
     scope: scope.key,
     scopeLabel: scope.label,
     persist: orgStoresPersistMode(),
-    canCreate: scope.key !== "none",
+    canCreate: scopeOf(actor).key === "all" || !isConfigured(actor) || featureAllowed(actor, "people.stores", "edit"),
     teams: listTeams(),
     stores: listOrgStores(req.query || {}, actor)
   });
@@ -311,16 +323,26 @@ peopleRouter.get("/org/site-acl", async (req, res) => {
   res.json({ ok: true, persist: siteAclPersistMode(), ...board });
 });
 
-peopleRouter.get("/org/rights-board", (_req, res) => {
+peopleRouter.get("/org/rights-board", async (_req, res) => {
+  await hydratePeopleRoster();
+  await hydrateOrgStores();
   res.json(listRightsBoard());
 });
 
-peopleRouter.post("/org/rights-board/pin", (req, res) => {
-  sendResult(res, pinRightsName(req.body?.name, req.body?.role), false);
+peopleRouter.post("/org/rights-board/pin", async (req, res) => {
+  const actor = await resolveActor(req);
+  if (!featureAllowed(actor, "people.rights", "edit") && !(await requireRosterEditor(req, res))) return;
+  await hydratePeopleRoster();
+  await hydrateOrgStores();
+  sendResult(res, await pinRightsName(req.body?.name, req.body?.role), false);
 });
 
-peopleRouter.post("/org/rights-board/unpin", (req, res) => {
-  sendResult(res, unpinRightsName(req.body?.name), false);
+peopleRouter.post("/org/rights-board/unpin", async (req, res) => {
+  const actor = await resolveActor(req);
+  if (!featureAllowed(actor, "people.rights", "edit") && !(await requireRosterEditor(req, res))) return;
+  await hydratePeopleRoster();
+  await hydrateOrgStores();
+  sendResult(res, await unpinRightsName(req.body?.name), false);
 });
 
 peopleRouter.get("/org/board", async (req, res) => {
@@ -352,16 +374,18 @@ peopleRouter.get("/shops", (_req, res) => {
   res.json({ ok: true, kinds: ["店铺", "店群"], shops: listShops() });
 });
 
-peopleRouter.post("/shops", (req, res) => {
-  sendResult(res, createShop(req.body || {}), true);
+peopleRouter.post("/shops", async (req, res) => {
+  if (!(await requireRosterEditor(req, res))) return;
+  sendResult(res, await createShop(req.body || {}), true);
 });
 
 peopleRouter.get("/grants", (_req, res) => {
   res.json({ ok: true, grants: listGrants() });
 });
 
-peopleRouter.post("/grants", (req, res) => {
-  sendResult(res, createGrant(req.body || {}), true);
+peopleRouter.post("/grants", async (req, res) => {
+  if (!(await requireRosterEditor(req, res))) return;
+  sendResult(res, await createGrant(req.body || {}), true);
 });
 
 peopleRouter.get("/reconcile", (_req, res) => {
@@ -370,6 +394,8 @@ peopleRouter.get("/reconcile", (_req, res) => {
 
 peopleRouter.get("/", async (req, res) => {
   await hydratePeopleRoster();
+  await hydrateOrgStores();
+  await hydrateSiteAcl();
   const actor = await resolveActor(req);
   res.json({
     ok: true,
@@ -472,4 +498,11 @@ peopleRouter.post("/", async (req, res) => {
     return;
   }
   res.status(201).json({ ok: true, person: result.person });
+});
+
+peopleRouter.use(async (error, _req, res, _next) => {
+  // Reload the last confirmed state after a failed write; never report success
+  // for an update that exists only in this process's memory.
+  try { await hydratePeopleRoster(); await hydrateOrgStores(); await hydrateSiteAcl(); } catch {}
+  res.status(Number(error.statusCode) || 503).json({ ok: false, error: "组织数据保存失败，请稍后重试" });
 });

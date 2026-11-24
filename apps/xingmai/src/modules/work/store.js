@@ -262,12 +262,13 @@ export async function orgPeople() {
   }
   return list.map((person) => {
     const username =
-      usernameById.get(Number(person.id)) ||
       person.username ||
+      usernameById.get(Number(person.id)) ||
       (person.employeeNo === "XM001" || person.center === "人员管理" ? "罗成" : "");
     const board = String(person.board || person.orgBoard || "").trim();
     return {
       id: Number(person.id),
+      organizationManaged: person.demo !== true || Number(person.orgRevision || 0) > 0,
       name: String(person.name || ""),
       role: String(person.role || ""),
       center: String(person.center || ""),

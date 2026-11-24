@@ -86,6 +86,32 @@ export function cardMarkdown(card, mentionId = '') {
 export function cardPlainText(card) {
   return [card.taskTitle, card.description, ...card.fields.map(f => `${f.label} ${f.value}`), card.noteLabel, card.note].filter(Boolean).join(' · ');
 }
+// Native OA fields are rendered by DingTalk, not by the website's HTML/CSS.
+// https://developer.alibaba.com/docs/api.htm?apiId=37692
+// OA displays at most six form rows and three content lines. Keep essential
+// task facts in the form; the whole card opens the current source record.
+export function cardOA(card) {
+  const plain = (value, max) => clean(value, max).replace(/</g, '＜').replace(/>/g, '＞').replace(/@/g, '＠');
+  const colors = { blue: 'FF2563EB', orange: 'FFD97706', red: 'FFDC2626', green: 'FF16845B', gray: 'FF64748B' };
+  const form = [];
+  if (card.taskTitle) form.push({ key: '任务：', value: plain(card.taskTitle, 100) });
+  for (const f of (card.fields || []).slice(0, 5)) form.push({ key: plain(f.label, 10) + '：', value: plain(f.value, 100) });
+  if (card.recipientName && form.length < 6) form.push({ key: '接收人：', value: plain(card.recipientName, 24) });
+  return {
+    message_url: card.url, pc_message_url: card.url,
+    // DingTalk replaces head.text with the app name in Work Notifications.
+    head: { bgcolor: 'FF2563EB', text: '甄选未来·工作中心' },
+    body: {
+      title: plain(card.title || '工作通知', 48), form,
+      content: [card.note ? plain((card.noteLabel || '说明') + '：' + card.note, 86) : '',
+        card.description ? plain(card.description, 60) : '',
+        '点击卡片' + plain(card.button || '查看详情', 20) + '，以最新记录为准。'].filter(Boolean).join('\n'),
+      author: '甄选未来 · 工作中心'
+    },
+    status_bar: { status_value: plain(card.status || '请查看', 12) + ' · ' + plain(card.button || '查看详情', 20) + ' →',
+      status_bg: '0x' + (colors[card.tone] || colors.blue) }
+  };
+}
 export function legacyCard(title, text, url, button, name) {
   return { title: clean(title, 64), recipientName: clean(name, 24), category: '工作通知', status: '请查看',
     taskTitle: '', fields: [], note: clean(text, 200), noteLabel: '通知内容', url, button };

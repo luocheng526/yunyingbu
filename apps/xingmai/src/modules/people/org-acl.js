@@ -1,3 +1,10 @@
+let canonicalActor = value => value;
+let featureAllowed = () => false;
+let isConfigured = () => false;
+let storeAllowed = () => false;
+export function registerOrganizationPermissions(source) {
+  ({ canonicalActor, featureAllowed, isConfigured, storeAllowed } = source);
+}
 const FULL = new Set(["罗成", "管理员"]);
 const LINE_LEADERS = new Set(["罗成", "沈子晗", "韩梦凯", "管理员"]);
 
@@ -29,7 +36,7 @@ export function groupIdOf(row = {}) {
 }
 
 export function actorKey(actor) {
-  const name = normalizeGroupId(actor);
+  const name = normalizeGroupId(canonicalActor(actor));
   if (name === "luocheng") {
     return "罗成";
   }
@@ -38,7 +45,7 @@ export function actorKey(actor) {
 
 export function scopeOf(actor) {
   const name = actorKey(actor);
-  if (!name || FULL.has(name) || name.includes("罗成")) {
+  if (FULL.has(name)) {
     return { key: "all", actor: name || "罗成", groupId: "", label: "可改全部团队" };
   }
   if (name.includes("沈子晗")) {
@@ -59,7 +66,7 @@ export function rowMatchesScope(row, scope) {
     return true;
   }
   if (scope.key === "group") {
-    return groupIdOf(row) === scope.groupId;
+    return groupIdOf(row) === scope.groupId || ["director", "manager", "supervisor", "reserve", "operator", "assistant"].some(key => normalizeGroupId(row[key]) === scope.actor);
   }
   const blob = teamBlob(row);
   if (scope.key === "shen") {
@@ -71,14 +78,26 @@ export function rowMatchesScope(row, scope) {
   return false;
 }
 
+// Explicit organization master-data access is independent of operational
+// responsibility and downstream business-data grants.
+export function storeScopeOf(actor, cap = "enter") {
+  const scope = scopeOf(actor);
+  if (scope.key === "all") return scope;
+  if (isConfigured(actor) && featureAllowed(actor, "people.stores", cap)) {
+    return { key: "all", actor: scope.actor, groupId: "", label: cap === "edit" ? "可管理全部店铺主数据" : "可查看全部店铺主数据" };
+  }
+  return scope;
+}
+
 export function canEditStore(actor, row) {
-  return rowMatchesScope(row, scopeOf(actor));
+  if (scopeOf(actor).key !== "all" && isConfigured(actor) && !featureAllowed(actor, "people.stores", "edit")) return false;
+  return rowMatchesScope(row, storeScopeOf(actor, "edit"));
 }
 
 /** 成员表五级线：只有罗成、韩梦凯、沈子晗能双击改。 */
 export function canEditRoster(actor) {
   const name = actorKey(actor);
-  return name.includes("罗成") || name.includes("沈子晗") || name.includes("韩梦凯");
+  return ["罗成", "沈子晗", "韩梦凯"].includes(name) || (isConfigured(name) && featureAllowed(name, "people.members", "edit"));
 }
 
 function samePerson(actor, person) {
@@ -91,7 +110,8 @@ function samePerson(actor, person) {
   return name === personName || (Boolean(username) && name === username);
 }
 
-/** 罗成看全部账号密码；沈子晗/韩梦凯看本组；运营只看自己的。 */
+// Credential fields follow explicit member-management permissions. The owner
+// account remains protected; unconfigured accounts retain their legacy scope.
 export function canSeeLogin(actor, person) {
   if (samePerson(actor, person)) {
     return true;
@@ -100,6 +120,8 @@ export function canSeeLogin(actor, person) {
   if (scope.key === "all") {
     return true;
   }
+  if (isAdministratorPerson(person)) return false;
+  if (isConfigured(actor)) return featureAllowed(actor, "people.members", "enter");
   if (scope.key === "shen" || scope.key === "han") {
     return canAssignPerson(actor, person);
   }
@@ -107,11 +129,19 @@ export function canSeeLogin(actor, person) {
 }
 
 export function canEditLogin(actor, person) {
+  if (scopeOf(actor).key === "all") return true;
+  if (isAdministratorPerson(person)) return false;
+  if (isConfigured(actor)) return featureAllowed(actor, "people.members", "edit");
   return canSeeLogin(actor, person);
 }
 
+function isAdministratorPerson(person) {
+  return Boolean(person && [person.name, person.username].some(value => ["罗成", "luocheng", "管理员"].includes(String(value || "").trim())));
+}
+
 export function canAssignSiteAcl(actor) {
-  return canEditRoster(actor);
+  const name = actorKey(actor);
+  return ["罗成", "沈子晗", "韩梦凯"].includes(name) || (isConfigured(name) && featureAllowed(name, "people.acl", "edit"));
 }
 
 export function personBranch(person) {
@@ -146,6 +176,7 @@ export function canAssignPerson(actor, person) {
     return false;
   }
   const scope = scopeOf(actor);
+  if (isConfigured(actor) && featureAllowed(actor, "people.acl", "edit") && !["沈子晗", "韩梦凯"].includes(actorKey(actor))) return true;
   if (scope.key === "all") {
     return true;
   }
@@ -170,7 +201,7 @@ export function assertCanWrite(actor, row, next = null) {
 }
 
 export function assertCanImportRow(actor, row, selectedGroupId = "") {
-  const scope = scopeOf(actor);
+  const scope = storeScopeOf(actor, "edit");
   const gid = groupIdOf(row);
   const picked = normalizeGroupId(selectedGroupId);
   if (picked && gid !== picked) {

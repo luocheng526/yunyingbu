@@ -57,17 +57,17 @@ test("侧栏在甄选智能体后面挂工作汇报，不进底部", () => {
   const html = navMarkup("/work", luocheng);
   const main = html.match(/<nav class="xm-menu xm-menu-main">([\s\S]*?)<\/nav>/)[1];
   const agents = main.indexOf("甄选智能体");
-  const work = main.indexOf("工作汇报");
+  const work = main.indexOf("工作中心");
   assert.ok(agents >= 0 && work > agents);
   assert.equal(html.includes('href="/work"'), true);
 });
 
 test("壳把 /work 交给工作汇报模块", () => {
   assert.equal(APP_MODULES["/work"], "work");
-  assert.equal(SHELL_ASSET_VER, "0.1.772-feedback");
+  assert.match(SHELL_ASSET_VER, /^0\.1\./);
   const html = renderAppShell("/work", luocheng);
   assert.equal(html.includes("/shared/modules/work.js"), true);
-  assert.equal(html.includes("工作汇报"), true);
+  assert.equal(html.includes("工作中心"), true);
 });
 
 test("填写日报页用看板，空的时候仍能写下日报", () => {
@@ -110,8 +110,8 @@ test("今天未交时侧栏工作汇报右上角是 1，交了就去掉", () => 
 
 test("nav.js 把工作汇报放进主栏而不是底栏", () => {
   const js = readFileSync(join(root, "../public/shared/nav.js"), "utf8");
-  assert.match(js, /0\.1\.772-feedback/);
-  assert.match(js, /\{ href: "\/work", label: "工作汇报" \}/);
+  assert.match(js, /xm-fast-shell/);
+  assert.match(js, /\{ href: "\/work", label: "工作中心" \}/);
   assert.match(js, /"\/work": "work"/);
   const itemsBlock = js.match(/const items = \[([\s\S]*?)\];/)[1];
   const agentsAt = itemsBlock.indexOf('href: "/agents"');
