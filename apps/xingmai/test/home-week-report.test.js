@@ -29,6 +29,7 @@ test("week tab sits beside 实时 and keeps the five-times spreadsheet headers",
   assert.match(homeJs, /label: "近七天业绩汇总"/);
   assert.match(homeJs, /function weekTableHtml/);
   assert.match(homeJs, /function drawWeekPng/);
+  assert.match(homeJs, /function weekMonthHead/);
   assert.match(homeJs, /一键发送图片/);
   assert.match(homeJs, /id="xm-hm-week"/);
   assert.match(homeJs, /data-week-send/);
@@ -36,6 +37,10 @@ test("week tab sits beside 实时 and keeps the five-times spreadsheet headers",
   assert.match(homeJs, /店铺所在类目/);
   assert.match(homeJs, /推广费用占比/);
   assert.match(homeJs, /面板总业绩/);
+  assert.match(homeJs, /is-banner/);
+  assert.match(homeJs, /过万店铺/);
+  assert.match(homeJs, /韩梦凯五倍店铺/);
+  assert.match(homeJs, /month === 6 \|\| month >= 8/);
 });
 
 test("last seven day labels and crawler seed plus manual overlay", () => {
@@ -53,6 +58,8 @@ test("last seven day labels and crawler seed plus manual overlay", () => {
   assert.equal(keys.includes("profit_01"), true);
   assert.equal(keys.includes("mtd_2026-11-15"), true);
   assert.equal(keys.includes("register"), true);
+  assert.equal(keys.includes("marginMtd_2026-11-15"), true);
+  assert.equal(keys.includes("marginMtd_2026-11-14"), false);
   const seeded = seedRowsFromLive(
     [
       { shopName: "DIKTT潮流生活旗舰店", source: "han", liveAmount: 11194, paidAmount: 2000 },
@@ -66,6 +73,65 @@ test("last seven day labels and crawler seed plus manual overlay", () => {
   assert.equal(seeded[0].cells["gmv_2026-11-16"], 11194);
   const mixed = applyManualCells(seeded, { "han|DIKTT潮流生活旗舰店|stage": "稳定店铺33%-35%" }, "han");
   assert.equal(mixed[0].cells.stage, "稳定店铺33%-35%");
+});
+
+test("headers match the 甄选五倍业绩统计 spreadsheet on 2026-11-22", () => {
+  const labels = buildWeekColumns("2026-11-22").columns.map((col) => col.label);
+  assert.deepEqual(labels, [
+    "拿店日期",
+    "当月职级",
+    "所属人",
+    "店铺阶段",
+    "店铺名称",
+    "店铺所在类目",
+    "11.16号",
+    "11.17号",
+    "11.18号",
+    "11.19号",
+    "11.20号",
+    "11.21号",
+    "11.22号",
+    "11.20号推广费用",
+    "11.21号推广费用",
+    "11.22号推广费用",
+    "11.20号推广费用占比",
+    "11.21号推广费用占比",
+    "11.22号推广费用占比",
+    "当月费比",
+    "1.1-1.31号利润",
+    "2.1-2.28号利润",
+    "3.1-3.31号利润",
+    "4.1-4.30号利润",
+    "5.1-5.31号利润",
+    "6.1-30号利润",
+    "7.1-7.31号利润",
+    "8.1-31号利润",
+    "9.1-30号利润",
+    "10.1-31号利润",
+    "11.1-17号利润",
+    "11.1-18号利润",
+    "11.1-19号利润",
+    "11.1-20号利润",
+    "11.1-21号利润",
+    "5.1-5.31号大毛利率",
+    "6.1-30号大毛利率",
+    "7.1-7.31号大毛利率",
+    "8.1-31号大毛利率",
+    "9.1-30号大毛利率",
+    "10.1-31号大毛利率",
+    "11.1-21号大毛利率",
+    "访客数",
+    "订单数",
+    "店铺上新数",
+    "在售",
+    "京仓SPU个数",
+    "近15天退货率",
+    "近30天退货率",
+    "店铺所在类目",
+    "本月推广总费用",
+    "面板总业绩",
+    "登记日期"
+  ]);
 });
 
 test("week pack splits han and shen shops", () => {
@@ -85,6 +151,8 @@ test("week pack splits han and shen shops", () => {
   const shen = pack.teams.find((item) => item.key === "shen");
   assert.equal(han.rows.map((row) => row.shop).join(), "韩店A");
   assert.equal(shen.rows.map((row) => row.shop).join(), "沈店B");
+  assert.equal(han.foot.map((item) => item.label).join(), "韩梦凯精铺组近七天业绩,无清洁统计,清洁统计");
+  assert.equal(han.kpis.some((item) => item.key === "over10k"), true);
   resetWeekStore();
 });
 

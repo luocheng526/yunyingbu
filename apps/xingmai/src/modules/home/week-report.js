@@ -51,26 +51,20 @@ function monthLastDay(year, month) {
   return MONTH_DAYS[month] || 30;
 }
 
-function monthProfitLabel(year, month) {
+function monthRangeLabel(year, month, suffix) {
   const last = monthLastDay(year, month);
-  if (month === 6) {
-    return `6.1-${last}号利润`;
+  if (month === 6 || month >= 8) {
+    return `${month}.1-${last}号${suffix}`;
   }
-  if (month === 8 || month === 10) {
-    return `${month}.1-${last}号利润`;
-  }
-  return `${month}.1-${month}.${last}号利润`;
+  return `${month}.1-${month}.${last}号${suffix}`;
+}
+
+function monthProfitLabel(year, month) {
+  return monthRangeLabel(year, month, "利润");
 }
 
 function monthMarginLabel(year, month) {
-  const last = monthLastDay(year, month);
-  if (month === 6) {
-    return `6.1-${last}号大毛利率`;
-  }
-  if (month === 8 || month === 10) {
-    return `${month}.1-${last}号大毛利率`;
-  }
-  return `${month}.1-${month}.${last}号大毛利率`;
+  return monthRangeLabel(year, month, "大毛利率");
 }
 
 export function buildWeekColumns(ymd = shanghaiYmd()) {
@@ -142,16 +136,17 @@ export function buildWeekColumns(ymd = shanghaiYmd()) {
       edit: true
     });
   }
-  mtdDays.slice(-2).forEach((day) => {
+  const marginMtd = mtdDays[mtdDays.length - 1];
+  if (marginMtd) {
     cols.push({
-      key: `marginMtd_${day.ymd}`,
-      label: `${Number(parts[1])}.1-${Number(day.ymd.split("-")[2])}号大毛利率`,
+      key: `marginMtd_${marginMtd.ymd}`,
+      label: `${Number(parts[1])}.1-${Number(marginMtd.ymd.split("-")[2])}号大毛利率`,
       group: "margin",
       w: 72,
-      ymd: day.ymd,
+      ymd: marginMtd.ymd,
       edit: true
     });
-  });
+  }
   [
     { key: "visitors", label: "访客数", w: 56 },
     { key: "orders", label: "订单数", w: 56 },
@@ -259,22 +254,35 @@ export function teamKpis(rows, ymd) {
   let gmv = 0;
   let orders = 0;
   let n = 0;
+  let over = 0;
+  const owners = {};
   (rows || []).forEach((row) => {
     const pay = num(row.cells && row.cells[`gmv_${ymd}`]);
     if (pay != null) {
       gmv += pay;
+      if (pay >= 10000) {
+        over += 1;
+      }
     }
     const od = num(row.cells && row.cells.orders);
     if (od != null) {
       orders += od;
+    }
+    const owner = String((row.cells && row.cells.owner) || "").trim();
+    if (owner) {
+      owners[owner] = true;
     }
     n += 1;
   });
   return [
     { key: "total", label: "业绩", value: gmv || "" },
     { key: "shopAvg", label: "店均", value: n ? Math.round(gmv / n) : "" },
+    { key: "unitPrice", label: "客单价", value: "" },
+    { key: "cvr", label: "转化率", value: "" },
     { key: "orders", label: "订单数", value: orders || "" },
-    { key: "shops", label: "运营店铺数量", value: n }
+    { key: "staff", label: "运营人数", value: Object.keys(owners).length || "" },
+    { key: "shops", label: "运营店铺数量", value: n },
+    { key: "over10k", label: "过万店铺", value: over }
   ];
 }
 
@@ -374,7 +382,7 @@ export function buildWeekPack(liveRecords, ymd = shanghaiYmd()) {
       foot: [
         { key: "fine", label: `${meta.label.replace("五倍店铺", "")}精铺组近七天业绩`, kind: "fine" },
         { key: "noclean", label: "无清洁统计", kind: "noclean" },
-        { key: "clean", label: "清洁店铺统计", kind: "clean" }
+        { key: "clean", label: "清洁统计", kind: "clean" }
       ]
     };
   });
