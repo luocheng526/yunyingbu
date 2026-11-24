@@ -77,7 +77,7 @@ export async function siteAclGuard(req, res, next) {
         res.status(403).json({ ok: false, error: "组织中心未授予此店铺的数据操作权限", code: "STORE_ACL_DENIED" });
         return;
       }
-      protectStoreResponse(res, mod, scope);
+      protectStoreResponse(res, mod, scope, dest);
       if (mod === 'hr' && read && dest === '/api/hr/staff' && !cap.features?.['hr.staff']?.enter) {
         const json = res.json.bind(res);
         res.json = body => json(Array.isArray(body?.staff) ? {...body, staff:body.staff.map(person=>Object.fromEntries(['id','name','department','position','status'].map(key=>[key,person[key]])))} : body);

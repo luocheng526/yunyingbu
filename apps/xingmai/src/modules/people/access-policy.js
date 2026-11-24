@@ -83,7 +83,7 @@ export function checkStoreRequest(scope, module, req) {
   return true;
 }
 
-export function filterStorePayload(payload, scope) {
+export function filterStorePayload(payload, scope, currentShopRecords = false) {
   if (!scope.configured || scope.full("see") || !payload || typeof payload !== "object") return payload;
   let removed = false;
   const visit = (value, key = "", inherited = false) => {
@@ -98,13 +98,20 @@ export function filterStorePayload(payload, scope) {
     }
     const knownName = value.name && scope.byKey.has(clean(value.name));
     if (!tokens.length && knownName) tokens.push(value.name);
-    if (tokens.length && tokens.some(token => !scope.can(token, "see"))) { removed = true; return undefined; }
+    // The live collector names its top-level records from the current roster.
+    // A different shop can still carry the same name in its rename history.
+    const currentShop = currentShopRecords && key === "records" && !inherited && typeof value.shop === "string" ? value.shop : "";
+    if (tokens.some(token => {
+      if (token !== currentShop) return !scope.can(token, "see");
+      const current = scope.all.filter(row => row.storeName === currentShop);
+      return !current.length || current.some(row => !scope.cap(row).see);
+    })) { removed = true; return undefined; }
     if (!inherited && !tokens.length && rowLists.has(key)) { removed = true; return undefined; }
     const out = {};
     for (const [childKey, child] of Object.entries(value)) {
       if (!inherited && !tokens.length && ["totals", "total", "summary", "metrics", "kpis", "rankings", "trend"].includes(childKey)) { removed = true; continue; }
       if (scope.byKey.has(clean(childKey)) && !scope.can(childKey, "see")) { removed = true; continue; }
-      const next = visit(child, childKey, inherited || tokens.length > 0);
+      const next = currentShop && childKey === "shop" ? child : visit(child, childKey, inherited || tokens.length > 0);
       if (next !== undefined) out[childKey] = next;
     }
     return out;
@@ -122,10 +129,13 @@ export function filterStorePayload(payload, scope) {
   return next;
 }
 
-export function protectStoreResponse(res, module, scope) {
+export function protectStoreResponse(res, module, scope, pathname) {
   if (!STORE_MODULES.has(module) || !scope.configured || scope.full("see")) return;
   const json = res.json.bind(res);
-  res.json = body => { res.set("Cache-Control", "private, no-store"); return json(res.statusCode >= 400 ? body : filterStorePayload(body, scope)); };
+  res.json = body => {
+    res.set("Cache-Control", "private, no-store");
+    return json(res.statusCode >= 400 ? body : filterStorePayload(body, scope, pathname === "/api/home/live2"));
+  };
   const send = res.send.bind(res);
   res.send = body => {
     const type = String(res.get("Content-Type") || "");
