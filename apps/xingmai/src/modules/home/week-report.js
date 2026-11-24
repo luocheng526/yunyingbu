@@ -247,15 +247,20 @@ export function sheetMetricsToCells(sheetRows, webShops, days) {
       cells[cellKey(team, shop, "cat")] = row.cat;
     }
     (days || []).forEach((ymd) => {
-      const value = row.gmv && row.gmv[ymd];
-      if (value == null || value === "") {
-        return;
-      }
-      cells[cellKey(team, shop, `gmv_${ymd}`)] = value;
+      writeCell(cells, team, shop, `gmv_${ymd}`, row.gmv && row.gmv[ymd]);
+      writeCell(cells, team, shop, `fee_${ymd}`, row.fee && row.fee[ymd]);
+      writeCell(cells, team, shop, `feeRate_${ymd}`, row.feeRate && row.feeRate[ymd]);
     });
     matched.push({ sheet: row.shop, shop, team });
   });
   return { cells, matched, unmatched };
+}
+
+function writeCell(cells, team, shop, col, value) {
+  if (value == null || value === "") {
+    return;
+  }
+  cells[cellKey(team, shop, col)] = value;
 }
 
 function num(value) {

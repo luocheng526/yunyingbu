@@ -255,8 +255,8 @@ test("sheet rows match webpage shops by name not row order", () => {
   assert.equal(matchWeekShop("RASW栀悦专卖店", web), "RASW栀砚专卖店");
   const patched = sheetMetricsToCells(
     [
-      { shop: "DIKTT潮流护理旗舰店", team: "shen", cat: "个护健康", gmv: { "2026-11-18": 14653 } },
-      { shop: "RASW栀悦专卖店", team: "shen", cat: "厨房卫浴", gmv: { "2026-11-22": 6667 } }
+      { shop: "DIKTT潮流护理旗舰店", team: "shen", cat: "个护健康", gmv: { "2026-11-18": 14653 }, fee: { "2026-11-22": 5192 }, feeRate: { "2026-11-22": 0.4001 } },
+      { shop: "RASW栀悦专卖店", team: "shen", cat: "厨房卫浴", gmv: { "2026-11-22": 6667 }, fee: { "2026-11-22": 3853 }, feeRate: { "2026-11-22": 0.5779 } }
     ],
     web,
     ["2026-11-18", "2026-11-22"]
@@ -265,6 +265,10 @@ test("sheet rows match webpage shops by name not row order", () => {
   assert.equal(patched.cells["shen|DIKTT个护健康旗舰店|gmv_2026-11-18"], 14653);
   assert.equal(patched.cells["shen|DIKTT个护健康旗舰店|cat"], "个护健康");
   assert.equal(patched.cells["shen|RASW栀砚专卖店|gmv_2026-11-22"], 6667);
+  assert.equal(patched.cells["shen|DIKTT个护健康旗舰店|fee_2026-11-22"], 5192);
+  assert.equal(patched.cells["shen|DIKTT个护健康旗舰店|feeRate_2026-11-22"], 0.4001);
+  assert.equal(patched.cells["shen|RASW栀砚专卖店|fee_2026-11-22"], 3853);
+  assert.equal(patched.cells["shen|RASW栀砚专卖店|feeRate_2026-11-22"], 0.5779);
 });
 
 function osTmp() {
