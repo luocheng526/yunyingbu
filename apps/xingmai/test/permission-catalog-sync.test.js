@@ -5,6 +5,7 @@ import express from 'express';
 import { SITE_MODULES, SITE_NAV, SITE_FEATURE_PATHS, resetSiteAcl, savePersonSiteAcl, effectiveSiteAcl } from '../src/modules/people/site-acl.js';
 import { featureForRequest } from '../src/modules/people/access-policy.js';
 import { siteAclGuard } from '../src/modules/people/site-acl-guard.js';
+import { listOrgStores } from '../src/modules/people/org-board.js';
 import { WORK_FEATURES, migrateWorkCap } from '../src/modules/people/work-permissions.js';
 import { resetPeopleStore } from '../src/modules/people/store.js';
 import { resetWorkStore } from '../src/modules/work/store.js';
@@ -79,6 +80,57 @@ test('work settings, execution, report, export and legacy endpoints map separate
   for(const [tail,feature] of [['center/work','records'],['center/issue','records'],['center/daily','reports'],['center/settings','settings'],['center/export','export'],['center/notices/read','messages'],['tasks/publish','publish'],['diary/settings','legacyDiary'],['settings/templates','legacySettings']])assert.equal(featureForRequest('work','/api/work/'+tail),'work.'+feature);
   assert.equal(featureForRequest('work','/api/work/center'),'');
 });
+test('homepage fee goals follow realtime access and the authorized shops', async () => {
+  const [editable, viewOnly, hidden] = listOrgStores({}, owner.username);
+  const limits = { lo: 35, hi: 42 };
+  const goals = {
+    [editable.storeName]: limits,
+    [viewOnly.storeName]: limits,
+    [hidden.storeName]: limits,
+    '已移除的店铺': limits
+  };
+  const stores = { [editable.id]: on, [viewOnly.id]: read };
+  const feePath = '/api/home/fee-goals';
+  async function grantHome(features) {
+    const result = await savePersonSiteAcl(owner.username, assistant.username, {
+      modules: { home: { ...on, catalogVersion: 2, features } },
+      stores
+    });
+    assert.equal(result.ok, true, result.error);
+  }
+  async function request(method, path = feePath, body = {}) {
+    let response;
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      set() {},
+      send() {},
+      json(payload) { response = { status: this.statusCode, payload }; }
+    };
+    await siteAclGuard({ method, path, body, user: assistant }, res, () => res.json({ ok: true, goals }));
+    return response;
+  }
+
+  assert.equal(featureForRequest('home', '/api/home/erp-kpis'), 'home.company');
+  await grantHome({ 'home.company': on });
+  for (const path of [feePath, '/API/HOME/FEE-GOALS/']) {
+    assert.equal((await request('GET', path)).payload.code, 'SITE_ACL_DENIED');
+  }
+
+  await grantHome({ 'home.realtime': read });
+  assert.deepEqual((await request('GET')).payload.goals, {
+    [editable.storeName]: limits,
+    [viewOnly.storeName]: limits
+  });
+  assert.equal((await request('POST', feePath, { shop: editable.storeName })).payload.code, 'SITE_ACL_DENIED');
+
+  await grantHome({ 'home.realtime': on });
+  assert.equal((await request('POST', feePath, { shop: editable.storeName })).status, 200);
+  for (const shop of [viewOnly.storeName, hidden.storeName]) {
+    assert.equal((await request('POST', feePath, { shop })).payload.code, 'STORE_ACL_DENIED');
+  }
+});
+
 test('HR and meeting legacy grants migrate and can be revoked independently',async()=>{
   await savePersonSiteAcl('罗成','陈明婧',{modules:{hr:{...on,features:{'hr.staff':read}},meeting:{...on,features:{'meeting.hours':read}}}});
   const sheet=effectiveSiteAcl('陈明婧');assert.equal(sheet.modules.hr.features['hr.org'].enter,true);assert.equal(sheet.modules.meeting.features['meeting.profit'].enter,true);

@@ -34,7 +34,9 @@ async function resolveActor(req) {
 
 export async function siteAclGuard(req, res, next) {
   try {
-    const dest = String(req.path || "").replace(/\/+$/, "") || "/";
+    const pathname = String(req.path || "").replace(/\/+$/, "") || "/";
+    // Match the fee goals route consistently with Express' case-insensitive routing.
+    const dest = pathname.toLowerCase() === "/api/home/fee-goals" ? "/api/home/fee-goals" : pathname;
     const api = dest.startsWith("/api/");
     const read = req.method === "GET" || req.method === "HEAD";
     // Shared shell metadata is needed even when the organization editor is hidden.

@@ -8,7 +8,9 @@ export function featureForRequest(module, path, query = {}, method = "GET", body
   const tail = path.replace(/^\/api\/[^/]+\/?/, "");
   switch (module) {
     case "people": return /site-acl/.test(tail) ? "people.acl" : /rights-board/.test(tail) ? "people.rights" : /logs/.test(tail) ? "people.logs" : /notices/.test(tail) ? "people.notices" : /org\/(stores|summary)/.test(tail) ? "people.stores" : "people.members";
-    case "home": return /week/.test(tail) ? "home.week" : /live|jingmai|local-paid|erp-paid/.test(tail) ? "home.realtime" : /team/.test(tail) ? "home.team" : /lead|chief/.test(tail) ? "home.lead" : /rank|board/.test(tail) ? "home.board" : /workbench/.test(tail) ? "home.workbench" : /summary|erp-kpis|fee-goals/.test(tail) ? "home.company" : "";
+    case "home":
+      if (tail.toLowerCase() === "fee-goals") return "home.realtime";
+      return /week/.test(tail) ? "home.week" : /live|jingmai|local-paid|erp-paid/.test(tail) ? "home.realtime" : /team/.test(tail) ? "home.team" : /lead|chief/.test(tail) ? "home.lead" : /rank|board/.test(tail) ? "home.board" : /workbench/.test(tail) ? "home.workbench" : /summary|erp-kpis/.test(tail) ? "home.company" : "";
     case "bound": return /export/.test(tail) ? "bound.export" : /link|collect|progress|probe/.test(tail) ? "bound.link" : /prefs|catalog/.test(tail) ? "bound.cards" : "bound.board";
     case "data": return /goods|products/.test(tail) ? "data.goods" : /shops/.test(tail) ? "data.shops" : "data.overview";
     case "shen": return /jingcang/.test(tail) ? "shen.jingcang" : /recharge/.test(tail) ? "shen.recharge" : /paid/.test(tail) ? "shen.paid" : /training/.test(tail) ? "shen.training" : /tasks/.test(tail) ? "shen.tasks" : "shen.product";
@@ -134,7 +136,12 @@ export function protectStoreResponse(res, module, scope, pathname) {
   const json = res.json.bind(res);
   res.json = body => {
     res.set("Cache-Control", "private, no-store");
-    return json(res.statusCode >= 400 ? body : filterStorePayload(body, scope, pathname === "/api/home/live2"));
+    if (res.statusCode >= 400) return json(body);
+    if (pathname?.toLowerCase() === "/api/home/fee-goals" && body?.goals) {
+      const goals = Object.fromEntries(Object.entries(body.goals).filter(([shop]) => scope.can(shop, "see")));
+      return json({ ...body, goals, scopeFiltered: true });
+    }
+    return json(filterStorePayload(body, scope, pathname === "/api/home/live2"));
   };
   const send = res.send.bind(res);
   res.send = body => {
