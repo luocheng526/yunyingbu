@@ -66,6 +66,6 @@ test('工作设置显示组织中心直属上级和工作中心所属团队', as
   assert.match(root.innerHTML, /<th>直属上级<\/th><th>所属团队<\/th>/);
   assert.match(root.innerHTML, /<td>测试助理<\/td><td>助理<\/td><td>运营助理<\/td><td>测试带教<\/td><td>测试经理直属团队<\/td><\/tr>/);
   assert.match(root.innerHTML, /<td>旧名册员工<\/td><td>员工<\/td><td>员工<\/td><td>—<\/td><td>测试经理直属团队<\/td><\/tr>/);
-  assert.doesNotMatch(root.innerHTML, /调整关联|personSettings/);
+  assert.doesNotMatch(root.innerHTML, /调整关联|personSettings|运营与运营助理协作授权|新增授权/);
   unmount();
 });

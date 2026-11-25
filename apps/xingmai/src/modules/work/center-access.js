@@ -1,7 +1,7 @@
 import { permissionsFor } from '../people/feature-policy.js';
 import { orgPeople, matchPerson, orgBoardName, ORG_BOARDS } from './store.js';
 import { loadOrg } from './diary.js';
-import { settings, fault, day } from './center-db.js';
+import { settings, fault } from './center-db.js';
 
 export const WORK_ROLES=['总监','经理','主管','运营','运营助理','员工'];
 export const roleLevel=role=>({总监:5,经理:4,主管:3,运营:2,运营助理:1,员工:1})[role]||1;
@@ -67,12 +67,10 @@ export async function access(user){
   ctx.visiblePeople=active.filter(p=>canSeePerson(ctx,p));ctx.boards=ORG_BOARDS.filter(b=>ctx.director||ctx.visiblePeople.some(p=>p.board===b.code));return ctx;
 }
 export function canSeePerson(ctx,p){return Boolean(p)&&(ctx.director||p.id===ctx.me.id||(ctx.management&&p.ancestorIds.includes(ctx.me.id)));}
-export function collaboration(ctx,target){const today=day();return ctx.config.collaborations.some(c=>String(c.operatorId)===ctx.me.id&&String(c.assistantId)===target.id&&c.enabled!==false&&(!c.startOn||c.startOn<=today)&&(!c.endOn||c.endOn>=today));}
 export function canAssign(ctx,target){
   if(!target||target.status==='离职'||target.id===ctx.me.id)return false;
-  if(ctx.director)return true;
-  if(ctx.manager||ctx.me.role==='主管')return roleLevel(target.role)<roleLevel(ctx.me.role)&&canSeePerson(ctx,target);
-  return ctx.me.role==='运营'&&target.role==='运营助理'&&(target.parentId===ctx.me.id||collaboration(ctx,target));
+  if(ctx.me.role==='运营')return target.role==='运营助理'&&target.parentId===ctx.me.id;
+  return (ctx.management||ctx.me.orgRole==='储备')&&target.ancestorIds.includes(ctx.me.id);
 }
 // Saved scopes remain authoritative after a person changes team or manager.
 export function managedRecord(ctx,row){

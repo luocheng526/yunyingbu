@@ -203,7 +203,8 @@ export async function saveSettings(user,input) {
   if(!permissionsFor(user,'work').can('settings','edit'))fault('组织中心未授予此操作权限',403);
   const ctx=await access(user);if(!ctx.director)fault('只有总监可以修改工作中心全局设置',403);
   if(['roleOverrides','teamOverrides','reportingOverrides'].some(key=>Object.hasOwn(input,key)))fault('人员角色和汇报关系请在组织中心维护');
-  const next=copy(ctx.config),allowed=['categories','collaborations','taskTemplates','reportRoles','reportMembers','weekdays','restDays','deadline','allowLate','reviewHours','staleHours','requiredAttachmentCategories','reportFields','taskReminders','dailyReminders','dueSoonMinutes','repeatReminderAt'];
+  if(Object.hasOwn(input,'collaborations'))fault('派单范围由组织中心的上下级关系决定');
+  const next=copy(ctx.config),allowed=['categories','taskTemplates','reportRoles','reportMembers','weekdays','restDays','deadline','allowLate','reviewHours','staleHours','requiredAttachmentCategories','reportFields','taskReminders','dailyReminders','dueSoonMinutes','repeatReminderAt'];
   for(const key of allowed)if(Object.hasOwn(input,key))next[key]=copy(input[key]);
   if(!next.reportFields||typeof next.reportFields!=='object'||Array.isArray(next.reportFields))fault('日报模板格式不合法');
   for(const key of ['reportRoles','reportMembers','requiredAttachmentCategories','taskTemplates'])if(!Array.isArray(next[key]))fault('设置格式不合法：'+key);
@@ -220,9 +221,6 @@ export async function saveSettings(user,input) {
   if(!Array.isArray(next.weekdays)||next.weekdays.some(n=>!Number.isInteger(n)||n<0||n>6))fault('工作日不合法');
   if(!Array.isArray(next.restDays)||next.restDays.some(d=>!validDay(d)))fault('休息日期不合法');
   for(const key of ['reviewHours','staleHours'])if(!(Number(next[key])>0&&Number(next[key])<=720))fault('提醒时长应为 1～720 小时');
-  if(!Array.isArray(next.collaborations))fault('协作授权格式不合法');
-  if(Object.hasOwn(input,'collaborations'))for(const c of next.collaborations)if(!c||typeof c!=='object'||(c.enabled!==false&&(ctx.byId.get(String(c.operatorId))?.role!=='运营'||ctx.byId.get(String(c.assistantId))?.role!=='运营助理'))||(c.startOn&&!validDay(c.startOn))||(c.endOn&&!validDay(c.endOn))||(c.startOn&&c.endOn&&c.startOn>c.endOn))fault('协作授权对象或日期不合法');
-  for(const c of next.collaborations) {c.authorizedBy=ctx.me.id;c.updatedAt=stamp();}
   for(const template of next.taskTemplates) template.composerImages=await saveComposerImages(template.composerImages,['description','criteria'],ctx.config.taskTemplates.flatMap(t=>t.composerImages||[]),ctx.me.id);
   const composerImages=await saveComposerImages(input.composerImages,['reason','categories','requiredAttachmentCategories',...Object.keys(next.reportFields).map(k=>'fields_'+k)],[],ctx.me.id);
   next.history=[...(ctx.config.history||[]),{at:stamp(),actor:ctx.me.id,composerImages,reason:clean(input.reason,500)||'调整工作设置',before:Object.fromEntries(allowed.map(k=>[k,ctx.config[k]])),after:Object.fromEntries(allowed.map(k=>[k,next[k]]))}];

@@ -123,18 +123,48 @@ test('operator can assign a direct assistant through the organization reporting 
   assert.equal((await publishTask(users.op,draft())).statusCode,403);
   assert.equal((await centerData(users.opB)).canPublish,true);
 });
-test('operator needs current collaboration for assistants outside direct reports; assistant cannot publish',async()=>{
-  assert.equal((await publishTask(users.op,draft())).statusCode,403);
-  const config=await settings();await saveSettings(users.director,{revision:config.revision,collaborations:[{operatorId:'4',assistantId:'5',enabled:true,startOn:today()}]});
-  const t=await create(users.op);assert.equal(t.reviewer,'4');assert.equal((await listTasks(users.lead,'all')).rows.length,1);
+test('legacy collaborations no longer grant dispatch and cannot be added through settings',async()=>{
+  const config=await settings();
+  const collaborations=[{operatorId:'4',assistantId:'7',enabled:true,startOn:today()}];
+  await writeRecord('settings','settings',{...config,collaborations},config.revision);
+  await patchPerson(5,{operator:'张文静'});
+  resetOrgMemo();
+  assert.deepEqual((await centerData(users.op)).options.assignees.map(p=>p.id),['5']);
+  assert.equal((await publishTask(users.op,draft({assignee:'7'}))).statusCode,403);
+  assert.equal((await publishTask(users.op,draft({collaborators:['7']}))).statusCode,403);
+  const task=await create(users.op);
+  assert.equal((await actTask(users.op,{id:task.id,revision:task.revision,action:'edit',assignee:'7',note:'测试跨组改派'})).statusCode,403);
   assert.equal((await publishTask(users.assistant,draft({assignee:'4'}))).statusCode,403);
-  const config2=await settings();await saveSettings(users.director,{revision:config2.revision,collaborations:[{operatorId:'4',assistantId:'5',enabled:false}]});
-  assert.equal((await publishTask(users.op,draft())).statusCode,403);
-  assert.equal((await listTasks(users.op,'published')).rows.length,1);
+  const saved=await settings();
+  await assert.rejects(()=>saveSettings(users.director,{revision:saved.revision,collaborations}),/派单范围由组织中心/);
+  await saveSettings(users.director,{revision:saved.revision,deadline:'19:00'});
+  assert.deepEqual((await settings()).collaborations,collaborations);
 });
-test('expired and future collaborations do not authorize dispatch',async()=>{
-  const s=await settings();await saveSettings(users.director,{revision:s.revision,collaborations:[{operatorId:'4',assistantId:'5',endOn:'2001-01-01'},{operatorId:'4',assistantId:'5',startOn:'2099-01-01'}]});
-  assert.equal((await publishTask(users.op,draft())).statusCode,403);
+test('reserve, supervisor, manager, and director can dispatch to direct and indirect reports only',async()=>{
+  const line={director:'罗成',lineManager:'沈子晗',supervisor:'杨润泽'};
+  const reserve=await createPerson({...line,name:'测试储备',role:'储备'});
+  const operator=await createPerson({...line,reserve:'测试储备',name:'测试运营',role:'运营'});
+  const assistant=await createPerson({...line,reserve:'测试储备',operator:'测试运营',name:'测试助理',role:'助理'});
+  const otherDirector=await createPerson({name:'另一位总监',role:'总监'});
+  const otherAssistant=await createPerson({director:'另一位总监',name:'另一支线助理',role:'助理'});
+  assert.ok([reserve,operator,assistant,otherDirector,otherAssistant].every(result=>result.ok));
+  resetOrgMemo();
+  const reserveUser={username:reserve.person.name};
+  const [reserveId,operatorId,assistantId,otherAssistantId]=[reserve,operator,assistant,otherAssistant].map(({person})=>String(person.id));
+  const reserveData=await centerData(reserveUser);
+  assert.equal(reserveData.canPublish,true);
+  assert.deepEqual(reserveData.options.assignees.map(p=>p.id).sort(),[operatorId,assistantId].sort());
+  assert.equal((await create(reserveUser,{assignee:operatorId})).reviewer,reserveId);
+  const parent=await create(users.lead,{assignee:reserveId});
+  assert.equal((await create(reserveUser,{assignee:assistantId,parent_id:parent.id})).parent_id,parent.id);
+  for(const [user,outsideId] of [[reserveUser,'4'],[users.lead,'7'],[users.manager,otherAssistantId],[users.director,otherAssistantId]]){
+    const assignees=(await centerData(user)).options.assignees.map(p=>p.id);
+    assert.ok(assignees.includes(assistantId));
+    assert.ok(!assignees.includes(outsideId));
+    assert.equal((await create(user,{assignee:assistantId})).assignee,assistantId);
+    assert.equal((await publishTask(user,draft({assignee:outsideId}))).statusCode,403);
+  }
+  assert.equal((await create({username:otherDirector.person.name},{assignee:otherAssistantId})).assignee,otherAssistantId);
 });
 test('manager can designate employee supervisor as reviewer; other reviewers rejected',async()=>{
   const t=await create(users.manager,{reviewer:'8'});assert.equal(t.reviewer,'8');

@@ -2527,7 +2527,7 @@
     if(window.XmWorkCenter?.permissionVersion==='catalog-2')run();
     else {
       root.innerHTML='<div style="padding:32px">正在打开工作中心…</div>';
-      var script=document.createElement('script');script.src='/shared/modules/work-center.js?v=20261125-work-settings';script.onload=run;
+      var script=document.createElement('script');script.src='/shared/modules/work-center.js?v=20261125-org-dispatch';script.onload=run;
       script.onerror=function(){if(!stopped)root.innerHTML='<div style="padding:32px">工作中心加载失败，请刷新页面重试。</div>';};
       document.head.appendChild(script);
     }
