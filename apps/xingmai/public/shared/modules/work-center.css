@@ -8,3 +8,5 @@ html[data-theme=dark] .wc .wc-people-picker>summary,html[data-theme=dark] .wc-pe
 @media(min-width:1500px){.wc-grid.eight{grid-template-columns:repeat(8,minmax(0,1fr))}.wc-kpi{padding:15px}.wc-kpi .value{font-size:26px}}
 @media(max-width:1100px){.wc-split{grid-template-columns:1fr}.wc-head{align-items:flex-start}.wc-nav button{padding:11px 12px}.wc{padding:20px}.wc-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:650px){.wc{padding:14px}.wc-head{flex-direction:column;gap:14px}.wc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.wc-form,.wc-detail-grid{grid-template-columns:1fr}.wc-toolbar input,.wc-toolbar select{max-width:145px}.wc-card{padding:14px}.wc-kpi .value{font-size:24px}.wc-nav button{padding:9px 12px}.wc-dialog-body{padding:15px}}
+
+.wc-compose-saved{display:inline-flex;width:140px;height:110px;margin:6px 10px 10px 0;padding:6px;border:1px solid var(--wc-line);border-radius:8px;background:var(--wc-bg);vertical-align:top;cursor:zoom-in}.wc-compose-saved img{max-width:100%;max-height:100%;object-fit:contain;margin:auto}.wc input[type=text],.wc input[type=search],.wc textarea{user-select:text;-webkit-user-select:text}
