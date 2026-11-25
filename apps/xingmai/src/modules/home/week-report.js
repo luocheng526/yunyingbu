@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { shanghaiYmd, shanghaiNow } from "./local-paid.js";
+import { attachWeekTotals } from "./week-totals.js";
 
 const TEAMS = [
   { key: "han", label: "韩梦凯五倍店铺", totalLabel: "韩梦凯五倍店铺业绩" },
@@ -614,7 +615,7 @@ export function buildWeekPack(orgShops, ymd = shanghaiYmd()) {
       ]
     };
   });
-  return {
+  return attachWeekTotals({
     ok: true,
     title: "甄选五倍业绩统计",
     ymd: layout.ymd,
@@ -625,7 +626,7 @@ export function buildWeekPack(orgShops, ymd = shanghaiYmd()) {
     dingReady: Boolean(saved.webhook || process.env.HOME_WEEK_DING_WEBHOOK),
     updatedAt: saved.updatedAt || shanghaiNow(),
     source: "org+manual"
-  };
+  });
 }
 
 function token() {

@@ -27,6 +27,7 @@ import {
 } from "../src/modules/home/week-report.js";
 import { homeRouter } from "../src/modules/home/router.js";
 import { paintWeekInk } from "../src/modules/home/week-ink-patch.js";
+import { attachWeekTotals, isWeekCleanShop, sumWeekCells } from "../src/modules/home/week-totals.js";
 
 const homeJs = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "../public/shared/modules/home.js"),
@@ -69,6 +70,14 @@ test("week ink patch turns green/red GMV numbers black", () => {
   assert.match(next, /ctx\.fillStyle = "#000";/);
   assert.doesNotMatch(next, /td\.is-up\{background:#00b050;color:#fff\}/);
   assert.doesNotMatch(next, /bg === "#00b050" \|\| bg === "#ff0000" \? "#fff"/);
+});
+
+test("week ink patch fills foot cells and appends 人员总计", () => {
+  const next = paintWeekInk(homeJs);
+  assert.match(next, /footCell\(item\.kind \|\| "fine", col, item\.label, item\.cells\)/);
+  assert.match(next, /pack\.grandSummary \? \[pack\.grandSummary\]/);
+  assert.match(next, /item\.cells \|\| \{\}, \{ label: item\.label \}/);
+  assert.match(next, /team\.readonly \|\| pack\.historical/);
 });
 
 test("last seven day labels and crawler seed plus manual overlay", () => {
@@ -387,6 +396,68 @@ test("week-report route returns 401 when org center is not logged in", async () 
   } finally {
     await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
+});
+
+test("week pack fills 清洁/无清洁 footers and 人员总计", () => {
+  setWeekStorePath(join(osTmp(), `home-week-sum-${Date.now()}.json`));
+  resetWeekStore();
+  saveWeekCells({
+    cells: {
+      "han|ZYUO洗护旗舰店|cat": "衣物清洁/护理",
+      "han|ZYUO洗护旗舰店|gmv_2026-11-18": 1519,
+      "han|ZYUO洗护旗舰店|gmv_2026-11-16": 1400,
+      "han|ZYUO洗护旗舰店|fee_2026-11-16": 700,
+      "han|ZYUO洗护旗舰店|feeRate_2026-11-16": 0.5,
+      "han|ZYUO洗护旗舰店|profit_10": 100,
+      "han|RASW旗舰店|cat": "个护健康",
+      "han|RASW旗舰店|gmv_2026-11-18": 35002,
+      "han|RASW旗舰店|gmv_2026-11-16": 30000,
+      "han|RASW旗舰店|fee_2026-11-16": 9000,
+      "han|RASW旗舰店|profit_10": 200,
+      "shen|HYEGIIR健康器械旗舰店|cat": "医疗保健",
+      "shen|HYEGIIR健康器械旗舰店|gmv_2026-11-18": 48996,
+      "shen|HYEGIIR健康器械旗舰店|gmv_2026-11-16": 40000
+    }
+  });
+  const pack = buildWeekPack(
+    [
+      { store: "ZYUO洗护旗舰店", team: "精铺组 韩梦凯", operator: "陈晓曼", manager: "韩梦凯", enabled: true },
+      { store: "RASW旗舰店", team: "精铺组 韩梦凯", operator: "薛双双", manager: "韩梦凯", enabled: true },
+      { store: "HYEGIIR健康器械旗舰店", team: "沈子晗组", operator: "高丽男", manager: "沈子晗", enabled: true }
+    ],
+    "2026-11-18"
+  );
+  assert.equal(isWeekCleanShop({ shop: "ZYUO洗护旗舰店", cells: { cat: "衣物清洁/护理" } }), true);
+  assert.equal(isWeekCleanShop({ shop: "RASW旗舰店", cells: { cat: "个护健康" } }), false);
+  assert.equal(isWeekCleanShop({ shop: "DIKTT个护健康旗舰店", cells: { cat: "个护健康" } }), false);
+  const han = pack.teams.find((item) => item.key === "han");
+  const shen = pack.teams.find((item) => item.key === "shen");
+  assert.equal(han.foot[0].cells["gmv_2026-11-18"], 36521);
+  assert.equal(han.foot[1].label, "无清洁统计");
+  assert.equal(han.foot[1].cells["gmv_2026-11-18"], 35002);
+  assert.equal(han.foot[2].label, "清洁统计");
+  assert.equal(han.foot[2].cells["gmv_2026-11-18"], 1519);
+  assert.equal(han.foot[0].cells["fee_2026-11-16"], 9700);
+  assert.equal(han.foot[0].cells["feeRate_2026-11-16"], 0.3089);
+  assert.equal(han.foot[0].cells["profit_10"], 300);
+  assert.equal(shen.foot[0].cells["gmv_2026-11-18"], 48996);
+  assert.equal(shen.foot[1].cells["gmv_2026-11-18"], 48996);
+  assert.equal(shen.foot[2].cells["gmv_2026-11-18"], "");
+  assert.equal(pack.grandSummary.totalLabel, "人员总计");
+  assert.equal(pack.grandSummary.isSummary, true);
+  assert.equal(pack.grandSummary.readonly, true);
+  assert.equal(pack.grandSummary.foot[0].label, "店铺总计 3家");
+  assert.equal(pack.grandSummary.foot[0].cells["gmv_2026-11-18"], 85517);
+  assert.equal(pack.grandSummary.foot[1].label, "无清洁统计");
+  assert.equal(pack.grandSummary.foot[1].cells["gmv_2026-11-18"], 83998);
+  assert.equal(pack.grandSummary.foot[2].label, "清洁店铺统计");
+  assert.equal(pack.grandSummary.foot[2].cells["gmv_2026-11-18"], 1519);
+  assert.equal(han.kpis.find((item) => item.key === "total").value, 36521);
+  const summed = sumWeekCells(han.rows, pack.columns);
+  assert.equal(summed["gmv_2026-11-18"], 36521);
+  const again = attachWeekTotals(pack);
+  assert.equal(again.grandSummary.foot[0].label, "店铺总计 3家");
+  resetWeekStore();
 });
 
 test("dingtalk webhook rejects non-ding hosts", async () => {

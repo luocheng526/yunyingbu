@@ -34,6 +34,7 @@ import {
   postDingTalk,
   readWeekStore
 } from "./week-report.js";
+import { attachWeekTotals } from "./week-totals.js";
 
 const homeJsPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -523,12 +524,12 @@ export function homeRouter() {
         .trim();
       const origin = host ? `${proto}://${host}` : "";
       const shops = await loadWeekOrgShops(req.headers.cookie || "", fetch, origin);
-      return res.json(buildWeekPack(shops));
+      return res.json(attachWeekTotals(buildWeekPack(shops)));
     } catch (err) {
       if (Number(err && err.statusCode) === 401) {
         return res.status(401).json({ ok: false, error: err.message || "请先登录" });
       }
-      return res.json(buildWeekPack([]));
+      return res.json(attachWeekTotals(buildWeekPack([])));
     }
   });
 
