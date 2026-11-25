@@ -72,7 +72,7 @@ export function canAssign(ctx,target){
   if(!target||target.status==='离职'||target.id===ctx.me.id)return false;
   if(ctx.director)return true;
   if(ctx.manager||ctx.me.role==='主管')return roleLevel(target.role)<roleLevel(ctx.me.role)&&canSeePerson(ctx,target);
-  return ctx.me.role==='运营'&&target.role==='运营助理'&&collaboration(ctx,target);
+  return ctx.me.role==='运营'&&target.role==='运营助理'&&(target.parentId===ctx.me.id||collaboration(ctx,target));
 }
 // Saved scopes remain authoritative after a person changes team or manager.
 export function managedRecord(ctx,row){

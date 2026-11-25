@@ -108,7 +108,22 @@ test('supervisor can assign assistant directly but not another team',async()=>{
   const t=await create(users.lead);assert.equal(t.reviewer,'8');
   const bad=await publishTask(users.lead,draft({assignee:'7'}));assert.equal(bad.statusCode,403);
 });
-test('operator requires explicit current collaboration; assistant cannot publish',async()=>{
+test('operator can assign a direct assistant through the organization reporting line',async()=>{
+  await patchPerson(5,{operator:'张文静'});
+  resetOrgMemo();
+  const data=await centerData(users.op);
+  assert.equal(data.canPublish,true);
+  assert.deepEqual(data.options.assignees.map(p=>p.id),['5']);
+  assert.equal((await create(users.op)).reviewer,'4');
+  assert.equal((await publishTask(users.op,draft({assignee:'7'}))).statusCode,403);
+
+  await patchPerson(5,{operator:'郭桂良',supervisor:'高丽男'});
+  resetOrgMemo();
+  assert.equal((await centerData(users.op)).canPublish,false);
+  assert.equal((await publishTask(users.op,draft())).statusCode,403);
+  assert.equal((await centerData(users.opB)).canPublish,true);
+});
+test('operator needs current collaboration for assistants outside direct reports; assistant cannot publish',async()=>{
   assert.equal((await publishTask(users.op,draft())).statusCode,403);
   const config=await settings();await saveSettings(users.director,{revision:config.revision,collaborations:[{operatorId:'4',assistantId:'5',enabled:true,startOn:today()}]});
   const t=await create(users.op);assert.equal(t.reviewer,'4');assert.equal((await listTasks(users.lead,'all')).rows.length,1);
