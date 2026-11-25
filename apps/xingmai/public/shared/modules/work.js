@@ -2521,7 +2521,7 @@
   mount: function(root) {
     var stopped=false, cleanup=null;
     if (!document.getElementById('work-center-css')) {
-      var css=document.createElement('link'); css.id='work-center-css';css.rel='stylesheet';css.href='/shared/modules/work-center.css?v=20261125-tab-badges';document.head.appendChild(css);
+      var css=document.createElement('link'); css.id='work-center-css';css.rel='stylesheet';css.href='/shared/modules/work-center.css?v=20261125-task-detail';document.head.appendChild(css);
     }
     function run(){
       function mount(){if(!stopped){window.XmWorkRich.style();cleanup=window.XmWorkCenter.mount(root);}}

@@ -1,8 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { once } from "node:events";
+import express from "express";
 import { parseRichContent, bindRichFiles, richPlainText } from "../src/modules/work/rich-content.js";
 import { publishTask, listTasks, readTaskFile, resetTaskStore, setTaskNotifier } from "../src/modules/work/tasks.js";
 import { resetPeopleStore, patchPerson } from "../src/modules/people/store.js";
+import { workRouter } from "../src/modules/work/router.js";
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aY9sAAAAASUVORK5CYII=", "base64");
 const files = [{ name: "inline.png", mime: "image/png", bytes: png }];
 
@@ -42,4 +45,37 @@ test("task save/read keeps rich content and file access permissions; rejected in
     assert.equal((await listTasks(user,"published")).rows.length,1);
     const repeated=await publishTask(user,draft);assert.equal(repeated.duplicate,true);assert.deepEqual(repeated.task.description_doc,created.task.description_doc);
   }finally{resetTaskStore();resetPeopleStore();}
+});
+
+test("inline task files serve validated image bytes only to users who can view the task", async () => {
+  resetPeopleStore(); resetTaskStore(); setTaskNotifier(async()=>true);
+  const director={username:'罗成'};
+  await patchPerson(3,{...director,name:'罗成',role:'总监'});
+  const task=await publishTask(director,{
+    title:'任务图片预览',assignee:'4',start_at:'2026-11-21T09:00',due_at:'2026-11-22T18:00',
+    files:[files[0],{ name:'image.png',mime:'application/octet-stream',bytes:png },
+      { name:'invalid.png',mime:'image/png',bytes:Buffer.from('<html>not an image</html>') }]
+  });
+  assert.equal(task.ok,true,task.error);
+  const [image,octet,invalid]=task.task.files;
+  const app=express();
+  app.use('/api/work',(req,_res,next)=>{ req.user=req.query.outside?{username:'郭桂良'}:{username:'张文静'}; next(); },workRouter);
+  const server=app.listen(0,'127.0.0.1');
+  await once(server,'listening');
+  try{
+    const file=(id,extra='')=>fetch(`http://127.0.0.1:${server.address().port}/api/work/tasks/file?id=${id}${extra}`);
+    for(const imageFile of [image,octet]){
+      const response=await file(imageFile.id,'&inline=1');
+      assert.equal(response.status,200);
+      assert.equal(response.headers.get('content-type'),'image/png');
+      assert.equal(response.headers.get('cache-control'),'private, no-store');
+      assert.deepEqual(Buffer.from(await response.arrayBuffer()),png);
+    }
+    assert.equal((await file(image.id,'&inline=1&outside=1')).status,404);
+    assert.equal((await file(invalid.id,'&inline=1')).status,415);
+    assert.equal((await (await file(image.id)).json()).data,png.toString('base64'));
+  }finally{
+    await new Promise(resolve=>server.close(resolve));
+    resetTaskStore(); resetPeopleStore();
+  }
 });

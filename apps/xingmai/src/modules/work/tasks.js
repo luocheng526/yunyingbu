@@ -458,7 +458,7 @@ export async function taskCounts(user) {
   return { mine, review };
 }
 
-export async function readTaskFile(user, fileId) {
+export async function readTaskFile(user, fileId, { binary = false } = {}) {
   await ready();
   const me = await meOf(user);
   const id = cleanId(fileId);
@@ -466,11 +466,16 @@ export async function readTaskFile(user, fileId) {
     return fail("没有这个附件", 404);
   }
   const ctx = await access(user);
-  const task = [...tasks.values()].find((item) => taskVisible(ctx, item) && [...item.files, ...item.events.flatMap((event) => event.files)].some((file) => file.id === id));
-  if (!task) {
+  let meta;
+  for (const task of tasks.values()) {
+    if (!taskVisible(ctx, task)) continue;
+    const files = [...(task.files || []), ...(task.events || []).flatMap(event => event.files || [])];
+    meta = files.find(file => file.id === id);
+    if (meta) break;
+  }
+  if (!meta) {
     return fail("没有这个附件", 404);
   }
-  const meta = [...task.files, ...task.events.flatMap((event) => event.files)].find((file) => file.id === id);
   let bytes = fileBytes.get(id);
   if (!bytes && dbMode() === "mysql") {
     const [rows] = await query("SELECT bytes FROM work_report_task_file WHERE id = ?", [id]);
@@ -479,5 +484,6 @@ export async function readTaskFile(user, fileId) {
   if (!bytes) {
     return fail("没有这个附件", 404);
   }
-  return { ok: true, name: meta.name, mime: meta.mime || "application/octet-stream", data: Buffer.from(bytes).toString("base64") };
+  const file = { ok: true, name: meta.name, mime: meta.mime || "application/octet-stream" };
+  return binary ? { ...file, bytes: Buffer.from(bytes) } : { ...file, data: Buffer.from(bytes).toString("base64") };
 }

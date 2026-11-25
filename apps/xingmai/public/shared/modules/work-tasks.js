@@ -176,7 +176,8 @@
   }
 
   function zoomImage(host, src, name) {
-    if (!/^data:image\/(png|jpeg|gif|webp|bmp);base64,/i.test(src || "") && !String(src||"").startsWith("/api/work/center/image/")) return;
+    var taskImage = /^\/api\/work\/tasks\/file\?id=[a-z0-9-]{8,64}&inline=1$/i.test(src || "");
+    if (!taskImage && !/^data:image\/(png|jpeg|gif|webp|bmp);base64,/i.test(src || "") && !String(src||"").startsWith("/api/work/center/image/")) return;
     var dialog = document.createElement("dialog");
     dialog.className = "wt-image-viewer";
     dialog.setAttribute("aria-label", "图片放大查看");

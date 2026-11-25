@@ -18,6 +18,7 @@ import {
 import { getReport, getSettings, isWorkAdmin, myTodoCount, orgPeople, saveMembers, saveReport, saveTemplate, snapshot } from "./store.js";
 import { dingUserOf, popupTo, saveNotifyWebhook } from "./dingtalk.js";
 import { actTask, listTasks, publishTask, readTaskFile, taskContext, taskCounts } from "./tasks.js";
+import { isImage } from "./rich-content.js";
 import { centerRouter } from './center.js';
 import { startWorkReminders } from './reminders.js';
 
@@ -323,7 +324,19 @@ workRouter.get(
 workRouter.get(
   "/tasks/file",
   wrap(async (req, res) => {
-    sendResult(res, await readTaskFile(req.user, req.query?.id), 404);
+    const inline = req.query?.inline === "1";
+    const file = await readTaskFile(req.user, req.query?.id, { binary: inline });
+    if (!inline || !file.ok) return sendResult(res, file, 404);
+
+    const extension = file.name?.split(".").at(-1).toLowerCase();
+    const imageTypes = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp" };
+    const mime = file.mime === "application/octet-stream" ? imageTypes[extension] : file.mime.toLowerCase();
+    if (!isImage({ ...file, mime })) {
+      return sendResult(res, { ok: false, statusCode: 415, error: "这个附件不支持图片预览" });
+    }
+    res.set("Cache-Control", "private, no-store");
+    res.set("X-Content-Type-Options", "nosniff");
+    res.type(mime).send(file.bytes);
   })
 );
 

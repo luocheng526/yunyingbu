@@ -1,6 +1,6 @@
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"]);
 
-function isImage(file) {
+export function isImage(file) {
   if (!IMAGE_TYPES.has(file?.mime)) return false;
   const b = file.bytes;
   if (!Buffer.isBuffer(b)) return false;
