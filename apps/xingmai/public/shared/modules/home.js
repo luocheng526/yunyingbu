@@ -1,6 +1,6 @@
-/* xm-module-home 0.1.1125-connect */
+/* xm-module-home 0.1.1319-weekbar */
 (function () {
-  var HOME_JS_STAMP = "0.1.1125-connect";
+  var HOME_JS_STAMP = "0.1.1319-weekbar";
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
@@ -994,6 +994,13 @@
     }
     return days[month] || 30;
   }
+  function weekMonthHead(year, month, suffix) {
+    var last = weekMonthLast(year, month);
+    if (month === 6 || month >= 8) {
+      return month + ".1-" + last + "号" + suffix;
+    }
+    return month + ".1-" + month + "." + last + "号" + suffix;
+  }
   function blankWeekPack() {
     var today = shanghaiYmd(0);
     var parts = today.split("-").map(Number);
@@ -1023,12 +1030,13 @@
     for (m = 1; m < month; m += 1) {
       cols.push({
         key: "profit_" + ("0" + m).slice(-2),
-        label: m + ".1-" + (m === 6 || m === 8 || m === 10 ? weekMonthLast(year, m) + "号" : m + "." + weekMonthLast(year, m) + "号") + "利润",
+        label: weekMonthHead(year, m, "利润"),
         group: "profit",
         w: 70
       });
     }
-    weekLastDays(6, weekShiftYmd(today, -1)).slice(-5).forEach(function (day) {
+    var mtdDays = weekLastDays(6, weekShiftYmd(today, -1)).slice(-5);
+    mtdDays.forEach(function (day) {
       cols.push({
         key: "mtd_" + day.ymd,
         label: Number(parts[1]) + ".1-" + Number(day.ymd.split("-")[2]) + "号利润",
@@ -1040,9 +1048,19 @@
     for (m = 5; m < month; m += 1) {
       cols.push({
         key: "margin_" + ("0" + m).slice(-2),
-        label: m + ".1-" + (m === 6 || m === 8 || m === 10 ? weekMonthLast(year, m) + "号" : m + "." + weekMonthLast(year, m) + "号") + "大毛利率",
+        label: weekMonthHead(year, m, "大毛利率"),
         group: "margin",
         w: 72
+      });
+    }
+    var marginMtd = mtdDays[mtdDays.length - 1];
+    if (marginMtd) {
+      cols.push({
+        key: "marginMtd_" + marginMtd.ymd,
+        label: Number(parts[1]) + ".1-" + Number(marginMtd.ymd.split("-")[2]) + "号大毛利率",
+        group: "margin",
+        w: 72,
+        ymd: marginMtd.ymd
       });
     }
     [
@@ -1113,9 +1131,47 @@
     }
     return cur >= before ? "is-up" : "is-down";
   }
+  function weekKpiOf(team, key) {
+    var list = (team && team.kpis) || [];
+    var i;
+    for (i = 0; i < list.length; i += 1) {
+      if (list[i].key === key) {
+        return list[i].value;
+      }
+    }
+    return "";
+  }
+  function weekBarKpis(team) {
+    return [
+      { key: "total", label: "业绩" },
+      { key: "shopAvg", label: "店均" },
+      { key: "orders", label: "订单数" },
+      { key: "shops", label: "运营店铺数量" }
+    ].map(function (item) {
+      return { label: item.label, value: weekKpiOf(team, item.key) };
+    });
+  }
+  function weekSideKpis(team) {
+    return [
+      { key: "shopAvg", label: "店均" },
+      { key: "unitPrice", label: "客单价" },
+      { key: "cvr", label: "转化率" },
+      { key: "orders", label: "订单数" },
+      { key: "staff", label: "运营人数" },
+      { key: "shops", label: "运营店铺数量" },
+      { key: "over10k", label: "过万店铺" }
+    ].map(function (item) {
+      return { label: item.label, value: weekKpiOf(team, item.key) };
+    });
+  }
   function weekTableHtml(pack) {
     var columns = (pack && pack.columns) || [];
-    var left = 0;
+    var leadW = [118, 72];
+    var tableW = leadW[0] + leadW[1];
+    columns.forEach(function (col) {
+      tableW += col.w || 70;
+    });
+    var left = leadW[0] + leadW[1];
     var sticky = {};
     columns.forEach(function (col, i) {
       if (i < 6) {
@@ -1123,6 +1179,19 @@
         left += col.w || 70;
       }
     });
+    function leadStyle(index, z) {
+      return (
+        ' style="position:sticky;left:' +
+        (index ? leadW[0] : 0) +
+        "px;z-index:" +
+        z +
+        ";min-width:" +
+        leadW[index] +
+        "px;width:" +
+        leadW[index] +
+        'px"'
+      );
+    }
     function headCell(col) {
       var stick = sticky[col.key];
       return (
@@ -1169,16 +1238,32 @@
       }
       return '<td class="is-' + kind + '"></td>';
     }
-    var teams = ((pack && pack.teams) || []).map(function (team) {
-      var kpis = (team.kpis || [])
-        .map(function (item) {
-          return "<span>" + escapeHtml(item.label) + "<b>" + escapeHtml(weekCellText(item.value)) + "</b></span>";
-        })
-        .join("");
+    function sideCells(kind, name, value) {
+      var cls = kind ? "is-" + kind : "is-id";
+      return (
+        '<td class="' +
+        cls +
+        '"' +
+        leadStyle(0, 1) +
+        ">" +
+        escapeHtml(name || "") +
+        '</td><td class="' +
+        cls +
+        '"' +
+        leadStyle(1, 1) +
+        ">" +
+        escapeHtml(weekCellText(value)) +
+        "</td>"
+      );
+    }
+    var teams = ((pack && pack.teams) || []).map(function (team, teamIndex) {
+      var side = weekSideKpis(team);
       var rows = (team.rows || [])
-        .map(function (row) {
+        .map(function (row, rowIndex) {
+          var kpi = side[rowIndex] || { label: "", value: "" };
           return (
             "<tr>" +
+            sideCells("", kpi.label, kpi.value) +
             columns
               .map(function (col) {
                 return bodyCell(team.key, row, col);
@@ -1192,6 +1277,7 @@
         .map(function (item) {
           return (
             '<tr class="xm-hm-week-foot">' +
+            sideCells("", "", "") +
             columns
               .map(function (col) {
                 return footCell(item.kind || "fine", col, item.label);
@@ -1201,14 +1287,39 @@
           );
         })
         .join("");
+      var banner =
+        teamIndex === 0
+          ? '<tr class="xm-hm-week-banner"><th class="is-banner" colspan="' +
+            (columns.length + 2) +
+            '">' +
+            escapeHtml((pack && pack.title) || "甄选五倍业绩统计") +
+            "</th></tr>"
+          : "";
+      var barKpis = weekBarKpis(team)
+        .map(function (item) {
+          return "<span>" + escapeHtml(item.label) + "<b>" + escapeHtml(weekCellText(item.value)) + "</b></span>";
+        })
+        .join("");
       return (
         '<section class="xm-hm-week-team"><div class="xm-hm-week-head"><span>' +
         escapeHtml(team.totalLabel || team.label) +
         '</span><div class="xm-hm-week-kpis">' +
-        kpis +
+        barKpis +
         '</div><button type="button" class="is-ghost" data-week-add="' +
         escapeHtml(team.key) +
-        '">加一行</button></div><table class="xm-hm-week-table"><thead><tr>' +
+        '">加一行</button></div><table class="xm-hm-week-table" style="min-width:' +
+        tableW +
+        'px"><thead>' +
+        banner +
+        '<tr><th class="is-id is-team"' +
+        leadStyle(0, 3) +
+        ">" +
+        escapeHtml((team.totalLabel || team.label || "") + ":") +
+        '</th><th class="is-id is-team"' +
+        leadStyle(1, 3) +
+        ">" +
+        escapeHtml(weekCellText(weekKpiOf(team, "total"))) +
+        "</th>" +
         columns.map(headCell).join("") +
         "</tr></thead><tbody>" +
         rows +
@@ -1219,7 +1330,7 @@
     return (
       '<div class="xm-hm-week-bar"><div><h2>' +
       escapeHtml((pack && pack.title) || "甄选五倍业绩统计") +
-      "</h2><p>表头按原五倍表。店铺和当天成交/花费先接韩梦凯实时付费、沈子晗付费中心；其余格子可手填，保存到服务器。点一键发送图片生成大图发钉钉。</p></div><span><input data-week-hook placeholder=\"钉钉机器人 webhook\" /><button type=\"button\" data-week-hook-save>保存机器人</button><button type=\"button\" data-week-send>" +
+      "</h2><p>表头按手填的甄选五倍业绩统计表。店铺来自组织中心；数字稍后按京麦抓取自动填。格子仍可手改，保存到服务器。点一键发送图片生成大图发钉钉。</p></div><span><input data-week-hook placeholder=\"钉钉机器人 webhook\" /><button type=\"button\" data-week-hook-save>保存机器人</button><button type=\"button\" data-week-send>" +
       (weekSending ? "发送中…" : "一键发送图片") +
       "</button></span></div>" +
       teams.join("")
@@ -1239,13 +1350,17 @@
       var headH = 52;
       var titleH = 36;
       var teamGap = 16;
-      var width = 0;
+      var lead = [
+        { key: "_kpiName", w: 118, group: "id" },
+        { key: "_kpiVal", w: 72, group: "id" }
+      ];
+      var width = lead[0].w + lead[1].w;
       columns.forEach(function (col) {
         width += col.w || 70;
       });
       var height = 8;
-      teams.forEach(function (team) {
-        height += titleH + headH + ((team.rows || []).length + (team.foot || []).length) * rowH + teamGap;
+      teams.forEach(function (team, teamIndex) {
+        height += titleH + (teamIndex === 0 ? titleH : 0) + headH + ((team.rows || []).length + (team.foot || []).length) * rowH + teamGap;
       });
       var canvas = document.createElement("canvas");
       canvas.width = Math.max(width, 800) * scale;
@@ -1288,34 +1403,54 @@
         return lines.slice(0, 3);
       }
       var y = 4;
-      teams.forEach(function (team) {
+      teams.forEach(function (team, teamIndex) {
         ctx.fillStyle = "#ffc000";
         ctx.fillRect(0, y, width, titleH);
         ctx.fillStyle = "#111";
         ctx.font = 'bold 16px "Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
         ctx.textAlign = "left";
-        ctx.fillText((team.totalLabel || team.label || "") + "  " + (pack.title || ""), 10, y + titleH / 2);
+        var barText = (team.totalLabel || team.label || "") + "  " + weekBarKpis(team).map(function (item) {
+          var num = weekCellText(item.value);
+          return item.label + (num ? " " + num : "");
+        }).join("  ");
+        ctx.fillText(barText, 10, y + titleH / 2);
         y += titleH;
+        if (teamIndex === 0) {
+          ctx.fillStyle = "#ffc000";
+          ctx.fillRect(0, y, width, titleH);
+          ctx.fillStyle = "#111";
+          ctx.font = 'bold 16px "Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
+          ctx.textAlign = "center";
+          ctx.fillText(pack.title || "甄选五倍业绩统计", width / 2, y + titleH / 2);
+          y += titleH;
+        }
+        var renderCols = lead.concat(columns);
+        var headLabels = {};
+        headLabels._kpiName = (team.totalLabel || team.label || "") + ":";
+        headLabels._kpiVal = weekCellText(weekKpiOf(team, "total"));
         var x = 0;
         ctx.font = 'bold 11px "Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
         ctx.textAlign = "center";
-        columns.forEach(function (col) {
+        renderCols.forEach(function (col) {
           var w = col.w || 70;
           ctx.fillStyle = fillHead(col.group);
           ctx.fillRect(x, y, w, headH);
           ctx.strokeStyle = "#333";
           ctx.strokeRect(x, y, w, headH);
           ctx.fillStyle = col.group === "fee" || col.group === "feeRate" ? "#fff" : "#111";
-          var lines = wrap(col.label, w - 6);
+          var label = headLabels[col.key] != null ? headLabels[col.key] : col.label;
+          var lines = wrap(label, w - 6);
           lines.forEach(function (line, i) {
             ctx.fillText(line, x + w / 2, y + headH / 2 + (i - (lines.length - 1) / 2) * 12);
           });
           x += w;
         });
         y += headH;
-        function drawWeekRow(cells, shop, kind) {
+        var side = weekSideKpis(team);
+        function drawWeekRow(cells, shop, kind, rowIndex) {
           var x0 = 0;
-          columns.forEach(function (col) {
+          var kpi = !kind && side[rowIndex] ? side[rowIndex] : { label: "", value: "" };
+          renderCols.forEach(function (col) {
             var w = col.w || 70;
             var gmv = kind ? "" : weekGmvClass({ cells: cells, shop: shop }, col, columns);
             var bg = "#fff";
@@ -1338,22 +1473,28 @@
             ctx.fillRect(x0, y, w, rowH);
             ctx.strokeStyle = "#333";
             ctx.strokeRect(x0, y, w, rowH);
-            ctx.fillStyle = bg === "#00b050" || bg === "#ff0000" || bg === "#5b9bd5" ? "#fff" : "#111";
+            ctx.fillStyle = "#000";
             ctx.font = '11px "Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
-            var text = col.key === "shop" ? shop || cells.shop || (kind ? cells.label : "") : weekCellText(cells[col.key]);
-            if (kind && col.key === "shop") {
-              text = cells.label || "";
+            var text = "";
+            if (col.key === "_kpiName") {
+              text = kpi.label || "";
+            } else if (col.key === "_kpiVal") {
+              text = weekCellText(kpi.value);
+            } else if (col.key === "shop") {
+              text = kind ? cells.label || "" : shop || cells.shop || "";
+            } else {
+              text = weekCellText(cells[col.key]);
             }
             ctx.fillText(String(text || ""), x0 + w / 2, y + rowH / 2);
             x0 += w;
           });
           y += rowH;
         }
-        (team.rows || []).forEach(function (row) {
-          drawWeekRow(row.cells || {}, row.shop, "");
+        (team.rows || []).forEach(function (row, rowIndex) {
+          drawWeekRow(row.cells || {}, row.shop, "", rowIndex);
         });
         (team.foot || []).forEach(function (item) {
-          drawWeekRow({ label: item.label }, "", item.kind);
+          drawWeekRow({ label: item.label }, "", item.kind, -1);
         });
         y += teamGap;
       });
@@ -2793,12 +2934,17 @@
       ".xm-hm-week-bar button.is-ghost{background:transparent;color:var(--xm-primary)}" +
       ".xm-hm-week-bar button:disabled{opacity:.55;cursor:wait}" +
       ".xm-hm-week-team{border:1px solid #e4e7ed;border-radius:10px;overflow:auto;background:#fff}" +
+      ".xm-hm-week-tools{display:flex;justify-content:flex-end;padding:4px 8px;background:#fff}" +
+      ".xm-hm-week-tools button{border:0;background:transparent;color:var(--xm-primary);height:28px;padding:0 8px;cursor:pointer;font-size:12px}" +
       ".xm-hm-week-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:8px 10px;background:#ffc000;font-weight:700}" +
+      ".xm-hm-week-head button{margin-left:auto;border:1px solid #c48a00;background:#fff8e1;color:#333;border-radius:6px;height:28px;padding:0 12px;cursor:pointer;font-size:13px;font-weight:600}" +
       ".xm-hm-week-kpis{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;font-weight:600}" +
       ".xm-hm-week-kpis b{font-size:16px;margin-left:4px}" +
       ".xm-hm-week-table{border-collapse:separate;border-spacing:0;font-size:11px;table-layout:fixed}" +
       ".xm-hm-week-table th,.xm-hm-week-table td{border:1px solid #333;padding:3px 4px;text-align:center;vertical-align:middle;word-break:break-all;background:#fff}" +
-      ".xm-hm-week-table th{font-weight:700;line-height:1.25}" +
+      ".xm-hm-week-table th{font-weight:700;line-height:1.25;height:52px}" +
+      ".xm-hm-week-table th.is-banner{background:#ffc000;font-size:16px;height:36px;letter-spacing:2px}" +
+      ".xm-hm-week-table th.is-team{height:52px;word-break:normal}" +
       ".xm-hm-week-table th.is-id,.xm-hm-week-table td.is-id{background:#ffff00}" +
       ".xm-hm-week-table th.is-cat,.xm-hm-week-table td.is-cat{background:#f8cbad}" +
       ".xm-hm-week-table th.is-gmv{background:#ffff00}" +
@@ -2806,11 +2952,11 @@
       ".xm-hm-week-table th.is-profit,.xm-hm-week-table th.is-margin{background:#bdd7ee}" +
       ".xm-hm-week-table th.is-mtd{background:#f8cbad}" +
       ".xm-hm-week-table th.is-ops{background:#ffff00}" +
-      ".xm-hm-week-table td.is-up{background:#00b050;color:#fff}" +
-      ".xm-hm-week-table td.is-down{background:#ff0000;color:#fff}" +
+      ".xm-hm-week-table td.is-up{background:#00b050;color:#000}" +
+      ".xm-hm-week-table td.is-down{background:#ff0000;color:#000}" +
       ".xm-hm-week-table td.is-fine{background:#ffff00}" +
-      ".xm-hm-week-table td.is-noclean{background:#5b9bd5;color:#fff}" +
-      ".xm-hm-week-table td.is-clean{background:#00b050;color:#fff}" +
+      ".xm-hm-week-table td.is-noclean{background:#5b9bd5;color:#000}" +
+      ".xm-hm-week-table td.is-clean{background:#00b050;color:#000}" +
       ".xm-hm-week-table input{width:100%;border:0;background:transparent;text-align:center;font:inherit;color:inherit;padding:0}" +
       ".xm-hm-week-table .is-shop{text-align:left;font-weight:600}" +
       ".xm-hm-week-foot td{font-weight:700}" +
@@ -3702,7 +3848,7 @@
         : state.view === "live2"
           ? state.live2Hint || "实时（新版）用组织中心账号在服务器登录。实时成交金额取京麦经营数据的成交金额；实时付费金额、实时付费ROI、实时付费成交额取京准通当天的花费、投产比、总订单金额。实时费比 =（实时付费金额 / 实时成交金额）× 100%。还没有读到的格子显示—或待接入。"
         : state.view === "week"
-          ? "近七天业绩汇总：爬虫填店铺和当天数字，其余可手填；一键发送图片发到钉钉。"
+          ? "近七天业绩汇总：表头按甄选五倍业绩统计原表。店铺来自组织中心，数字稍后接京麦抓取；格子可手改，一键发送图片发到钉钉。"
           : "数字来自星脉 ERP。";
     root.querySelector("#xm-hm-pop h3").textContent =
       "卡片设置 · " + (viewKey === "team" ? "经理团队" : viewKey === "chief" ? "主管/储备" : "数据总揽");

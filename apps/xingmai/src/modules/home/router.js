@@ -6,6 +6,7 @@ import { getHomeErpKpis } from "./erp-kpis.js";
 import { getHomeErpPaid } from "./erp-paid.js";
 import { HOME_JS_STAMP } from "./asset-ver.js";
 import { patchConnectPicker } from "./connect-patch.js";
+import { paintWeekInk } from "./week-ink-patch.js";
 import {
   getHomeLocalPaid,
   postHomeLocalPaid,
@@ -25,6 +26,7 @@ import { getLive2Board, noteLive2Cookie, startLive2Collector, startLive2Round } 
 import { readFeeGoals, saveFeeGoal } from "./fee-goals.js";
 import {
   buildWeekPack,
+  loadWeekOrgShops,
   saveWeekCells,
   dingWebhook,
   saveWeekShot,
@@ -32,6 +34,7 @@ import {
   postDingTalk,
   readWeekStore
 } from "./week-report.js";
+import { attachWeekTotals } from "./week-totals.js";
 
 const homeJsPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -272,7 +275,7 @@ export function patchHomeClientSource(text) {
     .replaceAll("0.1.1039-loginpop", "0.1.1090-paidon")
     .replaceAll("0.1.1043-deskkeep", "0.1.1090-paidon")
     .replaceAll("0.1.1070-liveon", "0.1.1090-paidon");
-  return patchExpiredShopLogin(patchConnectPicker(patched));
+  return paintWeekInk(patchExpiredShopLogin(patchConnectPicker(patched)));
 }
 
 const EXPIRED_STALE_OLD =
@@ -513,10 +516,20 @@ export function homeRouter() {
   router.get("/week-report", async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     try {
-      const live = await getHomeLocalPaid(req);
-      return res.json(buildWeekPack((live && live.records) || []));
-    } catch {
-      return res.json(buildWeekPack([]));
+      const host = String(req.get("x-forwarded-host") || req.get("host") || "")
+        .split(",")[0]
+        .trim();
+      const proto = String(req.headers["x-forwarded-proto"] || req.protocol || "http")
+        .split(",")[0]
+        .trim();
+      const origin = host ? `${proto}://${host}` : "";
+      const shops = await loadWeekOrgShops(req.headers.cookie || "", fetch, origin);
+      return res.json(attachWeekTotals(buildWeekPack(shops)));
+    } catch (err) {
+      if (Number(err && err.statusCode) === 401) {
+        return res.status(401).json({ ok: false, error: err.message || "请先登录" });
+      }
+      return res.json(attachWeekTotals(buildWeekPack([])));
     }
   });
 
