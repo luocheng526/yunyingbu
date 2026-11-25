@@ -23,3 +23,8 @@ html[data-theme=dark] .wc .wc-people-picker>summary,html[data-theme=dark] .wc-pe
 .wc-task-files{margin:10px 0}
 .wc-task-links{margin:10px 0;padding-inline-start:22px;overflow-wrap:anywhere}
 .wc-task-links a{color:var(--wc-blue)}
+.wc-organization>summary{cursor:pointer;font-weight:700}
+.wc-organization>p{margin:12px 0}
+.wc-report-roles{border:0;padding:0;margin:0;min-inline-size:0}
+.wc-report-roles>legend{padding:0;margin-bottom:6px}
+.wc-report-roles:disabled{opacity:.65}

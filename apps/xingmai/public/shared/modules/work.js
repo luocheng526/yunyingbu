@@ -1322,20 +1322,16 @@
   return (
    '<div class="work-stack">' +
    uiCard("必须提交店铺日报的岗位", '<div class="work-checks">' + positions + "</div>" + uiButton("保存岗位设置", "data-save-positions"), "勾选岗位，并且已排进运营部、人事部或技术部、名下有店的人，当天要交店铺日报。登记休息后免报。") +
-   uiCard("考勤与提醒", '<p class="work-lead">' +
+   uiCard("钉钉考勤与人员绑定", '<p class="work-lead">' +
    dingLead +
    (link.app && !link.agent ? " 待配置工作通知 AgentId。" : "") +
    '</p><div class="work-checks"><label><input type="checkbox" data-delivery="useSchedule"' +
    (delivery.useSchedule ? " checked" : "") +
    '> 按钉钉排班识别休息日</label><label><input type="checkbox" data-delivery="useLeave"' +
    (delivery.useLeave ? " checked" : "") +
-   '> 按钉钉请假记录识别已批休假</label><label><input type="checkbox" data-delivery="remind"' +
-   (delivery.remind ? " checked" : "") +
-   '> 提醒未交日报</label></div><label class="work-field">每日提醒时间（北京时间）<input data-remind-at type="time" value="' +
-   esc(delivery.remindAt || "18:00") +
-   '"></label><label class="work-field">排班查询人<select data-ding-operator><option value="">请选择</option>' +
+   '> 按钉钉请假记录识别已批休假</label></div><label class="work-field">排班查询人<select data-ding-operator><option value="">请选择</option>' +
    operatorOptions +
-   '</select></label>' + uiButton("保存考勤与提醒", "data-save-delivery") +
+   '</select></label>' + uiButton("保存考勤设置", "data-save-delivery") +
    (link.app
     ? '<div class="xm-ui-table-wrap"><table class="xm-ui-table"><thead><tr><th>姓名</th><th>工号</th><th>钉钉 userId</th><th>核对</th></tr></thead><tbody>' +
      (bindRows || '<tr><td colspan="4">没有在职人员</td></tr>') +
@@ -2098,11 +2094,10 @@
    }
    var saveDelivery = event.target.closest("[data-save-delivery]");
    if (saveDelivery) {
-    var delivery = {};
+    var delivery = Object.assign({}, state.diarySettings.policy.delivery);
     [].slice.call(root.querySelectorAll("[data-delivery]")).forEach(function (box) {
      delivery[box.getAttribute("data-delivery")] = box.checked;
     });
-    delivery.remindAt = (root.querySelector("[data-remind-at]") || {}).value || "18:00";
     delivery.operatorPersonId = Number((root.querySelector("[data-ding-operator]") || {}).value) || 0;
     api("/api/work/diary/settings", {
      method: "PUT",
@@ -2111,7 +2106,7 @@
      .then(function (data) {
       state.diarySettings = data;
       var ready = data.policy && data.policy.integration && data.policy.integration.app;
-      setMsg(ready ? "考勤与提醒已保存" : "已保存。企业应用未配置，暂不查询钉钉。");
+      setMsg(ready ? "考勤设置已保存" : "已保存。企业应用未配置，暂不查询钉钉。");
       paint(root);
      })
      .catch(oops(root));
@@ -2521,7 +2516,7 @@
   mount: function(root) {
     var stopped=false, cleanup=null;
     if (!document.getElementById('work-center-css')) {
-      var css=document.createElement('link'); css.id='work-center-css';css.rel='stylesheet';css.href='/shared/modules/work-center.css?v=20261125-task-detail';document.head.appendChild(css);
+      var css=document.createElement('link'); css.id='work-center-css';css.rel='stylesheet';css.href='/shared/modules/work-center.css?v=20261125-work-settings';document.head.appendChild(css);
     }
     function run(){
       function mount(){if(!stopped){window.XmWorkRich.style();cleanup=window.XmWorkCenter.mount(root);}}
@@ -2532,7 +2527,7 @@
     if(window.XmWorkCenter?.permissionVersion==='catalog-2')run();
     else {
       root.innerHTML='<div style="padding:32px">正在打开工作中心…</div>';
-      var script=document.createElement('script');script.src='/shared/modules/work-center.js';script.onload=run;
+      var script=document.createElement('script');script.src='/shared/modules/work-center.js?v=20261125-work-settings';script.onload=run;
       script.onerror=function(){if(!stopped)root.innerHTML='<div style="padding:32px">工作中心加载失败，请刷新页面重试。</div>';};
       document.head.appendChild(script);
     }
