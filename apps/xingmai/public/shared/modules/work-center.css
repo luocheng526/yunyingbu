@@ -10,3 +10,5 @@ html[data-theme=dark] .wc .wc-people-picker>summary,html[data-theme=dark] .wc-pe
 @media(max-width:650px){.wc{padding:14px}.wc-head{flex-direction:column;gap:14px}.wc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.wc-form,.wc-detail-grid{grid-template-columns:1fr}.wc-toolbar input,.wc-toolbar select{max-width:145px}.wc-card{padding:14px}.wc-kpi .value{font-size:24px}.wc-nav button{padding:9px 12px}.wc-dialog-body{padding:15px}}
 
 .wc-compose-saved{display:inline-flex;width:140px;height:110px;margin:6px 10px 10px 0;padding:6px;border:1px solid var(--wc-line);border-radius:8px;background:var(--wc-bg);vertical-align:top;cursor:zoom-in}.wc-compose-saved img{max-width:100%;max-height:100%;object-fit:contain;margin:auto}.wc input[type=text],.wc input[type=search],.wc textarea{user-select:text;-webkit-user-select:text}
+
+.wc-nav-count:not([hidden]){display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;min-width:18px;height:18px;padding:0 5px;margin-inline-start:6px;border-radius:999px;background:#c6283a;color:#fff;font-size:11px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}

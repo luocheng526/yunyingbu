@@ -51,6 +51,9 @@ test('工作设置显示组织中心直属上级和工作中心所属团队', as
     FormData,
     URLSearchParams,
     location: { search: '' },
+    document: { addEventListener() {} },
+    setInterval: () => 1,
+    clearInterval() {},
     fetch: async () => ({ ok: true, json: async () => data })
   });
 

@@ -1,10 +1,10 @@
 import { obligationBundle, diaryObligation } from './diary.js';
 
-export async function eligibility(ctx,date) {
+export async function eligibility(ctx,date,people=ctx.active) {
   const bundle=await obligationBundle(date);
   const weekday=new Date(date+'T12:00:00+08:00').getUTCDay();
   const eligible=new Map();
-  for(const p of ctx.active) {
+  for(const p of people) {
     const config=ctx.config;
     const included=config.reportMembers.length?config.reportMembers.map(String).includes(p.id):config.reportRoles.includes(p.role);
     const onDay=config.weekdays.includes(weekday)&&!config.restDays.includes(date);

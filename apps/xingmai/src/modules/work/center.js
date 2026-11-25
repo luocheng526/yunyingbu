@@ -23,6 +23,17 @@ function range(query={}) {
   if(!validDay(from)||!validDay(to)||from>to||(Date.parse(to)-Date.parse(from))/86400000>MAX_RANGE) fault('日期范围应有效且不超过一年');
   return {from,to};
 }
+async function navigationBadges(ctx,rows,today,report,absence) {
+  const tasks=ctx.permissions.can('tasks')?rows.filter(t=>t.assignee===ctx.me.id&&t.status==='待执行').length:0;
+  if(!ctx.permissions.can('reports')||report?.submittedAt)return {tasks,reports:0};
+  const obligations=absence??await eligibility(ctx,today,[ctx.me]);
+  return {tasks,reports:obligations.get(ctx.me.id)?.required?1:0};
+}
+export async function centerBadges(user) {
+  const today=day(),{ctx,rows}=await visibleTasks(user);
+  const report=ctx.permissions.can('reports')?await record('daily:'+ctx.me.id+':'+today):null;
+  return {ok:true,today,badges:await navigationBadges(ctx,rows,today,report)};
+}
 function visibleRecord(ctx,r) {
   return recordVisible(ctx,r);
 }
@@ -77,7 +88,7 @@ async function dailyDraft(ctx,allTasks,date,workRows,dailyRows=[],issueRows=[]) 
 }
 export async function centerData(user,query={}) {
   const policy=permissionsFor(user,'work');if(!policy.any())fault('组织中心未授予工作中心功能权限',403);
-  const {ctx,rows}=await visibleTasks(user); const {from,to}=range(query);
+  const {ctx,rows}=await visibleTasks(user); const {from,to}=range(query),today=day();
   const [daily,works,issues,notices,absence]=await Promise.all([records('daily'),records('work'),records('issue'),records('notice'),eligibility(ctx,to)]);
   let tasks=rows.map(t=>decorate(ctx,t)).filter(t=>localDay(t.created_at||t.events?.[0]?.at)<=to && (within(t.due_at,from,to)||within(t.created_at||t.events?.[0]?.at,from,to)||within(t.completed_at,from,to)||(!terminal(t)&&localDay(t.start_at)<=to)));
   const relevant=(t,includePerson=true)=>(!query.team||t.team_id===query.team)&&(!includePerson||!query.person||t.assignee===query.person)&&(!query.shop||t.shop_id===query.shop)&&(!query.role||ctx.byId.get(t.assignee)?.role===query.role)&&(!query.department||(t.department||ctx.byId.get(t.assignee)?.department)===query.department)&&(!query.board||(t.board||ctx.byId.get(t.assignee)?.board)===query.board);
@@ -120,6 +131,8 @@ export async function centerData(user,query={}) {
     ...people.filter(p=>p.required&&p.reportStatus==='未提交'&&Date.now()>time(to+'T'+ctx.config.deadline)).map(p=>({id:p.id,type:'person',title:p.name+' 尚未提交日报',person:p.name,reason:'截止 '+ctx.config.deadline})),
     ...visibleIssues.filter(i=>i.status!=='已解决'&&i.escalated).map(i=>({id:i.id,type:'issue',title:i.title,person:i.personName,reason:'需要上级协调'}))];
   const currentDaily=daily.find(r=>r.personId===ctx.me.id&&r.date===to)||null;
+  const todayDaily=to===today?currentDaily:daily.find(r=>r.personId===ctx.me.id&&r.date===today);
+  const badges=await navigationBadges(ctx,rows,today,todayDaily,to===today?absence:undefined);
   const draft=await dailyDraft(ctx,rows,to,works,daily,issues);
   const timeline=[...rows.filter(t=>relevant(t,false)).flatMap(t=>(t.events||[]).filter(e=>within(e.at,from,to)&&(!query.person||[t.assignee,t.publisher,t.reviewer,e.actor].includes(query.person))).map(e=>({at:e.at,action:e.action,title:t.title,actor:ctx.byId.get(e.actor)?.name||e.actor_name||'历史员工',taskId:t.id,note:e.note}))),
     ...visibleWork.filter(w=>!query.person||w.personId===query.person).map(w=>({at:w.createdAt,action:'登记自主工作',title:w.title,actor:w.personName,note:w.result})),
@@ -131,7 +144,7 @@ export async function centerData(user,query={}) {
     people:ctx.visiblePeople.map(p=>({id:p.id,name:p.name,role:p.role,orgRole:p.orgRole,teamId:p.teamId,teamName:p.teamName,parentId:p.parentId,board:p.board,department:p.department})),
     assignees:ctx.active.filter(p=>canAssign(ctx,p)).map(p=>({id:p.id,name:p.name,role:p.role,teamId:p.teamId,teamName:p.teamName,supervisorId:p.supervisorId,shops:p.visibleShops,reviewerIds:allowedReviewers(ctx,p).map(r=>r.id)})),
     reviewers:reviewerOptions(ctx).map(p=>({id:p.id,name:p.name})),shops:ctx.bundle.shops.filter(s=>s.kind!=='店群'&&(ctx.director||ctx.visiblePeople.some(p=>p.visibleShops.includes(s.name)))).map(s=>({id:String(s.id),name:s.name}))};
-  const result={ok:true,from,to,today:day(),me:{id:ctx.me.id,name:ctx.me.name,role:ctx.me.role,teamId:ctx.me.teamId},counts,teams,departments,managers,people,tasks,publishedTasks,timeline,trend,alerts,works:visibleWork,issues:visibleIssues,dailies:visibleDaily,draft,currentDaily,notices:notices.filter(n=>n.personId===ctx.me.id),options,
+  const result={ok:true,from,to,today,me:{id:ctx.me.id,name:ctx.me.name,role:ctx.me.role,teamId:ctx.me.teamId},counts,badges,teams,departments,managers,people,tasks,publishedTasks,timeline,trend,alerts,works:visibleWork,issues:visibleIssues,dailies:visibleDaily,draft,currentDaily,notices:notices.filter(n=>n.personId===ctx.me.id),options,
     permissions:Object.fromEntries(WORK_FEATURES.map(f=>[f.id,Object.fromEntries(["see","enter","edit"].map(right=>[right,ctx.permissions.can(f.id.slice(5),right)]))])),tabs:WORK_FEATURES.filter(f=>f.tab).map(({id,name,tab})=>({id,name,tab})),
     settings:ctx.director&&ctx.permissions.can("settings")?ctx.config:{categories:ctx.config.categories,taskTemplates:ctx.config.taskTemplates,reportFields:ctx.config.reportFields,deadline:ctx.config.deadline,reviewHours:ctx.config.reviewHours},canManage:ctx.director&&ctx.permissions.can("settings"),canViewManagement:ctx.management&&ctx.permissions.can("management"),canPublish:options.assignees.length>0&&ctx.permissions.can("publish","edit")};
   const summary=['overview','people','management','statistics','export'].some(f=>policy.can(f));
@@ -228,6 +241,10 @@ export const centerRouter=Router();
 const wrap=fn=>async(req,res)=>{try {const result=await fn(req,res);if(!res.headersSent)res.json(result);}catch(error){res.status(error.statusCode||500).json({ok:false,error:error.message});}};
 centerRouter.get('/image/:id',wrap(async(req,res)=>{const image=await readComposerImage(req.user,req.params.id,req.query.record,req.query.task);res.set('Cache-Control','private, no-store');res.set('X-Content-Type-Options','nosniff');res.type(image.mime).send(Buffer.from(image.data,'base64'));}));
 centerRouter.get('/',wrap(req=>centerData(req.user,req.query)));
+centerRouter.get('/badges',wrap((req,res)=>{
+  res.set('Cache-Control','private, no-store');
+  return centerBadges(req.user);
+}));
 centerRouter.get('/reminders',wrap(async req=>{const ctx=await access(req.user);if(!ctx.director)fault('只有总监可以查看提醒状态',403);return reminderStatus(ctx);}));
 centerRouter.get('/tasks/:id',wrap(async req=>{
   if(!['tasks','acceptance','overview','people','management','reports','statistics'].some(f=>permissionsFor(req.user,'work').can(f)))fault('组织中心未授予查看任务权限',403);
