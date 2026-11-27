@@ -134,6 +134,7 @@ export const HR_SCHEMA = [
     emergency_phone VARCHAR(32) NOT NULL DEFAULT '',
     note_text VARCHAR(500) NOT NULL DEFAULT '',
     dingtalk_userid VARCHAR(64) NOT NULL DEFAULT '',
+    roster_fields JSON NULL,
     created_by VARCHAR(64) NOT NULL DEFAULT '',
     created_at VARCHAR(40) NOT NULL,
     updated_at VARCHAR(40) NOT NULL
@@ -407,6 +408,9 @@ async function migrateStaffTable() {
   }
   if (!names.has("contract_ends_on")) {
     await query("ALTER TABLE hr_staff ADD COLUMN contract_ends_on VARCHAR(10) NOT NULL DEFAULT ''");
+  }
+  if (!names.has("roster_fields")) {
+    await query("ALTER TABLE hr_staff ADD COLUMN roster_fields JSON NULL");
   }
 }
 
@@ -1388,8 +1392,18 @@ export async function deleteOnboard(id) {
   });
 }
 
+const rosterTextFields = {
+  rosterNumber: 32, contractSigned: 16, laborContractSigned: 16, socialInsurancePaid: 32,
+  idNumber: 32, bankName: 120, salary: 120, maritalStatus: 32, ethnicity: 32,
+  politicalStatus: 32, school: 120, major: 120, emergencyRelation: 32,
+  householdType: 32, householdAddress: 255, residentialAddress: 255, tianjinSocialInsurance: 64
+};
+const rosterFields = [...Object.keys(rosterTextFields), "regularizedOn", "graduatedOn", "age", "employmentStage"];
+
 function mapStaff(row) {
+  const stored = typeof row.roster_fields === "string" ? JSON.parse(row.roster_fields) : row.roster_fields;
   return {
+    ...Object.fromEntries(rosterFields.map((key) => [key, stored?.[key] ?? null])),
     id: Number(row.id),
     name: row.person_name,
     gender: row.gender || "",
@@ -1418,8 +1432,34 @@ function filled(input, key) {
   return input && input[key] != null && String(input[key]).trim() !== "";
 }
 
-function staffDetailsPatch(input) {
+function staffStatus(value, leftOn) {
+  const status = clip(value, 16);
+  if (!status) return { status: leftOn ? "离职" : "在职" };
+  const stage = status === "试用" ? "试用期" : status;
+  if (["试用期", "待转正", "转正"].includes(stage)) return { status: "在职", employmentStage: stage };
+  return { status: mustChoice(status, STAFF_STATUSES, "状态"), employmentStage: null };
+}
+
+function rosterPatch(input) {
   const patch = {};
+  for (const [key, max] of Object.entries(rosterTextFields)) {
+    if (filled(input, key)) patch[key] = clip(input[key], max);
+  }
+  if (filled(input, "regularizedOn")) patch.regularizedOn = optionalDate(input.regularizedOn, "实际转正日期");
+  if (filled(input, "graduatedOn")) {
+    const date = String(input.graduatedOn).trim();
+    patch.graduatedOn = /^\d{4}(?:-(?:0[1-9]|1[0-2]))?$/.test(date) ? date : optionalDate(date, "毕业时间");
+  }
+  if (filled(input, "age")) {
+    const age = String(input.age).trim();
+    if (!/^\d+$/.test(age) || Number(age) > 150) throw bad("年龄请填写 0–150 的整数");
+    patch.age = Number(age);
+  }
+  return patch;
+}
+
+function staffDetailsPatch(input) {
+  const patch = rosterPatch(input);
   if (filled(input, "jobLevel")) patch.jobLevel = clip(input.jobLevel, 64);
   if (filled(input, "tenureMonths")) {
     const months = String(input.tenureMonths).trim();
@@ -1438,10 +1478,7 @@ function staffDetailsPatch(input) {
 }
 
 function staffFrom(input, { requireName = true } = {}) {
-  const statusText = clip(input.status, 16);
-  let status = statusText ? mustChoice(statusText, STAFF_STATUSES, "状态") : "";
   const leftOn = optionalDate(input.leftOn, "离职日期");
-  if (!status) status = leftOn ? "离职" : "在职";
   return {
     name: requireName ? mustName(input.name, "姓名") : clip(input.name, 64),
     gender: optionalGender(input.gender),
@@ -1452,7 +1489,7 @@ function staffFrom(input, { requireName = true } = {}) {
     joinedOn: optionalDate(input.joinedOn, "入职日期"),
     birthday: optionalDate(input.birthday, "生日"),
     leftOn,
-    status,
+    ...staffStatus(input.status, leftOn),
     hometown: clip(input.hometown, 64),
     education: clip(input.education, 32),
     emergencyName: clip(input.emergencyName, 64),
@@ -1473,8 +1510,8 @@ function staffPatch(input) {
   if (filled(input, "joinedOn")) patch.joinedOn = optionalDate(input.joinedOn, "入职日期");
   if (filled(input, "birthday")) patch.birthday = optionalDate(input.birthday, "生日");
   if (filled(input, "leftOn")) patch.leftOn = optionalDate(input.leftOn, "离职日期");
-  if (filled(input, "status")) patch.status = mustChoice(input.status, STAFF_STATUSES, "状态");
-  else if (patch.leftOn) patch.status = "离职";
+  if (filled(input, "status")) Object.assign(patch, staffStatus(input.status));
+  else if (patch.leftOn) Object.assign(patch, staffStatus("离职"));
   if (filled(input, "hometown")) patch.hometown = clip(input.hometown, 64);
   if (filled(input, "education")) patch.education = clip(input.education, 32);
   if (filled(input, "emergencyName")) patch.emergencyName = clip(input.emergencyName, 64);
@@ -1510,9 +1547,9 @@ async function writeStaff(row) {
   if (dbMode() === "mysql") {
     const [result] = await query(
       `INSERT INTO hr_staff
-        (person_name, gender, job_number, department_name, position_name, phone, joined_on, birthday, left_on, status_name, hometown, education, emergency_name, emergency_phone, note_text, dingtalk_userid, created_by, created_at, updated_at, job_level, tenure_months, contract_ends_on)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.birthday || "", row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.createdBy, row.createdAt, row.updatedAt, row.jobLevel, row.tenureMonths, row.contractEndsOn]
+        (person_name, gender, job_number, department_name, position_name, phone, joined_on, birthday, left_on, status_name, hometown, education, emergency_name, emergency_phone, note_text, dingtalk_userid, created_by, created_at, updated_at, job_level, tenure_months, contract_ends_on, roster_fields)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.birthday || "", row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.createdBy, row.createdAt, row.updatedAt, row.jobLevel, row.tenureMonths, row.contractEndsOn, JSON.stringify(staffRosterFields(row))]
     );
     row.id = Number(result.insertId);
     return row;
@@ -1522,28 +1559,46 @@ async function writeStaff(row) {
   return { ...row };
 }
 
-async function saveStaffRow(row) {
-  row.updatedAt = new Date().toISOString();
+const staffColumns = {
+  name: "person_name", gender: "gender", jobNumber: "job_number", department: "department_name",
+  position: "position_name", phone: "phone", joinedOn: "joined_on", birthday: "birthday",
+  leftOn: "left_on", status: "status_name", hometown: "hometown", education: "education",
+  emergencyName: "emergency_name", emergencyPhone: "emergency_phone", note: "note_text",
+  dingtalkUserId: "dingtalk_userid", jobLevel: "job_level", tenureMonths: "tenure_months",
+  contractEndsOn: "contract_ends_on", updatedAt: "updated_at"
+};
+
+function staffRosterFields(row) {
+  return Object.fromEntries(rosterFields.filter((key) => Object.hasOwn(row, key)).map((key) => [key, row[key]]));
+}
+
+async function saveStaffRow(id, patch) {
+  patch.updatedAt = new Date().toISOString();
   if (dbMode() === "mysql") {
+    const entries = Object.entries(staffColumns).filter(([key]) => Object.hasOwn(patch, key));
+    const assignments = entries.map(([, column]) => column + " = ?");
+    const values = entries.map(([key]) => patch[key]);
+    const fields = staffRosterFields(patch);
+    if (Object.keys(fields).length) {
+      assignments.push("roster_fields = JSON_MERGE_PATCH(COALESCE(roster_fields, JSON_OBJECT()), ?)");
+      values.push(JSON.stringify(fields));
+    }
     const [result] = await query(
-      `UPDATE hr_staff SET
-        person_name = ?, gender = ?, job_number = ?, department_name = ?, position_name = ?, phone = ?,
-        joined_on = ?, birthday = ?, left_on = ?, status_name = ?, hometown = ?, education = ?, emergency_name = ?,
-        emergency_phone = ?, note_text = ?, dingtalk_userid = ?, updated_at = ?,
-        job_level = ?, tenure_months = ?, contract_ends_on = ?
-       WHERE id = ?`,
-      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.birthday || "", row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.updatedAt, row.jobLevel, row.tenureMonths, row.contractEndsOn, row.id]
+      "UPDATE hr_staff SET " + assignments.join(", ") + " WHERE id = ?", [...values, id]
     );
     if (!result.affectedRows) throw bad("记录不存在", 404);
-    return row;
+    const [saved] = await rowsOf("SELECT * FROM hr_staff WHERE id = ?", [id]);
+    if (!saved) throw bad("记录不存在", 404);
+    return mapStaff(saved);
   }
-  const index = memory.staff.findIndex((item) => item.id === row.id);
-  if (index < 0) throw bad("记录不存在", 404);
-  memory.staff[index] = row;
+  const row = memory.staff.find((item) => item.id === id);
+  if (!row) throw bad("记录不存在", 404);
+  Object.assign(row, patch);
   return { ...row };
 }
 
 export async function createStaff(input = {}, actor = "") {
+  await ensureHrSchema();
   const row = {
     jobLevel: "", tenureMonths: null, contractEndsOn: "", ...staffDetailsPatch(input),
     ...staffFrom(input), ...stamp(actor), updatedAt: new Date().toISOString()
@@ -1553,21 +1608,18 @@ export async function createStaff(input = {}, actor = "") {
 
 export async function updateStaff(id, input = {}, _actor = "", { replace = false } = {}) {
   const key = Number(id);
-  const rows = await readStaffRows();
-  const current = rows.find((row) => row.id === key);
-  if (!current) throw bad("记录不存在", 404);
-  const next = replace ? { ...current, ...staffFrom(input), id: current.id, createdBy: current.createdBy, createdAt: current.createdAt } : { ...current, ...staffPatch(input) };
-  Object.assign(next, staffDetailsPatch(input));
+  await ensureHrSchema();
+  const patch = { ...(replace ? staffFrom(input) : staffPatch(input)), ...staffDetailsPatch(input) };
   // Explicit clearing is separate from import's merge-only blank values.
   if (!replace && Array.isArray(input.clearFields)) {
-    const clearable = ["jobNumber", "department", "position", "joinedOn", "leftOn", "jobLevel", "contractEndsOn"];
+    const clearable = ["gender", "jobNumber", "department", "position", "phone", "joinedOn", "birthday", "leftOn",
+      "jobLevel", "contractEndsOn", "hometown", "education", "emergencyName", "emergencyPhone", "note"];
     for (const field of input.clearFields) {
-      if (clearable.includes(field)) next[field] = "";
-      if (field === "tenureMonths") next.tenureMonths = null;
+      if (clearable.includes(field)) patch[field] = "";
+      if (field === "tenureMonths" || (field !== "employmentStage" && rosterFields.includes(field))) patch[field] = null;
     }
   }
-  if (next.status === "在职" && replace && !clip(input.leftOn, 10)) next.leftOn = "";
-  return saveStaffRow(next);
+  return saveStaffRow(key, patch);
 }
 
 function matchStaff(rows, input) {
@@ -1589,14 +1641,23 @@ function matchStaff(rows, input) {
   return null;
 }
 
-export async function importStaff(rows = [], actor = "") {
+export async function importStaff(rows = [], actor = "", { departures = false } = {}) {
   if (!Array.isArray(rows) || !rows.length) throw bad("没有可导入的行");
   if (rows.length > 400) throw bad("一次最多导入 400 人");
+  const validRows = rows.filter((input) => clip(input?.name, 64))
+    .map((input) => departures ? { ...input, status: "离职" } : input);
+  for (const input of validRows) {
+    try {
+      staffFrom(input);
+      staffDetailsPatch(input);
+    } catch (error) {
+      throw bad((clip(input.sourceRow, 96) || "导入行") + "：" + error.message);
+    }
+  }
   const existing = await readStaffRows();
   let added = 0;
   let updated = 0;
-  for (const input of rows) {
-    if (!clip(input && input.name, 64)) continue;
+  for (const input of validRows) {
     const hit = matchStaff(existing, input);
     if (hit) {
       const saved = await updateStaff(hit.id, input, actor, { replace: false });

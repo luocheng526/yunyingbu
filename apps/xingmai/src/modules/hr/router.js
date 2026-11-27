@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { rosterTemplates } from "./roster-template.js";
 import { createDingClient, dingCallsEnabled, readDingEnv } from "./dingtalk.js";
 import { startDingStream } from "./stream.js";
 import {
@@ -322,6 +323,12 @@ hrRouter.delete("/onboards/:id", async (req, res) => {
   }
 });
 
+hrRouter.get("/staff/template", (req, res) => {
+  const template = req.query.kind === "leave" ? rosterTemplates.leave : rosterTemplates.active;
+  res.set("Cache-Control", "private, no-store");
+  res.attachment(template.filename).send(template.data);
+});
+
 hrRouter.get("/staff", async (req, res) => {
   try {
     res.json({ ok: true, staff: await listStaff({ status: req.query.status }) });
@@ -332,7 +339,8 @@ hrRouter.get("/staff", async (req, res) => {
 
 hrRouter.post("/staff/import", async (req, res) => {
   try {
-    res.json({ ok: true, ...(await importStaff((req.body || {}).rows, actorName(req))) });
+    const { rows, departures } = req.body || {};
+    res.json({ ok: true, ...(await importStaff(rows, actorName(req), { departures: departures === true })) });
   } catch (err) {
     sendErr(res, err);
   }
