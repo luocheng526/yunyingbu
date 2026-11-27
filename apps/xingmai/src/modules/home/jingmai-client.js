@@ -1216,7 +1216,7 @@ export async function recoverBrowserSession(cookies, signal, expected = {}, deps
   const relogin = deps.relogin || reloginHomeSession;
   let jar = (cookies || []).map(cookie => ({ ...cookie }));
   // Credentials are only supplied to the normal browser login, never to metrics.
-  const { credentials, takeReloginSlot, ...hint } = expected;
+  const { credentials, takeReloginSlot, beforeRelogin, onLoginVerified, ...hint } = expected;
   let deal;
   try {
     deal = await readDeal(jar, signal, { ...hint, requireIdentity: true });
@@ -1225,11 +1225,18 @@ export async function recoverBrowserSession(cookies, signal, expected = {}, deps
     if (takeReloginSlot && !takeReloginSlot()) {
       throw Object.assign(new Error("登录失效，等待下一轮分批恢复"), { code: "login", recoveryDeferred: true });
     }
+    // Reserve/persist the attempt before submitting, so a timeout or restart
+    // cannot turn a failed login into another immediate password request.
+    if (beforeRelogin) await beforeRelogin();
     try {
       jar = await relogin(signal, hint, credentials);
+      // Identity has been verified by the browser. Keep the renewed session
+      // even if the following metrics request fails; never invent fresh data.
+      if (onLoginVerified) await onLoginVerified(jar);
       deal = await readDeal(jar, signal, { ...hint, requireIdentity: true });
     } catch (failed) {
       failed.loginAttempted = true;
+      if (["identity", "identity_missing"].includes(failed.code)) failed.needsHuman = true;
       throw failed;
     }
   }
