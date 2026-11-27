@@ -55,13 +55,13 @@ export function interestingEvent(message, corpId) {
   return null;
 }
 
-async function refreshUsers(userIds, client, leave) {
+async function refreshUsers(userIds, client, approvalIds) {
   if (!userIds.length) return;
   const day = shanghaiToday();
   await pullDay(day, { client, userIds });
-  if (leave) {
+  if (approvalIds.length) {
     try {
-      await pullLeaves(day, day, client);
+      await pullLeaves(day, day, client, { userIds: approvalIds });
     } catch {
       /* 请假没跟上也不挡住当天留档 */
     }
@@ -75,20 +75,25 @@ export function startDingStream({ client, fetchImpl = globalThis.fetch, WebSocke
   let stopped = false;
   let socket = null;
   const pending = new Set();
-  let wantLeave = false;
+  const pendingApprovals = new Set();
+  let refreshing = Promise.resolve();
   let flushTimer = null;
 
   function schedule(hit) {
-    for (const id of hit.userIds || []) pending.add(id);
-    if (hit.kind === "approval") wantLeave = true;
+    for (const id of hit.userIds) {
+      pending.add(id);
+      if (hit.kind === "approval") pendingApprovals.add(id);
+    }
     if (flushTimer) return;
     flushTimer = setTimeout(() => {
       const ids = [...pending];
-      const leave = wantLeave;
+      const approvalIds = [...pendingApprovals];
       pending.clear();
-      wantLeave = false;
+      pendingApprovals.clear();
       flushTimer = null;
-      refreshUsers(ids, client, leave).catch(() => {});
+      refreshing = refreshing.then(() => {
+        if (!stopped && dingCallsEnabled()) return refreshUsers(ids, client, approvalIds);
+      }).catch(() => {});
     }, 20000);
     if (typeof flushTimer.unref === "function") flushTimer.unref();
   }
@@ -131,7 +136,7 @@ export function startDingStream({ client, fetchImpl = globalThis.fetch, WebSocke
   }
 
   async function loop() {
-    while (!stopped) {
+    while (!stopped && dingCallsEnabled()) {
       try {
         await connectOnce();
       } catch {
@@ -150,6 +155,7 @@ export function startDingStream({ client, fetchImpl = globalThis.fetch, WebSocke
       if (flushTimer) clearTimeout(flushTimer);
       flushTimer = null;
       pending.clear();
+      pendingApprovals.clear();
       if (socket && socket.close) socket.close();
     }
   };

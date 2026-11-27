@@ -903,7 +903,7 @@ export async function replaceLeaves(userIds, rows) {
   return replaceLeavesInRange(ids, "0000-01-01 00:00", "9999-12-31 23:59", rows);
 }
 
-export async function replaceLeavesInRange(userIds, startAt, endAt, rows) {
+export async function replaceLeavesInRange(userIds, startAt, endAt, rows, { clearUnattributed = true } = {}) {
   await ensureHrSchema();
   const ids = [...new Set((userIds || []).map((id) => clip(id, 64)).filter(Boolean))];
   const start = clip(startAt, 32);
@@ -916,7 +916,7 @@ export async function replaceLeavesInRange(userIds, startAt, endAt, rows) {
         [...ids, end, start]
       );
     }
-    if (start && end) {
+    if (clearUnattributed && start && end) {
       await query("DELETE FROM hr_leave_records WHERE dingtalk_userid = '' AND start_at <= ? AND end_at >= ?", [end, start]);
     }
     for (const row of clean) {
@@ -934,7 +934,7 @@ export async function replaceLeavesInRange(userIds, startAt, endAt, rows) {
   memory.leaves = memory.leaves.filter((row) => {
     const overlaps = String(row.startAt || "") <= end && String(row.endAt || "") >= start;
     if (!overlaps) return true;
-    if (!row.dingtalkUserId) return false;
+    if (!row.dingtalkUserId) return !clearUnattributed;
     return !ids.includes(row.dingtalkUserId);
   });
   for (const row of clean) {

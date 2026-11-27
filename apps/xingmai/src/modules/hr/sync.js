@@ -931,11 +931,48 @@ function leaveMs(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export async function pullLeaves(startDate, endDate, client = createDingClient()) {
+const leaveTypesCache = new WeakMap();
+
+async function loadLeaveTypes(client, userIds) {
+  const names = new Map();
+  for (const opUserId of userIds.slice(0, 8)) {
+    try {
+      const types = await client.listVacationTypes(opUserId);
+      for (const type of types || []) {
+        const code = String(type.leave_code || type.leaveCode || "");
+        const name = String(type.leave_name || type.leaveName || "").trim();
+        if (code && name) names.set(code, name);
+      }
+      if (names.size) break;
+    } catch (error) {
+      if (error.paused || error.capped) throw error;
+    }
+  }
+  return names;
+}
+
+function leaveTypesFor(client, userIds) {
+  const cached = leaveTypesCache.get(client);
+  if (cached?.pending) return cached.pending;
+  if (cached?.until > Date.now()) return cached.names;
+  const pending = loadLeaveTypes(client, userIds).then((names) => {
+    const minutes = names.size ? 60 : 5;
+    leaveTypesCache.set(client, { names, until: Date.now() + minutes * 60 * 1000 });
+    return names;
+  }, (error) => {
+    leaveTypesCache.delete(client);
+    throw error;
+  });
+  leaveTypesCache.set(client, { pending });
+  return pending;
+}
+
+export async function pullLeaves(startDate, endDate, client = createDingClient(), { userIds: selected = null } = {}) {
   if (!client.configured()) return { configured: false, leaves: [], quotas: [] };
   let directory = await listDingUsers();
   if (!directory.length) directory = await refreshDirectory(client);
-  const userIds = directory.map((user) => user.userId).filter(Boolean);
+  const directoryIds = directory.map((user) => user.userId).filter(Boolean);
+  const userIds = selected === null ? directoryIds : directoryIds.filter((id) => selected.includes(id));
   if (!userIds.length) {
     return { configured: true, leaves: [], quotas: [] };
   }
@@ -944,20 +981,7 @@ export async function pullLeaves(startDate, endDate, client = createDingClient()
   const { startMs } = dayBounds(startDate);
   const { endMs } = dayBounds(endDate);
   const leaveRows = await client.listLeaveStatus(userIds, startMs, endMs);
-  const typeName = new Map();
-  for (const opUserId of userIds.slice(0, 8)) {
-    if (typeName.size) break;
-    try {
-      const types = await client.listVacationTypes(opUserId);
-      for (const type of types || []) {
-        const code = String(type.leave_code || type.leaveCode || "");
-        const name = String(type.leave_name || type.leaveName || "").trim();
-        if (code && name) typeName.set(code, name);
-      }
-    } catch {
-      /* 换下一个人再读假期类型 */
-    }
-  }
+  const typeName = await leaveTypesFor(client, directoryIds);
   const known = new Set(userIds);
   const leaves = [];
   for (const row of leaveRows) {
@@ -979,7 +1003,10 @@ export async function pullLeaves(startDate, endDate, client = createDingClient()
       recordKey: `${userId}-${code}-${start}-${end}`
     });
   }
-  await replaceLeavesInRange(userIds, `${startDate} 00:00`, `${endDate} 23:59`, leaves);
+  await replaceLeavesInRange(userIds, `${startDate} 00:00`, `${endDate} 23:59`, leaves, { clearUnattributed: selected === null });
+
+  // Approval events update leave records; full sync still refreshes balances.
+  if (selected !== null) return { configured: true, leaves, quotas: [] };
 
   const compTypes = [...typeName.entries()].filter(([, name]) => name.includes("调休"));
   const quotas = [];
@@ -1366,11 +1393,15 @@ export function startScheduler(client = createDingClient()) {
       }
     }
   };
-  timer = setInterval(() => {
-    tick().catch(() => {});
-  }, 15 * 60 * 1000);
+  let running = false;
+  const check = () => {
+    if (running) return;
+    running = true;
+    tick().catch(() => {}).finally(() => { running = false; });
+  };
+  timer = setInterval(check, 15 * 60 * 1000);
   if (typeof timer.unref === "function") timer.unref();
-  tick().catch(() => {});
+  check();
 }
 
 export function stopScheduler() {
