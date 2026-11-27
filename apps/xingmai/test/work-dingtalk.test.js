@@ -6,9 +6,11 @@ import {
   classifySchedule,
   dingPublic,
   inRemindWindow,
+  loadAttendance,
   proposeBinds,
   resetDingStore,
   saveAppConfig,
+  saveBinds,
   saveNotifyWebhook,
   sendTaskNotice,
   setDingTransport,
@@ -285,4 +287,53 @@ test("优先工作通知，不重复发送单聊，两者失败才在群里 @ �
     setDingTransport(globalThis.fetch);
     resetDingStore();
   }
+});
+
+
+test("排班和请假共用进行中的请求，缓存按人员绑定与排班查询人隔离", async (t) => {
+  const oldId = process.env.DINGTALK_CLIENT_ID;
+  const oldSecret = process.env.DINGTALK_CLIENT_SECRET;
+  t.after(() => {
+    if (oldId === undefined) delete process.env.DINGTALK_CLIENT_ID;
+    else process.env.DINGTALK_CLIENT_ID = oldId;
+    if (oldSecret === undefined) delete process.env.DINGTALK_CLIENT_SECRET;
+    else process.env.DINGTALK_CLIENT_SECRET = oldSecret;
+    resetDingStore();
+    setDingTransport();
+  });
+  resetDingStore();
+  process.env.DINGTALK_CLIENT_ID = "ding-test";
+  process.env.DINGTALK_CLIENT_SECRET = "test-only";
+  await saveBinds([{ personId: 1, userid: "first" }, { personId: 2, userid: "second" }]);
+
+  const requests = [];
+  setDingTransport(async (url, { body }) => {
+    const route = new URL(url).pathname;
+    if (route.endsWith("/accessToken")) return { json: async () => ({ accessToken: "test-token" }) };
+    requests.push({ route, body: JSON.parse(body) });
+    return { json: async () => ({ errcode: 0, result: { schedules: [], leave_status: [] } }) };
+  });
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-11-27T10:00+08:00") });
+  const options = { date: "2026-11-27", people: [{ id: 1 }, { id: 2 }], useSchedule: true, useLeave: true, operatorPersonId: 1 };
+  const results = await Promise.all([
+    loadAttendance(options),
+    loadAttendance({ ...options, people: [...options.people].reverse(), fresh: true }),
+    loadAttendance(options)
+  ]);
+  assert.deepEqual(results[0], results[1]);
+  assert.deepEqual(results[1], results[2]);
+  assert.equal(requests.length, 2);
+  t.mock.timers.tick(9 * 60 * 1000);
+  await loadAttendance(options);
+  assert.equal(requests.length, 2);
+  await loadAttendance({ ...options, operatorPersonId: 2 });
+  assert.equal(requests[2].body.op_user_id, "second");
+  await saveBinds([{ personId: 2, userid: "rebound" }]);
+  await loadAttendance(options);
+  assert.equal(requests[4].body.userids, "first,rebound");
+  t.mock.timers.tick(10 * 60 * 1000);
+  await loadAttendance(options);
+  assert.equal(requests.length, 8);
+  await loadAttendance({ ...options, fresh: true });
+  assert.equal(requests.length, 10);
 });

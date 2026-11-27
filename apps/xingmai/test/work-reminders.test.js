@@ -107,9 +107,17 @@ test('missing binding is visible and recovers once bound, never counts as sent',
   const notice = item({ personId: '5', personName: '未绑定人员' }); let sends = 0;
   const send = async () => { sends++; return 'robot'; };
   assert.equal(await deliverReminder(notice, { now: at('18:00'), send }), 'blocked');
-  assert.equal(sends, 0); assert.equal((await record(notice.id)).sentAt, undefined);
+  assert.equal(sends, 0);
+  const blocked = await record(notice.id);
+  assert.equal(blocked.sentAt, undefined);
+  assert.equal(blocked.attempts, 0);
+  assert.equal(await deliverReminder(notice, { now: at('18:05'), send }), 'skipped');
+  assert.equal(await deliverReminder(notice, { now: at('19:00'), send }), 'skipped');
+  assert.deepEqual(await record(notice.id), blocked);
   await saveBinds([{ personId: 5, userid: 'newly-bound' }]);
-  assert.equal(await deliverReminder(notice, { now: at('18:05'), send }), 'sent'); assert.equal(sends, 1);
+  assert.equal(await deliverReminder(notice, { now: at('19:00:30'), send }), 'sent');
+  assert.equal(sends, 1);
+  assert.equal((await record(notice.id)).attempts, 1);
 });
 
 test('expired lease recovers after crash; unread/read actions do not lose delivery results', async () => {

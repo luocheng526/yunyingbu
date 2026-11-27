@@ -4,6 +4,7 @@ import { dbMode, query } from "../profile/auth.js";
 import { cardMarkdown, cardOA, legacyCard } from './notice-cards.js';
 
 const WORK_URL = "https://zx.xingmaierp.cc/work";
+const ATTENDANCE_CACHE_MS = 10 * 60 * 1000;
 
 export function workLink(tab, taskId) {
   const url = new URL(WORK_URL);
@@ -26,6 +27,7 @@ let transport = globalThis.fetch;
 
 export function setDingTransport(fn) {
   transport = fn || globalThis.fetch;
+  attendanceCache = new Map();
   tokenCache = { value: "", until: 0 };
 }
 
@@ -409,29 +411,46 @@ async function leavesFor(userids, date) {
 }
 
 export async function loadAttendance({ date, people, useSchedule, useLeave, operatorPersonId, fresh }) {
+  const { clientId, clientSecret } = dingConfig();
+  if ((!useSchedule && !useLeave) || !clientId || !clientSecret) return new Map();
+
+  const wanted = (people || []).filter((person) => person.status !== "离职")
+    .map((person) => Number(person.id)).sort((a, b) => a - b);
+  const bindings = wanted.map((personId) => [personId, dingUserOf(personId)]);
+  const operator = useSchedule ? binds.get(Number(operatorPersonId)) : undefined;
+  const key = JSON.stringify([date, clientId, useSchedule, useLeave, operator?.userid || "", bindings]);
+  const cache = attendanceCache;
+  const now = Date.now();
+  const cached = cache.get(key);
+  if (cached?.pending) return cached.pending;
+  if (!fresh && cached?.until > now) return cached.map;
+  for (const [cachedKey, entry] of cache) {
+    if (entry.until <= now) cache.delete(cachedKey);
+  }
+
+  const pending = fetchAttendance({ date, useSchedule, useLeave, operator, bindings }).then(({ map, failed }) => {
+    const ttl = failed ? 60 * 1000 : ATTENDANCE_CACHE_MS;
+    cache.set(key, { map, until: Date.now() + ttl });
+    return map;
+  }, (error) => {
+    cache.delete(key);
+    throw error;
+  });
+  cache.set(key, { pending });
+  return pending;
+}
+
+async function fetchAttendance({ date, useSchedule, useLeave, operator, bindings }) {
   const map = new Map();
-  if (!useSchedule && !useLeave) {
-    return map;
-  }
-  const key = `${date}|${useSchedule ? 1 : 0}|${useLeave ? 1 : 0}`;
-  const cached = attendanceCache.get(key);
-  if (!fresh && cached && Date.now() - cached.at < 60000) {
-    return cached.map;
-  }
-  const wanted = (people || []).filter((person) => person.status !== "离职");
-  if (!dingPublic().app) {
-    return map;
-  }
   const bound = [];
-  for (const person of wanted) {
-    const row = binds.get(Number(person.id));
-    if (!row || !row.confirmed || !row.userid) {
-      map.set(Number(person.id), { pending: false, exempt: false, half: false, reason: "未绑定钉钉" });
+  for (const [personId, userid] of bindings) {
+    if (!userid) {
+      map.set(personId, { pending: false, exempt: false, half: false, reason: "未绑定钉钉" });
       continue;
     }
-    bound.push({ personId: Number(person.id), userid: row.userid });
+    bound.push({ personId, userid });
   }
-  const operator = binds.get(Number(operatorPersonId));
+  const userids = [...new Set(bound.map((row) => row.userid))];
   let scheduleError = "";
   let schedules = new Map();
   if (useSchedule) {
@@ -439,7 +458,7 @@ export async function loadAttendance({ date, people, useSchedule, useLeave, oper
       scheduleError = "待配置排班查询人";
     } else {
       try {
-        schedules = await schedulesFor(bound.map((row) => row.userid), date, operator.userid);
+        schedules = await schedulesFor(userids, date, operator.userid);
       } catch (error) {
         scheduleError = error.publicMessage || "钉钉排班接口失败";
       }
@@ -449,7 +468,7 @@ export async function loadAttendance({ date, people, useSchedule, useLeave, oper
   let leaves = new Map();
   if (useLeave) {
     try {
-      leaves = await leavesFor(bound.map((row) => row.userid), date);
+      leaves = await leavesFor(userids, date);
     } catch (error) {
       leaveError = error.publicMessage || "钉钉请假接口失败";
     }
@@ -489,8 +508,7 @@ export async function loadAttendance({ date, people, useSchedule, useLeave, oper
     }
     map.set(row.personId, { pending: pending && !exempt, exempt, half, reason });
   }
-  attendanceCache.set(key, { at: Date.now(), map });
-  return map;
+  return { map, failed: Boolean(scheduleError || leaveError) };
 }
 
 export async function claimReminder(personId, date) {
@@ -605,6 +623,7 @@ export async function saveAppConfig(input) {
   }
   rememberedAgent = agentId;
   rememberedAuth = nextAuth;
+  attendanceCache = new Map();
   tokenCache = { value: "", until: 0 };
   const check = await checkWorkNotice();
   if (!check.ok) {
