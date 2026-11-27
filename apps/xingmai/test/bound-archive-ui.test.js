@@ -899,7 +899,7 @@ test('渠道报表缺失时可跳到同日商品明细，商品详情可选昨�
   const h = await harness({ saved, overview, startAtDefault: true });
   assert.match(h.root.innerHTML, /所选日期暂无这张渠道报表/);
   assert.match(h.root.innerHTML, /data-page="productOverview">查看已采商品<\/button>/);
-  assert.ok(h.root.innerHTML.includes(`data-act="pick-date" type="date" min="2026-09-01" max="${previousDay}"`));
+  assert.ok(h.root.innerHTML.includes(`data-act="pick-date" type="date" min="2026-09-01" max="${yesterday}"`));
 
   await h.click({ 'data-act': 'page', 'data-page': 'productOverview' });
   assert.match(h.root.innerHTML, /当前显示各店已保存的商品明细/);

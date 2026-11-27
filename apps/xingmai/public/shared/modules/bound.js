@@ -1499,7 +1499,9 @@
 
   function reliableDay() {
     var goodsArchive = state.localArchive?.unified && (state.page === "productOverview" || state.page === "channelAnalysis" && state.tab === "qdfx_goods");
-    return iso(addDays(parseIso(shanghaiToday()), goodsArchive ? -1 : -2));
+    var channelDaily = state.localArchive?.unified && (state.page === "channelOverview" && state.archiveAccountOverview && ['', 'qdzl_lb'].includes(state.tab)
+      || state.page === "channelAnalysis" && state.tab === "qdfx_dplb");
+    return iso(addDays(parseIso(shanghaiToday()), goodsArchive || channelDaily ? -1 : -2));
   }
 
   function clampRange(from, to) {

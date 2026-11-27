@@ -12,6 +12,7 @@ import { shopDayRequest, validShopDay } from "./shop-day-contract.js";
 import { visibleShops, BATCH_DATE } from "./shop-batch.js";
 import { createRequestPacer } from "./request-pacer.js";
 import { GOODS_REPORTS, GOODS_BACKFILL_CONCURRENCY } from './goods-backfill.js';
+import { CHANNEL_DAILY_REPORTS } from './daily-channel.js';
 
 const QUIET_MODULES = new Set(["hp", "team"]);
 const QUIET_MASTERS = new Set(["goods", "teams", "members"]);
@@ -244,8 +245,28 @@ export async function requestDailyPerformance(scope, owner) {
   return batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner, parallelLimit: GOODS_BACKFILL_CONCURRENCY }));
 }
 
+export async function requestChannelDailyReport(reportId, date) {
+  if (!CHANNEL_DAILY_REPORTS.includes(reportId) || date >= shanghaiToday() || collectionStatus().batchEnabled) return { blocked: 'invalid_scope' };
+  const current = await session();
+  const owner = ownerOf(current);
+  if (!owner || !verifiedLogin(current)) return { blocked: 'server_login_required' };
+  const report = reports().find(item => item.id === reportId);
+  const page = reportId === 'qdzl_lb' ? 'channelOverview' : 'channelAnalysis';
+  const body = reportBody(report, 'all', { start: date, end: date, daysType: '1' }, 1);
+  const result = await batchPacer.run(() => requestScopedRead({
+    path: report.path, method: report.method, access: report.access, body, referer: ORIGIN + '/workTable/' + page,
+    ownerHash: owner, exclusive: true
+  }));
+  if (ownerOf(await session()) !== owner) return { blocked: 'identity_changed' };
+  if (result.payload?.code === 0) {
+    const data = extractList(result.payload.data);
+    if (!data.object && data.total > data.rows.length) return { blocked: 'incomplete_report' };
+  }
+  return result;
+}
+
 async function requestScopedRead(spec, onRequest = () => {}) {
-  const parallel = Boolean(spec.ownerHash);
+  const parallel = Boolean(spec.ownerHash) && !spec.exclusive;
   const limit = parallel ? spec.parallelLimit === GOODS_BACKFILL_CONCURRENCY ? GOODS_BACKFILL_CONCURRENCY : 2 : 1;
   if (scopedReadBusy || batchReads >= limit) return { blocked: "collector_busy" };
   if (parallel) batchReads++; else scopedReadBusy = true;

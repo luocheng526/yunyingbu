@@ -1,10 +1,11 @@
 import { startDailyGoods } from "./daily-goods.js";
+import { startDailyChannelReports } from './daily-channel.js';
 import { Router } from "express";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { createShopDayCollector } from "./shop-day.js";
 import { createFourPageJob } from "./four-page-job.js";
-import { requestShopDayReport, linkStatus, collectionStatus, requestVisibleShops, requestBatchShopDayReport, requestGoodsBackfillReport } from "./collect.js";
+import { requestShopDayReport, linkStatus, collectionStatus, requestVisibleShops, requestBatchShopDayReport, requestGoodsBackfillReport, requestChannelDailyReport } from "./collect.js";
 import { createArchiveImport } from "./archive-import.js";
 import { createAnnotations } from "./annotations.js";
 import { createSavedOverview } from "./saved-overview.js";
@@ -62,6 +63,8 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
   void goodsBackfill.resume().catch(() => {});
   if (process.env.NODE_ENV === 'production' && !process.env.NODE_TEST_CONTEXT && !process.env.MENGKAI_SMOKE_LIVE) {
     startDailyGoods(goodsBackfill, linkStatus);
+    startDailyChannelReports({ request: requestChannelDailyReport, blocked: () =>
+      collectionStatus().batchEnabled || goodsBackfill.busy() || batch.busy() || importer.busy() || job.busy() || collector.isBusy() });
   }
   router.use((req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
