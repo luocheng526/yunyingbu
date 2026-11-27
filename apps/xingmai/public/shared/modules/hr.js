@@ -874,17 +874,21 @@ var g,b=roster,v=state.status;if("staff"===n||"org"===n)g=o("/api/hr/staff");els
   min-width: 0;
   width: min(188px, calc(100% - 8px));
 }
-.hr-org-direct-reports > .hr-org-node::before,
-.hr-org-direct-reports > .hr-org-chart > .hr-org-node::before {
+/* Connect every card to the rail above it, including the operations subgroups. */
+.hr-org-co::after,
+.hr-org-node::before {
   content: "";
   position: absolute;
-  top: -18px;
   left: 50%;
   transform: translateX(-50%);
   width: 2px;
   height: 18px;
   background: #8eb6ff;
+  pointer-events: none;
 }
+.hr-org-co::after { bottom: -18px; }
+.hr-org-node::before { top: -18px; }
+.hr-org-chart > .hr-org-kids { row-gap: 18px; }
 @media (max-width: 600px) {
   .hr-org-direct-reports > .hr-org-node,
   .hr-org-direct-reports > .hr-org-chart > .hr-org-node {
