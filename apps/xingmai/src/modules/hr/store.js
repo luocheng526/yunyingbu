@@ -123,6 +123,9 @@ export const HR_SCHEMA = [
     phone VARCHAR(32) NOT NULL DEFAULT '',
     joined_on VARCHAR(10) NOT NULL DEFAULT '',
     birthday VARCHAR(10) NOT NULL DEFAULT '',
+    job_level VARCHAR(64) NOT NULL DEFAULT '',
+    tenure_months SMALLINT UNSIGNED DEFAULT NULL,
+    contract_ends_on VARCHAR(10) NOT NULL DEFAULT '',
     left_on VARCHAR(10) NOT NULL DEFAULT '',
     status_name VARCHAR(16) NOT NULL DEFAULT '在职',
     hometown VARCHAR(64) NOT NULL DEFAULT '',
@@ -395,6 +398,15 @@ async function migrateStaffTable() {
   const names = new Set(columns.map((row) => row.COLUMN_NAME));
   if (!names.has("birthday")) {
     await query("ALTER TABLE hr_staff ADD COLUMN birthday VARCHAR(10) NOT NULL DEFAULT ''");
+  }
+  if (!names.has("job_level")) {
+    await query("ALTER TABLE hr_staff ADD COLUMN job_level VARCHAR(64) NOT NULL DEFAULT ''");
+  }
+  if (!names.has("tenure_months")) {
+    await query("ALTER TABLE hr_staff ADD COLUMN tenure_months SMALLINT UNSIGNED DEFAULT NULL");
+  }
+  if (!names.has("contract_ends_on")) {
+    await query("ALTER TABLE hr_staff ADD COLUMN contract_ends_on VARCHAR(10) NOT NULL DEFAULT ''");
   }
 }
 
@@ -1386,6 +1398,9 @@ function mapStaff(row) {
     position: row.position_name || "",
     phone: row.phone || "",
     joinedOn: row.joined_on || "",
+    jobLevel: row.job_level || "",
+    tenureMonths: row.tenure_months ?? null,
+    contractEndsOn: row.contract_ends_on || "",
     birthday: row.birthday || "",
     leftOn: row.left_on || "",
     status: row.status_name || "在职",
@@ -1401,6 +1416,25 @@ function mapStaff(row) {
 
 function filled(input, key) {
   return input && input[key] != null && String(input[key]).trim() !== "";
+}
+
+function staffDetailsPatch(input) {
+  const patch = {};
+  if (filled(input, "jobLevel")) patch.jobLevel = clip(input.jobLevel, 64);
+  if (filled(input, "tenureMonths")) {
+    const months = String(input.tenureMonths).trim();
+    if (!/^\d+$/.test(months) || Number(months) > 1200) throw bad("司龄请填写 0–1200 的整数月数");
+    patch.tenureMonths = Number(months);
+  }
+  if (filled(input, "contractEndsOn")) {
+    const date = String(input.contractEndsOn).trim();
+    const parsed = new Date(date + "T00:00:00Z");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+      throw bad("请填写有效的合同到期日");
+    }
+    patch.contractEndsOn = date;
+  }
+  return patch;
 }
 
 function staffFrom(input, { requireName = true } = {}) {
@@ -1476,9 +1510,9 @@ async function writeStaff(row) {
   if (dbMode() === "mysql") {
     const [result] = await query(
       `INSERT INTO hr_staff
-        (person_name, gender, job_number, department_name, position_name, phone, joined_on, birthday, left_on, status_name, hometown, education, emergency_name, emergency_phone, note_text, dingtalk_userid, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.birthday || "", row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.createdBy, row.createdAt, row.updatedAt]
+        (person_name, gender, job_number, department_name, position_name, phone, joined_on, birthday, left_on, status_name, hometown, education, emergency_name, emergency_phone, note_text, dingtalk_userid, created_by, created_at, updated_at, job_level, tenure_months, contract_ends_on)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.birthday || "", row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.createdBy, row.createdAt, row.updatedAt, row.jobLevel, row.tenureMonths, row.contractEndsOn]
     );
     row.id = Number(result.insertId);
     return row;
@@ -1495,9 +1529,10 @@ async function saveStaffRow(row) {
       `UPDATE hr_staff SET
         person_name = ?, gender = ?, job_number = ?, department_name = ?, position_name = ?, phone = ?,
         joined_on = ?, birthday = ?, left_on = ?, status_name = ?, hometown = ?, education = ?, emergency_name = ?,
-        emergency_phone = ?, note_text = ?, dingtalk_userid = ?, updated_at = ?
+        emergency_phone = ?, note_text = ?, dingtalk_userid = ?, updated_at = ?,
+        job_level = ?, tenure_months = ?, contract_ends_on = ?
        WHERE id = ?`,
-      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.birthday || "", row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.updatedAt, row.id]
+      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.birthday || "", row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.updatedAt, row.jobLevel, row.tenureMonths, row.contractEndsOn, row.id]
     );
     if (!result.affectedRows) throw bad("记录不存在", 404);
     return row;
@@ -1509,7 +1544,10 @@ async function saveStaffRow(row) {
 }
 
 export async function createStaff(input = {}, actor = "") {
-  const row = { ...staffFrom(input), ...stamp(actor), updatedAt: new Date().toISOString() };
+  const row = {
+    jobLevel: "", tenureMonths: null, contractEndsOn: "", ...staffDetailsPatch(input),
+    ...staffFrom(input), ...stamp(actor), updatedAt: new Date().toISOString()
+  };
   return writeStaff(row);
 }
 
@@ -1519,11 +1557,13 @@ export async function updateStaff(id, input = {}, _actor = "", { replace = false
   const current = rows.find((row) => row.id === key);
   if (!current) throw bad("记录不存在", 404);
   const next = replace ? { ...current, ...staffFrom(input), id: current.id, createdBy: current.createdBy, createdAt: current.createdAt } : { ...current, ...staffPatch(input) };
+  Object.assign(next, staffDetailsPatch(input));
   // Explicit clearing is separate from import's merge-only blank values.
   if (!replace && Array.isArray(input.clearFields)) {
-    const clearable = ["jobNumber", "department", "position", "joinedOn", "leftOn"];
+    const clearable = ["jobNumber", "department", "position", "joinedOn", "leftOn", "jobLevel", "contractEndsOn"];
     for (const field of input.clearFields) {
       if (clearable.includes(field)) next[field] = "";
+      if (field === "tenureMonths") next.tenureMonths = null;
     }
   }
   if (next.status === "在职" && replace && !clip(input.leftOn, 10)) next.leftOn = "";
