@@ -17,17 +17,25 @@ export const CENTERS = [
 export const POSTS = ["店长", "运营", "主管", "经理", "储备", "助理", "总监"];
 export const PEOPLE_BOARDS = [
   { id: "ops", name: "运营部门管理" },
-  { id: "hrTech", name: "人事和技术部门" },
-  { id: "backend", name: "后端部门" }
+  { id: "hr", name: "人事部" },
+  { id: "tech", name: "技术部" },
+  { id: "backend", name: "后端部门" },
+  { id: "hrTech", name: "待确认部门" }
 ];
 const BOARD_IDS = new Set(PEOPLE_BOARDS.map((row) => row.id));
+const DEPARTMENT_NAMES = { hr: "人事部", tech: "技术部" };
 const BOARD_NAME_TO_ID = {
   运营部门管理: "ops",
   运营部: "ops",
   运营: "ops",
   人事和技术部门: "hrTech",
   人事技术: "hrTech",
-  人事: "hrTech",
+  人事: "hr",
+  人事部: "hr",
+  人事部门: "hr",
+  技术: "tech",
+  技术部: "tech",
+  技术部门: "tech",
   后端部门: "backend",
   后端: "backend"
 };
@@ -37,11 +45,12 @@ export function normalizeBoard(value) {
   if (BOARD_IDS.has(raw)) {
     return raw;
   }
-  return BOARD_NAME_TO_ID[raw] || "ops";
+  return Object.hasOwn(BOARD_NAME_TO_ID, raw) ? BOARD_NAME_TO_ID[raw] : "ops";
 }
 
 export function boardOf(person) {
-  return normalizeBoard(person && person.board);
+  const board = normalizeBoard(person?.board);
+  return board === "hrTech" ? rosterDepartment(person.department, person.center) || board : board;
 }
 
 function knownBoard(value) {
@@ -49,15 +58,32 @@ function knownBoard(value) {
   if (!raw) {
     return "";
   }
-  if (BOARD_IDS.has(raw) || BOARD_NAME_TO_ID[raw]) {
+  if (BOARD_IDS.has(raw) || Object.hasOwn(BOARD_NAME_TO_ID, raw)) {
     return normalizeBoard(raw);
   }
   return "";
 }
 
+function rosterDepartment(...values) {
+  return values.map(knownBoard).find((board) => Object.hasOwn(DEPARTMENT_NAMES, board));
+}
+
 function boardFromInput(input, fallback = "ops") {
   const item = input && typeof input === "object" ? input : {};
-  return knownBoard(item.board) || knownBoard(item.部门管理) || normalizeBoard(fallback);
+  const board = knownBoard(item.board) || knownBoard(item.部门管理) || normalizeBoard(fallback);
+  return board === "hrTech"
+    ? rosterDepartment(item.department, item.部门, item.center, item.所属中心) || board
+    : board;
+}
+
+function assignRosterBoard(person, board) {
+  if (Object.hasOwn(DEPARTMENT_NAMES, board)) {
+    // Work reporting still uses the shared group code. The roster uses the recorded department.
+    person.board = "hrTech";
+    person.department = DEPARTMENT_NAMES[board];
+  } else {
+    person.board = board;
+  }
 }
 export const SHOP_KINDS = ["店铺", "店群"];
 export const INITIAL_PASSWORD = "ChangeMe123!";
@@ -248,7 +274,8 @@ function applyRosterSnapshot(data) {
     if (next.reserve == null) {
       next.reserve = "";
     }
-    next.board = boardOf(next);
+    const board = normalizeBoard(next.board);
+    assignRosterBoard(next, board);
     return next;
   });
   shops = Array.isArray(data.shops) ? data.shops.map(clone) : shops;
@@ -787,7 +814,8 @@ function presentPerson(person) {
   const line = orgLineOf(person);
   return {
     ...clone(row),
-    board: boardOf(person),
+    board: normalizeBoard(person.board),
+    rosterBoard: boardOf(person),
     managerName: managerNameOf(person),
     director: line.director,
     lineManager: line.manager,
@@ -879,9 +907,9 @@ function applyCreatePerson(input) {
     department,
     managerId,
     username: usernameRaw || name,
-    password: passwordRaw || INITIAL_PASSWORD,
-    board: boardFromInput(input, "ops")
+    password: passwordRaw || INITIAL_PASSWORD
   };
+  assignRosterBoard(person, boardFromInput(input));
   stampOrgLine(person, line, { skipEmpty: true });
   people.push(person);
   rememberLogin(person);
@@ -918,7 +946,7 @@ export async function importPeople(rows, board) {
     const status = String(item.状态 || item.status || "").trim() || "在职";
     const username = String(item.账号 || item.username || "").trim();
     const password = String(item.登录密码 || item.password || "").trim();
-    const boardId = boardFromInput(item, importBoard);
+    let boardId = boardFromInput(item, importBoard);
     if (!name) {
       failed.push({ line, error: "姓名为必填" });
       return;
@@ -927,7 +955,19 @@ export async function importPeople(rows, board) {
     if (managerId != null && !findPerson(managerId)) {
       managerId = null;
     }
-    const found = people.find((row) => String(row.name || "").trim() === name && boardOf(row) === boardId);
+    const sameName = people.filter((row) => String(row.name || "").trim() === name);
+    let found = sameName.find((row) => boardOf(row) === boardId);
+    if (!found && boardId === "hrTech") {
+      const matches = sameName.filter((row) => normalizeBoard(row.board) === "hrTech");
+      if (matches.length > 1) {
+        failed.push({ line, error: "人事部和技术部有同名人员，请选择具体部门后导入" });
+        return;
+      }
+      if (matches.length === 1) {
+        found = matches[0];
+        boardId = boardOf(found);
+      }
+    }
     if (found) {
       const result = applyPatchPerson(found.id, {
         status,
@@ -943,7 +983,7 @@ export async function importPeople(rows, board) {
       found.center = center;
       found.department = department || found.department || center;
       found.managerId = managerId;
-      found.board = boardId;
+      assignRosterBoard(found, boardId);
       found.orgRevision = Number(found.orgRevision || 0) + 1;
       stampOrgLine(found, org, { skipEmpty: true });
       rememberLogin(withLogin(found));
@@ -1039,7 +1079,7 @@ function applyPatchPerson(id, input) {
   for (const key of ["department", "center"]) {
     if (Object.hasOwn(input, key)) found[key] = String(input[key] ?? "").trim();
   }
-  if (Object.hasOwn(input, "board")) found.board = normalizeBoard(input.board);
+  if (Object.hasOwn(input, "board")) assignRosterBoard(found, normalizeBoard(input.board));
   rememberLogin(withLogin(found));
   if (
     Object.prototype.hasOwnProperty.call(input, "username") ||
