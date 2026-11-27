@@ -786,7 +786,21 @@ function supportSummary(department) {
  const supervisors = members.filter(person => person.role === "主管").map(person => person.name);
  return supervisors.length ? "主管 " + supervisors.join("、") + " · " + members.length + " 人" : "在职 " + members.length + " 人";
 }
-function blank(v){return!v||"无"===v||"—"===v}function members(manager,group){return order.filter(function(n){var p=by[n];return operationsManagerOf(p)===manager&&p.name!==manager&&("direct"===group?blank(p.supervisor)||p.supervisor===manager:p.supervisor===group)}).map(function(n){return by[n]})}function groups(manager){var seen={};return order.forEach(function(n){var p=by[n];operationsManagerOf(p)===manager&&p.supervisor&&p.supervisor!==manager&&"无"!==p.supervisor&&(seen[p.supervisor]=1)}),Object.keys(seen).sort(function(a,b){return members(manager,b).length-members(manager,a).length||a.localeCompare(b,"zh")})}function node(title,sub,key,kids,tone){var btn='<button type="button" class="hr-org-node'+(kids?" hr-org-branch":"")+'" data-org-dept="'+a(key)+'" aria-selected="'+(pick===key?"true":"false")+'"><i style="background:'+tone[0]+";color:"+tone[1]+'">'+O(kids?"dept":"people")+'</i><div><b>'+a(title)+"</b><span>"+a(sub)+"</span></div></button>";return kids?'<div class="hr-org-chart">'+btn+'<div class="hr-org-kids">'+kids+"</div></div>":btn}function zoneNodes(manager){var direct=members(manager,"direct"),keys=groups(manager),html=node("直属小组","在职 "+(direct.length+1),"g:"+manager,"",tones[0]);return keys.forEach(function(k,i){html+=node(k,"在职 "+members(manager,k).length,"g:"+k,"",tones[(i+1)%tones.length])}),html}function unit(manager){return order.filter(function(n){var p=by[n];return operationsManagerOf(p)===manager}).length}var tones=[["#e8f1ff","#2f6bff"],["#e9fbf1","#16a34a"],["#f3e8ff","#8b5cf6"],["#e7f8fb","#0891b2"],["#fff6e8","#f5a524"]],opsN=unit("韩梦凯")+unit("沈子晗"),chart='<div class="hr-org-chart"><button type="button" class="hr-org-co" data-org-dept="" aria-selected="'+(pick?"false":"true")+'"><i style="background:#2f6bff;color:#fff">'+O("people")+'</i><div><b>甄选</b><span>在职 '+order.length+'</span></div></button><div class="hr-org-kids">'+node("罗成","总监","luo",node("运营部","在职 "+opsN,"ops",node("运营一区","韩梦凯","han",zoneNodes("韩梦凯"),tones[0])+node("运营二区","沈子晗","shen",zoneNodes("沈子晗"),tones[1]),tones[0])+node(supportDepartments.tech,supportSummary("tech"),"tech","",tones[2])+node(supportDepartments.hr,supportSummary("hr"),"hr","",tones[3]),tones[4])+"</div></div>",main="quota"===view?'<div class="hr-empty">编制还没有录入。</div>':chart;
+function blank(v){return!v||"无"===v||"—"===v}function members(manager,group){return order.filter(function(n){var p=by[n];return operationsManagerOf(p)===manager&&p.name!==manager&&("direct"===group?blank(p.supervisor)||p.supervisor===manager:p.supervisor===group)}).map(function(n){return by[n]})}function groups(manager){var seen={};return order.forEach(function(n){var p=by[n];operationsManagerOf(p)===manager&&p.supervisor&&p.supervisor!==manager&&"无"!==p.supervisor&&(seen[p.supervisor]=1)}),Object.keys(seen).sort(function(a,b){return members(manager,b).length-members(manager,a).length||a.localeCompare(b,"zh")})}
+function node(title, sub, key, children, tone) {
+ const button = '<button type="button" class="hr-org-node' + (children ? ' hr-org-branch' : '') +
+  '" data-org-dept="' + a(key) + '" aria-selected="' + (pick === key) + '">' +
+  '<i style="background:' + tone[0] + ';color:' + tone[1] + '">' + O(children ? "dept" : "people") +
+  '</i><div><b>' + a(title) + '</b><span>' + a(sub) + '</span></div></button>';
+ if (!children) return button;
+ const isDirector = key === "luo";
+ const branchClass = isDirector ? ' hr-org-chart--director' : '';
+ const groupClass = isDirector ? ' hr-org-direct-reports' : '';
+ const groupAttributes = isDirector ? ' role="group" aria-label="' + a(title + '直属部门') + '"' : '';
+ return '<div class="hr-org-chart' + branchClass + '">' + button +
+  '<div class="hr-org-kids' + groupClass + '"' + groupAttributes + '>' + children + '</div></div>';
+}
+function zoneNodes(manager){var direct=members(manager,"direct"),keys=groups(manager),html=node("直属小组","在职 "+(direct.length+1),"g:"+manager,"",tones[0]);return keys.forEach(function(k,i){html+=node(k,"在职 "+members(manager,k).length,"g:"+k,"",tones[(i+1)%tones.length])}),html}function unit(manager){return order.filter(function(n){var p=by[n];return operationsManagerOf(p)===manager}).length}var tones=[["#e8f1ff","#2f6bff"],["#e9fbf1","#16a34a"],["#f3e8ff","#8b5cf6"],["#e7f8fb","#0891b2"],["#fff6e8","#f5a524"]],opsN=unit("韩梦凯")+unit("沈子晗"),chart='<div class="hr-org-chart"><button type="button" class="hr-org-co" data-org-dept="" aria-selected="'+(pick?"false":"true")+'"><i style="background:#2f6bff;color:#fff">'+O("people")+'</i><div><b>甄选</b><span>在职 '+order.length+'</span></div></button><div class="hr-org-kids">'+node("罗成","总监","luo",node(supportDepartments.tech,supportSummary("tech"),"tech","",tones[2])+node("运营部","在职 "+opsN,"ops",node("运营一区","韩梦凯","han",zoneNodes("韩梦凯"),tones[0])+node("运营二区","沈子晗","shen",zoneNodes("沈子晗"),tones[1]),tones[0])+node(supportDepartments.hr,supportSummary("hr"),"hr","",tones[3]),tones[4])+"</div></div>",main="quota"===view?'<div class="hr-empty">编制还没有录入。</div>':chart;
 function pathOf(person) {
  const department = supportDepartmentOf(person);
  if (department) return supportDepartments[department];
@@ -822,6 +836,68 @@ state.status ||= o("/api/hr/status").catch(() => ({ configured: false }));
 const roster = n === "org" ? o("/api/hr/roster").then(i) : state.people;
 var g,b=roster,v=state.status;if("staff"===n||"org"===n)g=o("/api/hr/staff");else{var x=t.querySelector("[data-join-month]");x&&x.value?x.value:r().slice(0,7),g=Promise.all([o("/api/hr/recruits"),o("/api/hr/onboards"),o("/api/hr/interviews").catch((function(){return{interviews:[]}})),o("/api/hr/talents").catch((function(){return{talents:[]}}))]).then((function(t){return{recruits:t[0].recruits||[],onboards:t[1].onboards||[],interviews:t[2].interviews||[],talents:t[3].talents||[]}}))}Promise.all([b,v,g]).then((function(a){if(state.alive&&e===state.ticket&&state.tab===n){var r=Object.assign({people:a[0],configured:a[1].configured},a[2]);state.view=r,"attendance"===n?y(t,r):"overtime"===n?w(t,r):"staff"===n?S(t,r):"org"===n?C(t,r):"recruit"===n&&T(t,r)}})).catch((function(a){if(state.alive&&e===state.ticket){if(403===a.status){var r=document.querySelector('a[href="/hr"]');return r&&r.remove(),void(t.innerHTML='<div class="xm-page hr-page xm-ui-scope"><p class="hr-msg is-error">没有智能人事权限</p></div>')}u(t,a.message||"读取失败",!0)}}))}}function I(e,state,a){t.some((function(t){return t.id===a}))&&(state.tab=a,Array.prototype.forEach.call(e.querySelectorAll(".hr-tab"),(function(t){var e=t.getAttribute("data-tab")===a;t.setAttribute("aria-selected",e?"true":"false"),t.tabIndex=e?0:-1})),p(e,a,r().slice(0,7),r()),D(e,state))}function L(t,e){var a=t.elements[e];return a?String(a.value||"").trim():""}function H(t,e){var a=new Blob(["\ufeff"+e],{type:"text/csv;charset=utf-8"}),r=document.createElement("a");r.href=URL.createObjectURL(a),r.download=t,r.click(),URL.revokeObjectURL(r.href)}function P(form,person){staffFields.forEach(([key])=>{form.elements[key].value=person?(staffEditValue(person,key)??""):key==="status"?"在职":""});var button=form.querySelector("button[type=submit]");if(person?.id)form.setAttribute("data-staff-id",String(person.id));else form.removeAttribute("data-staff-id");button.textContent=person?"保存修改":"登记"}var F="undefined"==typeof window?null:window;F&&(F.XmModules=F.XmModules||{},F.XmModules["/hr"]={mount:function(e){!function(){if(!document.getElementById("hr-page-style")){var t=document.createElement("style");t.id="hr-page-style",t.textContent=".hr-page{color:var(--xm-ink)}html[data-theme='dark'] .hr-msg.is-error{color:#ff7875}.hr-board-kpi b{order:2}.hr-board-kpi i{order:3;display:flex;width:52px}.hr-board-kpi span{order:1}",(function(){try{var e=Uint8Array.from(atob("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"),function(c){return c.charCodeAt(0)});new Response(new Blob([e]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text().then(function(a){t.textContent=a+".hr-todo{align-items:flex-start}.hr-todo .hr-todo-names{display:block;margin-top:4px;line-height:1.55;white-space:normal}button.hr-org-co{font:inherit;cursor:pointer}.hr-org-branch:after{content:'';position:absolute;left:50%;bottom:-18px;width:2px;height:18px;background:#8eb6ff}.hr-org-kids{align-items:flex-start}[data-staff]{display:flex;flex-direction:column;gap:16px}.hr-staff .hr-home-kpis,.hr-staff .hr-clock-grid{gap:16px}"})}catch(a){}})(),document.head.appendChild(t)}}();
   mountStaffRosterStyles();
+  if (!document.getElementById("xm-hr-org-chart-style")) {
+    const orgChartStyle = document.createElement("style");
+    orgChartStyle.id = "xm-hr-org-chart-style";
+    orgChartStyle.textContent = `
+.hr-org-chart.hr-org-chart--director { width: 100%; }
+.hr-org-kids.hr-org-direct-reports {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas: "tech ops hr" "zones zones zones";
+  position: relative;
+  align-items: stretch;
+  justify-items: center;
+  gap: 18px 0;
+  border-top: 0;
+  padding-top: 18px;
+}
+.hr-org-direct-reports::before {
+  content: "";
+  position: absolute;
+  inset: 0 16.6667% auto;
+  height: 2px;
+  background: #8eb6ff;
+}
+.hr-org-direct-reports > .hr-org-chart {
+  display: contents;
+}
+.hr-org-direct-reports > [data-org-dept="tech"] { grid-area: tech; }
+.hr-org-direct-reports > [data-org-dept="hr"] { grid-area: hr; }
+.hr-org-direct-reports > .hr-org-chart > [data-org-dept="ops"] { grid-area: ops; }
+.hr-org-direct-reports > .hr-org-chart > .hr-org-kids {
+  grid-area: zones;
+  margin-top: 0;
+}
+.hr-org-direct-reports > .hr-org-node,
+.hr-org-direct-reports > .hr-org-chart > .hr-org-node {
+  min-width: 0;
+  width: min(188px, calc(100% - 8px));
+}
+.hr-org-direct-reports > .hr-org-node::before,
+.hr-org-direct-reports > .hr-org-chart > .hr-org-node::before {
+  content: "";
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 18px;
+  background: #8eb6ff;
+}
+@media (max-width: 600px) {
+  .hr-org-direct-reports > .hr-org-node,
+  .hr-org-direct-reports > .hr-org-chart > .hr-org-node {
+    padding: 8px;
+  }
+  .hr-org-direct-reports > .hr-org-node > i,
+  .hr-org-direct-reports > .hr-org-chart > .hr-org-node > i {
+    display: none;
+  }
+}
+    `;
+    document.head.appendChild(orgChartStyle);
+  }
   if (!document.getElementById("xm-hr-dashboard-style")) {
     const dashboardStyle = document.createElement("style");
     dashboardStyle.id = "xm-hr-dashboard-style";
