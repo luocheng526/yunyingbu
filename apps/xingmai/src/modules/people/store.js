@@ -335,6 +335,69 @@ async function writeMysqlRoster(snapshot) {
   return true;
 }
 
+// The production roster retained pilot flags after these identities were
+// verified against the staff directory and current store assignments.
+const VERIFIED_PILOT_IDENTITIES = new Map([
+  [1, ["沈子晗", "SZ001"]],
+  [2, ["韩梦凯", "HK001"]],
+  [4, ["张文静", "SZ002"]],
+  [5, ["陈明婧", "SZ003"]],
+  [6, ["郭桂良", "SZ004"]],
+  [8, ["杨润泽", "SZ006"]],
+  [9, ["崔安琪", "SZ007"]],
+  [11, ["高丽男", "SZ009"]],
+  [12, ["栗静萱", "SZ010"]],
+  [13, ["杨禄", "SZ011"]],
+  [14, ["张鹏", "SZ012"]],
+  [15, ["王梓萱", "SZ013"]],
+  [16, ["秦怡硕", "SZ014"]]
+]);
+
+function isVerifiedPilotMember(person) {
+  const identity = VERIFIED_PILOT_IDENTITIES.get(person.id);
+  return person.demo === true && person.status === "在职"
+    && identity?.[0] === person.name && identity[1] === person.employeeNo;
+}
+
+export async function migrateVerifiedRosterMembers(query, stores, staff) {
+  const assigned = new Set((stores || [])
+    .filter(store => !store.demo && store.status !== "停用")
+    .flatMap(store => [store.manager, store.supervisor, store.reserve, store.operator, store.assistant]));
+  const active = new Set(staff.filter(person => person.status === "在职"
+    && staff.filter(record => record.name === person.name).length === 1).map(person => person.name));
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const [rows] = await query("SELECT payload FROM people_roster_board WHERE id = 1");
+    const raw = rows[0]?.payload;
+    if (!raw) return 0;
+    const roster = JSON.parse(raw);
+    const members = Array.isArray(roster.people) ? roster.people : [];
+    const accounts = members.map(person => {
+      const saved = roster.loginOverlay?.[String(person.id)];
+      return withLogin({
+        ...person,
+        username: saved?.username || person.username,
+        password: saved?.password || person.password
+      });
+    });
+    const verified = members.filter((person, index) => {
+      const { username, password } = accounts[index];
+      return isVerifiedPilotMember(person) && assigned.has(person.name) && active.has(person.name)
+        && username === person.name && password !== INITIAL_PASSWORD
+        && !accounts.some((other, i) => i !== index && (other.name === person.name || other.username === username));
+    });
+    if (!verified.length) return 0;
+
+    for (const employee of verified) employee.demo = false;
+    // Retry against the current snapshot if another process saved the roster.
+    const [result] = await query(
+      "UPDATE people_roster_board SET payload = ? WHERE id = 1 AND BINARY payload = BINARY ?",
+      [JSON.stringify(roster), raw]
+    );
+    if (result.affectedRows === 1) return verified.length;
+  }
+  return 0;
+}
+
 export function peopleRosterPersistMode() {
   return rosterPersistMode;
 }
@@ -602,6 +665,11 @@ function inferRoleFromLine(name, line, fallback) {
     return "总监";
   }
   return fallback || "";
+}
+
+export function orgRoleOf(person, line = orgLineOf(person)) {
+  const name = String(person.name || "").trim();
+  return name ? inferRoleFromLine(name, line, person.role) : person.role || "";
 }
 
 function resolveManagerIdByName(managerName) {
@@ -1180,6 +1248,13 @@ export async function hydrateFromMysql() {
     if (roster.mode === "mysql" || roster.mode === "file") {
       const { hydrateOrgStores } = await import("./org-board.js");
       const org = await hydrateOrgStores();
+      if (roster.mode === "mysql" && org.mode === "mysql" && people.some(isVerifiedPilotMember)) {
+        const { listStaff } = await import("../hr/store.js");
+        if (await migrateVerifiedRosterMembers(auth.query, masterStores(), await listStaff())) {
+          await hydratePeopleRoster();
+          writeRosterFile();
+        }
+      }
       const { hydrateSiteAcl } = await import("./site-acl.js");
       await hydrateSiteAcl();
       return { ok: true, mode: roster.mode, people: people.length, shops: shops.length, grants: grants.length, stores: org.stores };
