@@ -1,3 +1,5 @@
+import { NAV_MAIN, NAV_FOOT } from '../home/nav-items.js';
+import { WORK_FEATURES, migrateFeatureCap } from './work-permissions.js';
 import { stateSync } from "./state-sync.js";
 const sync = stateSync();
 import fs from "node:fs";
@@ -6,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { canAssignPerson, canAssignSiteAcl, personBranch, scopeOf, registerOrganizationPermissions } from "./org-acl.js";
 import { listOrgStores } from "./org-board.js";
-import { listPeople, orgLineOf } from "./store.js";
+import { listPeople, orgLineOf, orgRoleOf } from "./store.js";
 
 export const SITE_MODULES = [
   {
@@ -94,14 +96,8 @@ export const SITE_MODULES = [
   },
   {
     id: "work",
-    name: "工作汇报",
-    features: [
-      { id: "work.today", name: "今天工作汇报" },
-      { id: "work.summary", name: "工作汇总" },
-      { id: "work.duty", name: "提交情况" },
-      { id: "work.settings", name: "部门设置" },
-      { id: "work.diary", name: "日报设置" }
-    ]
+    name: "工作中心",
+    features: WORK_FEATURES
   },
   {
     id: "meeting",
@@ -111,7 +107,9 @@ export const SITE_MODULES = [
       { id: "meeting.rank", name: "奋斗排名" },
       { id: "meeting.people", name: "新人介绍" },
       { id: "meeting.levels", name: "职级调整" },
-      { id: "meeting.stars", name: "优秀员工" }
+      { id: "meeting.stars", name: "优秀员工" },
+      { id: "meeting.profit", name: "BI利润", legacy: ["meeting.hours"] },
+      { id: "meeting.goals", name: "个人目标", legacy: ["meeting.levels"] }
     ]
   },
   {
@@ -149,10 +147,14 @@ export const SITE_MODULES = [
     id: "hr",
     name: "智能人事",
     features: [
-      { id: "hr.attendance", name: "数据看板" },
-      { id: "hr.overtime", name: "奋斗时长" },
-      { id: "hr.recruit", name: "招聘中心" },
-      { id: "hr.staff", name: "员工花名册" }
+      { id: "hr.attendance", name: "数据看板", tab: "attendance" },
+      { id: "hr.overtime", name: "奋斗时长", tab: "overtime" },
+      { id: "hr.recruit", name: "招聘管理", tab: "recruit" },
+      { id: "hr.staff", name: "员工管理", tab: "staff" },
+      { id: "hr.clock", name: "考勤管理", tab: "clock", legacy: ["hr.attendance"] },
+      { id: "hr.pay", name: "薪酬绩效", tab: "pay", legacy: ["hr.staff", "hr.overtime"], legacyAll: true },
+      { id: "hr.train", name: "培训发展", tab: "train", legacy: ["hr.staff"] },
+      { id: "hr.org", name: "组织架构", tab: "org", legacy: ["hr.staff"] }
     ]
   },
   {
@@ -242,8 +244,19 @@ export const SITE_FEATURE_PATHS = {
   "/shen/recharge-rules": "shen.recharge", "/shen/training": "shen.training", "/shen/tasks": "shen.tasks",
   "/han/selection": "han.selection", "/han/goods": "han.goods", "/han/paid": "han.paid",
   "/han/recharge-rules": "han.recharge", "/han/training": "han.training",
+  "/stores/reviews": "shopkeep.reviews", "/stores/violations": "shopkeep.violations", "/stores/shipping": "shopkeep.shipping", "/stores/inventory": "shopkeep.stock",
   "/academy/courses": "academy.courses", "/academy/exams": "academy.exams", "/academy/handbook": "academy.handbook"
 };
+
+// Navigation owns visible module and routed page names. The permission editor
+// consumes the same names, so future menu renames cannot leave a stale catalog.
+const navigation = [...NAV_MAIN, ...NAV_FOOT].flatMap(item=>[item,...(item.children||[])]);
+for (const item of navigation) {
+  const module = SITE_MODULES.find(mod=>SITE_NAV.some(row=>row.href===item.href&&row.id===mod.id));
+  if(module)module.name=item.label;
+  const feature=SITE_MODULES.flatMap(mod=>mod.features).find(f=>f.id===SITE_FEATURE_PATHS[item.href]);
+  if(feature)feature.name=item.label;
+}
 
 export function canonicalPerson(value) {
   const key = String(value || "").trim();
@@ -434,7 +447,7 @@ function blankModules() {
 function fillModules(source, fallback) {
   const modules = blankModules();
   SITE_MODULES.forEach((mod) => {
-    const incoming = source && source[mod.id];
+    const incoming = migrateFeatureCap(source?.[mod.id], mod.features);
     const base = fallback && fallback[mod.id];
     modules[mod.id] = {
       ...normalizeCap({
@@ -442,7 +455,7 @@ function fillModules(source, fallback) {
         enter: Boolean(incoming && incoming.enter) || Boolean(base && base.enter),
         edit: Boolean(incoming && incoming.edit) || Boolean(base && base.edit)
       }),
-      features: {}
+      features: {}, catalogVersion: 2
     };
     (mod.features || []).forEach((feature) => {
       const feat = incoming && incoming.features && incoming.features[feature.id];
@@ -483,7 +496,7 @@ function maxModules() {
 function compactModules(modules) {
   const out = {};
   SITE_MODULES.forEach((mod) => {
-    const incoming = modules && modules[mod.id];
+    const incoming = migrateFeatureCap(modules?.[mod.id], mod.features);
     if (!incoming) {
       return;
     }
@@ -496,7 +509,7 @@ function compactModules(modules) {
     });
     const cap = normalizeCap(incoming);
     if (cap.see || cap.enter || cap.edit || Object.keys(features).length) {
-      out[mod.id] = { ...cap, features };
+      out[mod.id] = { ...cap, features, catalogVersion: 2 };
     }
   });
   return out;
@@ -581,7 +594,7 @@ function presentPerson(person) {
   return {
     id: person.id,
     name: person.name,
-    role: person.role,
+    role: orgRoleOf(person, line),
     status: person.status,
     center: person.center,
     lineManager: line.manager || person.lineManager || "",
