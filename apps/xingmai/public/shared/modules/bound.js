@@ -15,20 +15,16 @@
     catalog: null,
     viewData: null,
     link: null,
-    probe: null,
-    probeDate: "",
-    probeBusy: false,
     passwordBusy: false,
     qrBusy: false,
     qrOpen: false,
     autoReloginChoice: null,
     autoReloginBusy: false,
     autoReloginMessage: "",
-    batchRun: null,
     goodsBackfill: null,
     goodsBackfillBusy: false,
-    batchBusy: false,
-    batchError: "",
+    goodsBackfillRead: '',
+    goodsBackfillError: '',
     loginEditing: false,
     admin: false,
     error: "",
@@ -93,26 +89,97 @@
   var archivePromise = null, archiveKey = "", archiveScopeKey = "", archiveRevision = 0, savedOptionsPromise = null;
   var savedResponses = new Map(), archiveViews = new Map(), annotationIndexes = {};
   var backfillPolling = false;
-  function backfillText(run) {
-    if (!run) return '';
-    var names = { running: '补采中', complete: '补采完成', complete_with_errors: '补采结束，有失败项', paused: '已暂停', interrupted: '待继续', blocked: '已停止，需处理失败原因' };
-    return '商品补采：' + (names[run.status] || run.status) + ' · ' + run.from + ' 至 ' + run.to + ' · 完成 ' + run.done + '/' + run.total + ' 项（按店铺、日期核验）' + (run.failed ? ' · 失败 ' + run.failed + ' 项' : '') + (run.status === 'running' && run.current ? ' · 当前 ' + run.current.shopName + ' ' + run.current.date : '');
+  var goodsStatuses = {
+    running: '采集中', complete: '已完成', complete_with_errors: '本轮结束，有未通过项',
+    paused: '已暂停', interrupted: '待继续', blocked: '已暂停，需处理异常'
+  };
+  var goodsReasons = {
+    server_login_required: '请先连接旧站', login_expired: '旧站登录过期', login_busy: '旧站正在登录',
+    login_conflict: '旧站账号在其他位置登录', session_changed: '旧站会话已变更', identity_changed: '旧站账号身份已变化',
+    account_disabled: '旧站账号已停用', device_restricted: '旧站限制了当前设备', permission_denied: '旧站接口权限不足',
+    upstream_unavailable: '旧站接口连续异常', timeout: '请求超时', request_failed: '请求失败',
+    collector_busy: '已有采集任务运行', local_archive_error: '数据保存失败', upstream_pending: '旧站结果尚未就绪',
+    pagination_total_changed: '分页总数不一致', pagination_identity_mismatch: '商品或店铺标识不一致',
+    pagination_incomplete: '商品分页尚未收齐', pause_legacy_batch_first: '旧采集任务仍在运行',
+    invalid_scope: '店铺或日期范围有误', unknown_shop: '旧站账号目前看不到任务店铺'
+  };
+  function goodsReason(reason) {
+    return goodsReasons[reason] || '本次数据未通过核验';
+  }
+  function renderGoodsTask() {
+    var run = state.goodsBackfill;
+    var unavailable = state.goodsBackfillRead === 'unavailable';
+    if (!run) {
+      var message = unavailable ? '暂时读不到采集进度。'
+        : state.goodsBackfillRead === 'ready' ? '暂无商品采集任务记录。' : '正在读取采集进度…';
+      return '<p class="bd-status" role="status">' + message + '</p>';
+    }
+    var kind = run.automatic ? '自动采集' : '手动补采';
+    var dates = run.from === run.to ? run.from : run.from + ' 至 ' + run.to;
+    var percent = run.total > 0 ? Math.min(100, Math.max(0, Math.round(run.done * 100 / run.total))) : 0;
+    var result = '<p role="status"><strong>' + kind + ' · ' + esc(goodsStatuses[run.status] || '状态未知') + '</strong> · ' + esc(dates)
+      + ' · 已核验 ' + esc(run.done) + '/' + esc(run.total) + ' 项（店铺 × 日期）' + (run.failed ? ' · 未通过 ' + esc(run.failed) + ' 项' : '') + '</p>'
+      + '<progress aria-label="已核验的店铺日期进度" value="' + percent + '" max="100"></progress>';
+    if (run.status === 'running' && run.current) result += '<p class="bd-status">当前店铺：' + esc(run.current.shopName) + ' · ' + esc(run.current.date) + '</p>';
+    if (run.reason) result += '<p class="bd-status">原因：' + esc(goodsReason(run.reason)) + '</p>';
+    if (unavailable) result += '<p class="bd-status">暂时读不到最新进度，以上为上次读取结果。</p>';
+    return result;
+  }
+  function renderGoodsFailureDetails(run) {
+    var errors = run && Array.isArray(run.errors) ? run.errors.slice(-5).reverse() : [];
+    if (!errors.length) return '';
+    return '<div class="bd-table-wrap"><table class="bd-table"><thead><tr><th>最近未通过的店铺</th><th>业务日期</th><th>原因</th></tr></thead><tbody>'
+      + errors.map(function (entry) {
+        var scope = entry.scope || {}, failure = (entry.failures || [])[0] || {};
+        return '<tr><td>' + esc(scope.shopName || '—') + '</td><td>' + esc(scope.date || '—') + '</td><td>' + esc(goodsReason(failure.reason)) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  function renderGoodsProgress(detail) {
+    var run = state.goodsBackfill, controls = '';
+    if (run && !run.automatic && state.goodsBackfillRead === 'ready' &&
+      ['running', 'paused', 'interrupted', 'blocked', 'complete_with_errors'].includes(run.status)) {
+      var running = run.status === 'running';
+      controls = '<div class="bd-tools"><button type="button" data-act="goods-backfill-' + (running ? 'stop' : 'resume') + '"'
+        + (state.goodsBackfillBusy ? ' disabled' : '') + '>' + (running ? '暂停本次补采' : '继续本次补采') + '</button></div>';
+    }
+    return renderGoodsTask() + controls
+      + (state.goodsBackfillError ? '<p class="bd-banner" role="alert">' + esc(state.goodsBackfillError) + '</p>' : '')
+      + (detail ? renderGoodsFailureDetails(run) : '');
+  }
+  function renderGoodsCollection() {
+    var link = state.link || {};
+    var connection = link.collection && link.collection.batchEnabled ? '旧采集任务运行期间，商品自动采集排队等候。'
+      : link.batchLoginReady ? '旧站已连接，服务器会自动检查采集任务。' : '旧站连接后，服务器会自动检查采集任务。';
+    return '<section class="bd-block" aria-labelledby="bd-goods-policy"><h2 id="bd-goods-policy" class="bd-block-title">商品采集规则与进度</h2>'
+      + '<ul><li><strong>采集范围：</strong>43 家指定京东店铺的商品数据，从 2026 年 11 月 19 日起，按北京时间自动补到昨天。</li>'
+      + '<li><strong>每日回查：</strong>先补缺失数据。在业务日期后第二天零点前采到的数据，从该时点起重新采集并核验，停机漏掉的回查也会补上。</li>'
+      + '<li><strong>发布条件：</strong>SKU、SPU 的明细、汇总和指标卡全部核验通过后，才更新该店当天的数据。核验失败时保留已核验的版本。</li></ul>'
+      + '<p class="bd-status">' + connection + ' 关闭网页后任务继续在服务器运行。</p>'
+      + '<div data-goods-progress>' + renderGoodsProgress(true) + '</div></section>';
   }
   function renderBackfill() {
-    var run = state.goodsBackfill;
-    if (!run) return '';
-    return '<section class="bd-block"><p data-backfill-progress>' + esc(backfillText(run)) + '</p>' + (run.status === 'complete' ? '' : '<button type="button" data-act="goods-backfill-' + (run.status === 'running' ? 'stop' : 'resume') + '"' + (state.goodsBackfillBusy ? ' disabled' : '') + '>' + (run.status === 'running' ? '暂停补采' : '继续补采') + '</button>') + (run.reason ? '<p>原因：' + esc({ server_login_required: '请先连接旧站', login_expired: '旧站登录已过期，请重新连接', login_conflict: '旧站登录冲突，请重新连接', upstream_unavailable: '旧站接口暂时不可用', identity_changed: '登录账号已变化' }[run.reason] || run.reason) + '</p>' : '') + '</section>';
+    if (!state.goodsBackfill) return '';
+    return '<section class="bd-block" data-goods-progress>' + renderGoodsProgress(false) + '</section>';
   }
-  function pollGoodsBackfill(root, token) {
-    if (backfillPolling) return;
+  async function pollGoodsBackfill(root, token) {
+    if (backfillPolling || token !== active || state.goodsBackfillBusy) return;
     backfillPolling = true;
-    Promise.resolve().then(function () { return fetch('/api/bound/shop-day/goods-backfill'); }).then(async function (r) {
-      if (!r.ok) return;
-      var body = await r.json(); if (!body.ok || token !== active) return;
-      var previous = state.goodsBackfill; state.goodsBackfill = body.run;
-      if (previous?.status !== body.run?.status || previous?.id !== body.run?.id) paint(root);
-      else { var label = root.querySelector && root.querySelector('[data-backfill-progress]'); if (label) label.textContent = backfillText(body.run); }
-    }).catch(function () {}).finally(function () { backfillPolling = false; });
+    var previousRun = state.goodsBackfill, previousRead = state.goodsBackfillRead;
+    try {
+      var response = await fetch('/api/bound/shop-day/goods-backfill');
+      var body = response.ok ? await response.json() : null;
+      if (token !== active || state.goodsBackfillBusy || state.goodsBackfill !== previousRun) return;
+      state.goodsBackfillRead = body && body.ok ? 'ready' : 'unavailable';
+      if (body && body.ok) state.goodsBackfill = body.run;
+    } catch {
+      if (token !== active || state.goodsBackfillBusy || state.goodsBackfill !== previousRun) return;
+      state.goodsBackfillRead = 'unavailable';
+    } finally { backfillPolling = false; }
+    if (!['link', 'productOverview'].includes(state.page)) return;
+    if (previousRead === state.goodsBackfillRead && JSON.stringify(previousRun) === JSON.stringify(state.goodsBackfill)) return;
+    var slot = root.querySelector && root.querySelector('[data-goods-progress]');
+    if (slot) slot.innerHTML = renderGoodsProgress(state.page === 'link');
+    else if (!state.loginEditing && !state.passwordBusy && !state.qrBusy) paint(root);
   }
   function restoreSavedRecord(record) {
     if (!record || !Array.isArray(record.rowAliases)) return record;
@@ -261,7 +328,7 @@
         });
       }
       state.localArchive = { scope: manifest.scope, selected: manifest.selected, records: records, failures: failures, products: products,
-        unified: manifest.unified, collectionScope: manifest.collectionScope || manifest.scope, runtime: manifest.runtime || 'local', inventory: manifest.inventory, reports: manifest.reports, run: manifest.runtime === 'server' ? manifest.fourPageRun : manifest.run, exclusions: manifest.exclusions || [], cardRecords: previous && !refresh && !scopeChanged ? previous.cardRecords : {}, periods: previous && !refresh && !scopeChanged ? previous.periods : {}, extras: previous && !refresh && !scopeChanged ? previous.extras : {} };
+        unified: manifest.unified, collectionScope: manifest.collectionScope || manifest.scope, runtime: manifest.runtime || 'local', inventory: manifest.inventory, reports: manifest.reports, exclusions: manifest.exclusions || [], cardRecords: previous && !refresh && !scopeChanged ? previous.cardRecords : {}, periods: previous && !refresh && !scopeChanged ? previous.periods : {}, extras: previous && !refresh && !scopeChanged ? previous.extras : {} };
       if (!previous) {
         state.from = manifest.scope.from || manifest.scope.date; state.to = manifest.scope.to || manifest.scope.date;
         state.daysType = "1";
@@ -1047,14 +1114,6 @@
     }).join('') + '</div>';
   }
 
-  function archiveRunText() {
-    var run = state.localArchive.run;
-    if (!run || state.page !== 'link' && state.localArchive.unified) return '查看已保存数据，无需登录 BI 或重新采集。';
-    var label = { collecting: '正在采集', running: '正在采集', stopped: '采集已停止', paused: '采集已暂停', complete_with_deferred: '本轮采集完成，仍有待核验项', complete: '采集完成', interrupted: '采集中断' }[run.status] || run.status;
-    var reason = run.errors && run.errors.length ? run.errors[run.errors.length - 1].reason : '';
-    var error = { login_conflict: '账号已在其他位置登录，请先结束另一处操作后再建立采集会话。', server_login_required: '需要在连接旧站重新登录后续采。', login_expired: '自动重登未恢复会话，请重新登录后续采。', account_disabled: '旧站账号已禁用，已停止重试。', device_restricted: '旧站设备限制，已停止重试。' }[reason] || '';
-    return label + '：' + run.done + ' / ' + run.total + ' 项。' + (['collecting', 'running'].includes(run.status) ? '请勿同时在旧站登录此账号。' : error || '查看已保存数据无需登录 BI。');
-  }
   function archiveChartColumn(data) {
     return data.columns.find(function (c) { return c.numeric && c.key === state.archiveChartMetric; }) || data.columns.find(function (c) { return c.key === 'gmv'; }) || data.columns.find(function (c) { return c.numeric; }) || {};
   }
@@ -1129,7 +1188,7 @@
       '<div class="bd-pager"><select data-act="archive-page-size" aria-label="每页条数">' + [20, 50, 100].map(function (n) { return '<option value="' + n + '"' + (data.pageSize === n ? ' selected' : '') + '>' + n + ' 条/页</option>'; }).join('') + '</select><button type="button" data-act="page-no" data-delta="-1"' + (data.pageNo <= 1 ? " disabled" : "") + '>上一页</button><span>第 ' + data.pageNo + ' / ' + Math.max(1, Math.ceil(data.total / data.pageSize)) + ' 页</span><button type="button" data-act="page-no" data-delta="1"' + (data.pageNo * data.pageSize >= data.total ? " disabled" : "") + '>下一页</button></div></section>';
     return '<section class="bd-main" data-bound-erp="false" data-local-archive="true" data-page="' + esc(data.page.id) + '">' +
       '<header class="bd-head"><div><h1>' + esc(data.page.label) + '</h1><p class="bd-sub">' + (state.localArchive.runtime === 'server' ? '服务器' : '本机') + '已采数据 · ' + esc(scope.platform) + ' · ' + esc(scope.shopName) + '</p></div><div class="bd-filters">' + shopPicker + renderDateBar(data) + '</div></header>' +
-      '<div class="bd-archive-progress"><span data-archive-progress>' + esc(archiveRunText()) + '</span><button type="button" data-act="archive-refresh"' + (state.archiveRefreshBusy ? ' disabled' : '') + '>' + (state.archiveRefreshBusy ? '正在刷新…' : '刷新已采数据') + '</button></div>' + (state.page === 'productOverview' ? renderBackfill() : '') + selectProduct +
+      '<div class="bd-archive-progress"><span>查看已保存数据，无需连接旧站。</span><button type="button" data-act="archive-refresh"' + (state.archiveRefreshBusy ? ' disabled' : '') + '>' + (state.archiveRefreshBusy ? '正在刷新…' : '刷新已采数据') + '</button></div>' + (state.page === 'productOverview' ? renderBackfill() : '') + selectProduct +
       (state.error ? '<p class="bd-banner" role="alert">' + esc(state.error) + '</p>' : '') +
       (state.localArchive.failures.length ? '<p class="bd-banner">部分档案读取失败：' + esc(state.localArchive.failures.join("、")) + '</p>' : '') +
       (data.page.id === 'channelOverview' && !data.account ? '<p class="bd-banner">当前总览范围：' + esc(scope.platform) + ' · ' + esc(scope.shopName) + ' · ' + esc(scope.date) + '。可在店铺选择中切换“全部已存店铺”，查看历史渠道汇总。</p>' : '') +
@@ -1286,12 +1345,6 @@
       ".bd-panel{margin:0 0 12px;padding:10px 12px;background:#fff;border:1px solid #eceff5;border-radius:6px;}",
       ".bd-panel label{display:flex;gap:6px;align-items:center;margin:4px 12px 4px 0;font-size:12px;}",
       ".bd-qr{width:180px;height:180px;object-fit:contain;background:#fff;}",
-      ".bd-now{margin:0 0 8px;font-size:13px;}",
-      ".bd-meter{height:8px;margin:8px 0 12px;background:#f2f3f5;border-radius:4px;overflow:hidden;}",
-      ".bd-meter i{display:block;height:100%;background:#3b6cff;}",
-      ".bd-progress{max-height:420px;overflow:auto;}",
-      ".bd-progress td.is-current{color:#3b6cff;font-weight:650;}",
-      ".bd-reason{margin-top:2px;max-width:280px;color:#8a93a6;font-size:12px;font-weight:400;white-space:normal;}",
       ".bd-detail{white-space:normal;text-align:left;font-size:12px;line-height:1.6;color:#4e5969;}",
       "@media(max-width:900px){.bd-head{flex-direction:column}.bd-gallery{grid-template-columns:1fr 1fr}}"
     ].join("");
@@ -1435,7 +1488,8 @@
   }
 
   function reliableDay() {
-    return iso(addDays(parseIso(shanghaiToday()), -2));
+    var goodsArchive = state.page === "productOverview" && state.localArchive?.unified;
+    return iso(addDays(parseIso(shanghaiToday()), goodsArchive ? -1 : -2));
   }
 
   function clampRange(from, to) {
@@ -1700,7 +1754,7 @@
     }).join("");
     return '<div class="bd-datepick"><span class="bd-stat-time">' + esc(statText(data.range.from, data.range.to, daysType)) + '</span><div class="bd-presets">' + buttons +
       '<i class="bd-split"></i><button type="button" class="bd-arrow" data-act="shift" data-delta="-1" aria-label="上一期"' + (shiftRange(-1) ? "" : " disabled") + '>‹</button><button type="button" class="bd-arrow" data-act="shift" data-delta="1" aria-label="下一期"' + (shiftRange(1) ? "" : " disabled") + '>›</button><i class="bd-split"></i>' +
-      '<button type="button" data-act="preset" data-preset="custom" class="bd-custom' + (preset === "custom" ? " is-on" : "") + '">自定义<span class="bd-tip">自定义最多连续 60 天。只查看已保存的对应时间段数据；切换日期不会触发采集。最近两天不取。</span></button></div>' +
+      '<button type="button" data-act="preset" data-preset="custom" class="bd-custom' + (preset === "custom" ? " is-on" : "") + '">自定义<span class="bd-tip">自定义最多连续 60 天。查看所选时段的已保存数据，切换日期不会触发采集。</span></button></div>' +
       '<input class="bd-picker" data-act="pick-date" type="date" min="' + DATA_START + '" max="' + esc(cap) + '" value="' + esc(dayValue) + '">' +
       '<input class="bd-picker" data-act="pick-week" type="week" max="' + esc(isoWeekValue(iso(addDays(parseIso(weekStart(today)), -7)))) + '" value="' + esc(isoWeekValue(monday)) + '">' +
       '<input class="bd-picker" data-act="pick-month" type="month" min="2026-09" max="' + esc(today.slice(0, 7)) + '" value="' + esc(monthValue) + '">' +
@@ -2238,106 +2292,6 @@
     return "";
   }
 
-  function renderProgress() {
-    var progress = state.progress;
-    if (!progress || !progress.items) {
-      return '<section class="bd-block"><h2 class="bd-block-title">采集进度</h2><p class="bd-miss">正在读取本库进度。</p></section>';
-    }
-    var counts = progress.counts || {};
-    var done = counts.done || 0;
-    var total = progress.total || progress.items.length || 1;
-    var width = Math.max(0, Math.min(100, Math.round(done / total * 100)));
-    var cursor = progress.cursor || {};
-    var phase = progress.phase || "";
-    var now = "采集还没开始。";
-    if (progress.collection && !progress.collection.batchEnabled) {
-      now = progress.collection.message;
-    } else if (phase === "collecting" && cursor.label) {
-      now = "正在采集：" + (cursor.page || "") + " / " + cursor.label + "，" + (cursor.start || "") + (cursor.end && cursor.end !== cursor.start ? " 至 " + cursor.end : "");
-    } else if (phase === "collecting") {
-      now = "正在采集。这一页每几秒刷新一次。";
-    } else if (phase === "logged_in") {
-      now = progress.message || "已补到今天。之后按天增量。";
-    } else if (phase === "needs_scan" || phase === "waiting_scan") {
-      now = "采集停住，等扫码。下面是已经入库的进度。";
-    }
-    var labels = { done: "已完成", partial: "部分完成", failed: "失败", pending: "还没开始" };
-    var rows = progress.items.map(function (item) {
-      var current = cursor.id === item.id && (cursor.dim || "all") === (item.dim || "all");
-      var dim = item.dim && item.dim !== "all" ? " " + item.dim.toUpperCase() : "";
-      var statusText = current ? "正在采" : (labels[item.status] || item.status);
-      var reason = item.reason || "";
-      if (!reason && item.readyDays === 0 && item.failedDays > 0) {
-        reason = "还没有一天采集成功，已采天数不会增加";
-      }
-      var dates = item.failedDates || [];
-      var failLine = "";
-      if (item.failedDays) {
-        failLine = "失败 " + item.failedDays + " 天";
-        if (item.retries) {
-          failLine += "，已重试 " + item.retries + " 次";
-        }
-        if (dates.length) {
-          failLine += "：" + dates.slice(0, 8).join("、");
-          if (dates.length > 8) {
-            failLine += " 等 " + dates.length + " 天";
-          }
-        }
-      }
-      if (item.failedMonths) {
-        failLine += (failLine ? "。" : "") + "整月失败 " + item.failedMonths + " 个";
-      }
-      var reasonHtml = (reason || failLine) ? '<div class="bd-reason">' + esc([reason, failLine].filter(Boolean).join("。")) + "</div>" : "";
-      return '<tr class="' + (current ? "bd-total" : "") + '"><td class="' + (current ? "is-current" : "") + '">' + esc(item.page) + "</td><td>" + esc(item.tab + dim) + "</td><td>" + esc(item.readyDays) + "/" + esc(progress.dayCount) + "</td><td>" + esc(item.failedDays) + "</td><td>" + esc(item.latest || "—") + "</td><td>" + esc(statusText) + reasonHtml + "</td></tr>";
-    }).join("");
-    return '<section class="bd-block"><h2 class="bd-block-title">采集进度</h2><p class="bd-now">' + esc(now) + "</p><div class=\"bd-meter\"><i style=\"width:" + width + "%\"></i></div><p class=\"bd-status\">已完成 " + esc(done) + " / " + esc(total) + " 张表。进行中 " + esc(counts.partial || 0) + "，失败 " + esc(counts.failed || 0) + "，还没开始 " + esc(counts.pending || 0) + "。范围 " + esc(progress.startOn) + " 至 " + esc(progress.today) + "。</p><div class=\"bd-progress\"><table class=\"bd-table\"><tr><th>页面</th><th>表</th><th>已采天数</th><th>失败</th><th>最近一天</th><th>状态</th></tr>" + rows + "</table></div></section>";
-  }
-
-  function renderProbe() {
-    var probe = state.probe;
-    if (!probe || !probe.target) return "";
-    var target = probe.target;
-    var busy = state.probeBusy || probe.running;
-    var last = probe.last;
-    var metric = last && last.metric;
-    var result = metric ? '<p><strong>接口支付金额：' + esc(metric.displayValue) + '</strong> · ' + (metric.matchesPage ? "与旧站页面一致" : "与页面不一致") + '</p><p class="bd-status">' + esc(metric.definition) + '。' + esc(metric.precisionNote) + '</p>' : '';
-    var candidateRow = last && last.sample && last.sample.row;
-    if (!metric && target.metric === "广告花费" && last && last.status === "response_received"
-      && candidateRow && String(candidateRow.date || "").replace(/\//g, "-") === target.date
-      && typeof candidateRow.tghf === "number" && Number.isFinite(candidateRow.tghf)) {
-      var adMatchesPage = target.pageConfirmation && target.pageConfirmation.source === "user"
-        && typeof target.pageDisplay === "string" && Number(target.pageDisplay.replace(/,/g, "")) === candidateRow.tghf;
-      result = '<p><strong>' + (adMatchesPage ? '接口广告花费：' : '推广相关候选值：')
-        + esc(new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 20 }).format(candidateRow.tghf))
-        + '</strong>' + (adMatchesPage ? ' · 与用户确认的旧站页面一致' : '')
-        + '</p><p class="bd-status">接口字段 tghf。' + (adMatchesPage ? '页面金额已人工核对；账单实际消耗口径尚未单独验证。' : '广告金额口径待核对；尚未确认为广告账单实际消耗。') + '</p>';
-    }
-    var tasks = (probe.targets || [target]).map(function (item) {
-      return '<button type="button" data-act="probe-target" data-date="' + esc(item.date) + '"' + (busy ? ' disabled' : '') + '>' + esc(item.date + " · " + item.metric) + '</button>';
-    }).join("");
-    var baseline = target.pageDisplay == null ? "尚未核对旧站页面值。" : "已确认的旧站页面值：" + esc(target.pageDisplay) + "。";
-    return '<section class="bd-block"><h2 class="bd-block-title">单店试采</h2><div class="bd-tools">' + tasks + '</div><p>' + esc(target.shopName) + " · " + esc(target.date) + " · " + esc(target.metric) + '</p><p class="bd-status">' + baseline + '每次只请求这一家店的数据，并核对指定日期行。</p><div class="bd-tools"><button type="button" data-act="probe"' + (busy ? ' disabled' : '') + '>' + (busy ? "试采中…" : "试采一次") + '</button></div>' + result + (last ? '<p role="status">' + esc(last.message) + '</p><p class="bd-status">请求次数：' + esc(last.requestCount) + " · " + esc(last.finishedAt) + "</p>" : "") + '</section>';
-  }
-
-  function renderShopBatch() {
-    return renderBackfill() + renderShopBatchContent();
-  }
-  function renderShopBatchContent() {
-    if (!state.localArchive || state.localArchive.runtime !== 'server') return '';
-    var run = state.batchRun, busy = state.batchBusy || run && run.status === 'running';
-    var names = { running: '采集中', queued: '等待采集', paused: '已暂停', interrupted: '服务重启后待续采', blocked: '已暂停，需处理异常', complete: '已完成', complete_with_errors: '本轮结束，部分店铺待处理', failed: '待处理' };
-    var reasons = { server_login_required: '请先登录旧站账号', login_expired: '登录已过期', login_conflict: '账号在其他位置登录', identity_changed: '登录账号发生变化', shop_list_unverified: '店铺列表结构待核验', shop_discovery_failed: '未取得旧站店铺列表', collector_busy: '已有采集任务运行', permission_denied: '接口权限不足', upstream_unavailable: '旧站接口连续异常', schema_unverified: '返回字段待核验', date_unverified: '日期待核验', timeout: '接口超时', request_failed: '接口请求失败' };
-    var rows = run ? run.shops.map(function (item) {
-      var live = item.status === 'running' && run.currentRun && run.currentRun.scope
-        && run.currentRun.scope.platform === item.scope.platform && run.currentRun.scope.shopId === item.scope.shopId
-        ? run.currentRun : item.run;
-      var progress = live ? live.done + '/' + live.total : '—';
-      if (live && item.status === 'running' && live.inFlight && live.inFlight.length) progress += ' · 正在处理 ' + live.inFlight.length + ' 项';
-      return '<tr><td>' + esc(item.scope.shopName) + '</td><td>' + esc(item.scope.platform) + '</td><td>' + esc(names[item.status] || item.status) + '</td><td>' + esc(progress) + '</td><td>' + esc(reasons[item.reason] || item.reason || '') + '</td></tr>';
-    }).join('') : '';
-    return '<section class="bd-block"><h2>多店四页采集</h2>' + (state.batchError ? '<p role="alert">' + esc(state.batchError) + '</p>' : '') + '<p>' + esc(run && run.selection ? run.selection.label : '当前账号全部可见店铺') + ' · 2026-10-03</p>' + (run && run.selection ? '<p>本轮仅采选定的 ' + esc(run.total) + ' 家店铺；其他店铺已采数据保留，暂不继续采集。</p>' : '') + '<p>逐店采集渠道总览、渠道详情、关键指标分析和商品总览，已有成功结果直接复用。</p><p role="status">' + esc(run ? (names[run.status] || run.status) + ' · 完成 ' + run.done + '/' + run.total + ' 家 · 待处理 ' + run.failed + ' 家 · 请求 ' + run.requests + ' 次 · 复用 ' + run.cached + ' 项' : '尚未建立全店任务') + '</p>' + (run && run.current ? '<p>当前店铺：' + esc(run.current.shopName) + (run.currentRun ? ' · ' + esc(run.currentRun.done + '/' + run.currentRun.total) + ' 项' : '') + '</p>' : '') + '<button type="button" data-act="batch-start"' + (busy ? ' disabled' : '') + '>开始 / 继续本轮采集</button><button type="button" data-act="batch-stop"' + (!busy ? ' disabled' : '') + '>暂停本轮采集</button><p class="bd-status">关闭页面后服务器继续运行。暂停后可续采；登录冲突会停止。当前只采这一天，不启动九月以来的全量回补。</p>' + (rows ? '<div class="bd-table-wrap"><table><thead><tr><th>店铺</th><th>渠道</th><th>状态</th><th>本店任务</th><th>原因</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '') + '</section>';
-  }
-
   function renderLink() {
     var link = state.link || {};
     var showQr = link.qrReady && (link.phase === "waiting_scan" || link.phase === "needs_scan" || link.phase === "choose_account");
@@ -2356,19 +2310,19 @@
       || link.authFailure === "login_failed" && diagnostic && diagnostic.stage === "login" && diagnostic.httpStatus === 200 && String(diagnostic.upstreamCode) === "1000101");
     var linkMessage = credentialsRejected
       ? '旧站返回“用户名或密码错误”（1000101）。请核对与 hejun.ecbis.cn 登录页相同的账号密码，或使用已绑定账号扫码连接。已停止自动重登。'
-      : link.message || '';
+      : link.batchLoginReady && /开始\s*\/\s*继续本轮采集|批量采集保持暂停|按筛选时间整段补采/.test(link.message || '')
+        ? '旧站已连接，账号身份已核验。' + (link.autoReloginEnabled ? ' 已启用自动重登。' : '')
+        : link.message || '';
     password += '<p class="bd-status">连接地址：<a href="https://hejun.ecbis.cn/login" target="_blank" rel="noopener noreferrer">hejun.ecbis.cn</a>。此处需要单独建立采集会话，浏览器已登录状态不会自动同步。账号和密码首尾空格会按旧站规则去除。</p>';
     if (diagnostic) password += '<details><summary>查看登录诊断</summary><p class="bd-status">'
       + esc(({ login: '账号验证', session: '会话校验', profile: '身份校验' }[diagnostic.stage] || '登录')
         + ' · HTTP ' + (diagnostic.httpStatus == null ? '未取得响应' : diagnostic.httpStatus)
         + ' · 旧站错误码 ' + (diagnostic.upstreamCode == null ? '未提供' : diagnostic.upstreamCode)
         + ' · ' + (diagnostic.at || '')) + '</p></details>';
-    var archive = state.localArchive;
-    var scoped = archive ? '' : renderProgress();
     var qrButtons = [['WECHAT', '微信'], ['FEISHU', '飞书'], ['DINGTALK', '钉钉'], ['QYWX', '企业微信']].map(function (p) {
       return '<button type="button" data-act="scan" data-provider="' + p[0] + '"' + (state.qrBusy || state.passwordBusy ? ' disabled' : '') + '>' + p[1] + '</button>';
     }).join('');
-    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>连接旧站</h1><p class="bd-sub">使用旧站账号密码或扫码建立采集会话。</p><p class="bd-status">采集期间查看本系统已采数据，避免在其他设备重复登录旧站导致会话失效。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + '</p></div></header><section class="bd-block"><p role="status">' + esc(linkMessage) + '</p>' + password + '<details data-bound-qr' + (state.qrOpen || showQr || credentialsRejected || link.phase === 'choose_account' ? ' open' : '') + '><summary>扫码登录（可续采）</summary><p>使用旧站已绑定的账号扫码。身份核验成功后，点击“开始 / 继续本轮采集”；已完成的数据会复用。登录过期时停止并保留进度，重新扫码后可继续。</p>' + (state.qrBusy ? '<p role="status">正在处理扫码登录…</p>' : '') + qr + '<div class="bd-tools">' + qrButtons + accounts + '</div></details></section>' + (archive ? '' : renderProbe()) + renderShopBatch() + scoped + '</section>';
+    return '<section class="bd-main" data-bound-erp="false"><header class="bd-head"><div><h1>连接旧站</h1><p class="bd-sub">使用旧站账号密码或扫码建立采集会话。</p><p class="bd-status">采集期间查看本系统已采数据，避免在其他设备重复登录旧站导致会话失效。</p><p class="bd-status">爬虫，非 ERP。浏览器标识 ' + esc(link.deviceId || "") + '</p></div></header><section class="bd-block"><p role="status">' + esc(linkMessage) + '</p>' + password + '<details data-bound-qr' + (state.qrOpen || showQr || credentialsRejected || link.phase === 'choose_account' ? ' open' : '') + '><summary>扫码登录（可续采）</summary><p>使用旧站已绑定的账号扫码。身份核验后，服务器会继续检查商品采集任务。若连接过期，请重新登录。</p>' + (state.qrBusy ? '<p role="status">正在处理扫码登录…</p>' : '') + qr + '<div class="bd-tools">' + qrButtons + accounts + '</div></details></section>' + renderGoodsCollection() + '</section>';
   }
 
   function renderMain() {
@@ -2476,11 +2430,10 @@
     var revision = ++loadRevision;
     state.error = "";
     var metadataPromise = Promise.all([state.catalog ? { ok: true } : fetch('/api/bound'), state.catalog ? null : fetch('/api/bound/catalog'), state.linkChecked && state.page !== 'link' ? null : fetch('/api/bound/link')]);
-    await readLocalArchive(); await readArchiveProduct();
+    if (state.page !== 'link') { await readLocalArchive(); await readArchiveProduct(); }
     var metadata = await metadataPromise, stamp = metadata[0], catalog = metadata[1], link = metadata[2];
     if (token !== active || revision !== loadRevision) return;
     var view = state.page === "link" || state.localArchive ? null : await fetch("/api/bound/view?" + queryString());
-    var progress = state.page === "link" ? await fetch("/api/bound/progress") : null;
     if (token !== active || revision !== loadRevision) {
       return;
     }
@@ -2491,9 +2444,6 @@
     }
     if (catalog) {
       state.catalog = await catalog.json();
-    }
-    if (progress && progress.ok) {
-      state.progress = await progress.json();
     }
     if (view && view.ok) {
       state.viewData = await view.json();
@@ -2510,19 +2460,8 @@
       state.error = "这一页没有读到";
     }
     if (link) { state.admin = link.ok; state.link = link.ok ? await link.json() : null; state.linkChecked = true; }
-    if (state.page === "link" && state.admin) {
-      try { var batchResponse = await fetch("/api/bound/shop-day/batch"); if (batchResponse.ok) state.batchRun = (await batchResponse.json()).run; } catch { /* Existing saved data remains readable. */ }
-      try {
-        var requestedProbeDate = state.probeDate;
-        var probe = await fetch("/api/bound/collect/probe" + (requestedProbeDate ? "?date=" + encodeURIComponent(requestedProbeDate) : ""));
-        if (token !== active || requestedProbeDate !== state.probeDate) return;
-        state.probe = probe.ok ? await probe.json() : null;
-      } catch {
-        state.probe = null;
-      }
-    }
     if (!state.loginEditing && !state.passwordBusy) paint(root);
-    if (['productOverview', 'link'].includes(state.page)) pollGoodsBackfill(root, token);
+    if (state.admin && ['productOverview', 'link'].includes(state.page)) pollGoodsBackfill(root, token);
   }
 
   // Poll only live status; do not reload archived reports/catalog every 3 seconds.
@@ -2532,15 +2471,10 @@
     linkPollBusy = true;
     var revision = loadRevision;
     try {
-      var results = await Promise.all(['/api/bound/shop-day/batch', '/api/bound/shop-day/run', '/api/bound/link'].map(async function (url) {
-        var response = await fetch(url);
-        return response.ok ? response.json() : null;
-      }));
-      if (token !== active || revision !== loadRevision || state.page !== 'link' || state.loginEditing || state.passwordBusy || state.qrBusy || state.batchBusy) return;
-      if (results[0] && results[0].ok) state.batchRun = results[0].run;
-      if (results[1] && results[1].ok && state.localArchive) state.localArchive.run = results[1].run;
-      if (results[2]) state.link = results[2];
-      paint(root);
+      var response = await fetch('/api/bound/link');
+      var result = response.ok ? await response.json() : null;
+      if (!result || token !== active || revision !== loadRevision || state.page !== 'link' || state.loginEditing || state.passwordBusy || state.qrBusy || state.autoReloginBusy) return;
+      if (JSON.stringify(result) !== JSON.stringify(state.link)) { state.link = result; paint(root); }
     } catch { /* Keep the last confirmed progress during a network interruption. */ }
     finally { linkPollBusy = false; }
   }
@@ -2579,24 +2513,21 @@
       var act = node.getAttribute("data-act");
       if (act === 'goods-backfill-stop' || act === 'goods-backfill-resume') {
         var backfill = state.goodsBackfill;
-        if (!backfill || state.goodsBackfillBusy) return;
-        state.goodsBackfillBusy = true; paint(root);
-        var backfillBody = act === 'goods-backfill-stop' ? {} : { from: backfill.from, to: backfill.to, shopKeys: backfill.shops.map(function (s) { return s.platform + ':' + s.shopId; }) };
-        fetch('/api/bound/shop-day/goods-backfill/' + (act === 'goods-backfill-stop' ? 'stop' : 'start'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(backfillBody) }).then(async function (r) {
-          var result = await r.json();
-          if (!r.ok || !result.ok) throw Error(result.reason || 'request_failed');
-          if (result.run) state.goodsBackfill = result.run;
-        }).catch(function (error) { state.error = '补采操作未完成：' + ({ server_login_required: '请先连接旧站', collector_busy: '已有采集任务运行', login_expired: '旧站登录已过期' }[error.message] || error.message); }).finally(function () { state.goodsBackfillBusy = false; if (token === active) { paint(root); pollGoodsBackfill(root, token); } });
-        return;
-      }
-      if (act === 'batch-start' || act === 'batch-stop') {
-        if (!state.localArchive || state.localArchive.runtime !== 'server' || state.batchBusy) return;
-        state.batchBusy = true; state.batchError = ""; paint(root);
-        fetch('/api/bound/shop-day/batch/' + (act === 'batch-start' ? 'start' : 'stop'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(async function (r) {
-          var result = await r.json();
-          if (!r.ok || !result.ok) { state.batchError = '全店任务操作未完成：' + ({ server_login_required: '请先扫码或用账号密码登录', collector_busy: '已有采集任务运行', identity_changed: '采集账号与已有任务不一致', shop_list_unverified: '旧站店铺列表需要核验', shop_discovery_failed: '旧站店铺列表请求失败' }[result.reason] || result.reason || '请稍后重试'); return; }
-          if (result.run) state.batchRun = result.run;
-        }).catch(function () { state.batchError = '全店任务请求失败，请稍后重试。'; }).finally(function () { state.batchBusy = false; if (token === active) paint(root); });
+        if (!backfill || backfill.automatic || state.goodsBackfillBusy || state.goodsBackfillRead !== 'ready') return;
+        var stopping = act === 'goods-backfill-stop';
+        if (stopping !== (backfill.status === 'running')) return;
+        state.goodsBackfillBusy = true; state.goodsBackfillError = ''; paint(root);
+        var body = stopping ? {} : { from: backfill.from, to: backfill.to, shopKeys: backfill.shops.map(function (s) { return s.platform + ':' + s.shopId; }) };
+        fetch('/api/bound/shop-day/goods-backfill/' + (stopping ? 'stop' : 'start'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(async function (response) {
+          var result = await response.json();
+          if (!response.ok || !result.ok) throw Error(result.reason || 'request_failed');
+          if (token === active && result.run) state.goodsBackfill = result.run;
+        }).catch(function (error) {
+          if (token === active) state.goodsBackfillError = '补采操作未完成：' + goodsReason(error.message);
+        }).finally(function () {
+          state.goodsBackfillBusy = false;
+          if (token === active) { paint(root); pollGoodsBackfill(root, token); }
+        });
         return;
       }
       if (state.localArchive && act.indexOf("archive-") === 0) {
@@ -2642,14 +2573,6 @@
         if (act === 'archive-column-move') {
           var order = archiveDisplayColumns(state.viewData).map(function (c) { return c.key; }), current = order.indexOf(node.getAttribute('data-key')), moveTarget = current + Number(node.getAttribute('data-delta'));
           if (current > 0 && moveTarget > 0 && moveTarget < order.length) { order.splice(moveTarget, 0, order.splice(current, 1)[0]); state.archiveColumnOrder[archiveDisplayId(state.viewData)] = order; saveArchiveDisplay(); paint(root); }
-          return;
-        }
-        if (act === 'archive-job-start' || act === 'archive-job-stop') {
-          if (state.localArchive.runtime !== 'server') return;
-          fetch('/api/bound/shop-day/' + (act === 'archive-job-start' ? 'four-pages/start' : 'stop'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(async function (r) {
-            var result = await r.json(); if (!r.ok || !result.ok) throw new Error('job_failed');
-            if (result.run) state.localArchive.run = result.run;
-          }).catch(function () { state.error = '采集任务未启动，请确认登录状态后重试。'; }).finally(function () { if (token === active) paint(root); });
           return;
         }
         if (act === 'archive-key-metric') {
@@ -2840,7 +2763,7 @@
         state.datePop = "";
         applyRange({ from: yearRange.from, to: yearRange.to, daysType: "year" });
       } else if (act === "password-login") {
-        if (state.passwordBusy || state.qrBusy || state.probeBusy || state.autoReloginBusy) return;
+        if (state.passwordBusy || state.qrBusy || state.autoReloginBusy) return;
         var userField = root.querySelector('[name="bound-user-name"]');
         var passwordField = root.querySelector('[name="bound-password"]');
         var autoField = root.querySelector('[name="bound-auto-relogin"]');
@@ -2867,32 +2790,6 @@
             if (token === active) paint(root);
           });
         loginBody = "";
-        return;
-      } else if (act === "probe-target") {
-        if (state.probeBusy || state.passwordBusy) return;
-        state.probeDate = node.getAttribute("data-date");
-        state.probe = null;
-        paint(root);
-        load(root, token);
-        return;
-      } else if (act === "probe") {
-        if (state.probeBusy || state.passwordBusy || !state.probe || !state.probe.target) return;
-        state.probeBusy = true;
-        var target = state.probe.target;
-        paint(root);
-        fetch("/api/bound/collect/probe", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ shopId: target.shopId, platform: target.platform, date: target.date })
-        }).then(function (response) { return response.json(); }).then(function (result) {
-          if (token !== active) return;
-          if (result.record) state.probe.last = result.record;
-          else state.error = result.message || "本次试采未开始";
-        }).catch(function () {
-          if (token === active) state.error = "没有收到试采结果，请查看最近一次记录，避免重复提交。";
-        }).finally(function () {
-          state.probeBusy = false;
-          if (token === active) paint(root);
-        });
         return;
       } else if (act === "scan" || act === "pick") {
         if (state.qrBusy || state.passwordBusy) return;
@@ -3194,8 +3091,9 @@
       savedResponses.clear(); archiveViews.clear(); annotationIndexes = {}; state.archiveAnnotations = {};
       state.loginEditing = false;
       if (!state.autoReloginBusy) { state.autoReloginChoice = null; state.autoReloginMessage = ""; }
-      var initialProbeDate = new URLSearchParams(window.location && window.location.search || "").get("probeDate");
-      if (initialProbeDate) { state.page = "link"; state.probeDate = initialProbeDate; }
+      state.goodsBackfill = null; state.goodsBackfillRead = ''; state.goodsBackfillError = '';
+      // Existing links still open the connection page after the test panel was retired.
+      if (new URLSearchParams(window.location && window.location.search || '').has('probeDate')) state.page = 'link';
       ensureStyle();
       if (root.classList) {
         root.classList.add("xm-ui-scope");
@@ -3204,20 +3102,11 @@
       detach = listen(root, token);
       load(root, token);
       if (typeof setInterval === "function") {
-        var archivePollTick = 0;
+        var statusTick = 0;
         timer = setInterval(function () {
-          if (state.page === "link" && state.admin && !state.loginEditing && !state.passwordBusy) {
-            pollLinkProgress(root, token);
-          }
-          if (state.localArchive && ++archivePollTick % 10 === 0 && token === active) {
-            if (['productOverview', 'link'].includes(state.page)) pollGoodsBackfill(root, token);
-            fetch("/api/bound/shop-day/run").then(function (r) { return r.ok ? r.json() : null; }).then(function (result) {
-              if (!result || !result.ok || token !== active) return;
-              state.localArchive.run = result.run;
-              var label = root.querySelector && root.querySelector('[data-archive-progress]');
-              if (label) label.textContent = archiveRunText();
-            }).catch(function () { /* The saved data remains readable during a local outage. */ });
-          }
+          if (!state.admin || token !== active) return;
+          if (state.page === 'link' && !state.loginEditing && !state.passwordBusy && !state.qrBusy) pollLinkProgress(root, token);
+          if (++statusTick % 2 === 0 && ['link', 'productOverview'].includes(state.page)) pollGoodsBackfill(root, token);
         }, 3000);
       }
       return function () {

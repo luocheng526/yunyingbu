@@ -50,7 +50,7 @@ test('取消选项单独保存，保留输入，轮询和重新打开页面不�
   assert.deepEqual(JSON.parse(posts[0].options.body), { enabled: false });
   assert.equal(fields['[name="bound-password"]'].value, 'test-secret');
   // An old poll response still reports true while the preference save is pending.
-  poll(); await delay(10); assert.doesNotMatch(checkbox(), / checked/);
+  poll(); await delay(10); assert.equal(field.checked, false);
   finish(); await delay(10);
   assert.equal(enabled, false);
   assert.match(fields['[data-auto-relogin-status]'].textContent, /已关闭/);

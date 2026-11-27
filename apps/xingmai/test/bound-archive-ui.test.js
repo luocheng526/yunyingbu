@@ -7,6 +7,7 @@ import { createAnnotations } from "../src/modules/bound/annotations.js";
 import { publicCatalog } from "../src/modules/bound/catalog.js";
 import { createSavedData } from '../src/modules/bound/saved-data.js';
 import { compactSavedRecord } from '../src/modules/bound/saved-wire.js';
+import { addDays, shanghaiToday } from '../src/modules/bound/time.js';
 
 const source = readFileSync(new URL("../public/shared/modules/bound.js", import.meta.url), "utf8");
 const scope = { shopId: "16501691", platform: "JD", shopName: "RASW潮流生活京选菀瑶专卖店", date: "2026-10-03" };
@@ -230,12 +231,16 @@ test('快速切换日期时旧请求较晚返回不会覆盖新日期', async ()
 test('商品补采显示实际范围进度，暂停与继续保持原店铺日期范围', async () => {
   const h = await harness({ saved: savedFixture(), backfill: { id: 'backfill', status: 'running', from: '2026-09-01', to: '2026-11-18', done: 43, total: 3397, failed: 0, shops: [scope], current: scope } });
   await h.click({ 'data-act': 'page', 'data-page': 'productOverview' });
-  assert.match(h.root.innerHTML, /商品补采：补采中/); assert.match(h.root.innerHTML, /43\/3397/);
-  await h.click({ 'data-act': 'goods-backfill-stop' }); assert.match(h.root.innerHTML, /商品补采：已暂停/);
+  assert.match(h.root.innerHTML, /手动补采 · 采集中/); assert.match(h.root.innerHTML, /43\/3397/);
+  await h.click({ 'data-act': 'goods-backfill-stop' }); assert.match(h.root.innerHTML, /手动补采 · 已暂停/);
   await h.click({ 'data-act': 'goods-backfill-resume' });
   const start = h.calls.find(c => c.url.endsWith('/goods-backfill/start'));
   assert.deepEqual(JSON.parse(start.options.body), { from: '2026-09-01', to: '2026-11-18', shopKeys: ['JD:' + scope.shopId] });
-  assert.match(h.root.innerHTML, /商品补采：补采中/);
+  assert.match(h.root.innerHTML, /手动补采 · 采集中/);
+  const yesterday = addDays(shanghaiToday(), -1);
+  await h.change('pick-date', yesterday);
+  const last = h.calls.filter(call => call.url.startsWith('/api/bound/shop-day/saved?')).at(-1);
+  assert.equal(new URL(last.url, 'http://localhost').searchParams.get('to'), yesterday);
 });
 
 test('大表内联读取一次、菜单往返复用、未显示SPU不请求；标记全表一次读取且可保存', async () => {
@@ -624,8 +629,8 @@ test("商品切换只读对应商品档案，缺采时不沿用上一件商品�
   await h.click({ 'data-act': 'archive-refresh' });
   assert.match(h.root.innerHTML, /商品 ID：90000000000000/);
   assert.match(h.root.innerHTML, />888</);
-  assert.match(h.root.innerHTML, /382 \/ 1544/);
-  assert.match(h.root.innerHTML, /请勿同时在旧站登录此账号/);
+  assert.doesNotMatch(h.root.innerHTML, /382 \/ 1544/);
+  assert.match(h.root.innerHTML, /查看已保存数据，无需连接旧站/);
   assert.equal(h.calls.some(c => c.options.method && c.options.method !== 'GET'), false);
 });
 

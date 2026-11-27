@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { publicCatalog } from '../src/modules/bound/catalog.js';
 
-test('扫码区域保持展开、相同二维码复用图片，防止重复提交，完成后提示续采', async () => {
+test('扫码区域保持展开、相同二维码复用图片，防止重复提交，连接成功后提示自动检查', async () => {
   let poll, finish, reused = 0;
   let link = { ok: true, provider: 'WECHAT', phase: 'idle', collection: {} };
   const calls = [];
@@ -36,6 +36,7 @@ test('扫码区域保持展开、相同二维码复用图片，防止重复提�
   const stop = context.window.XmModules['/bound'].mount(root); await delay(20);
   const click = attrs => root.click({ target: { closest: () => ({ getAttribute: key => attrs[key] }) } });
   root.toggle({ target: { open: true, getAttribute: key => key === 'data-bound-qr' ? '' : null } });
+  link = { ...link, message: '请选择扫码方式' };
   poll(); await delay(10); assert.match(root.innerHTML, /<details data-bound-qr open>/);
   click({ 'data-act': 'scan', 'data-provider': 'WECHAT' });
   click({ 'data-act': 'scan', 'data-provider': 'WECHAT' });
@@ -43,11 +44,14 @@ test('扫码区域保持展开、相同二维码复用图片，防止重复提�
   finish(); await delay(10);
   assert.match(root.innerHTML, /\/api\/bound\/link\/qr\?v=stable-scene/);
   assert.doesNotMatch(root.innerHTML, /\/link\/qr\?ts=/);
+  link = { ...link, message: '等待手机确认' };
   poll(); await delay(10); assert.match(root.innerHTML, /<details data-bound-qr open>/);
   assert.ok(reused > 0, '轮询复用同一张图片节点');
   link = { ...link, qrReady: false, phase: 'logged_in', batchLoginReady: true, message: '扫码已登录，请点击开始 / 继续本轮采集' };
   poll(); await delay(10);
-  assert.match(root.innerHTML, /扫码已登录，请点击开始 \/ 继续本轮采集/);
+  assert.match(root.innerHTML, /旧站已连接，账号身份已核验/);
+  assert.match(root.innerHTML, /服务器会自动检查采集任务/);
+  assert.doesNotMatch(root.innerHTML, /继续本轮采集/);
   assert.equal(calls.filter(c => c.url === '/api/bound/shop-day/batch/start').length, 0);
   assert.equal(calls.filter(c => c.url === '/api/bound/link/password').length, 0);
   click({ 'data-act': 'scan', 'data-provider': 'FEISHU' }); finish(); await delay(10);
