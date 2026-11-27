@@ -1,4 +1,6 @@
-import { dbMode, query } from "../profile/auth.js";
+import { dbMode, getPool, query } from "../profile/auth.js";
+
+export const DAILY_VERIFIED = 'daily-verified';
 
 const STATE_SQL = `CREATE TABLE IF NOT EXISTS bound_state (
   id VARCHAR(64) NOT NULL PRIMARY KEY,
@@ -119,7 +121,7 @@ export async function writeState(id, value) {
   );
 }
 
-export async function writeSheet(row) {
+export async function writeSheet(row, write = query) {
   await ensure();
   const saved = {
     reportId: String(row.reportId),
@@ -141,7 +143,7 @@ export async function writeSheet(row) {
     memory.sheets.set(sheetKey(saved), saved);
     return saved;
   }
-  await query(
+  await write(
     `INSERT INTO bound_sheet
       (report_id, dim, start_on, end_on, page_no, status, kind, total_rows, page_size, attempts, row_count, error_text, payload, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -166,6 +168,26 @@ export async function writeSheet(row) {
     ]
   );
   return saved;
+}
+
+export async function writeVerifiedDailySheets(sheets) {
+  await ensure();
+  if (dbMode() !== 'mysql') {
+    await Promise.all(sheets.map(row => writeSheet(row)));
+    return;
+  }
+  const pool = await getPool();
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    for (const sheet of sheets) await writeSheet(sheet, connection.execute.bind(connection));
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 function mapSheet(row) {
@@ -264,14 +286,22 @@ function sheetMatches(row, filter) {
 export async function listSheets(filter = {}) {
   await ensure();
   if (dbMode() !== "mysql") {
-    return [...memory.sheets.values()].filter((row) => sheetMatches(row, filter));
+    return latestDailySheets([...memory.sheets.values()].filter((row) => sheetMatches(row, filter)));
   }
   const { where, params } = sheetWhere(filter);
   const [found] = await query(
     `SELECT report_id, dim, start_on, end_on, page_no, status, kind, total_rows, page_size, attempts, row_count, error_text, payload, updated_at FROM bound_sheet${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`,
     params
   );
-  return found.map(mapSheet);
+  return latestDailySheets(found.map(mapSheet));
+}
+
+function latestDailySheets(sheets) {
+  const key = row => JSON.stringify([row.reportId, row.dim, row.startOn, row.endOn]);
+  const verified = new Map(sheets.filter(row => row.pageNo === 1 && row.errorText === DAILY_VERIFIED)
+    .map(row => [key(row), Math.ceil(row.totalRows / row.pageSize)]));
+  return sheets.filter(row => row.pageNo <= 1 || !verified.has(key(row))
+    || row.errorText === DAILY_VERIFIED && row.pageNo <= verified.get(key(row)));
 }
 
 export async function readPref(key) {

@@ -24,6 +24,7 @@
     goodsBackfill: null,
     goodsBackfillBusy: false,
     goodsBackfillRead: '',
+    dailyReportProgress: null,
     goodsBackfillError: '',
     loginEditing: false,
     admin: false,
@@ -142,7 +143,13 @@
       controls = '<div class="bd-tools"><button type="button" data-act="goods-backfill-' + (running ? 'stop' : 'resume') + '"'
         + (state.goodsBackfillBusy ? ' disabled' : '') + '>' + (running ? '暂停本次补采' : '继续本次补采') + '</button></div>';
     }
-    return renderGoodsTask() + controls
+    var daily = detail && state.dailyReportProgress;
+    var latest = daily && daily.days[0];
+    var dailySummary = latest ? '<p class="bd-status" role="status">' + esc(latest.date) + ' · 日报已核验 '
+      + esc(latest.verified) + '/' + esc(latest.required) + ' 项 · 商品已核验 '
+      + esc(latest.goods.verified) + '/' + esc(latest.goods.required) + ' 家 · '
+      + (latest.complete ? '已采齐' : daily.blockedReason ? esc(goodsReason(daily.blockedReason)) : '待补齐') + '</p>' : '';
+    return dailySummary + renderGoodsTask() + controls
       + (state.goodsBackfillError ? '<p class="bd-banner" role="alert">' + esc(state.goodsBackfillError) + '</p>' : '')
       + (detail ? renderGoodsFailureDetails(run) : '');
   }
@@ -151,7 +158,7 @@
     var connection = link.collection && link.collection.batchEnabled ? '旧采集任务运行期间，商品自动采集排队等候。'
       : link.batchLoginReady ? '旧站已连接，服务器会自动检查采集任务。' : '旧站连接后，服务器会自动检查采集任务。';
     return '<section class="bd-block" aria-labelledby="bd-goods-policy"><h2 id="bd-goods-policy" class="bd-block-title">商品采集规则与进度</h2>'
-      + '<ul><li><strong>采集范围：</strong>43 家指定京东店铺的商品数据，从 2026 年 11 月 19 日起，按北京时间自动补到昨天。</li>'
+      + '<ul><li><strong>采集范围：</strong>按历史清单采集日报和 43 家指定京东店铺的商品数据。从 2026 年 11 月 19 日起，按北京时间自动补到昨天。</li>'
       + '<li><strong>每日回查：</strong>先补缺失数据。在业务日期后第二天零点前采到的数据，从该时点起重新采集并核验，停机漏掉的回查也会补上。</li>'
       + '<li><strong>发布条件：</strong>SKU、SPU 的明细、汇总和指标卡全部核验通过后，才更新该店当天的数据。核验失败时保留已核验的版本。</li></ul>'
       + '<p class="bd-status">' + connection + ' 关闭网页后任务继续在服务器运行。</p>'
@@ -165,19 +172,26 @@
   async function pollGoodsBackfill(root, token) {
     if (backfillPolling || token !== active || state.goodsBackfillBusy) return;
     backfillPolling = true;
-    var previousRun = state.goodsBackfill, previousRead = state.goodsBackfillRead;
+    var previousRun = state.goodsBackfill, previousRead = state.goodsBackfillRead, previousDaily = state.dailyReportProgress;
+    var dailyRequest = state.page === 'link'
+      ? Promise.resolve().then(function () { return fetch('/api/bound/shop-day/daily-reports'); })
+        .then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+      : Promise.resolve(null);
     try {
-      var response = await fetch('/api/bound/shop-day/goods-backfill');
+      var results = await Promise.all([fetch('/api/bound/shop-day/goods-backfill'), dailyRequest]);
+      var response = results[0], daily = results[1];
       var body = response.ok ? await response.json() : null;
       if (token !== active || state.goodsBackfillBusy || state.goodsBackfill !== previousRun) return;
       state.goodsBackfillRead = body && body.ok ? 'ready' : 'unavailable';
       if (body && body.ok) state.goodsBackfill = body.run;
+      if (daily && daily.ok && Array.isArray(daily.days)) state.dailyReportProgress = daily;
     } catch {
       if (token !== active || state.goodsBackfillBusy || state.goodsBackfill !== previousRun) return;
       state.goodsBackfillRead = 'unavailable';
     } finally { backfillPolling = false; }
     if (!['link', 'productOverview'].includes(state.page)) return;
-    if (previousRead === state.goodsBackfillRead && JSON.stringify(previousRun) === JSON.stringify(state.goodsBackfill)) return;
+    if (previousRead === state.goodsBackfillRead && JSON.stringify(previousRun) === JSON.stringify(state.goodsBackfill)
+      && JSON.stringify(previousDaily) === JSON.stringify(state.dailyReportProgress)) return;
     var slot = root.querySelector && root.querySelector('[data-goods-progress]');
     if (slot) slot.innerHTML = renderGoodsProgress(state.page === 'link');
     else if (!state.loginEditing && !state.passwordBusy && !state.qrBusy) paint(root);
@@ -770,6 +784,7 @@
       var overviewState = state.archiveOverviewCache[state.from + ':' + state.to];
       if (!overviewState || overviewState.status === 'loading') message = '正在读取全部店铺数据…';
       else if (overviewState.status === 'missing') message = '全部店铺数据读取失败，请点击“刷新已采数据”重试。';
+      else if (overviewState.records[id]?.status === 'empty') message = '这张报表已采集，旧站返回 0 条记录。';
       else if (overviewState.records[id]?.status === 'not_saved') {
         missingChannelReport = true;
         message = '所选日期暂无这张渠道报表。商品采集的数据可在商品总览查询。';
@@ -1498,10 +1513,8 @@
   }
 
   function reliableDay() {
-    var goodsArchive = state.localArchive?.unified && (state.page === "productOverview" || state.page === "channelAnalysis" && state.tab === "qdfx_goods");
-    var channelDaily = state.localArchive?.unified && (state.page === "channelOverview" && state.archiveAccountOverview && ['', 'qdzl_lb'].includes(state.tab)
-      || state.page === "channelAnalysis" && state.tab === "qdfx_dplb");
-    return iso(addDays(parseIso(shanghaiToday()), goodsArchive || channelDaily ? -1 : -2));
+    var dailyArchive = state.localArchive?.unified && ['productOverview', 'channelOverview', 'channelAnalysis', 'channelAnalysisNew'].includes(state.page);
+    return iso(addDays(parseIso(shanghaiToday()), dailyArchive ? -1 : -2));
   }
 
   function clampRange(from, to) {
@@ -3103,7 +3116,7 @@
       savedResponses.clear(); archiveViews.clear(); annotationIndexes = {}; state.archiveAnnotations = {};
       state.loginEditing = false;
       if (!state.autoReloginBusy) { state.autoReloginChoice = null; state.autoReloginMessage = ""; }
-      state.goodsBackfill = null; state.goodsBackfillRead = ''; state.goodsBackfillError = '';
+      state.goodsBackfill = null; state.goodsBackfillRead = ''; state.goodsBackfillError = ''; state.dailyReportProgress = null;
       // Existing links still open the connection page after the test panel was retired.
       if (new URLSearchParams(window.location && window.location.search || '').has('probeDate')) state.page = 'link';
       ensureStyle();

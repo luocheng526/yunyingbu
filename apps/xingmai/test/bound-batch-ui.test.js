@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
+import { URLSearchParams } from 'node:url';
 import { publicCatalog } from '../src/modules/bound/catalog.js';
 
 const source = await readFile(new URL('../public/shared/modules/bound.js', import.meta.url), 'utf8');
@@ -13,7 +14,7 @@ const firstRun = { id: 'one', from: '2026-11-24', to: '2026-11-26', status: 'run
 const reply = (body, ok = true) => ({ ok, json: async () => body });
 
 async function harness(initialRun) {
-  let run = initialRun, poll, finish;
+  let run = initialRun, poll, finish, coverage;
   const calls = [];
   const root = { innerHTML: '', querySelector: () => null,
     addEventListener(type, fn) { this[type] = fn; }, removeEventListener() {} };
@@ -27,6 +28,7 @@ async function harness(initialRun) {
       if (url === '/api/bound/catalog') return reply(publicCatalog());
       if (url === '/api/bound/link') return reply({ phase: 'logged_in', batchLoginReady: true, collection: {}, message: '请点击“开始 / 继续本轮采集”' });
       if (url === '/api/bound/shop-day/goods-backfill') return run === undefined ? reply({}, false) : reply({ ok: true, run });
+      if (url === '/api/bound/shop-day/daily-reports') return coverage ? reply(coverage) : reply({}, false);
       if (/\/goods-backfill\/(start|stop)$/.test(url)) return new Promise(resolve => { finish = resolve; });
       return reply({}, false);
     }
@@ -34,7 +36,7 @@ async function harness(initialRun) {
   vm.runInContext(source, context);
   const stop = context.window.XmModules['/bound'].mount(root);
   await delay(20);
-  return { root, calls, stop, setRun(value) { run = value; }, finish: response => finish(response),
+  return { root, calls, stop, setRun(value) { run = value; }, setCoverage(value) { coverage = value; }, finish: response => finish(response),
     async refresh() { poll(); poll(); await delay(20); },
     click: act => root.click({ target: { closest: selector => selector === '[data-act]' ? { getAttribute: key => key === 'data-act' ? act : null } : null } }) };
 }
@@ -54,13 +56,27 @@ test('采集页显示规则和最新自动任务，旧面板和接口不再由�
     h.root.focusin({ target: { closest: () => ({}) } });
     h.setRun({ ...firstRun, automatic: true, done: 13 });
     await h.refresh();
-    assert.deepEqual(h.calls.slice(before).map(call => call.url), ['/api/bound/shop-day/goods-backfill']);
+    assert.deepEqual(h.calls.slice(before).map(call => call.url).sort(), ['/api/bound/shop-day/daily-reports', '/api/bound/shop-day/goods-backfill']);
     // The real DOM is patched in place when the login fields are focused.
     h.root.focusout({ relatedTarget: null });
     h.setRun({ ...firstRun, automatic: true, done: 14 });
     await h.refresh();
     assert.match(h.root.innerHTML, /已核验 14\/129/);
     assert.ok(h.calls.every(call => !/\/shop-day\/(batch|run)|\/collect\/probe|\/api\/bound\/progress/.test(call.url)));
+  } finally { h.stop(); }
+});
+
+test('日报和商品都核齐时才标记当天已采齐', async () => {
+  const h = await harness(null);
+  try {
+    const day = { date: '2026-11-26', verified: 24, required: 26, goods: { verified: 43, required: 43 }, complete: false };
+    h.setCoverage({ ok: true, days: [day] });
+    await h.refresh();
+    assert.match(h.root.innerHTML, /2026-11-26 · 日报已核验 24\/26 项 · 商品已核验 43\/43 家 · 待补齐/);
+    assert.doesNotMatch(h.root.innerHTML, /已采齐/);
+    h.setCoverage({ ok: true, days: [{ ...day, verified: 26, complete: true }] });
+    await h.refresh();
+    assert.match(h.root.innerHTML, /2026-11-26 · 日报已核验 26\/26 项 · 商品已核验 43\/43 家 · 已采齐/);
   } finally { h.stop(); }
 });
 

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { listSheets } from "./persist.js";
+import { DAILY_VERIFIED, listSheets } from "./persist.js";
 import { SHOP_TABLE_COLUMNS } from "./table-columns.js";
 import { sumSavedRows, dailyCoverage } from './saved-rollup.js';
 
@@ -94,7 +94,8 @@ export function createSavedOverview({ readSheets = listSheets, readScopes = asyn
         const daily = unambiguous(selected.flatMap(s => overviewRows(s.payload).rows).filter(r => !r.shopId && !r.sumLine && String(r.platform).toLowerCase() === 'all' && validDay(day(r.date)) && day(r.date) >= '2026-09-01' && day(r.date) <= to), r => day(r.date));
         responseData.history = { columnInfo, columnData: [...daily.values()] };
       }
-      return { reportId, page: 1, scope, rows: result, status: result.length ? 'received' : 'not_saved',
+      const confirmedEmpty = selected.some(sheet => sheet.errorText === DAILY_VERIFIED && sheet.rowCount === 0);
+      return { reportId, page: 1, scope, rows: result, status: result.length ? 'received' : confirmedEmpty ? 'empty' : 'not_saved',
         source: { kind: 'legacy_database', reportId: sourceId, updatedAt: selected.map(s => s.updatedAt || '').sort().at(-1) || null, conflictCount: conflicting.size, note: '历史采集值；旧站后续重算可能变化' },
         response: { payload: { data: kind === 'operating' ? [responseData, responseData.history] : responseData } } };
     }

@@ -1,11 +1,11 @@
-import { startDailyGoods } from "./daily-goods.js";
-import { startDailyChannelReports } from './daily-channel.js';
+import { dailyGoodsCoverage, startDailyGoods } from "./daily-goods.js";
+import { createDailyReportCollector, startDailyReports } from './daily-channel.js';
 import { Router } from "express";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { createShopDayCollector } from "./shop-day.js";
 import { createFourPageJob } from "./four-page-job.js";
-import { requestShopDayReport, linkStatus, collectionStatus, requestVisibleShops, requestBatchShopDayReport, requestGoodsBackfillReport, requestChannelDailyReport } from "./collect.js";
+import { requestShopDayReport, linkStatus, collectionStatus, requestVisibleShops, requestBatchShopDayReport, requestGoodsBackfillReport, requestDailyReport } from "./collect.js";
 import { createArchiveImport } from "./archive-import.js";
 import { createAnnotations } from "./annotations.js";
 import { createSavedOverview } from "./saved-overview.js";
@@ -60,11 +60,11 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
   void saved.options().catch(() => {});
   const importer = createArchiveImport({ directory, blocked: async () =>
     batch.busy() || job.busy() || collector.isBusy() || goodsBackfill.busy() });
+  const daily = createDailyReportCollector({ request: requestDailyReport });
   void goodsBackfill.resume().catch(() => {});
   if (process.env.NODE_ENV === 'production' && !process.env.NODE_TEST_CONTEXT && !process.env.MENGKAI_SMOKE_LIVE) {
     startDailyGoods(goodsBackfill, linkStatus);
-    startDailyChannelReports({ request: requestChannelDailyReport, blocked: () =>
-      collectionStatus().batchEnabled || goodsBackfill.busy() || batch.busy() || importer.busy() || job.busy() || collector.isBusy() });
+    startDailyReports(daily, () => collectionStatus().batchEnabled || goodsBackfill.busy() || batch.busy() || importer.busy() || job.busy() || collector.isBusy());
   }
   router.use((req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
@@ -103,6 +103,14 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
   route("post", "/collect", async req => job.busy() ? { ok: false, statusCode: 409, reason: "collector_busy" } : collector.collect(req.body));
   route("get", "/batch", async () => ({ ok: true, run: await batch.status() }));
   route('get', '/goods-backfill', async () => ({ ok: true, run: await goodsBackfill.status() }));
+  route('get', '/daily-reports', async () => {
+    const [result, scopes] = await Promise.all([daily.status(), goodsBackfill.scopes()]);
+    const goodsForDate = dailyGoodsCoverage(scopes);
+    return { ...result, days: result.days.map(day => {
+      const goods = goodsForDate(day.date);
+      return { ...day, goods, complete: day.verified === day.required && goods.verified === goods.required };
+    }) };
+  });
   route('post', '/goods-backfill/plan', req => goodsBackfill.plan(req.body));
   route('post', '/goods-backfill/start', req => goodsBackfill.start(req.body));
   route('post', '/goods-backfill/stop', req => Object.keys(req.body || {}).length ? { ok: false, statusCode: 400, reason: 'invalid_scope' } : goodsBackfill.stop());

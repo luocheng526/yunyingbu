@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { URLSearchParams } from "node:url";
-import { API_ORIGIN, MASTERS, ORIGIN, PAGE_SIZE, accessCodes, reports } from "./catalog.js";
+import { API_ORIGIN, MASTERS, ORIGIN, PAGE_SIZE, accessCodes, pageById, reports } from "./catalog.js";
 import { listSheetHeads, readState, replaceMasters, writeMaster, writeSheet, writeState } from "./persist.js";
 import { collectScopes, shanghaiToday } from "./time.js";
 import { createPasswordAuth } from "./password-login.js";
@@ -12,7 +12,7 @@ import { shopDayRequest, validShopDay } from "./shop-day-contract.js";
 import { visibleShops, BATCH_DATE } from "./shop-batch.js";
 import { createRequestPacer } from "./request-pacer.js";
 import { GOODS_REPORTS, GOODS_BACKFILL_CONCURRENCY } from './goods-backfill.js';
-import { CHANNEL_DAILY_REPORTS } from './daily-channel.js';
+import { DAILY_REPORTS, FIRST_DAILY_REPORT_DATE } from './daily-channel.js';
 
 const QUIET_MODULES = new Set(["hp", "team"]);
 const QUIET_MASTERS = new Set(["goods", "teams", "members"]);
@@ -245,24 +245,31 @@ export async function requestDailyPerformance(scope, owner) {
   return batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner, parallelLimit: GOODS_BACKFILL_CONCURRENCY }));
 }
 
-export async function requestChannelDailyReport(reportId, date) {
-  if (!CHANNEL_DAILY_REPORTS.includes(reportId) || date >= shanghaiToday() || collectionStatus().batchEnabled) return { blocked: 'invalid_scope' };
+export async function requestDailyReport({ reportId, dim }, date, page, pageSize) {
+  const planned = DAILY_REPORTS.find(report => report.reportId === reportId && report.dim === dim);
+  const today = shanghaiToday();
+  if (!planned || date < FIRST_DAILY_REPORT_DATE || (planned.snapshot ? date !== today : date >= today) || collectionStatus().batchEnabled) return { blocked: 'invalid_scope' };
   const current = await session();
   const owner = ownerOf(current);
-  if (!owner || !verifiedLogin(current)) return { blocked: 'server_login_required' };
+  if (!owner || !verifiedLogin(current) || !['logged_in', 'collecting'].includes(current.phase)) return { blocked: 'server_login_required' };
   const report = reports().find(item => item.id === reportId);
-  const page = reportId === 'qdzl_lb' ? 'channelOverview' : 'channelAnalysis';
-  const body = reportBody(report, 'all', { start: date, end: date, daysType: '1' }, 1);
+  const body = reportBody(report, dim, { start: date, end: date, daysType: '1' }, page);
+  const goods = ['sp_zl_list', 'sp_zl_trend'].includes(reportId);
+  const path = goods && dim === 'spu' ? (reportId === 'sp_zl_list' ? '/v2/goods/spuOverView' : '/v2/goods/trendOverViewPageListBySpu') : report.path;
+  if (goods) Object.assign(body, { shopId: '', shopList: [], filterCondition: [], orderCondition: [], isSku: false });
+  if (goods || page > 1) Object.assign(body, { pageNum: page, pageSize: pageSize || PAGE_SIZE });
   const result = await batchPacer.run(() => requestScopedRead({
-    path: report.path, method: report.method, access: report.access, body, referer: ORIGIN + '/workTable/' + page,
+    path, method: report.method, access: report.access, body, query: report.method === 'get' ? body : undefined,
+    referer: ORIGIN + pageById(report.pageId).route,
     ownerHash: owner, exclusive: true
   }));
   if (ownerOf(await session()) !== owner) return { blocked: 'identity_changed' };
-  if (result.payload?.code === 0) {
-    const data = extractList(result.payload.data);
-    if (!data.object && data.total > data.rows.length) return { blocked: 'incomplete_report' };
-  }
-  return result;
+  if ([-7, 9901, 1011].includes(result.payload?.code)) return { blocked: 'login_conflict' };
+  if (result.httpStatus === 401 || result.payload?.code === -1) return { blocked: 'login_expired' };
+  if (result.payload?.code !== 0) return result;
+  const data = result.payload.data;
+  const table = Array.isArray(data) && data.length === 1 && Array.isArray(data[0]?.columnData) ? data[0] : data;
+  return { ...result, list: extractList(table), pageSize: body.pageSize };
 }
 
 async function requestScopedRead(spec, onRequest = () => {}) {
@@ -404,8 +411,10 @@ function extractList(data) {
   }
   for (const key of ["list", "rows", "records", "columnData", "dataList", "goodsList", "pageList"]) {
     if (Array.isArray(data[key])) {
-      const total = Number(data.total ?? data.totalCount ?? data.count ?? data[key].length);
-      return { rows: data[key], total: Number.isFinite(total) ? total : data[key].length, object: false };
+      const hint = data.total ?? data.totalCount ?? data.count;
+      const total = Number(hint ?? data[key].length);
+      return { rows: data[key], total: Number.isFinite(total) ? total : data[key].length, object: false,
+        totalKnown: hint != null, columns: data.columnInfo, invalidTotal: hint != null && !Number.isSafeInteger(total) };
     }
   }
   if (data.growAnalysis && typeof data.growAnalysis === "object") {

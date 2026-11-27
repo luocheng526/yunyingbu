@@ -47,6 +47,18 @@ const shops = [
   "JD:33102281"
 ];
 const firstDay = '2026-11-19';
+const dailyShopKeys = new Set(shops);
+
+export function dailyGoodsCoverage(scopes) {
+  const byDate = new Map();
+  for (const scope of scopes) {
+    const key = scope.platform + ':' + scope.shopId;
+    if (!dailyShopKeys.has(key)) continue;
+    if (!byDate.has(scope.date)) byDate.set(scope.date, new Set());
+    byDate.get(scope.date).add(key);
+  }
+  return date => ({ required: dailyShopKeys.size, verified: byDate.get(date)?.size || 0 });
+}
 
 export function nextDailyGoods(scopes, today, selection = shops) {
   const yesterday = addDays(today, -1);
