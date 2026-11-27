@@ -8,7 +8,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
 import { recoverPasswordSession } from "./session-recovery.js";
 import { nativeMerchantMatches, watchNativeAccount } from "./browser-identity.js";
-import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, homeDealUnavailable, shopDealUnavailable, jingmaiAccessLimit, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
+import { beijingParts, collectPinRecords, extractPaid, filterPinsBelongingToShop, extractShopDeal, homeDealUnavailable, shopDealUnavailable, jingmaiAccessLimit, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
 
 const LOGIN_URL =
   "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
@@ -1319,12 +1319,22 @@ function deskSession(ws) {
   return ws && ws.__sessionId ? ws.__sessionId : undefined;
 }
 
-function send(ws, method, params, sessionId, timeoutMs) {
+function send(ws, method, params, sessionId, timeoutMs, signal) {
   const id = ws.__seq = (ws.__seq || 0) + 1;
   const sid = sessionId == null ? deskSession(ws) : sessionId;
   return new Promise(function (resolve, reject) {
-    const timer = setTimeout(function () {
+    if (signal?.aborted) return reject(signal.reason);
+    function cleanup() {
+      clearTimeout(timer);
       ws.removeEventListener("message", onMessage);
+      signal?.removeEventListener("abort", onAbort);
+    }
+    function onAbort() {
+      cleanup();
+      reject(signal.reason);
+    }
+    const timer = setTimeout(function () {
+      cleanup();
       reject(new Error(method + " timeout"));
     }, timeoutMs || 15000);
     function onMessage(event) {
@@ -1340,8 +1350,7 @@ function send(ws, method, params, sessionId, timeoutMs) {
       if (sid && message.sessionId && message.sessionId !== sid) {
         return;
       }
-      clearTimeout(timer);
-      ws.removeEventListener("message", onMessage);
+      cleanup();
       if (message.error) {
         reject(new Error(method));
       } else {
@@ -1349,16 +1358,22 @@ function send(ws, method, params, sessionId, timeoutMs) {
       }
     }
     ws.addEventListener("message", onMessage);
+    signal?.addEventListener("abort", onAbort, { once: true });
     const payload = { id: id, method: method, params: params || {} };
     if (sid) {
       payload.sessionId = sid;
     }
-    ws.send(JSON.stringify(payload));
+    try {
+      ws.send(JSON.stringify(payload));
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
   });
 }
 
-function evaluate(ws, expression, timeoutMs) {
-  return send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true, awaitPromise: true }, deskSession(ws), timeoutMs).then(function (result) {
+function evaluate(ws, expression, timeoutMs, signal) {
+  return send(ws, "Runtime.evaluate", { expression: expression, returnByValue: true, awaitPromise: true }, deskSession(ws), timeoutMs, signal).then(function (result) {
     if (result.exceptionDetails) {
       return null;
     }
@@ -4021,24 +4036,25 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected, savedOnly = f
   }
 }
 
-export async function readJztOverview(cookies, signal, expected) {
+export async function readJztOverview(cookies, signal, expected, { date = beijingParts().day, total = false } = {}) {
   if (signal && signal.aborted) {
     throw Object.assign(new Error("广告采集超时"), { code: "timeout", name: "AbortError" });
   }
+  const querySignal = total ? signal : undefined;
   let desk = null;
   try {
     desk = await launchChrome(signal, { ephemeral: true, profileKey: "" });
     const ws = desk.ws;
-    await send(ws, "Page.enable");
-    await send(ws, "Network.enable");
+    await send(ws, "Page.enable", {}, undefined, undefined, querySignal);
+    await send(ws, "Network.enable", {}, undefined, undefined, querySignal);
     const jar = cookieParams(cookies);
     if (jar.length) {
-      await send(ws, "Network.setCookies", { cookies: jar });
+      await send(ws, "Network.setCookies", { cookies: jar }, undefined, undefined, querySignal);
     }
-    await send(ws, "Page.navigate", { url: "https://jzt.jd.com/custom-report/#/overview" });
+    await send(ws, "Page.navigate", { url: "https://jzt.jd.com/custom-report/#/overview" }, undefined, undefined, querySignal);
     await waitDomContentLoaded(ws, signal, 20000);
     await sleepSignal(1500, signal);
-    const href = await evaluate(ws, "location.href");
+    const href = await evaluate(ws, "location.href", undefined, querySignal);
     if (/passport\.|\/login/i.test(String(href || ""))) {
       const err = new Error("京准通跨域登录未完成");
       err.code = "paid";
@@ -4047,7 +4063,7 @@ export async function readJztOverview(cookies, signal, expected) {
     const lists = await evaluate(
       ws,
       `fetch("https://jzt-api.jd.com/dataCenter/index/user/pinlist?requestFrom=0",{credentials:"include",headers:{accept:"application/json, text/plain, */*",siteId:"0"}}).then(r=>r.json()).then(user=>fetch("https://jzt-api.jd.com/dataCenter/index/auth/pinlist?requestFrom=0",{credentials:"include",headers:{accept:"application/json, text/plain, */*",siteId:"0"}}).then(r=>r.json()).catch(()=>null).then(auth=>({user,auth}))).catch(e=>({error:String(e&&e.message||e)}))`,
-      15000
+      15000, querySignal
     );
     if (!lists || lists.error) {
       const err = new Error("京准通没有可用账号");
@@ -4062,17 +4078,17 @@ export async function readJztOverview(cookies, signal, expected) {
     }
     const records = collectPinRecords(user.code === 1 ? user.data : null, lists.auth && Number(lists.auth.code) === 1 ? lists.auth.data : null);
     const wanted = expected || {};
-    const matched = pinsForLoggedInShop(records, wanted);
+    const matched = total ? filterPinsBelongingToShop(records, wanted) : pinsForLoggedInShop(records, wanted);
     if (!matched.length) {
       const err = new Error(records.length ? "待核验：无本店广告账号证据" : "京准通没有可用账号");
       err.code = "paid";
       throw err;
     }
-    const query = paidQuery(beijingParts().day, matched.map(function (row) { return row.pinId; }));
+    const query = paidQuery(date, matched.map(function (row) { return row.pinId; }), { total });
     const overview = await evaluate(
       ws,
       `fetch("https://jzt-api.jd.com/dataCenter/index/v2/summary/overview?requestFrom=0",{method:"POST",credentials:"include",headers:{accept:"application/json, text/plain, */*","content-type":"application/json",siteId:"0"},body:${JSON.stringify(JSON.stringify(query))}}).then(r=>r.json()).catch(e=>({error:String(e&&e.message||e)}))`,
-      15000
+      15000, querySignal
     );
     const paid = extractPaid(overview && overview.code === 1 ? overview.data : overview);
     if (!paid) {

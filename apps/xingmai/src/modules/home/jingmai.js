@@ -545,10 +545,10 @@ export function pinsForLoggedInShop(records, expected) {
   return pinsOfThisLogin(list, expected);
 }
 
-export function paidQuery(day, pinIds) {
+export function paidQuery(day, pinIds, { total = false } = {}) {
   return {
     pinIdList: pinIds || [],
-    businessType: [-4, 256],
+    businessType: total ? [-5] : [-4, 256],
     skuBrandId: [],
     skuCid3: [],
     clickOrOrderDay: 15,
@@ -558,11 +558,9 @@ export function paidQuery(day, pinIds) {
     startDate: day,
     endDate: day,
     basic: 0,
-    basicRange: 0,
+    basicRange: total ? 1 : 0,
     userTypes: [],
-    marketingObjectives: [],
-    marketingScenarios: [],
-    marketingTargetingTypes: []
+    ...(total ? {} : { marketingObjectives: [], marketingScenarios: [], marketingTargetingTypes: [] })
   };
 }
 

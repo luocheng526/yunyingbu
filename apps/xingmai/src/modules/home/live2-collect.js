@@ -13,6 +13,7 @@ import { jingmaiClient } from "./jingmai-client.js";
 import { COLLECTOR_OWNER_HOME, claimCollectorOwner, ensureCollectSession, getSession, listSamples, listSessions, markAuth, saveSample, sessionVersionOf, updateSessionCookies } from "./jingmai-store.js";
 import { beijingParts, collectAuthDecision, displayStamp, isMissingDealFieldError, matchCollectIdentity, sampleFields } from "./jingmai.js";
 import { homeCollectionGate } from "./jingmai-runner.js";
+import { interruptWeekJzt } from "./week-jzt.js";
 import { normalizeOrgShops, readServerOrgShops } from "./org-roster.js";
 import { blankLive2Record, live2RecordFromMetrics } from "./live2.js";
 import { createLive2SalesTrends } from "./live2-sales-trend.js";
@@ -964,6 +965,7 @@ export function createLive2Collector(deps = {}) {
     let cursor = 0;
     let lastPicked = roundStart;
     async function one(shop) {
+      if (inflight.has(shop.store)) await interruptWeekJzt(shop.store);
       if (inflight.has(shop.store) || humanBlocks(shop.store)) return;
       inflight.add(shop.store);
       const phase = {

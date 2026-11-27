@@ -6,6 +6,7 @@ import {
   classifyTransportError,
   collectPinIds,
   collectPinRecords,
+  filterPinsBelongingToShop,
   pinsForLoggedInShop,
   extractPaid,
   describeShopPayload,
@@ -922,7 +923,7 @@ async function warmJzt(jar, fetchImpl, signal) {
   }
 }
 
-async function fetchPaid(jar, fetchImpl, signal, expected) {
+async function fetchPaid(jar, fetchImpl, signal, expected, { date = beijingParts().day, total = false } = {}) {
   const headers = jztHeaders();
   await warmJzt(jar, fetchImpl, signal);
   if (signal && signal.aborted) {
@@ -967,7 +968,7 @@ async function fetchPaid(jar, fetchImpl, signal, expected) {
   if (!records.length) {
     const payload = user && user.code != null ? user : auth;
     if (fetchImpl === fetch && payload && Number(payload.code) !== 1) {
-      return readJztOverview(jar, signal, expected);
+      return readJztOverview(jar, signal, expected, { date, total });
     }
     throw jingmaiError("paid", paidAccountError(payload));
   }
@@ -976,7 +977,7 @@ async function fetchPaid(jar, fetchImpl, signal, expected) {
   const wantName = String((expected && (expected.shopName || expected.store)) || "").trim();
   let matched = records;
   if (wantId || wantName) {
-    matched = pinsForLoggedInShop(records, expected);
+    matched = total ? filterPinsBelongingToShop(records, expected) : pinsForLoggedInShop(records, expected);
     if (!matched.length) {
       // Real shop ids on the pins belong to a different shop. Do not mix them in.
       throw jingmaiError("paid", "待核验：无本店广告账号证据");
@@ -985,12 +986,11 @@ async function fetchPaid(jar, fetchImpl, signal, expected) {
   const pinIds = matched.map(function (row) {
     return row.pinId;
   });
-  const day = beijingParts().day;
   const overview = await postJson(
     fetchImpl,
     jar,
     JZT_ORIGIN + "/dataCenter/index/v2/summary/overview?requestFrom=0",
-    paidQuery(day, pinIds),
+    paidQuery(date, pinIds, { total }),
     Object.assign({ "content-type": "application/json" }, headers),
     signal
   );
@@ -1002,6 +1002,14 @@ async function fetchPaid(jar, fetchImpl, signal, expected) {
     throw jingmaiError("paid", "京准通没有返回付费数据");
   }
   return paid;
+}
+
+export async function readJztTotalSpend(jar, shop, date, signal, fetchImpl = fetch) {
+  const paid = await fetchPaid(jar, fetchImpl, signal, shop, { date, total: true });
+  if (!Number.isFinite(paid.paidAmount)) {
+    throw jingmaiError("paid", "京准通未返回总花费");
+  }
+  return paid.paidAmount;
 }
 
 function hasDealFields(metrics) {
