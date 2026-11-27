@@ -80,6 +80,26 @@ test('日报和商品都核齐时才标记当天已采齐', async () => {
   } finally { h.stop(); }
 });
 
+test('连接旧站后展示日报补采进度和日期，旧商品任务不会冒充日报', async () => {
+  const h = await harness({ ...firstRun, automatic: true, status: 'complete' });
+  try {
+    const latest = { date: '2026-11-26', verified: 0, required: 26, goods: { verified: 43, required: 43 }, complete: false };
+    const earlier = { ...latest, date: '2026-11-24' };
+    h.setCoverage({ ok: true, blockedReason: 'server_login_required', days: [latest, earlier] });
+    await h.refresh();
+    assert.match(h.root.innerHTML, /等待下一轮日报补采/);
+    assert.doesNotMatch(h.root.innerHTML, /请先连接旧站/);
+    h.setCoverage({ ok: true, running: true, days: [
+      { ...latest, verified: 19, pending: [{ failure: { reason: 'pagination_identity_mismatch' } }] },
+      earlier
+    ] });
+    await h.refresh();
+    assert.match(h.root.innerHTML, /日报补采中<\/strong> · 日报已核验 19\/52 项 · 1 项待重试/);
+    assert.match(h.root.innerHTML, /2026-11-24 · 已核验 0\/26 项/);
+    assert.match(h.root.innerHTML, /商品自动采集 · 已完成/);
+  } finally { h.stop(); }
+});
+
 test('没有任务或进度暂时不可用时规则依然可读', async () => {
   const h = await harness(null);
   try {

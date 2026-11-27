@@ -115,7 +115,7 @@
         : state.goodsBackfillRead === 'ready' ? '暂无商品采集任务记录。' : '正在读取采集进度…';
       return '<p class="bd-status" role="status">' + message + '</p>';
     }
-    var kind = run.automatic ? '自动采集' : '手动补采';
+    var kind = run.automatic ? '商品自动采集' : '商品手动补采';
     var dates = run.from === run.to ? run.from : run.from + ' 至 ' + run.to;
     var percent = run.total > 0 ? Math.min(100, Math.max(0, Math.round(run.done * 100 / run.total))) : 0;
     var result = '<p role="status"><strong>' + kind + ' · ' + esc(goodsStatuses[run.status] || '状态未知') + '</strong> · ' + esc(dates)
@@ -135,6 +135,30 @@
         return '<tr><td>' + esc(scope.shopName || '—') + '</td><td>' + esc(scope.date || '—') + '</td><td>' + esc(goodsReason(failure.reason)) + '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
+  function renderDailyReportProgress(daily) {
+    var latest = daily && daily.days[0];
+    if (!latest) return '';
+    var tally = daily.days.reduce(function (total, day) {
+      total.verified += day.verified;
+      total.required += day.required;
+      total.retry += (day.pending || []).filter(function (item) { return item.failure; }).length;
+      return total;
+    }, { verified: 0, required: 0, retry: 0 });
+    var reason = daily.blockedReason;
+    if (reason === 'server_login_required' && state.link?.batchLoginReady) reason = '';
+    var status = daily.running ? '日报补采中' : tally.verified === tally.required ? '日报已采齐'
+      : reason ? goodsReason(reason) : '等待下一轮日报补采';
+    return '<p role="status"><strong>' + esc(status) + '</strong> · 日报已核验 '
+      + esc(tally.verified) + '/' + esc(tally.required) + ' 项'
+      + (tally.retry ? ' · ' + esc(tally.retry) + ' 项待重试' : '') + '</p>'
+      + '<p class="bd-status">' + esc(latest.date) + ' · 日报已核验 '
+      + esc(latest.verified) + '/' + esc(latest.required) + ' 项 · 商品已核验 '
+      + esc(latest.goods.verified) + '/' + esc(latest.goods.required) + ' 家 · ' + (latest.complete ? '已采齐' : '待补齐') + '</p>'
+      + '<details data-daily-dates><summary>按日期查看日报进度</summary><ul>'
+      + daily.days.map(function (day) {
+        return '<li>' + esc(day.date) + ' · 已核验 ' + esc(day.verified) + '/' + esc(day.required) + ' 项</li>';
+      }).join('') + '</ul></details>';
+  }
   function renderGoodsProgress(detail) {
     var run = state.goodsBackfill, controls = '';
     if (run && !run.automatic && state.goodsBackfillRead === 'ready' &&
@@ -143,12 +167,7 @@
       controls = '<div class="bd-tools"><button type="button" data-act="goods-backfill-' + (running ? 'stop' : 'resume') + '"'
         + (state.goodsBackfillBusy ? ' disabled' : '') + '>' + (running ? '暂停本次补采' : '继续本次补采') + '</button></div>';
     }
-    var daily = detail && state.dailyReportProgress;
-    var latest = daily && daily.days[0];
-    var dailySummary = latest ? '<p class="bd-status" role="status">' + esc(latest.date) + ' · 日报已核验 '
-      + esc(latest.verified) + '/' + esc(latest.required) + ' 项 · 商品已核验 '
-      + esc(latest.goods.verified) + '/' + esc(latest.goods.required) + ' 家 · '
-      + (latest.complete ? '已采齐' : daily.blockedReason ? esc(goodsReason(daily.blockedReason)) : '待补齐') + '</p>' : '';
+    var dailySummary = detail ? renderDailyReportProgress(state.dailyReportProgress) : '';
     return dailySummary + renderGoodsTask() + controls
       + (state.goodsBackfillError ? '<p class="bd-banner" role="alert">' + esc(state.goodsBackfillError) + '</p>' : '')
       + (detail ? renderGoodsFailureDetails(run) : '');
@@ -193,7 +212,12 @@
     if (previousRead === state.goodsBackfillRead && JSON.stringify(previousRun) === JSON.stringify(state.goodsBackfill)
       && JSON.stringify(previousDaily) === JSON.stringify(state.dailyReportProgress)) return;
     var slot = root.querySelector && root.querySelector('[data-goods-progress]');
-    if (slot) slot.innerHTML = renderGoodsProgress(state.page === 'link');
+    if (slot) {
+      var datesOpen = slot.querySelector('[data-daily-dates]')?.open;
+      slot.innerHTML = renderGoodsProgress(state.page === 'link');
+      var dates = slot.querySelector('[data-daily-dates]');
+      if (dates && datesOpen) dates.open = true;
+    }
     else if (!state.loginEditing && !state.passwordBusy && !state.qrBusy) paint(root);
   }
   function restoreSavedRecord(record) {
