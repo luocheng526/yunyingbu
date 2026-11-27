@@ -155,6 +155,7 @@
       + '<li><strong>每日回查：</strong>先补缺失数据。在业务日期后第二天零点前采到的数据，从该时点起重新采集并核验，停机漏掉的回查也会补上。</li>'
       + '<li><strong>发布条件：</strong>SKU、SPU 的明细、汇总和指标卡全部核验通过后，才更新该店当天的数据。核验失败时保留已核验的版本。</li></ul>'
       + '<p class="bd-status">' + connection + ' 关闭网页后任务继续在服务器运行。</p>'
+      + '<button type="button" class="bd-plain" data-act="page" data-page="productOverview">查看已采商品</button>'
       + '<div data-goods-progress>' + renderGoodsProgress(true) + '</div></section>';
   }
   function renderBackfill() {
@@ -764,10 +765,18 @@
         note: key === 'realTimeGmv' ? '实时指标，不按所选日期累加；未保存时留空' : key === 'profit' && !product && state.page !== 'productOverview' ? '店铺利润已扣自定义费用' : '保留来源表值' };
     }) : [];
     var message = !validRange ? "当前选择范围未采集。已保存的数据仅覆盖 " + scope.date + "，未采数据不计为 0。" : !id ? "这个页面本轮尚未采集。请查看渠道详情、商品总览或商品全景分析。" : !available ? "这张表尚未采集或档案读取失败。请点击刷新已采数据重试。" : !complete ? "商品分页不完整，暂不显示商品合计指标。" : partial ? "以下为已保存的部分明细，不代表全部记录。" : unavailableCard ? "已取得此卡片的数量与规则，但分类明细尚未核验，暂不显示商品列表。选择“全部”可返回。" : total === 0 ? (q || state.archiveCard || state.archiveCategory || state.archiveFlag || state.archiveProfit || Object.values(filters).some(function (f) { return f.value !== ""; }) ? "没有匹配的记录。" : "接口已采集完成，返回 0 条记录。") : "";
+    var missingChannelReport = false;
     if (account && !available) {
       var overviewState = state.archiveOverviewCache[state.from + ':' + state.to];
       if (!overviewState || overviewState.status === 'loading') message = '正在读取全部店铺数据…';
       else if (overviewState.status === 'missing') message = '全部店铺数据读取失败，请点击“刷新已采数据”重试。';
+      else if (overviewState.records[id]?.status === 'not_saved') {
+        missingChannelReport = true;
+        message = '所选日期暂无这张渠道报表。商品采集的数据可在商品总览查询。';
+      }
+    }
+    if (state.page === 'productOverview' && validRange && partial && scope.shopId === '__all__') {
+      message = '当前显示各店已保存的商品明细。查询已核验的合计和分类指标时，请选择单家店铺和单日。';
     }
     return {
       localArchive: true, account: account, page: { id: meta.id, label: meta.label, ops: [] },
@@ -778,7 +787,7 @@
       classifications: classifications, categoryOptions: categoryOptions, allRows: allRows, filteredRows: rows,
       promotionGroups: promotionGroups, selectedPromotion: selectedPromotion,
       promotionSummary: selectedPromotion && selectedPromotion.extensibleTableWrapper.columnData.find(function (r) { return r.sumLine; }),
-      reportId: id, complete: complete, partial: partial, message: message, noMatches: message === "没有匹配的记录。",
+      reportId: id, complete: complete, partial: partial, message: message, noMatches: message === "没有匹配的记录。", missingChannelReport: missingChannelReport,
       goodsSummary: goods && validRange && complete && available ? (state.archiveCard ? cardArchive && cardArchive.verified && cardArchive.summary : archiveRows(id === "shop_spu_page" ? "shop_spu_total" : "shop_goods_total")[0]) : null,
       coverage: { status: validRange && available ? "ready" : "missing" },
       cardStatus: "ready", cards: cards, channelCount: account ? archiveRows('saved_channels').filter(function (r) { return String(r.platform).toLowerCase() !== 'all'; }).length : 1, shopCount: account ? archiveRows('saved_shops').length : 1, shops: [scope.shopName],
@@ -1182,6 +1191,7 @@
       renderArchiveOperatingTrend(data) + renderArchiveControls(data) +
       (data.goods && state.view !== 'period' ? '<div class="bd-summary-switch">汇总：' + chips([['all', '全部'], ['page', '当前页']], 'archiveSummary') + '</div>' : '') +
       (data.message ? '<p class="bd-miss">' + esc(data.message) + '</p>' : '') +
+      (data.missingChannelReport ? '<button type="button" class="bd-plain" data-act="page" data-page="productOverview">查看已采商品</button>' : '') +
       (data.message && !data.noMatches && !(data.partial && data.rows.length) ? '' : data.goods || data.reportId === 'key_goods' ? (state.view === 'period' ? renderArchivePeriod(data) : state.view === 'gallery' ? renderArchiveGallery(data) : renderArchiveGoodsTable(data)) : state.view === 'chart' ? renderArchiveChart(data) : state.view === 'period' && ['channel_shop_table', 'saved_shops'].includes(data.reportId) ? (data.rows.length ? (data.account ? renderSavedShopPeriod(data) : renderArchiveShopPeriod(data)) : '') : renderArchiveTable(data)) +
       (data.goods && state.view !== 'period' ? '<p class="bd-status">当前为 ' + (data.reportId === 'shop_spu_page' ? 'SPU 汇总，点击箭头展开商品链接' : 'SKU 商品链接明细') + '。销售件数按接口原口径展示，不等同于销售单数。左右滚动可查看全部指标。</p>' : '') +
       '<div class="bd-sum">当前表 ' + esc(data.total) + ' 条' + (data.goods && data.complete && data.coverage.status === "ready" ? ' · 全店商品分页已收齐' : '') + ' · 表格筛选不改变上方指标范围</div>' +
@@ -1488,7 +1498,7 @@
   }
 
   function reliableDay() {
-    var goodsArchive = state.page === "productOverview" && state.localArchive?.unified;
+    var goodsArchive = state.localArchive?.unified && (state.page === "productOverview" || state.page === "channelAnalysis" && state.tab === "qdfx_goods");
     return iso(addDays(parseIso(shanghaiToday()), goodsArchive ? -1 : -2));
   }
 

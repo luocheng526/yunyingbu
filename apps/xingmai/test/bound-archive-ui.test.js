@@ -874,6 +874,48 @@ test('总览在同一页面展示历史渠道和店铺；渠道筛选、店铺�
   assert.equal(h.calls.some(c=>c.options.method==='POST'),false);
 });
 
+test('渠道报表缺失时可跳到同日商品明细，商品详情可选昨天', async () => {
+  const yesterday = addDays(shanghaiToday(), -1);
+  const previousDay = addDays(yesterday, -1);
+  const daily = { ...scope, date: yesterday };
+  const goods = { ...daily, goodsId: '123456', goodsName: '已采商品样本', gmv: 100 };
+  const api = createSavedData({
+    collector: {},
+    readHeads: async () => [],
+    readSheets: async () => [],
+    readScopes: async () => [daily],
+    scopedCollector: item => ({ async getRecord({ reportId, page }) {
+      return item.date === yesterday && reportId === 'shop_goods_page' && page === 1
+        ? record(reportId, [goods], page, { scope: daily, total: 1 }) : null;
+    } })
+  });
+  const saved = { options: await api.options(), manifest: params => api.manifest(Object.fromEntries(params)),
+    record: async params => (await api.record(Object.fromEntries(params))).record };
+  const overview = params => ({
+    ok: true,
+    scope: { from: params.get('from'), to: params.get('to') },
+    records: { saved_shops: { status: 'not_saved', rows: [] } }
+  });
+  const h = await harness({ saved, overview, startAtDefault: true });
+  assert.match(h.root.innerHTML, /所选日期暂无这张渠道报表/);
+  assert.match(h.root.innerHTML, /data-page="productOverview">查看已采商品<\/button>/);
+  assert.ok(h.root.innerHTML.includes(`data-act="pick-date" type="date" min="2026-09-01" max="${previousDay}"`));
+
+  await h.click({ 'data-act': 'page', 'data-page': 'productOverview' });
+  assert.match(h.root.innerHTML, /当前显示各店已保存的商品明细/);
+  assert.match(h.root.innerHTML, /已采商品样本/);
+  assert.ok(h.calls.some(({ url }) => url.includes('/saved?') && url.includes(`from=${yesterday}&to=${yesterday}`)));
+
+  await h.click({ 'data-act': 'page', 'data-page': 'channelAnalysis' });
+  await h.click({ 'data-act': 'tab', 'data-tab': 'qdfx_goods' });
+  assert.ok(h.root.innerHTML.includes(`data-act="pick-date" type="date" min="2026-09-01" max="${yesterday}"`));
+  await h.change('pick-date', previousDay);
+  await h.change('pick-date', yesterday);
+  assert.match(h.root.innerHTML, /已采商品样本/);
+  assert.ok(h.root.innerHTML.includes(`value="${yesterday}"`));
+  assert.equal(h.calls.some(c => c.options.method === 'POST'), false);
+});
+
 test('批量标签和跟进保存可回读、可筛选；日期目标有达成率且不覆盖采集值', async () => {
   const marks = new Map(), h = await harness({ marks });
   await h.click({'data-act':'page','data-page':'productOverview'});
