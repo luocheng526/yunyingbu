@@ -52,7 +52,7 @@ export function createGoodsBackfill({ directory, discover, makeCollector, blocke
     const tasks = dates.flatMap(date => shops.map(shop => ({ ...shop, date })));
     return { ok: true, source, tasks, known, summary: { from: input.from, to: input.to, shops: shops.map(({ platform, shopId, shopName }) => ({ platform, shopId, shopName })), dates: dates.length, total: tasks.length, indexed: tasks.filter(s => known.has(scopeKey(s))).length, reports: GOODS_REPORTS } };
   }
-  async function start(input) {
+  async function start(input, automatic = false) {
     if (active) return { ok: false, statusCode: 409, reason: 'collector_busy' };
     active = true;
     try {
@@ -62,16 +62,17 @@ export function createGoodsBackfill({ directory, discover, makeCollector, blocke
       const previous = await read(path, null);
       if (previous && previous.owner !== prepared.source.owner) { active = false; return { ok: false, statusCode: 409, reason: 'identity_changed' }; }
       const { source, tasks, known, summary } = prepared;
-      run = { id: randomUUID(), owner: source.owner, status: 'running', ...summary, done: summary.indexed, failed: 0, requests: 0, cached: 0, verifiedSku: 0, verifiedSpu: 0, current: null, errors: [], startedAt: new Date().toISOString() };
+      run = { id: randomUUID(), owner: source.owner, status: 'running', automatic, ...summary, done: automatic ? 0 : summary.indexed, failed: 0, requests: 0, cached: 0, verifiedSku: 0, verifiedSpu: 0, current: null, errors: [], startedAt: new Date().toISOString() };
       stopping = false; await progress(true);
       settled = (async () => {
         let consecutiveFailures = 0;
         try {
           for (const scope of tasks) {
             if (stopping) { run.status = 'paused'; break; }
-            if (known.has(scopeKey(scope))) continue;
+            if (!automatic && known.has(scopeKey(scope))) continue;
             run.current = { ...scope, reports: {} }; await progress(true);
-            const collector = makeCollector(scope, source.owner), failures = [], counts = {};
+            const sampledAt = new Date().toISOString();
+            const collector = makeCollector(scope, source.owner, automatic), failures = [], counts = {};
             // SKU/SPU cards use the same upstream endpoint. Start the SPU call
             // only after the SKU response is archived, while other reports overlap.
             const reports = GOODS_REPORTS.filter(id => id !== 'shop_cards_spu');
@@ -119,12 +120,16 @@ export function createGoodsBackfill({ directory, discover, makeCollector, blocke
             // A failed worker never abandons another request's archive write.
             const workers = await Promise.allSettled(Array.from({ length: GOODS_BACKFILL_CONCURRENCY }, () => worker()));
             if (workers.some(r => r.status === 'rejected')) failures.push({ reason: 'local_archive_error' });
-            if (stopping) { run.status = 'paused'; await progress(true); break; }
+            if (stopping) { if (automatic) await collector.discardGoods(); run.status = 'paused'; await progress(true); break; }
             if (!failures.length && GOODS_REPORTS.every(id => Object.hasOwn(counts, id))) {
-              const entry = { ...scope, sku: counts.shop_goods_page, spu: counts.shop_spu_page, verifiedAt: new Date().toISOString() };
-              known.set(scopeKey(scope), entry); await save(indexPath, { version: 1, scopes: [...known.values()] });
+              const entry = { ...scope, ...(automatic ? { sampledAt } : {}), sku: counts.shop_goods_page, spu: counts.shop_spu_page, verifiedAt: new Date().toISOString() };
+              if (automatic) await collector.publishGoods();
+              const next = new Map(known).set(scopeKey(scope), entry);
+              await save(indexPath, { version: 1, scopes: [...next.values()] });
+              known.set(scopeKey(scope), entry);
               run.done++; run.verifiedSku += entry.sku; run.verifiedSpu += entry.spu; consecutiveFailures = 0;
             } else {
+              if (automatic) await collector.discardGoods();
               run.failed++; const reason = failures.find(f => fatal.has(f.reason))?.reason || failures[0]?.reason || 'incomplete';
               run.errors.push({ scope, failures }); run.errors = run.errors.slice(-100);
               if (fatal.has(reason)) { run.status = 'blocked'; run.reason = reason; }
@@ -142,7 +147,7 @@ export function createGoodsBackfill({ directory, discover, makeCollector, blocke
     } catch (error) { active = false; throw error; }
   }
   return { start, status, busy: () => active, wait: async () => { await settled; return status(); }, stop: () => { stopping = true; return { ok: true, stopping: active }; },
-    resume: async () => { const previous = await read(path, null); return previous?.status === 'running' ? start({ from: previous.from, to: previous.to, shopKeys: previous.shops.map(shopKey) }) : { ok: true, resumed: false }; },
+    resume: async () => { const previous = await read(path, null); return previous?.status === 'running' && !previous.automatic ? start({ from: previous.from, to: previous.to, shopKeys: previous.shops.map(shopKey) }) : { ok: true, resumed: false }; },
     plan: async input => { const result = await plan(input); return result.ok ? { ok: true, ...result.summary } : result; },
     scopes: async () => [...(await index()).values()] };
 }

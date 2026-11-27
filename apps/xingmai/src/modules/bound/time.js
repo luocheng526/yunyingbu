@@ -10,8 +10,8 @@ export function nowDate() {
   return clock();
 }
 
-export function shanghaiToday() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(clock());
+export function shanghaiToday(at = null) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(at || clock());
 }
 
 export function addDays(iso, delta) {

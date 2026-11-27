@@ -15,7 +15,7 @@ const success = data => ({ httpStatus: 200, payload: { code: 0, data } });
 async function temporary(work) { const directory = await mkdtemp(join(tmpdir(), 'bound-goods-backfill-')); try { await work(directory); } finally { await rm(directory, { recursive: true, force: true }); } }
 function fixtures(directory, beforeResponse = async () => {}) {
   const calls = []; let owner = 'one', fail = false;
-  const config = { directory, today, discover: async () => ({ ok: true, owner, shops: [SHOP_DAY] }), makeCollector: scope => createShopDayCollector({ directory, scope, concurrency: GOODS_BACKFILL_CONCURRENCY, intervalMs: 0, maxPages: 200, retryFailures: true, request: async input => {
+  const config = { directory, today, discover: async () => ({ ok: true, owner, shops: [SHOP_DAY] }), makeCollector: (scope, owner, freshGoods) => createShopDayCollector({ directory, scope, freshGoods, concurrency: GOODS_BACKFILL_CONCURRENCY, intervalMs: 0, maxPages: 200, retryFailures: true, request: async input => {
     calls.push({ scope, input });
     await beforeResponse(input);
     if (fail) return { blocked: 'login_conflict' };
@@ -173,3 +173,40 @@ test('SKU and SPU cards sharing an endpoint are collected serially without skipp
   assert.equal(run.status, 'complete'); assert.equal(run.done, 1);
   assert.deepEqual(cards, ['sku', 'spu']);
 }));
+
+test('a failed daily refresh preserves the published goods and a verified refresh replaces them', async () => temporary(async directory => {
+  const f = fixtures(directory), job = createGoodsBackfill(f.config);
+  const input = { ...selection, from: SHOP_DAY.date, to: SHOP_DAY.date };
+  await job.start(input);
+  assert.equal((await job.wait()).status, 'complete');
+  const reader = f.config.makeCollector(SHOP_DAY);
+  const report = { reportId: 'shop_goods_page', page: 1 };
+  const original = await reader.getRecord(report);
+  f.fail(true);
+  await job.start(input, true);
+  assert.equal((await job.wait()).status, 'blocked');
+  assert.deepEqual(await reader.getRecord(report), original);
+  f.fail(false);
+  await job.start(input, true);
+  assert.equal((await job.wait()).status, 'complete');
+  const fresh = await reader.getRecord(report);
+  assert.notEqual(fresh.id, original.id);
+  assert.equal(fresh.dataHash, original.dataHash);
+}));
+
+test('Shanghai calendar catches up to yesterday, then rechecks provisional scopes including missed days', async () => {
+  const { nextDailyGoods } = await import('../src/modules/bound/daily-goods.js');
+  const scopes = [], keys = ['JD:1'];
+  const add = (day, at) => scopes.push({ date: '2026-11-' + day, platform: 'JD', shopId:'1', verifiedAt: at });
+  for(let day=19;day<=23;day++) add(day,'2026-11-27T01:00:00Z');
+  for(let day=24;day<=26;day++){
+    assert.equal(nextDailyGoods(scopes,'2026-11-27',keys).from,'2026-11-'+day);
+    add(day,'2026-11-27T01:00:00Z');
+  }
+  assert.equal(nextDailyGoods(scopes,'2026-11-27',keys),null);
+  assert.equal(nextDailyGoods(scopes,'2026-11-28',keys).from,'2026-11-27');
+  add(27,'2026-11-28T01:00:00Z');
+  assert.equal(nextDailyGoods(scopes,'2026-11-28',keys).from,'2026-11-26');
+  add(26,'2026-11-27T16:00:00Z');
+  assert.equal(nextDailyGoods(scopes,'2026-11-28',keys),null);
+});

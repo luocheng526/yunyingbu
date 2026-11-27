@@ -1,9 +1,10 @@
+import { startDailyGoods } from "./daily-goods.js";
 import { Router } from "express";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { createShopDayCollector } from "./shop-day.js";
 import { createFourPageJob } from "./four-page-job.js";
-import { requestShopDayReport, collectionStatus, requestVisibleShops, requestBatchShopDayReport, requestGoodsBackfillReport } from "./collect.js";
+import { requestShopDayReport, linkStatus, collectionStatus, requestVisibleShops, requestBatchShopDayReport, requestGoodsBackfillReport } from "./collect.js";
 import { createArchiveImport } from "./archive-import.js";
 import { createAnnotations } from "./annotations.js";
 import { createSavedOverview } from "./saved-overview.js";
@@ -48,7 +49,7 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
       request: (input, onRequest) => batchRequest(input, onRequest, scope, owner) }) }) });
   const goodsBackfill = createGoodsBackfill({ directory, discover,
     blocked: async () => collectionStatus().batchEnabled || collector.isBusy() || job.busy() || importer.busy() || batch.busy(),
-    makeCollector: (scope, owner) => createShopDayCollector({ directory, scope, maxPages: 200, concurrency: GOODS_BACKFILL_CONCURRENCY, intervalMs: 0, retryFailures: true,
+    makeCollector: (scope, owner, freshGoods) => createShopDayCollector({ directory, scope, freshGoods, maxPages: 200, concurrency: GOODS_BACKFILL_CONCURRENCY, intervalMs: 0, retryFailures: true,
       request: (input, onRequest) => backfillRequest(input, onRequest, scope, owner) }) });
   const readScopes = async () => [...await batch.scopes(), ...await goodsBackfill.scopes()];
   const annotations = createAnnotations();
@@ -59,6 +60,9 @@ export function createShopDayRouter({ directory = defaultArchiveDirectory(), req
   const importer = createArchiveImport({ directory, blocked: async () =>
     batch.busy() || job.busy() || collector.isBusy() || goodsBackfill.busy() });
   void goodsBackfill.resume().catch(() => {});
+  if (process.env.NODE_ENV === 'production' && !process.env.NODE_TEST_CONTEXT && !process.env.MENGKAI_SMOKE_LIVE) {
+    startDailyGoods(goodsBackfill, linkStatus);
+  }
   router.use((req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     if (collectionStatus().batchEnabled) return res.status(409).json({ ok: false, reason: "pause_legacy_batch_first" });

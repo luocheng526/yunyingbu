@@ -1,5 +1,5 @@
 import { setTimeout } from "node:timers";
-import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { SHOP_DAY, DAY_REPORTS, DAY_EXCLUSIONS, shopDayRequest, validShopDay } from "./shop-day-contract.js";
@@ -79,24 +79,58 @@ export function chooseSoldProduct(record, scope = SHOP_DAY) {
 }
 
 // Local disk archive only. Never writes the legacy bound_sheet key lacking shop identity.
-export function createShopDayCollector({ directory, request, intervalMs = 1500, scope = SHOP_DAY, retryFailures = false, maxPages = 10, concurrency = 1 }) {
+export function createShopDayCollector({ directory, request, intervalMs = 1500, scope = SHOP_DAY, retryFailures = false, maxPages = 10, concurrency = 1, freshGoods = false }) {
   if (![1, 2, 4].includes(concurrency) || concurrency > 1 && intervalMs !== 0) throw new Error("invalid_concurrency");
   if (!validShopDay(scope)) throw new Error("invalid_scope");
   scope = Object.freeze({ ...scope });
   if (!directory || typeof request !== "function") throw new Error("单店采集配置无效");
   const dir = join(directory, scope.platform, scope.shopId, scope.date);
+  const generation = freshGoods ? randomUUID() : null;
+  const output = generation ? join(dir, generation) : dir;
+  const pointer = join(dir, 'current-goods.json');
+  const names = new Map();
+  function goodsFile(name) {
+    const match = /^(shop_(?:goods_page|spu_page|goods_total|spu_total|cards_sku|cards_spu))-shop-(\d+)-/.exec(name);
+    if (!match) return false;
+    const [, reportId, page] = match;
+    const key = reportId + ':' + page;
+    if (!names.has(key)) {
+      const spec = shopDayRequest({ reportId, page: Number(page) }, scope, 200);
+      names.set(key, spec && reportId + '-shop-' + page + '-' + digest(spec).slice(0, 12) + '.json');
+    }
+    return names.get(key) === name;
+  }
+  async function recordDir(name) {
+    if (generation) return output;
+    if (!goodsFile(name)) return dir;
+    try {
+      const id = JSON.parse(await readFile(pointer, 'utf8'));
+      if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('invalid_goods_generation');
+      return join(dir, id);
+    } catch (error) { if (error.code === 'ENOENT') return dir; throw error; }
+  }
+  async function publishGoods() {
+    if (!generation) throw new Error('missing_goods_generation');
+    const temp = pointer + '.' + generation + '.tmp';
+    await writeFile(temp, JSON.stringify(generation), { mode: 0o600 });
+    await rename(temp, pointer);
+  }
+  async function discardGoods() {
+    if (generation) await rm(output, { recursive: true, force: true });
+  }
   let busy = 0;
   const inFlight = new Set();
   let lastRequest = 0;
   async function read(name) {
-    try { return JSON.parse(await readFile(join(dir, name), "utf8")); }
+    try { return JSON.parse(await readFile(join(await recordDir(name), name), "utf8")); }
     catch (error) { if (error.code === "ENOENT") return null; throw error; }
   }
   async function save(name, data) {
-    await mkdir(dir, { recursive: true });
-    const temp = join(dir, `${name}.${randomUUID()}.tmp`);
+    const destination = await recordDir(name);
+    await mkdir(destination, { recursive: true });
+    const temp = join(destination, `${name}.${randomUUID()}.tmp`);
     await writeFile(temp, JSON.stringify(data, null, 2), { mode: 0o600 });
-    await rename(temp, join(dir, name));
+    await rename(temp, join(destination, name));
     const saved = await read(name);
     if (digest(saved) !== digest(data)) throw new Error("单店原始数据回读不一致");
     return saved;
@@ -156,9 +190,10 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500, 
     const d = await describe(input);
     return d && !d.blocked ? read(d.name) : null;
   }
-  async function collect(input) {
+  async function collect(input, options = {}) {
     const d = await describe(input);
     if (!d || d.blocked) return { ok: false, statusCode: 400, reason: d?.blocked || "invalid_scope" };
+    const refresh = options.refresh === true;
     if (d.report.requiresSelection && !input.categoryPath) return { ok: false, statusCode: 400, reason: "category_selection_contract_unverified" };
     if (busy >= concurrency || inFlight.has(d.name)) return { ok: false, statusCode: 409, reason: "collector_busy" };
     busy++; inFlight.add(d.name);
@@ -170,7 +205,7 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500, 
         if (good.has(parsed.status)) return { ok: true, cached: true, record: await save(d.name, { ...previous, ...parsed, revalidatedAt: new Date().toISOString() }) };
       }
       // Repeated actions and process restarts reuse success; failures require review, not hidden retries.
-      if (previous && (!retryFailures || good.has(previous.status) || !["timeout", "request_failed", "upstream_pending", "collector_busy"].includes(previous.status) || (previous.attempts || 1) >= 3)) return { ok: good.has(previous.status), cached: true, record: previous };
+      if (previous && !refresh && (!retryFailures || good.has(previous.status) || !["timeout", "request_failed", "upstream_pending", "collector_busy"].includes(previous.status) || (previous.attempts || 1) >= 3)) return { ok: good.has(previous.status), cached: true, record: previous };
       if ((input.page || 1) > 1) {
         const before = await getRecord({ ...input, page: input.page - 1 });
         if (!before || before.nextPage !== input.page) return { ok: false, statusCode: 400, reason: "invalid_page" };
@@ -331,5 +366,5 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500, 
     })();
     return { ok: true, run };
   }
-  return { collect, selectProduct, status, fourPageStatus, getRecord, inventory, startAll, stopAll, runStatus, isBusy: () => busy > 0 || runActive };
+  return { publishGoods, discardGoods, collect, selectProduct, status, fourPageStatus, getRecord, inventory, startAll, stopAll, runStatus, isBusy: () => busy > 0 || runActive };
 }
