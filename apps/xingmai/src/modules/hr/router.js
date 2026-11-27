@@ -340,7 +340,9 @@ hrRouter.get("/staff", async (req, res) => {
 hrRouter.post("/staff/import", async (req, res) => {
   try {
     const { rows, departures } = req.body || {};
-    res.json({ ok: true, ...(await importStaff(rows, actorName(req), { departures: departures === true })) });
+    res.json({ ok: true, ...(await importStaff(rows, actorName(req), {
+      departures: departures === true, rosterActor: req.user.username
+    })) });
   } catch (err) {
     sendErr(res, err);
   }
@@ -356,7 +358,7 @@ hrRouter.post("/staff/sync", async (req, res) => {
 
 hrRouter.post("/staff", async (req, res) => {
   try {
-    const person = await createStaff(req.body || {}, actorName(req));
+    const person = await createStaff(req.body || {}, actorName(req), { rosterActor: req.user.username });
     res.status(201).json({ ok: true, staff: person });
   } catch (err) {
     sendErr(res, err);
@@ -366,7 +368,9 @@ hrRouter.post("/staff", async (req, res) => {
 hrRouter.put("/staff/:id", async (req, res) => {
   try {
     const body = req.body || {};
-    const person = await updateStaff(req.params.id, body, actorName(req), { replace: body.replace === true });
+    const person = await updateStaff(req.params.id, body, actorName(req), {
+      replace: body.replace === true, rosterActor: req.user.username
+    });
     res.json({ ok: true, staff: person });
   } catch (err) {
     sendErr(res, err);
@@ -375,7 +379,7 @@ hrRouter.put("/staff/:id", async (req, res) => {
 
 hrRouter.delete("/staff/:id", async (req, res) => {
   try {
-    res.json({ ok: true, ...(await deleteStaff(req.params.id)) });
+    res.json({ ok: true, ...(await deleteStaff(req.params.id, { rosterActor: req.user.username })) });
   } catch (err) {
     sendErr(res, err);
   }
@@ -383,7 +387,7 @@ hrRouter.delete("/staff/:id", async (req, res) => {
 
 hrRouter.post("/recruits/:id/join", async (req, res) => {
   try {
-    res.json({ ok: true, ...(await registerRecruitJoin(req.params.id, actorName(req))) });
+    res.json({ ok: true, ...(await registerRecruitJoin(req.params.id, actorName(req), { rosterActor: req.user.username })) });
   } catch (err) {
     sendErr(res, err);
   }

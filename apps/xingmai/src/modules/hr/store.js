@@ -1,4 +1,5 @@
 import { dbMode, query } from "../profile/auth.js";
+import { matchOrganization, readOrganization, removeFromOrganization, saveOrganization, staffWithOrganization } from "./staff-roster.js";
 
 export const HR_TABS = ["数据看板", "奋斗时长", "招聘管理", "员工管理", "考勤管理", "薪酬绩效", "培训发展", "组织架构"];
 export const GENDERS = ["男", "女"];
@@ -115,6 +116,7 @@ export const HR_SCHEMA = [
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS hr_staff (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    org_person_id INT UNSIGNED DEFAULT NULL,
     person_name VARCHAR(64) NOT NULL,
     gender VARCHAR(8) NOT NULL DEFAULT '',
     job_number VARCHAR(64) NOT NULL DEFAULT '',
@@ -137,7 +139,8 @@ export const HR_SCHEMA = [
     roster_fields JSON NULL,
     created_by VARCHAR(64) NOT NULL DEFAULT '',
     created_at VARCHAR(40) NOT NULL,
-    updated_at VARCHAR(40) NOT NULL
+    updated_at VARCHAR(40) NOT NULL,
+    UNIQUE KEY uq_hr_staff_org_person (org_person_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS hr_talents (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -411,6 +414,13 @@ async function migrateStaffTable() {
   }
   if (!names.has("roster_fields")) {
     await query("ALTER TABLE hr_staff ADD COLUMN roster_fields JSON NULL");
+  }
+  if (!names.has("org_person_id")) {
+    await query("ALTER TABLE hr_staff ADD COLUMN org_person_id INT UNSIGNED DEFAULT NULL");
+  }
+  const indexes = await rowsOf("SHOW INDEX FROM hr_staff WHERE Key_name = 'uq_hr_staff_org_person'");
+  if (!indexes.length) {
+    await query("ALTER TABLE hr_staff ADD UNIQUE KEY uq_hr_staff_org_person (org_person_id)");
   }
 }
 
@@ -1297,7 +1307,7 @@ export async function deleteRecruit(id) {
   });
 }
 
-export async function registerRecruitJoin(id, actor = "") {
+export async function registerRecruitJoin(id, actor = "", options = {}) {
   await ensureHrSchema();
   const key = Number(id);
   const current = (await listRecruits()).find((row) => row.id === key);
@@ -1315,7 +1325,7 @@ export async function registerRecruitJoin(id, actor = "") {
     joinedOn: current.expectedJoin || current.recordDate,
     status: "在职",
     note
-  }, actor);
+  }, actor, options);
   if (dbMode() === "mysql") {
     await query("UPDATE hr_recruits SET joined_flag = 1, staff_id = ? WHERE id = ?", [staff.id, key]);
   } else {
@@ -1398,13 +1408,14 @@ const rosterTextFields = {
   politicalStatus: 32, school: 120, major: 120, emergencyRelation: 32,
   householdType: 32, householdAddress: 255, residentialAddress: 255, tianjinSocialInsurance: 64
 };
-const rosterFields = [...Object.keys(rosterTextFields), "regularizedOn", "graduatedOn", "age", "employmentStage"];
+const rosterFields = [...Object.keys(rosterTextFields), "regularizedOn", "graduatedOn", "age", "employmentStage", "group"];
 
 function mapStaff(row) {
   const stored = typeof row.roster_fields === "string" ? JSON.parse(row.roster_fields) : row.roster_fields;
   return {
     ...Object.fromEntries(rosterFields.map((key) => [key, stored?.[key] ?? null])),
     id: Number(row.id),
+    orgPersonId: Number(row.org_person_id) || null,
     name: row.person_name,
     gender: row.gender || "",
     jobNumber: row.job_number || "",
@@ -1485,6 +1496,7 @@ function staffFrom(input, { requireName = true } = {}) {
     jobNumber: clip(input.jobNumber, 64),
     department: clip(input.department, 64),
     position: clip(input.position, 64),
+    group: clip(input.group, 64),
     phone: optionalPhone(input.phone),
     joinedOn: optionalDate(input.joinedOn, "入职日期"),
     birthday: optionalDate(input.birthday, "生日"),
@@ -1506,6 +1518,7 @@ function staffPatch(input) {
   if (filled(input, "jobNumber")) patch.jobNumber = clip(input.jobNumber, 64);
   if (filled(input, "department")) patch.department = clip(input.department, 64);
   if (filled(input, "position")) patch.position = clip(input.position, 64);
+  if (filled(input, "group")) patch.group = clip(input.group, 64);
   if (filled(input, "phone")) patch.phone = optionalPhone(input.phone);
   if (filled(input, "joinedOn")) patch.joinedOn = optionalDate(input.joinedOn, "入职日期");
   if (filled(input, "birthday")) patch.birthday = optionalDate(input.birthday, "生日");
@@ -1536,20 +1549,59 @@ function sortStaff(rows) {
     .sort((a, b) => (a.status === "在职" ? 0 : 1) - (b.status === "在职" ? 0 : 1) || String(a.department).localeCompare(String(b.department), "zh") || String(a.name).localeCompare(String(b.name), "zh"));
 }
 
+let staffWork = Promise.resolve();
+
+function withStaffRoster(work) {
+  const result = staffWork.then(async () => {
+    const people = await readOrganization();
+    const rows = await readStaffRows();
+    const bound = new Set(rows.map((row) => row.orgPersonId).filter(Boolean));
+    const matches = new Map();
+    for (const row of rows) {
+      if (row.orgPersonId) continue;
+      const person = matchOrganization(row, people);
+      if (person) matches.set(person.id, [...(matches.get(person.id) || []), row]);
+    }
+    for (const person of people) {
+      if (bound.has(person.id)) continue;
+      const candidates = matches.get(person.id) || [];
+      const exact = candidates.filter((row) => row.jobNumber && row.jobNumber === person.employeeNo);
+      const match = exact.length === 1 ? exact[0] : candidates.length === 1 ? candidates[0] : null;
+      if (match) {
+        match.orgPersonId = (await saveStaffRow(match.id, { orgPersonId: person.id })).orgPersonId;
+      } else {
+        rows.push(await writeStaff(newStaff({}, "", person)));
+      }
+    }
+    return work(rows, people);
+  });
+  staffWork = result.catch(() => {});
+  return result;
+}
+
+function currentStaff(rows, people) {
+  const byId = new Map(people.map((person) => [person.id, person]));
+  return rows.filter((row) => !row.orgPersonId || byId.has(row.orgPersonId))
+    .map((row) => staffWithOrganization(row, byId.get(row.orgPersonId)));
+}
+
 export async function listStaff({ status = "" } = {}) {
   const picked = clip(status, 16);
   if (picked && !STAFF_STATUSES.includes(picked)) throw bad("状态不正确");
-  const rows = await readStaffRows();
-  return sortStaff(picked ? rows.filter((row) => row.status === picked) : rows);
+  return withStaffRoster((rows, people) => {
+    const staff = currentStaff(rows, people);
+    return sortStaff(picked ? staff.filter((row) => row.status === picked) : staff);
+  });
 }
 
 async function writeStaff(row) {
   if (dbMode() === "mysql") {
     const [result] = await query(
       `INSERT INTO hr_staff
-        (person_name, gender, job_number, department_name, position_name, phone, joined_on, birthday, left_on, status_name, hometown, education, emergency_name, emergency_phone, note_text, dingtalk_userid, created_by, created_at, updated_at, job_level, tenure_months, contract_ends_on, roster_fields)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.birthday || "", row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.createdBy, row.createdAt, row.updatedAt, row.jobLevel, row.tenureMonths, row.contractEndsOn, JSON.stringify(staffRosterFields(row))]
+        (person_name, gender, job_number, department_name, position_name, phone, joined_on, birthday, left_on, status_name, hometown, education, emergency_name, emergency_phone, note_text, dingtalk_userid, created_by, created_at, updated_at, job_level, tenure_months, contract_ends_on, roster_fields, org_person_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+      [row.name, row.gender, row.jobNumber, row.department, row.position, row.phone, row.joinedOn, row.birthday || "", row.leftOn, row.status, row.hometown, row.education, row.emergencyName, row.emergencyPhone, row.note, row.dingtalkUserId, row.createdBy, row.createdAt, row.updatedAt, row.jobLevel, row.tenureMonths, row.contractEndsOn, JSON.stringify(staffRosterFields(row)), row.orgPersonId || null]
     );
     row.id = Number(result.insertId);
     return row;
@@ -1560,6 +1612,7 @@ async function writeStaff(row) {
 }
 
 const staffColumns = {
+  orgPersonId: "org_person_id",
   name: "person_name", gender: "gender", jobNumber: "job_number", department: "department_name",
   position: "position_name", phone: "phone", joinedOn: "joined_on", birthday: "birthday",
   leftOn: "left_on", status: "status_name", hometown: "hometown", education: "education",
@@ -1597,29 +1650,56 @@ async function saveStaffRow(id, patch) {
   return { ...row };
 }
 
-export async function createStaff(input = {}, actor = "") {
-  await ensureHrSchema();
-  const row = {
+function newStaff(input, actor, person) {
+  return {
     jobLevel: "", tenureMonths: null, contractEndsOn: "", ...staffDetailsPatch(input),
-    ...staffFrom(input), ...stamp(actor), updatedAt: new Date().toISOString()
+    ...staffFrom(person ? { ...input, name: person.name, status: person.status } : input),
+    ...stamp(actor), updatedAt: new Date().toISOString(), orgPersonId: person?.id || null
   };
-  return writeStaff(row);
 }
 
-export async function updateStaff(id, input = {}, _actor = "", { replace = false } = {}) {
+export async function createStaff(input = {}, actor = "", { rosterActor } = {}) {
+  const row = newStaff(input, actor);
+  return withStaffRoster(async (rows, people) => {
+    if (rosterActor === undefined) return writeStaff(row);
+    const person = matchOrganization(row, people);
+    const existing = person
+      ? rows.find((entry) => entry.orgPersonId === person.id)
+      : matchStaff(rows.filter((entry) => !entry.orgPersonId), row);
+    const patch = { ...staffPatch(input), ...staffDetailsPatch(input) };
+    const saved = await saveOrganization(person ? patch : row, person, people, rosterActor);
+    const updated = existing
+      ? await saveStaffRow(existing.id, { ...patch, orgPersonId: saved.id })
+      : await writeStaff({ ...row, orgPersonId: saved.id });
+    return staffWithOrganization(updated, saved);
+  });
+}
+
+export async function updateStaff(id, input = {}, _actor = "", { replace = false, rosterActor } = {}) {
   const key = Number(id);
-  await ensureHrSchema();
   const patch = { ...(replace ? staffFrom(input) : staffPatch(input)), ...staffDetailsPatch(input) };
   // Explicit clearing is separate from import's merge-only blank values.
   if (!replace && Array.isArray(input.clearFields)) {
     const clearable = ["gender", "jobNumber", "department", "position", "phone", "joinedOn", "birthday", "leftOn",
       "jobLevel", "contractEndsOn", "hometown", "education", "emergencyName", "emergencyPhone", "note"];
     for (const field of input.clearFields) {
-      if (clearable.includes(field)) patch[field] = "";
-      if (field === "tenureMonths" || (field !== "employmentStage" && rosterFields.includes(field))) patch[field] = null;
+      if (clearable.includes(field) || field === "group") patch[field] = "";
+      else if (field === "tenureMonths" || (field !== "employmentStage" && rosterFields.includes(field))) patch[field] = null;
     }
   }
-  return saveStaffRow(key, patch);
+  return withStaffRoster(async (rows, people) => {
+    const row = rows.find((entry) => entry.id === key);
+    const person = row?.orgPersonId ? people.find((entry) => entry.id === row.orgPersonId) : null;
+    if (!row || (row.orgPersonId && !person)) throw bad("记录不存在", 404);
+    const shared = { ...patch };
+    if (!person && input.syncOrganization === true) Object.assign(shared, row, patch);
+    const saved = person || input.syncOrganization === true
+      ? await saveOrganization(shared, person, people, rosterActor)
+      : null;
+    if (patch.status === "在职" && !patch.leftOn) patch.leftOn = "";
+    const updated = await saveStaffRow(key, saved ? { ...patch, orgPersonId: saved.id } : patch);
+    return staffWithOrganization(updated, saved);
+  });
 }
 
 function matchStaff(rows, input) {
@@ -1627,21 +1707,22 @@ function matchStaff(rows, input) {
   const job = clip(input.jobNumber, 64);
   const name = clip(input.name, 64);
   const department = clip(input.department, 64);
-  if (ding) {
-    const hit = rows.find((row) => row.dingtalkUserId === ding);
-    if (hit) return hit;
-  }
-  if (job) {
-    const hit = rows.find((row) => row.jobNumber === job);
-    if (hit) return hit;
-  }
-  if (name) {
-    return rows.find((row) => row.name === name && row.department === department) || null;
+  const matching = [
+    ding ? rows.filter((row) => row.dingtalkUserId === ding) : [],
+    job ? rows.filter((row) => row.jobNumber === job) : [],
+    name ? rows.filter((row) => row.name === name && (!job || !row.jobNumber || row.jobNumber === job)) : []
+  ];
+  for (const hits of matching) {
+    if (hits.length === 1) return hits[0];
+    if (hits.length > 1) {
+      const scoped = hits.filter((row) => row.name === name && row.department === department);
+      return scoped.length === 1 ? scoped[0] : null;
+    }
   }
   return null;
 }
 
-export async function importStaff(rows = [], actor = "", { departures = false } = {}) {
+export async function importStaff(rows = [], actor = "", { departures = false, rosterActor } = {}) {
   if (!Array.isArray(rows) || !rows.length) throw bad("没有可导入的行");
   if (rows.length > 400) throw bad("一次最多导入 400 人");
   const validRows = rows.filter((input) => clip(input?.name, 64))
@@ -1654,17 +1735,17 @@ export async function importStaff(rows = [], actor = "", { departures = false } 
       throw bad((clip(input.sourceRow, 96) || "导入行") + "：" + error.message);
     }
   }
-  const existing = await readStaffRows();
+  const existing = await listStaff();
   let added = 0;
   let updated = 0;
   for (const input of validRows) {
     const hit = matchStaff(existing, input);
     if (hit) {
-      const saved = await updateStaff(hit.id, input, actor, { replace: false });
+      const saved = await updateStaff(hit.id, rosterActor === undefined ? input : { ...input, syncOrganization: true }, actor, { rosterActor });
       Object.assign(hit, saved);
       updated += 1;
     } else {
-      const saved = await createStaff(input, actor);
+      const saved = await createStaff(input, actor, { rosterActor });
       existing.push(saved);
       added += 1;
     }
@@ -1702,18 +1783,25 @@ async function opsPunchPeople() {
   return [...seen.values()];
 }
 
-export async function deleteStaff(id) {
-  return removeRow("hr_staff", memory.staff, id, (next) => {
-    memory.staff = next;
+export async function deleteStaff(id, { rosterActor } = {}) {
+  return withStaffRoster(async (rows, people) => {
+    const row = rows.find((entry) => entry.id === Number(id));
+    if (row?.orgPersonId) {
+      const person = people.find((entry) => entry.id === row.orgPersonId);
+      if (!person) throw bad("记录不存在", 404);
+      const { removed } = await removeFromOrganization(person, rosterActor);
+      return { removed };
+    }
+    return removeRow("hr_staff", memory.staff, id, (next) => { memory.staff = next; });
   });
 }
 
 export async function syncStaffFromPunches(actor = "") {
   const people = await opsPunchPeople();
-  const existing = await readStaffRows();
+  const existing = await listStaff();
   let added = 0;
   for (const person of people) {
-    if (!person.name || matchStaff(existing, person)) continue;
+    if (!person.name || existing.some((row) => row.name === person.name) || matchStaff(existing, person)) continue;
     const saved = await createStaff({ ...person, status: "在职" }, actor);
     existing.push(saved);
     added += 1;
