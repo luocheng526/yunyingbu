@@ -24,6 +24,7 @@ import {
 } from "./store.js";
 import { canAssignSiteAcl, canEditLogin, canEditRoster, canSeeLogin, scopeOf, storeScopeOf } from "./org-acl.js";
 import {
+  grantBatchSiteAcl,
   hydrateSiteAcl,
   listSiteAclBoard,
   navVisibility,
@@ -312,6 +313,14 @@ peopleRouter.put("/org/site-acl/:name", async (req, res) => {
   await hydrateSiteAcl();
   const actor = await resolveActor(req);
   sendResult(res, await savePersonSiteAcl(actor, req.params.name, req.body || {}), false);
+});
+
+peopleRouter.post("/org/site-acl/batch", async (req, res) => {
+  await hydratePeopleRoster();
+  await hydrateOrgStores();
+  await hydrateSiteAcl();
+  const actor = await resolveActor(req);
+  sendResult(res, await grantBatchSiteAcl(actor, req.body || {}), false);
 });
 
 peopleRouter.get("/org/site-acl", async (req, res) => {

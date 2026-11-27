@@ -11,7 +11,7 @@ test("organization assignments, grants, revocation and empty snapshots survive s
   try {
     fs.writeFileSync(path.join(isolated, "package.json"), '{"type":"module"}');
     fs.symlinkSync(fs.realpathSync(path.join(app,"node_modules")),path.join(isolated,"node_modules"),"junction");
-    for(const module of ["people","profile"]) {
+    for(const module of ["people","profile","home"]) {
       const dest=path.join(isolated,"src/modules",module);fs.mkdirSync(dest,{recursive:true});
       for(const file of fs.readdirSync(path.join(app,"src/modules",module))) if(file.endsWith(".js")) fs.copyFileSync(path.join(app,"src/modules",module,file),path.join(dest,file));
     }
@@ -38,10 +38,31 @@ test("organization assignments, grants, revocation and empty snapshots survive s
         assert.equal(acl.navVisibility('persist-person').paths['/work'].enter,false);
       } else if(phase==='database-failure') {
         setPoolForTests({query:async()=>{throw new Error('unavailable')}});setDbMode('mysql');
+        const person = people.listPeople().find(row => row.username === 'persist-person');
+        await assert.rejects(acl.grantBatchSiteAcl('罗成', {
+          targetIds: [String(person.id)],
+          modules: { home: cap }
+        }));
+        assert.equal(acl.effectiveSiteAcl(person.name).modules.home.see, false);
         await assert.rejects(acl.savePersonSiteAcl('罗成','持久化成员',{modules:{work:{...cap,features:{'work.today':cap}}}}));
         await assert.rejects(acl.hydrateSiteAcl());
         await assert.rejects(org.hydrateOrgStores());
         await assert.rejects(people.hydratePeopleRoster());
+      } else if (phase === 'batch-identities') {
+        const name = '权限同名成员';
+        await people.createPerson({ name, username: 'batch-hr', board: 'hrTech', department: '人事部' });
+        await people.createPerson({ name, username: 'batch-tech', board: 'hrTech', department: '技术部' });
+        const [first, second] = people.listPeople().filter(row => row.name === name);
+        assert.ok(first && second);
+        assert.equal((await acl.grantBatchSiteAcl('罗成', {
+          targetIds: [String(first.id)], modules: { home: cap }
+        })).ok, true);
+        assert.equal((await acl.grantBatchSiteAcl('罗成', {
+          targetIds: [String(second.id)], modules: { academy: cap }
+        })).ok, true);
+        const file = JSON.parse(fs.readFileSync('src/modules/people/data/site-acl.json', 'utf8'));
+        assert.deepEqual(Object.keys(file.grants['person:' + first.id].modules), ['home']);
+        assert.deepEqual(Object.keys(file.grants['person:' + second.id].modules), ['academy']);
       } else if (phase === 'delete-race') {
         const {person: assistant} = await people.createPerson({name:'待删除助理',role:'助理'});
         const {person: operator} = await people.createPerson({name:'保留运营',role:'运营',assistant:assistant.name});
@@ -95,7 +116,7 @@ test("organization assignments, grants, revocation and empty snapshots survive s
       }
     `;
     const env={...process.env};delete env.NODE_TEST_CONTEXT;
-    for(const phase of ["write","revoke","read-revoked","database-failure","read-revoked","delete-race","empty","read-empty"]) execFileSync(process.execPath,["--input-type=module","-e",script],{cwd:isolated,env:{...env,ORG_PHASE:phase},timeout:20000,stdio:"pipe"});
+    for(const phase of ["write","revoke","read-revoked","database-failure","read-revoked","batch-identities","delete-race","empty","read-empty"]) execFileSync(process.execPath,["--input-type=module","-e",script],{cwd:isolated,env:{...env,ORG_PHASE:phase},timeout:20000,stdio:"pipe"});
   } finally {
     const link=path.join(isolated,"node_modules");if(fs.existsSync(link))fs.unlinkSync(link);
     if(!path.resolve(isolated).startsWith(path.resolve(os.tmpdir())+path.sep))throw new Error("Unexpected test directory");

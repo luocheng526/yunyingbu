@@ -2,6 +2,7 @@ import { NAV_MAIN, NAV_FOOT } from '../home/nav-items.js';
 import { WORK_FEATURES, migrateFeatureCap } from './work-permissions.js';
 import { stateSync } from "./state-sync.js";
 const sync = stateSync();
+let pendingAclUpdate = Promise.resolve();
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -416,17 +417,29 @@ export async function hydrateSiteAcl() {
   return { ok: true, mode: persistMode };
 }
 
-export async function persistSiteAcl() {
-  if (runningUnderNodeTest()) return { ok: true, mode: persistMode };
-  return sync.write(snapshotAcl(), async snapshot => {
+function updateSiteAcl(update) {
+  const work = pendingAclUpdate.then(update);
+  pendingAclUpdate = work.catch(() => {});
+  return work;
+}
+
+export async function persistSiteAcl(nextGrants = grants) {
+  if (runningUnderNodeTest()) {
+    grants = nextGrants;
+    return { ok: true, mode: persistMode };
+  }
+  return sync.write({ grants: nextGrants }, async snapshot => {
     try {
       if (await writeMysqlAcl(snapshot)) {
         persistMode = "mysql"; writePersistFile(snapshot);
+        grants = snapshot.grants;
         return { ok: true, mode: persistMode };
       }
     } catch { throw Object.assign(new Error("组织中心保存失败，数据库未确认写入"), { statusCode: 503 }); }
     if (writePersistFile(snapshot)) {
-      persistMode = "file"; return { ok: true, mode: persistMode };
+      persistMode = "file";
+      grants = snapshot.grants;
+      return { ok: true, mode: persistMode };
     }
     throw Object.assign(new Error("组织中心保存失败，无法持久化"), { statusCode: 503 });
   });
@@ -660,7 +673,11 @@ export function readPersonSiteAcl(actor, name) {
   return { ok: true, person, sheet: effectiveSiteAcl(who, stores), stores };
 }
 
-export async function savePersonSiteAcl(actor, name, input = {}) {
+export function savePersonSiteAcl(actor, name, input = {}) {
+  return updateSiteAcl(() => replacePersonSiteAcl(actor, name, input));
+}
+
+async function replacePersonSiteAcl(actor, name, input) {
   if (!canAssignSiteAcl(actor)) {
     return { ok: false, statusCode: 403, error: "只有罗成、韩梦凯、沈子晗能配网站权限" };
   }
@@ -698,11 +715,11 @@ export async function savePersonSiteAcl(actor, name, input = {}) {
       delete nextStores[String(key)];
     }
   });
-  grants[`person:${person.id}`] = {
+  const grant = {
     modules: compactModules(input.modules),
     stores: compactStores(nextStores)
   };
-  await persistSiteAcl();
+  await persistSiteAcl({ ...grants, [`person:${person.id}`]: grant });
   return {
     ok: true,
     person,
@@ -711,13 +728,80 @@ export async function savePersonSiteAcl(actor, name, input = {}) {
   };
 }
 
+function addCap(previous, addition) {
+  return normalizeCap({
+    see: previous?.see || addition.see,
+    enter: previous?.enter || addition.enter,
+    edit: previous?.edit || addition.edit
+  });
+}
+
+export function grantBatchSiteAcl(actor, input = {}) {
+  return updateSiteAcl(async () => {
+    if (!canAssignSiteAcl(actor)) {
+      return { ok: false, statusCode: 403, error: "当前账号无权批量授权" };
+    }
+    if (!Array.isArray(input.targetIds) || !input.targetIds.length ||
+        input.targetIds.some(id => typeof id !== "string" || !id.trim())) {
+      return { ok: false, statusCode: 400, error: "请选择要授权的成员" };
+    }
+    const targetIds = [...new Set(input.targetIds)];
+    const eligibleIds = new Set(listSiteAclPeople(actor)
+      .filter(person => !isLuo(person.name))
+      .map(person => String(person.id)));
+    if (targetIds.some(id => !eligibleIds.has(id))) {
+      return { ok: false, statusCode: 403, error: "所选成员已不在可授权范围，请刷新成员列表" };
+    }
+
+    // New selections use the current catalog. Legacy aliases apply only to saved grants.
+    const moduleInput = Object.fromEntries(SITE_MODULES.map(({ id }) => [
+      id, { ...input.modules?.[id], catalogVersion: 2 }
+    ]));
+    const modules = compactModules(moduleInput);
+    const stores = compactStores(input.stores);
+    if (!Object.keys(modules).length && !Object.keys(stores).length) {
+      return { ok: false, statusCode: 400, error: "请选择要添加的权限" };
+    }
+    const scopedIds = new Set(listSiteAclStores(actor).map(store => String(store.id)));
+    if (Object.keys(stores).some(id => !scopedIds.has(id))) {
+      return { ok: false, statusCode: 403, error: "所选店铺已不在可授权范围，请刷新权限配置" };
+    }
+    for (const module of Object.values(modules)) {
+      // Selected features also need the corresponding level on their parent module.
+      Object.assign(module, Object.values(module.features).reduce(addCap, module));
+    }
+
+    const nextGrants = { ...grants };
+    const roster = new Map(listPeople().map(person => [String(person.id), person]));
+    for (const id of targetIds) {
+      const person = roster.get(id);
+      const previous = grants[`person:${id}`] ||
+        (canonicalPerson(person.name)?.id === person.id ? grants[person.name] : null) ||
+        (canonicalPerson(person.username)?.id === person.id ? grants[person.username] : null);
+      const defaults = !previous && isLineLeader(person.name) ? leaderModules() : null;
+      const previousModules = fillModules(previous?.modules, defaults);
+      const nextStores = { ...previous?.stores };
+      for (const [storeId, cap] of Object.entries(stores)) {
+        nextStores[storeId] = addCap(nextStores[storeId], cap);
+      }
+      nextGrants[`person:${id}`] = {
+        modules: compactModules(fillModules(modules, previousModules)),
+        stores: compactStores(nextStores)
+      };
+    }
+    await persistSiteAcl(nextGrants);
+    return { ok: true, updatedIds: targetIds, persist: persistMode };
+  });
+}
+
 export async function preservePersonAcl(person) {
   await hydrateSiteAcl();
-  const saved = savedGrant(person.username || person.name);
-  if (saved && !grants[`person:${person.id}`]) {
-    grants[`person:${person.id}`] = clone(saved);
-    await persistSiteAcl();
-  }
+  await updateSiteAcl(async () => {
+    const saved = savedGrant(person.username || person.name);
+    if (saved && !grants[`person:${person.id}`]) {
+      await persistSiteAcl({ ...grants, [`person:${person.id}`]: clone(saved) });
+    }
+  });
 }
 
 registerOrganizationPermissions({ canonicalActor, featureAllowed, isConfigured, storeAllowed });
