@@ -42,6 +42,51 @@ test("organization assignments, grants, revocation and empty snapshots survive s
         await assert.rejects(acl.hydrateSiteAcl());
         await assert.rejects(org.hydrateOrgStores());
         await assert.rejects(people.hydratePeopleRoster());
+      } else if (phase === 'delete-race') {
+        const {person: assistant} = await people.createPerson({name:'待删除助理',role:'助理'});
+        const {person: operator} = await people.createPerson({name:'保留运营',role:'运营',assistant:assistant.name});
+        const {person: duplicate} = await people.createPerson({name:'同名成员',board:'hrTech',department:'技术部'});
+        const {person: homonym} = await people.createPerson({name:'同名成员',board:'hrTech',department:'人事部'});
+        const {person: teammate} = await people.createPerson({name:'保留同名引用',role:'运营',assistant:homonym.name});
+        const {person: dependent} = await people.createPerson({name:'保留下属',managerId:assistant.id});
+        await org.createOrgStore({storeName:'删除测试店铺',assistant:assistant.name,remark:'运营中'},'罗成');
+        assert.equal(operator.assistant, assistant.name);
+        assert.equal(teammate.assistant, homonym.name);
+        assert.equal(dependent.managerId, assistant.id);
+        assert.ok(people.listGrants().some(grant => grant.personId === assistant.id));
+
+        let payload = fs.readFileSync('src/modules/people/data/people-roster.json','utf8');
+        let unblockLegacyDelete;
+        let markLegacyDeleteStarted;
+        const legacyDeleteBlocked = new Promise(resolve => { unblockLegacyDelete = resolve; });
+        const legacyDeleteStarted = new Promise(resolve => { markLegacyDeleteStarted = resolve; });
+        setPoolForTests({query:async (sql, values) => {
+          if (sql.startsWith('SELECT payload FROM people_roster_board')) return [[{payload}]];
+          if (sql.startsWith('INSERT INTO people_roster_board')) payload = values[0];
+          if (sql.startsWith('DELETE FROM people_grants')) {
+            markLegacyDeleteStarted();
+            await legacyDeleteBlocked;
+          }
+          return [[]];
+        }});
+        setDbMode('mysql');
+
+        const deletion = people.removePeople([assistant.id, duplicate.id]);
+        await legacyDeleteStarted;
+        try {
+          await people.hydratePeopleRoster();
+        } finally {
+          unblockLegacyDelete();
+        }
+        assert.equal((await deletion).removed, 2);
+        await people.hydratePeopleRoster();
+        const roster = people.listPeople();
+        assert.ok(!roster.some(row => row.id === assistant.id || row.id === duplicate.id), 'a concurrent read must not restore deleted members');
+        assert.ok(!people.listGrants().some(grant => grant.personId === assistant.id));
+        assert.equal(roster.find(row => row.id === operator.id).assistant, '');
+        assert.equal(roster.find(row => row.id === dependent.id).managerId, null);
+        assert.equal(roster.find(row => row.id === teammate.id).assistant, homonym.name);
+        assert.ok(roster.some(row => row.id === homonym.id));
       } else if(phase==='empty') {
         fs.writeFileSync('src/modules/people/data/people-roster.json',JSON.stringify({people:[],shops:[],grants:[],loginOverlay:{},nextPersonId:100}));
         fs.writeFileSync('src/modules/people/data/org-stores.json',JSON.stringify({rows:[],rightsPins:{},logs:[],nextId:100}));
@@ -50,7 +95,7 @@ test("organization assignments, grants, revocation and empty snapshots survive s
       }
     `;
     const env={...process.env};delete env.NODE_TEST_CONTEXT;
-    for(const phase of ["write","revoke","read-revoked","database-failure","read-revoked","empty","read-empty"]) execFileSync(process.execPath,["--input-type=module","-e",script],{cwd:isolated,env:{...env,ORG_PHASE:phase},timeout:20000,stdio:"pipe"});
+    for(const phase of ["write","revoke","read-revoked","database-failure","read-revoked","delete-race","empty","read-empty"]) execFileSync(process.execPath,["--input-type=module","-e",script],{cwd:isolated,env:{...env,ORG_PHASE:phase},timeout:20000,stdio:"pipe"});
   } finally {
     const link=path.join(isolated,"node_modules");if(fs.existsSync(link))fs.unlinkSync(link);
     if(!path.resolve(isolated).startsWith(path.resolve(os.tmpdir())+path.sep))throw new Error("Unexpected test directory");

@@ -1172,20 +1172,25 @@ export async function removePeople(ids) {
     }
     people = people.filter((row) => row.id !== found.id);
     grants = grants.filter((grant) => grant.personId !== found.id);
-    people.forEach((row) => {
-      if (row.managerId === found.id) {
-        row.managerId = null;
-      }
-    });
     delete loginOverlay[String(found.id)];
     removed.push({ id: found.id, name: found.name });
   }
   if (!removed.length) {
     return { ok: false, statusCode: skipped.length ? 400 : 404, error: skipped.length ? "管理员不能删" : "人员不存在" };
   }
-  saveLoginOverlay();
-  await persistRemovedPeople(removed.map((row) => row.id));
+  const removedIds = new Set(removed.map((row) => row.id));
+  const remainingNames = new Set(people.map((row) => row.name));
+  const removedNames = new Set(removed.map((row) => row.name).filter((name) => !remainingNames.has(name)));
+  for (const row of people) {
+    if (removedIds.has(Number(row.managerId))) row.managerId = null;
+    for (const field of ["director", "lineManager", "manager", "supervisor", "reserve", "operator", "assistant"]) {
+      if (removedNames.has(String(row[field] || "").trim())) row[field] = "";
+    }
+  }
+  // Queue the roster snapshot before legacy SQL can yield to a concurrent roster read.
   await persistPeopleRoster();
+  saveLoginOverlay();
+  await persistRemovedPeople(removedIds);
   return { ok: true, removed: removed.length, people: removed, skipped };
 }
 
