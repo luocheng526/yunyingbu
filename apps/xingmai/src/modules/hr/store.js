@@ -1519,6 +1519,13 @@ export async function updateStaff(id, input = {}, _actor = "", { replace = false
   const current = rows.find((row) => row.id === key);
   if (!current) throw bad("记录不存在", 404);
   const next = replace ? { ...current, ...staffFrom(input), id: current.id, createdBy: current.createdBy, createdAt: current.createdAt } : { ...current, ...staffPatch(input) };
+  // Explicit clearing is separate from import's merge-only blank values.
+  if (!replace && Array.isArray(input.clearFields)) {
+    const clearable = ["jobNumber", "department", "position", "joinedOn", "leftOn"];
+    for (const field of input.clearFields) {
+      if (clearable.includes(field)) next[field] = "";
+    }
+  }
   if (next.status === "在职" && replace && !clip(input.leftOn, 10)) next.leftOn = "";
   return saveStaffRow(next);
 }
