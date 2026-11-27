@@ -6,7 +6,7 @@
           <div class="hr-dashboard-title">
             <span class="hr-dashboard-eyebrow">WORKFORCE OVERVIEW</span>
             <h1>人事数据看板</h1>
-            <p class="hr-dashboard-subtitle">用一页看清团队规模、流动和待处理事项</p>
+            <p class="hr-dashboard-subtitle">管理招聘、员工档案和考勤，查看奋斗时长、薪酬绩效、培训发展及组织架构</p>
           </div>
           <p class="hr-msg" data-msg role="status"></p>
           <label class="hr-dashboard-range">
