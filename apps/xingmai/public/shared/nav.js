@@ -1568,6 +1568,7 @@
     revealTabBar();
     pinHomeTab();
     ensureMeHardReload();
+    window.XmChartMotion?.activate(active);
     return active;
   }
 
@@ -3900,6 +3901,10 @@
   });
 
   paintNow();
+  const chartMotion = document.createElement("script");
+  chartMotion.src = "/shared/chart-motion.js";
+  chartMotion.async = true;
+  document.head.appendChild(chartMotion);
 })();
 
 /* xm-glass-app-loader: appearance and installation only; business shell stays above. */
