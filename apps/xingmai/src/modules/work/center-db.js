@@ -62,7 +62,7 @@ export async function audit(actor, action, before, after, reason = '') {
 export const DEFAULT_SETTINGS = {
   categories: ['日常工作','商品上架','商品优化','选品测品','付费推广','店铺经营','退货治理','数据分析','人员管理','临时工作','其他'],
   roleOverrides: {}, teamOverrides: {}, reportingOverrides: {}, taskTemplates: [],
-  reportRoles: ['主管','运营','运营助理'], reportMembers: [], weekdays: [1,2,3,4,5], restDays: [],
+  reportRoles: ['主管','运营','运营助理'], weekdays: [1,2,3,4,5], restDays: [],
   deadline: '18:00', allowLate: true, reviewHours: 24, staleHours: 48,
   taskReminders: true, dailyReminders: true, dueSoonMinutes: 60, repeatReminderAt: '09:00',
   requiredAttachmentCategories: [],

@@ -6,7 +6,7 @@ export async function eligibility(ctx,date,people=ctx.active) {
   const eligible=new Map();
   for(const p of people) {
     const config=ctx.config;
-    const included=config.reportMembers.length?config.reportMembers.map(String).includes(p.id):config.reportRoles.includes(p.role);
+    const included=config.reportRoles.includes(p.role);
     const onDay=config.weekdays.includes(weekday)&&!config.restDays.includes(date);
     const obligation=await diaryObligation({person:ctx.bundle.people.find(row=>String(row.id)===p.id)||p,date,onRoster:false,templateFilled:false,templateLabels:[],bundle:bundle.bundle,attendance:bundle.attendance});
     const attendance=bundle.attendance.get(Number(p.id));

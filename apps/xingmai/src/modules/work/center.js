@@ -204,15 +204,15 @@ export async function saveSettings(user,input) {
   const ctx=await access(user);if(!ctx.director)fault('只有总监可以修改工作中心全局设置',403);
   if(['roleOverrides','teamOverrides','reportingOverrides'].some(key=>Object.hasOwn(input,key)))fault('人员角色和汇报关系请在组织中心维护');
   if(Object.hasOwn(input,'collaborations'))fault('派单范围由组织中心的上下级关系决定');
-  const next=copy(ctx.config),allowed=['categories','taskTemplates','reportRoles','reportMembers','weekdays','restDays','deadline','allowLate','reviewHours','staleHours','requiredAttachmentCategories','reportFields','taskReminders','dailyReminders','dueSoonMinutes','repeatReminderAt'];
+  const next=copy(ctx.config),allowed=['categories','taskTemplates','reportRoles','weekdays','restDays','deadline','allowLate','reviewHours','staleHours','requiredAttachmentCategories','reportFields','taskReminders','dailyReminders','dueSoonMinutes','repeatReminderAt'];
   for(const key of allowed)if(Object.hasOwn(input,key))next[key]=copy(input[key]);
   if(!next.reportFields||typeof next.reportFields!=='object'||Array.isArray(next.reportFields))fault('日报模板格式不合法');
-  for(const key of ['reportRoles','reportMembers','requiredAttachmentCategories','taskTemplates'])if(!Array.isArray(next[key]))fault('设置格式不合法：'+key);
+  for(const key of ['reportRoles','requiredAttachmentCategories','taskTemplates'])if(!Array.isArray(next[key]))fault('设置格式不合法：'+key);
   if(typeof next.taskReminders!=='boolean'||typeof next.dailyReminders!=='boolean')fault('提醒开关不合法');
   if(!Number.isInteger(next.dueSoonMinutes)||next.dueSoonMinutes<1||next.dueSoonMinutes>1440)fault('到期前提醒应为 1～1440 分钟');
   if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(next.repeatReminderAt))fault('每日催办时间不合法');
   if(typeof next.allowLate!=='boolean')fault('补交设置不合法');
-  if(next.reportRoles.some(r=>![...WORK_ROLES,'助理'].includes(r))||next.reportMembers.some(id=>!ctx.byId.has(String(id))))fault('日报人员或角色不合法');
+  if(next.reportRoles.some(r=>![...WORK_ROLES,'助理'].includes(r)))fault('日报岗位不合法');
   if(next.requiredAttachmentCategories.some(c=>!next.categories?.includes(c)))fault('必传附件分类应属于任务分类');
   for(const fields of Object.values(next.reportFields))if(!Array.isArray(fields)||fields.length>30||fields.some(f=>typeof f!=='string'||!f.trim()||f.length>80))fault('日报字段不合法');
   if(next.taskTemplates.length>100||next.taskTemplates.some(t=>!t||typeof t!=='object'||typeof t.title!=='string'||!t.title.trim()||t.title.length>200||['description','criteria'].some(k=>t[k]!=null&&(typeof t[k]!=='string'||t[k].length>4000))))fault('任务模板不合法');
