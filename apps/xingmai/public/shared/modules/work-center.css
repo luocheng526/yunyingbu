@@ -290,10 +290,10 @@ html[data-theme=dark] .wc-overview-page .wc-dash-filter-date input { background:
   padding:10px 16px 14px;
   max-width:none;
 }
-.wc-overview-page>.wc-head { justify-content:flex-end; margin:0; }
+.wc-overview-page>.wc-head { justify-content:flex-end; margin:0 0 10px; }
 .wc-overview-page .wc-btn.primary { background:#136fec; border-color:#136fec; }
 .wc-overview-page .wc-btn.primary:hover { background:#0f5fcf; }
-.wc-overview-page .wc-nav { margin-bottom:11px; gap:18px; }
+.wc-overview-page .wc-nav { margin-bottom:0; gap:18px; }
 .wc-overview-page .wc-nav button { padding:8px 3px; }
 .wc-compact-dashboard { gap:11px; }
 .wc-compact-heading,.wc-compact-card-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }

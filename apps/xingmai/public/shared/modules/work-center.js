@@ -317,7 +317,7 @@
       </div>`;
       return compactCard('待办与跟进',rows,'','wc-overview-inbox');
     }
-    function overview(){
+    function overview(navigation){
       const summary=can('overview'),statistics=can('statistics'),management=canOpenManagement();
       const execution=summary||statistics;
       const views=[
@@ -335,6 +335,7 @@
           <h1>工作总览</h1>
           <div class="wc-compact-scope">当前视角 <strong>${esc(scopeLabel)}</strong>${filtered?link('清除筛选','dashboardScope',''):''}</div>
         </header>
+        ${navigation}
         <div class="wc-dash-control-row wc-overview-tools">${toolbar(false,true)}
           <div class="wc-compact-heading-actions">${tools}${statistics&&can('export')?btn('导出 Excel','export'):''}${btn('刷新','refresh')}</div></div>
         ${summary?dashboardSummary(data.counts):''}
@@ -522,9 +523,10 @@
       if(dashboardAvailable())tabs.unshift(['overview','工作总览']);
       if(!tabs.some(([id])=>id===tab))tab=tabs[0]?.[0]||'';
       if(tab==='tasks'&&!can(taskView==='acceptance'?'acceptance':'tasks')){taskView=can('tasks')?'list':'acceptance';mode='all';page=1;}
+      const navigation=`<nav class="wc-nav" aria-label="工作中心导航">${tabs.map(([id,label])=>`<button data-action="tab" data-id="${id}" class="${tab===id?'active':''}" aria-current="${tab===id?'page':'false'}">${label}${tabBadgeLabels[id]?`<span class="wc-nav-count" data-wc-tab-count="${id}" hidden></span>`:''}</button>`).join('')}</nav>`;
       const body=!tab?empty('尚未开放工作功能','请在组织中心配置工作中心的功能与操作权限。')
-        :tab==='overview'?overview():tab==='tasks'?tasks():tab==='reports'?reports():settingsPage();
-      root.innerHTML=`<main class="wc${tab==='overview'?' wc-overview-page':''}"><header class="wc-head">${tab==='overview'?'':`<div><div class="wc-eyebrow">甄选未来 · WORK CENTER</div><h1>工作中心</h1><p class="wc-muted">${data.me.role==='总监'?'掌握全公司工作，覆盖各部门与团队。':'查看管理范围与个人任务，跟进工作结果。'}</p></div>`}<div class="wc-actions">${badge(data.me.name+' · '+data.me.role,'blue')}${btn('消息 '+(data.notices.filter(n=>!n.readAt).length+data.alerts.length),'notifications')}${btn('登记工作','newWork')}${data.canPublish?btn('发布任务','publish','primary'):btn('写日报','writeDaily','primary')}</div></header><nav class="wc-nav" aria-label="工作中心导航">${tabs.map(([id,label])=>`<button data-action="tab" data-id="${id}" class="${tab===id?'active':''}" aria-current="${tab===id?'page':'false'}">${label}${tabBadgeLabels[id]?`<span class="wc-nav-count" data-wc-tab-count="${id}" hidden></span>`:''}</button>`).join('')}</nav>${tab==='settings'||tab==='overview'||!tab?'':toolbar()}<div data-wc-body>${body}</div><footer class="wc-foot"><span>北京时间 · 数据来自组织、任务及工作记录</span>${tab==='overview'?'':btn('刷新数据','refresh')}</footer></main>`;
+        :tab==='overview'?overview(navigation):tab==='tasks'?tasks():tab==='reports'?reports():settingsPage();
+      root.innerHTML=`<main class="wc${tab==='overview'?' wc-overview-page':''}"><header class="wc-head">${tab==='overview'?'':`<div><div class="wc-eyebrow">甄选未来 · WORK CENTER</div><h1>工作中心</h1><p class="wc-muted">${data.me.role==='总监'?'掌握全公司工作，覆盖各部门与团队。':'查看管理范围与个人任务，跟进工作结果。'}</p></div>`}<div class="wc-actions">${badge(data.me.name+' · '+data.me.role,'blue')}${btn('消息 '+(data.notices.filter(n=>!n.readAt).length+data.alerts.length),'notifications')}${btn('登记工作','newWork')}${data.canPublish?btn('发布任务','publish','primary'):btn('写日报','writeDaily','primary')}</div></header>${tab==='overview'?'':navigation}${tab==='settings'||tab==='overview'||!tab?'':toolbar()}<div data-wc-body>${body}</div><footer class="wc-foot"><span>北京时间 · 数据来自组织、任务及工作记录</span>${tab==='overview'?'':btn('刷新数据','refresh')}</footer></main>`;
       root.querySelectorAll('form').forEach(form=>window.XmWorkRich.upgrade(form));
       applyPermissions();
       paintTabBadges();
