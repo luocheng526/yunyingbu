@@ -1,9 +1,47 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import { patchExpiredShopLogin, patchLive2OfflineRelogin } from "../src/modules/home/router.js";
 
 const homeJs = readFileSync(new URL("../public/shared/modules/home.js", import.meta.url), "utf8");
+
+test("实时 formats fee ratios above 100% and monitors small percentages in the right units", () => {
+  const functions = ["applyLive2Pack", "asNum", "fmtMoney", "fmtInt", "fmtRate", "feePct",
+    "feeMonitorOf", "feeShopCounts", "feePickShops", "live2Sums", "live2Charts",
+    "live2HistoryTotals", "live2Comparison", "trendOf"].map((name) => {
+    const start = homeJs.indexOf(`  function ${name}(`);
+    assert.ok(start >= 0, name);
+    return homeJs.slice(start, homeJs.indexOf("\n  function ", start + 1));
+  }).join("\n");
+  const records = [
+    { shop: "RASW潮流生活旗舰店", liveAmount: 329, paidAmount: 548.25, feeRate: 548.25 / 329,
+      overviewHistory: { comparison: { deal: 100, spend: 150 } } },
+    { shop: "低费比", liveAmount: 100, paidAmount: 1, feeRate: 0.01 },
+    { shop: "零花费", liveAmount: 100, paidAmount: 0, feeRate: 0 },
+    { shop: "零成交", liveAmount: 0, paidAmount: 25, feeRate: null },
+    { shop: "缺花费", liveAmount: 100, paidAmount: null, feeRate: null }
+  ];
+  const result = runInNewContext(functions + `
+    const shops = applyLive2Pack(records, { records });
+    const chart = live2Charts([shops[0]]).fee;
+    ({ rates: shops.map(row => row.feeRate), monitor: feeMonitorOf(shops[0]).label,
+      low: feeMonitorOf(shops[1]).label, noSales: feeMonitorOf(shops[3]).label, counts: feeShopCounts(shops),
+      hotShop: feePickShops(shops, 'hot')[0]?.shop, chart, oneHundred: fmtRate(1, 'ratio') });`, {
+    records, feeRangeOf: () => ({ lo: 35, hi: 40 }), liveFilter: () => ({})
+  });
+  assert.deepEqual(Array.from(result.rates), ["167%", "1%", "0%", null, null]);
+  assert.equal(result.monitor, "费比超标");
+  assert.equal(result.low, "加大付费");
+  assert.equal(result.noSales, "—");
+  assert.equal(result.counts.hot, 1);
+  assert.equal(result.counts.cold, 2);
+  assert.equal(result.hotShop, records[0].shop);
+  assert.equal(result.chart.value, "167%");
+  assert.equal(result.chart.yestText, "150%");
+  assert.match(result.chart.comparisonNote, /今日 167%/);
+  assert.equal(result.oneHundred, "100%");
+});
 
 test("实时 has a single entry after 近七天业绩汇总 and uses live2", () => {
   const views = homeJs.slice(homeJs.indexOf("var VIEWS"), homeJs.indexOf("var OVERVIEW_PANES"));
