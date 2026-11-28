@@ -1,6 +1,11 @@
 /* xm-fast-shell 0.1.113 0.1.772-bound 0.1.772-meeting 0.1.772-scroll 0.1.772-navhot 0.1.772-tabs 0.1.772-menulite 0.1.772-tab2 0.1.772-orgscroll 0.1.772-notice 0.1.773-tabkeep 0.1.774-tabcap 0.1.775-dutylive 0.1.776-homehit 0.1.777-parentgo 0.1.778-nochild 0.1.779-watermark 0.1.780-marklite 0.1.781-markwho 0.1.782-lightskin 0.1.783-navbold 0.1.784-homeloop 0.1.785-mever 0.1.787-acadleaf v0.4.18 — 个人中心脚本不进浏览器缓存 */
 (function () {
   const ASSET_VER = "20261124-permission-catalog-2";
+  const chartMotion = document.createElement("script");
+  chartMotion.src = "/shared/chart-motion.js?v=20261128-chart-motion-2";
+  chartMotion.async = true;
+  chartMotion.fetchPriority = "high";
+  document.head.appendChild(chartMotion);
   // Called by confirmed save handlers only; reads, pending jobs and errors do
   // not trigger this feedback. Keep it outside module DOM that may be repainted.
   (function installSaveFeedback() {
@@ -3901,10 +3906,6 @@
   });
 
   paintNow();
-  const chartMotion = document.createElement("script");
-  chartMotion.src = "/shared/chart-motion.js";
-  chartMotion.async = true;
-  document.head.appendChild(chartMotion);
 })();
 
 /* xm-glass-app-loader: appearance and installation only; business shell stays above. */
