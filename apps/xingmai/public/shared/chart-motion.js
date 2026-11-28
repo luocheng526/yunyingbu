@@ -12,6 +12,7 @@
     ["column", ".wc-trend-graph > svg", ".wc-dash-bar[height]:not([height='0'])"],
     ["bar", ".fb-category-list", ".fb-bar > i"],
     ["bar", ".bd-bars", ".bd-bar > i"],
+    ["bar", ".hr-dashboard-ranks", ".hr-rank-track > i"],
     ["bar", ".wc-rank-bar, .hr-dashboard-meter", "i"],
     ["stackedBar", ".hr-demographic-bar"],
     ["ring", ".wc-donut"],
@@ -31,25 +32,18 @@
     ["[data-act='view'].is-on[data-view]", "view"]
   ];
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const angle = "--xm-chart-reveal-angle";
-  let canSweep = false;
-  try {
-    window.CSS?.registerProperty?.({ name: angle, syntax: "<angle>", inherits: false, initialValue: "360deg" });
-    canSweep = Boolean(window.CSS?.registerProperty);
-  } catch (_error) {
-    // Keep a fade for browsers that cannot animate the gradient angle.
-  }
 
-  function sweepFrames(start) {
+  function sweepFrames(start, box = "view-box") {
     const edge = ["50% -5%", "105% -5%", "105% 50%", "105% 105%", "50% 105%", "-5% 105%", "-5% 50%", "-5% -5%"];
     const perimeter = Array.from({ length: 9 }, (_, index) => edge[(index + start) % edge.length]);
     return perimeter.map((_, step) => ({
-      clipPath: "polygon(50% 50%, " + perimeter.map((point, index) => index <= step ? point : perimeter[step]).join(", ") + ") view-box"
+      clipPath: "polygon(50% 50%, " + perimeter.map((point, index) => index <= step ? point : perimeter[step]).join(", ") + ") " + box
     }));
   }
   const topSweep = sweepFrames(0);
   // Human resources circles are rotated -90° by the renderer, so use their unrotated start.
   const rotatedSweep = sweepFrames(2);
+  const workRingSweep = sweepFrames(0, "border-box");
 
   function lineFrames(plot, marks) {
     const view = plot.viewBox?.baseVal;
@@ -79,6 +73,27 @@
     animation.currentTime = elapsed;
     playback.effects.add(animation);
     animation.onfinish = () => playback.effects.delete(animation);
+    return animation;
+  }
+
+  function playWorkRing(playback, plot, elapsed) {
+    const colors = plot.style.backgroundImage;
+    if (!colors || elapsed >= pace.ring) return;
+
+    // Keep the track and center visible while a separate color layer is clipped.
+    const layer = document.createElement("span");
+    layer.setAttribute("aria-hidden", "true");
+    layer.style.cssText = "position:absolute;inset:0;border-radius:inherit;pointer-events:none;" +
+      "mask-image:radial-gradient(circle closest-side,transparent 65%,#000 66%)";
+    layer.style.backgroundImage = colors;
+    plot.prepend(layer);
+
+    const track = { backgroundImage: "none", backgroundColor: "var(--wc-line,#e2eaf4)" };
+    animate(playback, plot, [track, track], pace.ring, elapsed);
+    const sweep = animate(playback, layer, workRingSweep, pace.ring, elapsed, 0, "linear");
+    const removeLayer = () => layer.remove();
+    sweep.addEventListener("finish", removeLayer, { once: true });
+    sweep.addEventListener("cancel", removeLayer, { once: true });
   }
 
   function play(group, now, previous) {
@@ -89,16 +104,15 @@
     if (type === "line" && !line) return;
     stop(previous);
     played.set(group.key, playback);
+    if (type === "ring") {
+      playWorkRing(playback, plot, elapsed);
+      return;
+    }
     for (const [index, mark] of marks.entries()) {
       if (type === "line") {
         animate(playback, mark, line, pace.line, elapsed, 0, "linear");
       } else if (type === "svgRing") {
         animate(playback, mark, plot.matches(".hr-donut") ? rotatedSweep : topSweep, pace.ring, elapsed, 0, "linear");
-      } else if (type === "ring" && canSweep) {
-        const maskImage = "radial-gradient(circle closest-side, #000 65%, transparent 66%), conic-gradient(#000 var(" + angle + "), transparent 0deg)";
-        animate(playback, mark, [{ maskImage, [angle]: "0deg" }, { maskImage, [angle]: "360deg" }], pace.ring, elapsed, 0, "linear");
-      } else if (type === "ring") {
-        animate(playback, mark, [{ opacity: 0.25 }, { opacity: 1 }], pace.ring, elapsed);
       } else {
         const column = type === "column";
         const from = column ? "inset(100% -2px -2px) fill-box" : "inset(0 100% 0 0)";
@@ -222,7 +236,7 @@
     if (records.some(record => {
       const attr = record.attributeName;
       if (attr === "class") return record.target.matches("[data-view], [data-act='page'], [data-act='tab'], .org-tab");
-      if (attr === "style") return record.target.matches(".wc-donut, .fb-bar > i, .bd-bar > i, .wc-rank-bar > i, .hr-dashboard-meter > i");
+      if (attr === "style") return record.target.matches(".wc-donut, .fb-bar > i, .bd-bar > i, .hr-rank-track > i, .wc-rank-bar > i, .hr-dashboard-meter > i");
       if (attr === "aria-pressed") return record.target.matches("[data-action='chartMode']");
       return true;
     })) schedule();

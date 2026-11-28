@@ -2,7 +2,7 @@
 (function () {
   const ASSET_VER = "20261124-permission-catalog-2";
   const chartMotion = document.createElement("script");
-  chartMotion.src = "/shared/chart-motion.js?v=20261128-chart-motion-2";
+  chartMotion.src = "/shared/chart-motion.js?v=20261128-chart-motion-3";
   chartMotion.async = true;
   chartMotion.fetchPriority = "high";
   document.head.appendChild(chartMotion);
