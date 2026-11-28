@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { getHomeErpKpis } from "./erp-kpis.js";
 import { getHomeErpPaid } from "./erp-paid.js";
 import { HOME_JS_STAMP } from "./asset-ver.js";
-import { paintWeekInk } from "./week-ink-patch.js";
 import { patchConnectPicker } from "./connect-patch.js";
+import { paintWeekInk } from "./week-ink-patch.js";
 import {
   getHomeLocalPaid,
   postHomeLocalPaid,
@@ -31,6 +31,7 @@ import {
   getWeekShot,
   readWeekStore
 } from "./week-report.js";
+import { attachWeekTotals } from "./week-totals.js";
 
 import { registerWeekManagement } from "./week-management.js";
 import { reportRevision, publicHistoryImage } from "./week-history.js";
@@ -555,7 +556,7 @@ export function patchDeskCodeLogin(text) {
 }
 
 function homeClientSource() {
-  return patchHomeClientSource(fs.readFileSync(homeJsPath, "utf8"));
+  return paintWeekInk(patchHomeClientSource(fs.readFileSync(homeJsPath, "utf8")));
 }
 
 export function homeRouter(deps = {}) {
@@ -566,7 +567,7 @@ export function homeRouter(deps = {}) {
   router.get("/client.js", (_req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     res.type("application/javascript");
-    res.send(paintWeekInk(homeClientSource()));
+    res.send(homeClientSource());
   });
 
   router.get("/erp-kpis", async (req, res) => {
@@ -748,11 +749,21 @@ export function homeRouter(deps = {}) {
   });
 
   async function currentWeekPack(req) {
-    const origin = process.env.HOME_INTERNAL_ORIGIN || process.env.SHEN_INTERNAL_ORIGIN || "http://127.0.0.1:" + req.socket.localPort;
-    try { return buildWeekPack(await loadWeekOrgShops(req.headers.cookie, fetch, origin)); }
-    catch (error) {
-      if (error.statusCode === 401) throw error;
-      return buildWeekPack([]);
+    try {
+      const host = String(req.get("x-forwarded-host") || req.get("host") || "")
+        .split(",")[0]
+        .trim();
+      const proto = String(req.headers["x-forwarded-proto"] || req.protocol || "http")
+        .split(",")[0]
+        .trim();
+      const origin = host ? `${proto}://${host}` : "";
+      const shops = await loadWeekOrgShops(req.headers.cookie || "", fetch, origin);
+      return attachWeekTotals(buildWeekPack(shops));
+    } catch (err) {
+      if (Number(err && err.statusCode) === 401) {
+        throw err;
+      }
+      return attachWeekTotals(buildWeekPack([]));
     }
   }
   router.get("/week-report", async (req, res) => {
@@ -760,7 +771,12 @@ export function homeRouter(deps = {}) {
     try {
       const pack = await currentWeekPack(req);
       return res.json({ ...pack, revision: reportRevision(pack) });
-    } catch (error) { return res.status(error.statusCode || 500).json({ ok: false, error: error.message }); }
+    } catch (err) {
+      if (Number(err && err.statusCode) === 401) {
+        return res.status(401).json({ ok: false, error: err.message || "请先登录" });
+      }
+      return res.status(502).json({ ok: false, error: err.message || "近七天业绩汇总读取失败" });
+    }
   });
   registerWeekManagement(router, { getPack: currentWeekPack });
 
@@ -770,7 +786,9 @@ export function homeRouter(deps = {}) {
     try {
       const saved = saveWeekCells(req.body || {});
       return res.json({ ok: true, updatedAt: saved.updatedAt, dingReady: Boolean(saved.webhook || dingWebhook()) });
-    } catch { return res.status(500).json({ ok: false, error: "业绩表保存失败，请检查存储后重试" }); }
+    } catch {
+      return res.status(500).json({ ok: false, error: "业绩表保存失败，请检查存储后重试" });
+    }
   });
 
   router.get("/week-shot/:id.png", (req, res) => {

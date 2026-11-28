@@ -421,7 +421,8 @@ async function passwordRelogin(shop) {
       merchantId: shop.merchantId || "",
       store: shop.store
     });
-    return kept === "saved" || kept === "kept";
+    // Keeping an old session is not proof that this login matched the new binding.
+    return kept === "saved";
   } finally {
     inflight.delete(shop.store);
   }
@@ -960,10 +961,14 @@ export async function beginRelogin(store, cookie, options) {
   const existing = sessions.find(function (item) {
     return item.store === name;
   });
-  if (sessionStillValid(existing)) {
+  // A manual retry must reach the login page. A changed org binding must not
+  // be validated against the previous session's shop ID.
+  const currentShopId = String(shop.shopId || "").trim();
+  const sessionShopId = String(existing?.shopId || "").trim();
+  if (!manual && sessionStillValid(existing) && (!currentShopId || currentShopId === sessionShopId)) {
     const alive = await cookiesAlive(existing.cookies || [], withMerchant({
       store: name,
-      shopId: (existing && existing.shopId) || (shop && shop.shopId) || "",
+      shopId: currentShopId || sessionShopId,
       merchantId: shop && shop.merchantId
     }));
     if (epoch !== loginEpoch) {
@@ -979,7 +984,7 @@ export async function beginRelogin(store, cookie, options) {
     await markAuth(name, "login_expired", "登录已失效，请重新登录", { writer: COLLECTOR_OWNER_HOME });
   }
   try {
-    const renewed = await passwordRelogin({
+    const renewed = !manual && await passwordRelogin({
       store: shop.store,
       login: shop.login,
       password: shop.password,
@@ -1009,8 +1014,8 @@ export async function beginRelogin(store, cookie, options) {
     shopId: shop.shopId || "",
     merchantId: shop.merchantId || "",
     ambiguousMerchant: shop.ambiguousMerchant === true,
-    // live2 点重新登录也会自动点立即登录；需要滑块时画面留着等人拖。
-    manual: false
+    // Explicit retries use an isolated login page and wait for the user.
+    manual: manual
   };
   shop.login = "";
   shop.password = "";

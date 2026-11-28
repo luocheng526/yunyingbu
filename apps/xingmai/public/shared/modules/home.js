@@ -1893,11 +1893,12 @@
     }
   }
   function feePct(value) {
-    var n = asNum(String(value == null ? "" : value).replace(/%/g, ""));
+    var text = String(value == null ? "" : value);
+    var n = asNum(text.replace(/%/g, ""));
     if (n == null) {
       return null;
     }
-    if (Math.abs(n) <= 1) {
+    if (!text.includes("%") && Math.abs(n) <= 1) {
       n = n * 100;
     }
     return n;
@@ -3828,7 +3829,7 @@
       if (!hit || hit.pendingCollect) {
         return row;
       }
-      var fee = hit.feeRate == null ? null : fmtRate(hit.feeRate);
+      var fee = hit.feeRate == null ? null : fmtRate(hit.feeRate, "ratio");
       return {
         shop: row.shop,
         team: row.team || hit.team || "",
@@ -4031,12 +4032,12 @@
     var sums = live2Sums(rows), today = live2HistoryTotals(rows, "today"), yesterday = live2HistoryTotals(rows, "yesterday");
     function card(key, label, metric, value) {
       var pair = live2Comparison(rows, metric), prior = pair.yesterday;
-      function format(number) { return metric === "fee" ? fmtRate(number) : fmtMoney(number); }
+      function format(number) { return metric === "fee" ? fmtRate(number, "ratio") : fmtMoney(number); }
       var notes = [pair.count ? "环比按相同" + pair.count + "家店铺计算，今日 " + format(pair.today) : "等待昨日可比数据"];
       if (pair.maxAge > 900) notes.push("昨日采样最多提前" + Math.ceil(pair.maxAge / 60) + "分钟");
       if (pair.cached) notes.push("历史刷新失败，沿用已读取记录");
       else if (pair.unavailable) notes.push("部分历史暂时读取失败");
-      return { key: key, label: label, value: value == null ? "—" : metric === "fee" ? fmtRate(value) : fmtMoney(value),
+      return { key: key, label: label, value: format(value),
         yestText: prior == null ? metric === "fee" && pair.count ? "无成交" : "待采集" : format(prior),
         yestLabel: pair.maxAge > 900 ? "昨日参考" : "昨日同段",
         delta: pair.today != null && prior != null && prior > 0 ? trendOf(pair.today, prior) : pair.today === 0 && prior === 0 ? 0 : "",
@@ -4437,12 +4438,12 @@
     var n = asNum(value);
     return n == null ? "—" : Math.round(n).toLocaleString("en-US");
   }
-  function fmtRate(value) {
+  function fmtRate(value, unit) {
     var n = asNum(value);
     if (n == null) {
       return "—";
     }
-    if (Math.abs(n) <= 1) {
+    if (unit === "ratio" || Math.abs(n) <= 1) {
       n = n * 100;
     }
     return Math.round(n) + "%";

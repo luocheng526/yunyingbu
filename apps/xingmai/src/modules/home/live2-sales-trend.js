@@ -1,5 +1,6 @@
 // Each pair comes from one Jingmai reading: yesterday = today / (1 + rate / 100).
 // The platform rate is authoritative; yesterday's local collection is not a baseline.
+import { buildShopOverviewHistory } from "./live2-overview-history.js";
 
 function stampParts(value) {
   if (value instanceof Date) value = new Date(value.getTime() + 8 * 3600000).toISOString().slice(0, 19);
@@ -103,7 +104,7 @@ export function createLive2SalesTrends({ listSamples, now, clock = Date.now }) {
     try {
       if (!cache || cache.day !== day || clock() - cache.at >= 30000) {
         if (!pending) {
-          pending = Promise.resolve().then(() => listSamples(day, day)).then(rows => {
+          pending = Promise.resolve().then(() => listSamples(previousDay(day), day)).then(rows => {
             const byShop = new Map();
             for (const row of rows) {
               if (!byShop.has(row.store)) byShop.set(row.store, []);
@@ -114,12 +115,22 @@ export function createLive2SalesTrends({ listSamples, now, clock = Date.now }) {
         }
         await pending;
       }
-      return records.map(record => ({ ...record,
-        salesTrend: buildShopSalesTrend(record, cache.day === day ? cache.byShop.get(record.shop) : [], stamp) }));
+      return records.map(record => {
+        const rows = cache.day === day ? cache.byShop.get(record.shop) : [];
+        return { ...record, salesTrend: buildShopSalesTrend(record, rows, stamp),
+          overviewHistory: buildShopOverviewHistory(record, rows, stamp) };
+      });
     } catch {
       // Current platform comparison remains usable even when history is unavailable.
-      return records.map(record => ({ ...record,
-        salesTrend: { ...buildShopSalesTrend(record, [], stamp), historyUnavailable: true } }));
+      return records.map(record => {
+        // A failed refresh must not erase observations already read today.
+        // A cache from another day must never be relabelled as today's data.
+        const rows = cache?.day === day ? cache.byShop.get(record.shop) || [] : [];
+        return { ...record,
+          salesTrend: { ...buildShopSalesTrend(record, rows, stamp), historyUnavailable: true },
+          overviewHistory: { ...buildShopOverviewHistory(record, rows, stamp),
+            historyUnavailable: true, historyCached: rows.length > 0 } };
+      });
     }
   };
 }
