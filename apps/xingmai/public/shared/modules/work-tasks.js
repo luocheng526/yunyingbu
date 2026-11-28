@@ -70,8 +70,13 @@
     return ["待执行", "进行中", "已退回"].indexOf(task.status) >= 0 && Date.parse(task.due_at + "+08:00") < now;
   }
 
-  function attachmentError(files) {
-    if (files.length > 3 || files.reduce(function (sum, file) { return sum + file.size; }, 0) > 3 * 1024 * 1024) {
+  // Match the daily image limits in composer-images.js.
+  var dailyImageLimit = 20;
+  var mb = 1024 * 1024;
+
+  function attachmentError(files, daily) {
+    if (files.length > (daily ? dailyImageLimit : 3) || files.reduce(function (sum, file) { return sum + file.size; }, 0) > 3 * mb) {
+      if (daily) return "每份日报最多 " + dailyImageLimit + " 张图片，合计 3 MB；请先移除图片后重试";
       return "最多上传 3 个附件，合计 3 MB；请先移除附件后重试";
     }
     return files.some(function (file) { return !file.size; }) ? "请移除空文件" : "";
@@ -198,6 +203,7 @@
   function bindRichEditors(form) {
     if (!form || form._wtRichPayload) return;
     var editors = [].slice.call(form.querySelectorAll('[data-rich-editor]'));
+    var daily = form.dataset.form === 'daily';
     var serial = 0;
     function attachments() {
       var input = form.querySelector('[name="files"]');
@@ -221,6 +227,7 @@
       return new File([file], file.name || '粘贴图片-' + (++serial) + '.' + extension, { type: type });
     }
     function allEntries() { return editors.reduce(function (all, editor) { return all.concat(editor._wtImages || []); }, []); }
+    function pendingFiles() { return editors.flatMap(function (editor) { return editor._wtPendingFiles || []; }); }
     form._wtInlineFiles = function () { return allEntries().map(function (entry) { return entry.file; }); };
     function draw(editor) {
       var box = editor.closest('.wt-rich-field').querySelector('[data-rich-images]');
@@ -249,9 +256,8 @@
     }
     function addImages(editor, files) {
       if (!files.length || !editor.isConnected || busy()) return;
-      var reserved=editors.flatMap(function(e){return Array.from({length:e._wtLoadCount||0},function(){return {size:1};});});
-      var error = attachmentError(attachments().concat(form._wtInlineFiles(), reserved, files));
-      if (error) { tell(editor, '图片和附件合计' + error.replace('最多上传', '最多'), true); return; }
+      var error = attachmentError(attachments().concat(form._wtInlineFiles(), pendingFiles(), files), daily);
+      if (error) { tell(editor, daily ? error : '图片和附件合计' + error.replace('最多上传', '最多'), true); return; }
       files.forEach(function (file) {
         var entry = { file: file, src: '', error: false }; editor._wtImages.push(entry);
         var reader = new FileReader();
@@ -296,11 +302,13 @@
       var attempt = ++editor._wtAttempt;
       editor._wtReading = true; tell(editor, '正在读取复制的图片…', false);
       try {
-        if (sources.length + attachments().length + form._wtInlineFiles().length > 3) throw new Error('图片和附件合计最多 3 个');
+        if (sources.length + attachments().length + form._wtInlineFiles().length + pendingFiles().length > (daily ? dailyImageLimit : 3)) {
+          throw new Error(daily ? '每份日报最多 ' + dailyImageLimit + ' 张图片' : '图片和附件合计最多 3 个');
+        }
         var files = await Promise.all(sources.map(async function (src) {
           // Clipboard HTML is never inserted. Read image bytes only; do not send site credentials.
           if (!/^data:image\/(png|jpeg|gif|webp|bmp);base64,/i.test(src) && !/^https?:\/\//i.test(src)) throw new Error('请右键复制图片后粘贴，或使用截图');
-          if (src.length > 4.3 * 1024 * 1024) throw new Error('图片和附件合计最多 3 MB');
+          if (src.length > 4.3 * mb) throw new Error(daily ? '图片合计最多 3 MB' : '图片和附件合计最多 3 MB');
           var res = await fetch(src, { credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(6000) });
           if (!res.ok) throw new Error('无法读取网页图片，请右键复制图片后粘贴，或使用截图');
           var file = normalizeImage(await res.blob());
@@ -313,12 +321,12 @@
     }
     form._wtSetImages = async function (name, images, source) {
       var editor=editors.find(function(e){return e.dataset.richEditor===name;});if(!editor)return;
-      var generation=(editor._wtLoadGeneration||0)+1;editor._wtLoadGeneration=generation;editor._wtLoading=true;editor._wtLoadError=false;editor._wtLoadCount=images.length;editor._wtImages=[];draw(editor);
+      var generation=(editor._wtLoadGeneration||0)+1;editor._wtLoadGeneration=generation;editor._wtLoading=true;editor._wtLoadError=false;editor._wtPendingFiles=images.map(function(image){return {size:daily ? image.size || 1 : 1};});editor._wtImages=[];draw(editor);
       try {
         var files=await Promise.all(images.map(async function(image){var response=await fetch(await source(image),{credentials:'same-origin'});if(!response.ok)throw new Error('图片加载失败');return normalizeImage(await response.blob(),image.mime);}));
-        if(editor.isConnected&&generation===editor._wtLoadGeneration){editor._wtLoadCount=0;addImages(editor,files);}
+        if(editor.isConnected&&generation===editor._wtLoadGeneration){editor._wtPendingFiles=[];addImages(editor,files);}
       } catch(error){tell(editor,error.message,true);editor._wtLoadError=true;}
-      finally{if(generation===editor._wtLoadGeneration){editor._wtLoading=false;editor._wtLoadCount=0;}}
+      finally{if(generation===editor._wtLoadGeneration){editor._wtLoading=false;editor._wtPendingFiles=[];}}
     };
     form._wtComposerPayload = function () {
       form._wtRichPayload();
@@ -328,7 +336,7 @@
       if (editors.some(function(editor){return editor._wtLoadError;})) throw new Error('原有图片未能载入，请关闭后重试，以免丢失图片');
       if (editors.some(function (editor) { return editor._wtReading || editor._wtLoading; })) throw new Error('图片正在读取，请稍候再提交');
       var images = allEntries(), attached = attachments(), files = attached.concat(images.map(function (entry) { return entry.file; }));
-      var error = attachmentError(files); if (error) throw new Error(error);
+      var error = attachmentError(files, daily); if (error) throw new Error(error);
       if (images.some(function (entry) { return !entry.src || entry.error; })) throw new Error('图片尚未读取完成，请稍候或删除后重新粘贴');
       var fields = {};
       editors.forEach(function (editor) {

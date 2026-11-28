@@ -21,6 +21,65 @@ beforeEach(async()=>{
   await patchPerson(7,{role:'助理',supervisor:'高丽男'});
   await saveSettings(users.director,{revision:0,weekdays:[0,1,2,3,4,5,6],deadline:'23:59'});
 });
+
+test('daily report API saves up to 20 images across fields within the image budget', async () => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
+  const mb = 1024 * 1024;
+  const image = (field, name, size) => ({
+    field, name, mime: 'image/png', data: Buffer.concat([png, Buffer.alloc(size - png.length, name)]).toString('base64')
+  });
+  const notes = { '商品上架': '已处理', '主图与详情优化': '已更新' };
+  const fields = Object.keys(notes);
+  const imageSize = 24 * 1024;
+  const images = Array.from({ length: 20 }, (_, i) => image(fields[i % 2], `${i}.png`, imageSize));
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => { req.user = users.assistant; next(); });
+  app.use('/api/work', workRouter);
+  const server = await new Promise(resolve => { const listener = app.listen(0, '127.0.0.1', () => resolve(listener)); });
+  const base = `http://127.0.0.1:${server.address().port}/api/work/center`;
+  const save = (composerImages, extra) => fetch(base + '/daily', {
+    method: 'POST', headers: { 'Content-Type': 'application/vnd.xm-work+json' },
+    body: JSON.stringify({ date: today(), notes, composerImages, ...extra })
+  });
+  try {
+    const draft = await save(images);
+    assert.equal(draft.status, 200);
+    const saved = (await draft.json()).record;
+    assert.deepEqual(saved.composerImages.map(i => i.field), images.map(i => i.field));
+    const reloaded = await fetch(base);
+    assert.deepEqual((await reloaded.json()).currentDaily.composerImages, saved.composerImages);
+
+    const revision = saved.revision;
+    const refs = saved.composerImages.map(({ id, field }) => ({ id, field }));
+    const overCount = await save([...refs, refs[0]], { revision });
+    assert.equal(overCount.status, 400);
+    assert.match((await overCount.json()).error, /20 张/);
+    const overTotal = await save([...refs.slice(1), image(fields[0], 'large.png', 3 * mb)], { revision });
+    assert.equal(overTotal.status, 400);
+    assert.match((await overTotal.json()).error, /合计最多 3 MB/);
+    const overSingle = await save([image(fields[0], 'oversize.png', 3 * mb + 1)], { revision });
+    assert.equal(overSingle.status, 400);
+    assert.match((await overSingle.json()).error, /超过 3 MB/);
+
+    const submitted = await save(refs, { revision, submit: true });
+    assert.equal(submitted.status, 200);
+    const published = (await submitted.json()).record;
+    assert.ok(published.submittedAt);
+    assert.deepEqual(published.composerImages, saved.composerImages);
+    assert.deepEqual(published.history[0].composerImages, saved.composerImages);
+    const opened = await fetch(`${base}/image/${encodeURIComponent(refs[0].id)}?record=${encodeURIComponent(saved.id)}`);
+    assert.equal(opened.status, 200);
+    assert.equal((await opened.arrayBuffer()).byteLength, imageSize);
+
+    await assert.rejects(() => saveWork(users.assistant, {
+      title: '自主工作', date: today(), composerImages: Array.from({ length: 4 }, () => ({ ...images[0], field: 'content' }))
+    }), /3 张/);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
 const draft=(overrides={})=>({title:'测试任务',assignee:'5',start_at:today()+'T09:00',due_at:today()+'T23:59',...overrides});
 async function create(user=users.manager,overrides={}){const result=await publishTask(user,draft(overrides));assert.equal(result.ok,true,result.error);return result.task;}
 async function act(user,task,action,extra={}){const result=await actTask(user,{id:task.id,revision:task.revision,action,note:'验证成果与说明',...extra});assert.equal(result.ok,true,result.error);return result.task;}

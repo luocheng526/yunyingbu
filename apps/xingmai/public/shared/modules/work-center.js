@@ -39,6 +39,7 @@
   const progress=(n,label='')=>`<span class="wc-small">${esc(label||n+'%')}</span><div class="wc-progress"><span style="width:${Math.max(0,Math.min(100,Number(n)||0))}%"></span></div>`;
   async function api(path,body,method='POST'){
     const res=await fetch('/api/work/'+path,{credentials:'same-origin',method:body===undefined?'GET':method,headers:body instanceof FormData?{}:{'Content-Type':'application/vnd.xm-work+json'},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)});
+    if(path==='center/daily'&&res.status===413)throw new Error('本次日报上传内容过大，请缩小图片或移除部分图片后重试');
     let data;try{data=await res.json();}catch{throw new Error('服务暂不可用，请稍后重试');}
     if(!res.ok||data.ok===false)throw new Error(data.error||'操作失败');return data;
   }

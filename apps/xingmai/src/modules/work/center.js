@@ -1,6 +1,6 @@
 import { WORK_FEATURES, workTaskActionFeature } from '../people/work-permissions.js';
 import { permissionsFor } from '../people/feature-policy.js';
-import { saveComposerImages, containsComposerImage } from './composer-images.js';
+import { saveComposerImages, containsComposerImage, DAILY_IMAGE_LIMIT } from './composer-images.js';
 import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
 import { access, canAssign, canEditTask, canReviewTask, allowedReviewers, reviewerOptions, recordVisible, managedRecord, scopeSnapshot, WORK_ROLES, normalizedRole, roleLevel } from './center-access.js';
@@ -171,7 +171,8 @@ export async function saveDaily(user,input) {
   const snapshot=await dailyDraft(ctx,rows,date,workRows,dailyRows,issueRows);
   if(submit&&snapshot.team) {const me=snapshot.team.members.find(p=>p.id===ctx.me.id);if(me)me.submitted=true;}
   const history=copy(previous?.history||[]);if(previous)history.push({...previous,history:undefined});
-  return writeRecord('daily',id,{...personSnapshot(ctx.me),date,notes,composerImages:await saveComposerImages(input.composerImages,Object.keys(notes),previous?.composerImages,ctx.me.id),snapshot,createdAt:previous?.createdAt||now,
+  const composerImages=await saveComposerImages(input.composerImages,Object.keys(notes),previous?.composerImages,ctx.me.id,DAILY_IMAGE_LIMIT);
+  return writeRecord('daily',id,{...personSnapshot(ctx.me),date,notes,composerImages,snapshot,createdAt:previous?.createdAt||now,
     submittedAt:previous?.submittedAt||(submit?now:null),late:previous?.submittedAt?previous.late:submit&&late,
     lastSubmittedAt:submit?now:previous?.lastSubmittedAt||null,history},revision);
 }
