@@ -30,10 +30,14 @@ export function createRequestPacer({ intervalMs = 750, now = Date.now, sleep = d
       signal?.throwIfAborted();
       try {
         const result = await send();
-        if (result.httpStatus === 429 || result.httpStatus >= 500) {
+        const rateLimited = result.httpStatus === 429 || result.payload?.code === 429 ||
+          (result.payload?.code !== 0 && [result.payload?.content, result.payload?.message]
+            .some(message => typeof message === "string" && /(?:请求|访问)(?:过于|太)频繁/.test(message)));
+        if (rateLimited || result.httpStatus >= 500) {
           spacing = Math.min(6000, Math.max(1500, spacing * 2));
-          holdUntil = Math.max(holdUntil, now() + Math.max(15000, result.retryAfterMs || 0));
+          holdUntil = Math.max(holdUntil, now() + Math.max(15000, result.retryAfterMs || (rateLimited ? 60000 : 0)));
           healthy = 0;
+          if (rateLimited && deferCooldown) return { ...result, ...cooldown() };
         } else if (result.httpStatus === 200 && result.payload?.code === 0 && ++healthy >= 10) {
           spacing = Math.max(intervalMs, spacing / 2); healthy = 0;
         }

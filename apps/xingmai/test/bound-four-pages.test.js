@@ -126,6 +126,13 @@ test("生产档案接口仅罗成可访问，采集拒绝跨站和任意范围�
     const summary = await (await fetch(base + '/sample')).json();
     assert.equal(summary.runtime, 'server'); assert.equal(summary.directory, undefined); assert.deepEqual(summary.scope, SHOP_DAY);
     const options = { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: '{}' };
+    const runNow = '/shop-day/goods-backfill/run-now';
+    assert.equal((await fetch(base + '/restricted' + runNow, { ...options, headers: { ...options.headers, 'x-test-user': 'ordinary' } })).status, 403);
+    assert.equal((await fetch(base + '/sample/goods-backfill/run-now', { ...options, headers: { ...options.headers, Origin: 'https://other.example' } })).status, 403);
+    assert.equal((await fetch(base + '/sample/goods-backfill/run-now', { ...options, body: JSON.stringify({ shopId: 'other' }) })).status, 400);
+    const disconnected = await fetch(base + '/sample/goods-backfill/run-now', options);
+    assert.equal(disconnected.status, 409);
+    assert.equal((await disconnected.json()).reason, 'server_login_required');
     assert.equal((await fetch(base + '/sample/collect', { ...options, headers: { ...options.headers, Origin: 'https://other.example' } })).status, 403);
     assert.equal((await fetch(base + '/sample/four-pages/start', { ...options, body: JSON.stringify({ shopId: 'other' }) })).status, 400);
     assert.equal((await fetch(base + '/sample/collect', { ...options, body: JSON.stringify({ reportId: 'key_graph', date: '2026-10-04' }) })).status, 400);

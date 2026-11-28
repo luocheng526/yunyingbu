@@ -11,6 +11,7 @@ const shopKey = s => s.platform + ':' + s.shopId;
 const scopeKey = s => s.date + ':' + shopKey(s);
 const fatal = new Set(['server_login_required', 'login_expired', 'login_busy', 'session_changed', 'login_conflict', 'account_disabled', 'device_restricted', 'identity_changed', 'permission_denied', 'local_archive_error']);
 const transient = new Set(['timeout', 'request_failed', 'upstream_pending', 'collector_busy']);
+const regularRetryMs = 15 * 60_000;
 
 export function validGoodsBackfill(input, today = shanghaiToday()) {
   if (!input || Object.keys(input).some(k => !['from', 'to', 'shopKeys'].includes(k))) return false;
@@ -37,6 +38,11 @@ export function createGoodsBackfill({ directory, discover, makeCollector, blocke
     const current = run || await read(path, null);
     if (!current) return null;
     const { owner, ...result } = current; void owner;
+    // Existing runs predate retryAt. Preserve the same delay for ordinary failures.
+    if (!result.retryAt && current.failed && ['blocked', 'complete_with_errors'].includes(current.status) && !fatal.has(current.reason)) {
+      const finished = Date.parse(current.finishedAt);
+      if (Number.isFinite(finished)) result.retryAt = new Date(finished + regularRetryMs).toISOString();
+    }
     return JSON.parse(JSON.stringify({ ...result, status: !active && current.status === 'running' ? 'interrupted' : current.status }));
   }
   async function progress(force = false) {
@@ -57,9 +63,12 @@ export function createGoodsBackfill({ directory, discover, makeCollector, blocke
     active = true;
     try {
       if (await blocked()) { active = false; return { ok: false, statusCode: 409, reason: 'collector_busy' }; }
+      const previous = await read(path, null);
+      if (previous?.reason === 'upstream_cooldown' && Date.parse(previous.retryAt) > Date.now()) {
+        active = false; return { ok: false, statusCode: 429, reason: previous.reason, retryAt: previous.retryAt };
+      }
       const prepared = await plan(input);
       if (!prepared.ok) { active = false; return prepared; }
-      const previous = await read(path, null);
       if (previous && previous.owner !== prepared.source.owner) { active = false; return { ok: false, statusCode: 409, reason: 'identity_changed' }; }
       const { source, tasks, known, summary } = prepared;
       run = { id: randomUUID(), owner: source.owner, status: 'running', automatic, ...summary, done: automatic ? 0 : summary.indexed, failed: 0, requests: 0, cached: 0, verifiedSku: 0, verifiedSpu: 0, current: null, errors: [], startedAt: new Date().toISOString() };
@@ -89,7 +98,8 @@ export function createGoodsBackfill({ directory, discover, makeCollector, blocke
                   if (!result.ok || !good(record)) {
                     failures.push({ reportId, page, reason: record?.status || result.reason || 'report_unavailable',
                       httpStatus: record?.response?.httpStatus ?? null, upstreamCode: record?.response?.payload?.code ?? null,
-                      upstreamMessage: typeof record?.response?.payload?.content === 'string' ? record.response.payload.content.slice(0, 200) : null });
+                      upstreamMessage: typeof record?.response?.payload?.content === 'string' ? record.response.payload.content.slice(0, 200) : null,
+                      ...(result.retryAfterMs > 0 ? { retryAt: Date.now() + result.retryAfterMs } : {}) });
                     break;
                   }
                   if (paged) {
@@ -130,14 +140,20 @@ export function createGoodsBackfill({ directory, discover, makeCollector, blocke
               run.done++; run.verifiedSku += entry.sku; run.verifiedSpu += entry.spu; consecutiveFailures = 0;
             } else {
               if (automatic) await collector.discardGoods();
-              run.failed++; const reason = failures.find(f => fatal.has(f.reason))?.reason || failures[0]?.reason || 'incomplete';
+              const cooldowns = failures.filter(f => f.reason === 'upstream_cooldown');
+              const reason = failures.find(f => fatal.has(f.reason))?.reason || cooldowns[0]?.reason || failures[0]?.reason || 'incomplete';
+              run.failed++;
               run.errors.push({ scope, failures }); run.errors = run.errors.slice(-100);
               if (fatal.has(reason)) { run.status = 'blocked'; run.reason = reason; }
+              if (reason === 'upstream_cooldown') {
+                run.status = 'waiting_retry'; run.reason = reason;
+                run.retryAt = new Date(Math.max(Date.now(), ...cooldowns.map(f => f.retryAt || Date.now() + 60_000))).toISOString();
+              }
               consecutiveFailures = transient.has(reason) ? consecutiveFailures + 1 : 0;
               if (consecutiveFailures >= 3) { run.status = 'blocked'; run.reason = 'upstream_unavailable'; }
             }
             await progress(true);
-            if (run.status === 'blocked') break;
+            if (run.status !== 'running') break;
           }
           if (run.status === 'running') run.status = run.failed ? 'complete_with_errors' : 'complete';
         } catch (error) { run.status = 'blocked'; run.reason = 'local_archive_error'; run.errorCode = error.code || error.name; }

@@ -9,6 +9,7 @@ import { SHOP_DAY, shopDayRequest } from '../src/modules/bound/shop-day-contract
 import { createSavedData } from '../src/modules/bound/saved-data.js';
 import { requestVisibleShops, requestGoodsBackfillReport, requestBatchShopDayReport, setBoundFetch } from '../src/modules/bound/collect.js';
 import { writeState, resetBoundStore } from '../src/modules/bound/persist.js';
+import { createDailyGoods, nextDailyGoods } from '../src/modules/bound/daily-goods.js';
 const today = () => '2026-11-23', selection = { from: '2026-10-03', to: '2026-10-04', shopKeys: ['JD:' + SHOP_DAY.shopId] };
 const table = rows => ({ columnInfo: [{ columnKey: 'gmv', columnName: '支付金额' }], columnData: rows });
 const success = data => ({ httpStatus: 200, payload: { code: 0, data } });
@@ -195,7 +196,6 @@ test('a failed daily refresh preserves the published goods and a verified refres
 }));
 
 test('Shanghai calendar catches up to yesterday, then rechecks provisional scopes including missed days', async () => {
-  const { nextDailyGoods } = await import('../src/modules/bound/daily-goods.js');
   const scopes = [], keys = ['JD:1'];
   const add = (day, at) => scopes.push({ date: '2026-11-' + day, platform: 'JD', shopId:'1', verifiedAt: at });
   for(let day=19;day<=23;day++) add(day,'2026-11-27T01:00:00Z');
@@ -210,3 +210,65 @@ test('Shanghai calendar catches up to yesterday, then rechecks provisional scope
   add(26,'2026-11-27T16:00:00Z');
   assert.equal(nextDailyGoods(scopes,'2026-11-28',keys),null);
 });
+
+test('the scheduler and manual start honor cooldown and select only due shops for a fresh collection', async () => {
+  const businessToday = () => '2026-11-21', day = '2026-11-19';
+  const date = '2026-11-20', plan = nextDailyGoods([], businessToday());
+  const shops = plan.shopKeys.map(key => ({ platform: 'JD', shopId: key.split(':')[1] }));
+  const scopes = [...shops.map(shop => ({ ...shop, date })), ...shops.map((shop, index) => ({
+    ...shop, date: day, sampledAt: index === 0 ? day + 'T16:00:00.000Z' : '2026-11-20T16:00:00.000Z'
+  }))];
+  const retryAt = '2026-11-21T07:00:00.000Z';
+  let time = Date.parse(retryAt) - 1, current = { status: 'waiting_retry', reason: 'upstream_cooldown', retryAt }, connected = true;
+  const starts = [];
+  const run = createDailyGoods({
+    busy: () => false, status: async () => current, scopes: async () => scopes,
+    start: async (...args) => { starts.push(args); return { ok: true }; }
+  }, async () => ({ batchLoginReady: connected, collection: { batchEnabled: false } }), { today: businessToday, now: () => time });
+  assert.equal((await run()).retryAt, retryAt);
+  assert.equal((await run({ manual: true })).statusCode, 429);
+  assert.deepEqual(starts, []);
+  time++;
+  connected = false;
+  assert.equal((await run()).reason, 'server_login_required');
+  connected = true;
+  await run();
+  assert.deepEqual(starts, [[{ from: day, to: day, shopKeys: [plan.shopKeys[0]] }, true]]);
+  current = { status: 'blocked', reason: 'upstream_unavailable', retryAt: '2026-11-21T07:15:00.000Z' };
+  assert.equal((await run()).statusCode, 429);
+  assert.equal((await run({ manual: true })).ok, true);
+  assert.equal(starts.length, 2);
+});
+
+test('a cooldown persists across collector restart and preserves the last verified version', async () => temporary(async directory => {
+  const f = fixtures(directory);
+  const input = { ...selection, from: SHOP_DAY.date, to: SHOP_DAY.date };
+  const originalJob = createGoodsBackfill(f.config);
+  await originalJob.start(input);
+  await originalJob.wait();
+  const key = { reportId: 'shop_goods_page', page: 1 };
+  const reader = f.config.makeCollector(SHOP_DAY), original = await reader.getRecord(key);
+  const makeCollector = (scope, _owner, freshGoods) => createShopDayCollector({
+    directory, scope, freshGoods, intervalMs: 0, concurrency: GOODS_BACKFILL_CONCURRENCY,
+    request: async () => ({ blocked: 'upstream_cooldown', retryAfterMs: 60_000,
+      httpStatus: 200, payload: { code: 500, content: '请求过于频繁，请稍后再试' } })
+  });
+  const limitedJob = createGoodsBackfill({ ...f.config, makeCollector });
+  await limitedJob.start(input, true);
+  const run = await limitedJob.wait();
+  assert.equal(run.status, 'waiting_retry');
+  assert.equal(run.reason, 'upstream_cooldown');
+  assert.equal(run.failed, 1);
+  assert.ok(Date.parse(run.retryAt) > Date.now());
+  assert.equal(run.errors[0].failures.find(f => f.reason === 'upstream_cooldown').upstreamCode, 500);
+  assert.deepEqual(await reader.getRecord(key), original);
+  const restarted = createGoodsBackfill(f.config);
+  const denied = await restarted.start(input, true);
+  assert.deepEqual(denied, { ok: false, statusCode: 429, reason: 'upstream_cooldown', retryAt: run.retryAt });
+  const path = join(directory, 'goods-backfill-run.json');
+  const persisted = JSON.parse(await readFile(path, 'utf8'));
+  await writeFile(path, JSON.stringify({ ...persisted, retryAt: '2026-10-01T00:00:00.000Z' }));
+  await restarted.start(input, true);
+  assert.equal((await restarted.wait()).status, 'complete');
+  assert.notEqual((await reader.getRecord(key)).id, original.id);
+}));

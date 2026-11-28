@@ -43,6 +43,18 @@ test("日报退避时立即返回，保留旧站要求的等待时间", async ()
   assert.deepEqual(await pacer.run(send, { deferCooldown: true }), success);
 });
 
+test("旧站在 HTTP 200 中返回请求过频时，商品和日报共享退避时间", async () => {
+  let time = 0;
+  const pacer = createRequestPacer({ now: () => time, sleep: async ms => { time += ms; } });
+  const limited = { httpStatus: 200, payload: { code: 500, content: "请求过于频繁，请稍后再试" } };
+  const options = { deferCooldown: true };
+  assert.deepEqual(await pacer.run(async () => limited, options), { ...limited, blocked: "upstream_cooldown", retryAfterMs: 60000 });
+  const send = async () => success;
+  assert.deepEqual(await pacer.run(send, options), { blocked: "upstream_cooldown", retryAfterMs: 60000 });
+  time = 60000;
+  assert.deepEqual(await pacer.run(send, options), success);
+});
+
 test("并行任务保留所有分页、分类卡和指标依赖；复用缓存不增加上游请求", async () => {
   const directory = await temp();
   let inflight = 0, peak = 0, calls = 0;

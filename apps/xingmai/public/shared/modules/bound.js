@@ -26,6 +26,7 @@
     goodsBackfillRead: '',
     dailyReportProgress: null,
     goodsBackfillError: '',
+    goodsBackfillMessage: '',
     loginEditing: false,
     admin: false,
     error: "",
@@ -92,7 +93,7 @@
   var backfillPolling = false;
   var goodsStatuses = {
     running: '采集中', complete: '已完成', complete_with_errors: '本轮结束，有未通过项',
-    paused: '已暂停', interrupted: '待继续', blocked: '已暂停，需处理异常'
+    paused: '已暂停', interrupted: '待继续', blocked: '已暂停，需处理异常', waiting_retry: '等待重试'
   };
   var goodsReasons = {
     server_login_required: '请先连接旧站', login_expired: '旧站登录过期', login_busy: '旧站正在登录',
@@ -100,7 +101,7 @@
     account_disabled: '旧站账号已停用', device_restricted: '旧站限制了当前设备', permission_denied: '旧站接口权限不足',
     upstream_unavailable: '旧站接口连续异常', timeout: '请求超时', request_failed: '请求失败',
     collector_busy: '已有采集任务运行', local_archive_error: '数据保存失败', upstream_pending: '旧站结果尚未就绪',
-    upstream_cooldown: '等待旧站限流结束', archive_timeout: '归档超时',
+    upstream_cooldown: '等待旧站接口恢复', archive_timeout: '归档超时',
     upstream_rejected: '旧站接口返回错误', unrecognized_report: '旧站返回格式无法识别',
     pagination_total_changed: '分页总数不一致', pagination_identity_mismatch: '商品或店铺标识不一致',
     pagination_incomplete: '商品分页尚未收齐', pause_legacy_batch_first: '旧采集任务仍在运行',
@@ -108,6 +109,11 @@
   };
   function goodsReason(reason) {
     return goodsReasons[reason] || '本次数据未通过核验';
+  }
+  function goodsRetryTime(value) {
+    var time = new Date(value);
+    return new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(time);
   }
   function renderGoodsTask() {
     var run = state.goodsBackfill;
@@ -120,11 +126,13 @@
     var kind = run.automatic ? '商品自动采集' : '商品手动补采';
     var dates = run.from === run.to ? run.from : run.from + ' 至 ' + run.to;
     var percent = run.total > 0 ? Math.min(100, Math.max(0, Math.round(run.done * 100 / run.total))) : 0;
-    var result = '<p role="status"><strong>' + kind + ' · ' + esc(goodsStatuses[run.status] || '状态未知') + '</strong> · ' + esc(dates)
+    var waiting = run.automatic && run.retryAt;
+    var result = '<p role="status"><strong>' + kind + ' · ' + esc(waiting ? '等待自动重试' : goodsStatuses[run.status] || '状态未知') + '</strong> · ' + esc(dates)
       + ' · 已核验 ' + esc(run.done) + '/' + esc(run.total) + ' 项（店铺 × 日期）' + (run.failed ? ' · 未通过 ' + esc(run.failed) + ' 项' : '') + '</p>'
       + '<progress aria-label="已核验的店铺日期进度" value="' + percent + '" max="100"></progress>';
     if (run.status === 'running' && run.current) result += '<p class="bd-status">当前店铺：' + esc(run.current.shopName) + ' · ' + esc(run.current.date) + '</p>';
     if (run.reason) result += '<p class="bd-status">原因：' + esc(goodsReason(run.reason)) + '</p>';
+    if (waiting) result += '<p class="bd-status">北京时间 ' + esc(goodsRetryTime(run.retryAt)) + ' 后自动重试。</p>';
     if (unavailable) result += '<p class="bd-status">暂时读不到最新进度，以上为上次读取结果。</p>';
     return result;
   }
@@ -181,13 +189,20 @@
   function renderGoodsProgress(detail) {
     var run = state.goodsBackfill, controls = '';
     if (run && !run.automatic && state.goodsBackfillRead === 'ready' &&
-      ['running', 'paused', 'interrupted', 'blocked', 'complete_with_errors'].includes(run.status)) {
+      ['running', 'paused', 'interrupted', 'blocked', 'complete_with_errors', 'waiting_retry'].includes(run.status)) {
       var running = run.status === 'running';
       controls = '<div class="bd-tools"><button type="button" data-act="goods-backfill-' + (running ? 'stop' : 'resume') + '"'
         + (state.goodsBackfillBusy ? ' disabled' : '') + '>' + (running ? '暂停本次补采' : '继续本次补采') + '</button></div>';
+    } else if (detail) {
+      var busy = state.goodsBackfillBusy || run?.status === 'running';
+      var retry = run && ['blocked', 'waiting_retry', 'complete_with_errors', 'interrupted', 'paused'].includes(run.status);
+      controls = '<div class="bd-tools"><button type="button" data-act="goods-backfill-now"'
+        + (busy || !state.link?.batchLoginReady || state.link.collection?.batchEnabled || state.goodsBackfillRead !== 'ready' ? ' disabled' : '') + '>'
+        + (busy ? '商品采集中' : retry ? '立即重试商品采集' : '立即采集商品') + '</button></div>';
     }
     var dailySummary = detail ? renderDailyReportProgress(state.dailyReportProgress) : '';
     return dailySummary + renderGoodsTask() + controls
+      + (state.goodsBackfillMessage ? '<p class="bd-status" role="status">' + esc(state.goodsBackfillMessage) + '</p>' : '')
       + (state.goodsBackfillError ? '<p class="bd-banner" role="alert">' + esc(state.goodsBackfillError) + '</p>' : '')
       + (detail ? renderGoodsFailureDetails(run) : '');
   }
@@ -221,7 +236,10 @@
       var body = response.ok ? await response.json() : null;
       if (token !== active || state.goodsBackfillBusy || state.goodsBackfill !== previousRun) return;
       state.goodsBackfillRead = body && body.ok ? 'ready' : 'unavailable';
-      if (body && body.ok) state.goodsBackfill = body.run;
+      if (body && body.ok) {
+        if (body.run?.id !== previousRun?.id) state.goodsBackfillMessage = '';
+        state.goodsBackfill = body.run;
+      }
       if (daily && daily.ok && Array.isArray(daily.days)) state.dailyReportProgress = daily;
     } catch {
       if (token !== active || state.goodsBackfillBusy || state.goodsBackfill !== previousRun) return;
@@ -2579,17 +2597,27 @@
         return;
       }
       var act = node.getAttribute("data-act");
-      if (act === 'goods-backfill-stop' || act === 'goods-backfill-resume') {
-        var backfill = state.goodsBackfill;
-        if (!backfill || backfill.automatic || state.goodsBackfillBusy || state.goodsBackfillRead !== 'ready') return;
+      if (['goods-backfill-stop', 'goods-backfill-resume', 'goods-backfill-now'].includes(act)) {
+        if (state.goodsBackfillBusy || state.goodsBackfillRead !== 'ready') return;
+        var backfill = state.goodsBackfill, now = act === 'goods-backfill-now';
         var stopping = act === 'goods-backfill-stop';
-        if (stopping !== (backfill.status === 'running')) return;
-        state.goodsBackfillBusy = true; state.goodsBackfillError = ''; paint(root);
-        var body = stopping ? {} : { from: backfill.from, to: backfill.to, shopKeys: backfill.shops.map(function (s) { return s.platform + ':' + s.shopId; }) };
-        fetch('/api/bound/shop-day/goods-backfill/' + (stopping ? 'stop' : 'start'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(async function (response) {
+        if (now ? state.page !== 'link' || backfill?.status === 'running' || !state.link?.batchLoginReady || state.link.collection?.batchEnabled
+          : !backfill || backfill.automatic || stopping !== (backfill.status === 'running')) return;
+        state.goodsBackfillBusy = true; state.goodsBackfillError = ''; state.goodsBackfillMessage = ''; paint(root);
+        var scope = stopping || now ? {} : { from: backfill.from, to: backfill.to, shopKeys: backfill.shops.map(function (s) { return s.platform + ':' + s.shopId; }) };
+        fetch('/api/bound/shop-day/goods-backfill/' + (now ? 'run-now' : stopping ? 'stop' : 'start'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scope) }).then(async function (response) {
           var result = await response.json();
-          if (!response.ok || !result.ok) throw Error(result.reason || 'request_failed');
-          if (token === active && result.run) state.goodsBackfill = result.run;
+          if (token !== active) return;
+          if (result.reason === 'upstream_cooldown') {
+            var retryAt = result.retryAt || (result.retryAfterMs > 0 ? Date.now() + result.retryAfterMs : null);
+            state.goodsBackfillMessage = retryAt ? '旧站请求暂缓，请在北京时间 ' + goodsRetryTime(retryAt) + ' 后再试。' : goodsReason(result.reason);
+          } else if (!response.ok || !result.ok) {
+            throw Error(result.reason || 'request_failed');
+          } else if (result.run) {
+            state.goodsBackfill = result.run;
+          } else if (now && result.started === false) {
+            state.goodsBackfillMessage = '当前没有待补采或待回查的商品数据。';
+          }
         }).catch(function (error) {
           if (token === active) state.goodsBackfillError = '补采操作未完成：' + goodsReason(error.message);
         }).finally(function () {
@@ -3159,7 +3187,7 @@
       savedResponses.clear(); archiveViews.clear(); annotationIndexes = {}; state.archiveAnnotations = {};
       state.loginEditing = false;
       if (!state.autoReloginBusy) { state.autoReloginChoice = null; state.autoReloginMessage = ""; }
-      state.goodsBackfill = null; state.goodsBackfillRead = ''; state.goodsBackfillError = ''; state.dailyReportProgress = null;
+      state.goodsBackfill = null; state.goodsBackfillRead = ''; state.goodsBackfillError = ''; state.goodsBackfillMessage = ''; state.dailyReportProgress = null;
       // Existing links still open the connection page after the test panel was retired.
       if (new URLSearchParams(window.location && window.location.search || '').has('probeDate')) state.page = 'link';
       ensureStyle();

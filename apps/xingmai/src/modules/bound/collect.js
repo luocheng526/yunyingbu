@@ -204,13 +204,14 @@ const verifiedLogin = current => current.provider === "PASSWORD" || (QR_PROVIDER
   && Boolean(current.authGeneration) && current.qrIdentityGeneration === current.authGeneration);
 // Keep the legacy field and hash shape to preserve ownership of existing jobs.
 const ownerOf = current => current.passwordIdentity?.userId ? createHash("sha256").update(JSON.stringify(current.passwordIdentity)).digest("hex") : "";
-export async function requestVisibleShops({ forDailyPerformance = false } = {}) {
+export async function requestVisibleShops({ forDailyPerformance = false, forGoodsBackfill = false } = {}) {
   const current = await session(), owner = ownerOf(current);
   if (collectionStatus().batchEnabled || !owner || !verifiedLogin(current)) return { ok: false, statusCode: 409, reason: "server_login_required" };
   const spec = { method: "get", path: "/v2/channel/getAllChannelList", access: "", referer: ORIGIN + "/workTable/channelOverview" };
-  const response = forDailyPerformance
-    ? await batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner, parallelLimit: GOODS_BACKFILL_CONCURRENCY }))
+  const response = forDailyPerformance || forGoodsBackfill
+    ? await batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner, parallelLimit: GOODS_BACKFILL_CONCURRENCY }), { deferCooldown: forGoodsBackfill })
     : await requestScopedRead(spec);
+  if (response.blocked === "upstream_cooldown") return { ok: false, statusCode: 429, reason: response.blocked, retryAfterMs: response.retryAfterMs };
   if (response.blocked) return { ok: false, statusCode: 409, reason: response.blocked };
   if (response.httpStatus !== 200 || response.payload?.code !== 0) return { ok: false, statusCode: 502, reason: "shop_discovery_failed" };
   if (ownerOf(await session()) !== owner) return { ok: false, statusCode: 409, reason: "identity_changed" };
@@ -232,7 +233,7 @@ export async function requestGoodsBackfillReport(input, onRequest, scope, owner)
   if (ownerOf(await session()) !== owner) return { blocked: 'identity_changed' };
   const spec = shopDayRequest(input, scope, 200);
   if (!spec) return { blocked: 'invalid_scope' };
-  return batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner, parallelLimit: GOODS_BACKFILL_CONCURRENCY }, onRequest));
+  return batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner, parallelLimit: GOODS_BACKFILL_CONCURRENCY }, onRequest), { deferCooldown: true });
 }
 
 // The performance sheet shares the backfill's authenticated session and pacing.

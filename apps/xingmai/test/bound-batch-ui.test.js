@@ -29,7 +29,7 @@ async function harness(initialRun) {
       if (url === '/api/bound/link') return reply({ phase: 'logged_in', batchLoginReady: true, collection: {}, message: '请点击“开始 / 继续本轮采集”' });
       if (url === '/api/bound/shop-day/goods-backfill') return run === undefined ? reply({}, false) : reply({ ok: true, run });
       if (url === '/api/bound/shop-day/daily-reports') return coverage ? reply(coverage) : reply({}, false);
-      if (/\/goods-backfill\/(start|stop)$/.test(url)) return new Promise(resolve => { finish = resolve; });
+      if (/\/goods-backfill\/(start|stop|run-now)$/.test(url)) return new Promise(resolve => { finish = resolve; });
       return reply({}, false);
     }
   });
@@ -51,7 +51,8 @@ test('采集页显示规则和最新自动任务，旧面板和接口不再由�
     assert.match(h.root.innerHTML, /自动采集 · 采集中.*已核验 5\/129/);
     assert.match(h.root.innerHTML, /当前店铺：测试店铺 · 2026-11-24/);
     assert.match(h.root.innerHTML, /商品分页尚未收齐/);
-    assert.doesNotMatch(h.root.innerHTML, /2026-10-03|多店四页采集|单店试采|继续本轮采集|data-act="goods-backfill-/);
+    assert.doesNotMatch(h.root.innerHTML, /2026-10-03|多店四页采集|单店试采|继续本轮采集/);
+    assert.match(h.root.innerHTML, /data-act="goods-backfill-now" disabled>商品采集中/);
     const before = h.calls.length;
     h.root.focusin({ target: { closest: () => ({}) } });
     h.setRun({ ...firstRun, automatic: true, done: 13 });
@@ -106,10 +107,37 @@ test('没有任务或进度暂时不可用时规则依然可读', async () => {
   const h = await harness(null);
   try {
     assert.match(h.root.innerHTML, /暂无商品采集任务记录/);
+    assert.match(h.root.innerHTML, /data-act="goods-backfill-now">立即采集商品/);
+    h.click('goods-backfill-now');
+    h.finish(reply({ ok: true, started: false })); await delay(20);
+    assert.match(h.root.innerHTML, /当前没有待补采或待回查的商品数据/);
     h.setRun(undefined);
     await h.refresh();
     assert.match(h.root.innerHTML, /暂时读不到采集进度/);
     assert.match(h.root.innerHTML, /商品采集规则与进度/);
+  } finally { h.stop(); }
+});
+
+test('自动商品采集失败后显示退避时间和手动重试入口', async () => {
+  const retryAt = '2026-11-28T06:30:00.000Z';
+  const waiting = { ...firstRun, automatic: true, status: 'waiting_retry', reason: 'upstream_cooldown', retryAt };
+  const h = await harness(waiting);
+  const posts = () => h.calls.filter(call => call.options.method === 'POST');
+  try {
+    assert.match(h.root.innerHTML, /商品自动采集 · 等待自动重试/);
+    assert.match(h.root.innerHTML, /北京时间 .*14:30:00 后自动重试/);
+    assert.match(h.root.innerHTML, /data-act="goods-backfill-now">立即重试商品采集/);
+    h.click('goods-backfill-now'); h.click('goods-backfill-now');
+    assert.equal(posts().length, 1);
+    assert.equal(posts()[0].url, '/api/bound/shop-day/goods-backfill/run-now');
+    assert.deepEqual(JSON.parse(posts()[0].options.body), {});
+    h.finish(reply({ ok: false, reason: 'upstream_cooldown', retryAt }, false)); await delay(20);
+    assert.match(h.root.innerHTML, /旧站请求暂缓.*14:30:00 后再试/);
+    h.click('goods-backfill-now');
+    h.setRun({ ...firstRun, id: 'retry', automatic: true });
+    h.finish(reply({ ok: true, run: { ...firstRun, id: 'retry', automatic: true } })); await delay(20);
+    assert.match(h.root.innerHTML, /商品自动采集 · 采集中/);
+    assert.doesNotMatch(h.root.innerHTML, /旧站请求暂缓/);
   } finally { h.stop(); }
 });
 

@@ -79,16 +79,26 @@ export function nextDailyGoods(scopes, today, selection = shops) {
   return null;
 }
 
-export function startDailyGoods(backfill, linkStatus) {
-  async function tick() {
+export function createDailyGoods(backfill, linkStatus, { today = shanghaiToday, now = Date.now } = {}) {
+  return async ({ manual = false } = {}) => {
+    if (backfill.busy()) return { ok: false, statusCode: 409, reason: 'collector_busy' };
     const current = await backfill.status();
-    if (backfill.busy() || current?.status === 'paused') return;
-    if (current?.failed && Date.now() - Date.parse(current.finishedAt) < 15 * 60000) return;
-    const input = nextDailyGoods(await backfill.scopes(), shanghaiToday());
-    if (!input) return;
+    const retryAt = current?.retryAt;
+    if (Date.parse(retryAt) > now() && (!manual || current.reason === 'upstream_cooldown')) {
+      return { ok: false, statusCode: 429, reason: current.reason, retryAt };
+    }
+    if (!manual && (current?.status === 'paused' || ['identity_changed', 'permission_denied', 'local_archive_error'].includes(current?.reason))) {
+      return { ok: true, started: false };
+    }
     const link = await linkStatus();
-    if (link.batchLoginReady && !link.collection.batchEnabled) await backfill.start(input, true);
-  }
+    if (!link.batchLoginReady) return { ok: false, statusCode: 409, reason: 'server_login_required' };
+    if (link.collection.batchEnabled) return { ok: false, statusCode: 409, reason: 'pause_legacy_batch_first' };
+    const input = nextDailyGoods(await backfill.scopes(), today());
+    return input ? backfill.start(input, true) : { ok: true, started: false };
+  };
+}
+
+export function startDailyGoods(tick) {
   async function poll() {
     try { await tick(); }
     catch (error) { console.error('边界商品自动采集检查失败', error.code || error.name); }

@@ -224,6 +224,8 @@ export function createShopDayCollector({ directory, request, intervalMs = 1500, 
           payload: response.payload ?? null, blocked: response.blocked ?? null,
           relogin: response.relogin ?? null };
         Object.assign(record, inspectDayResponse(input.reportId, response, record.goodsId, input, scope));
+        // Cooldown applies to the upstream session. It must not become the cached result of this report page.
+        if (record.status === "upstream_cooldown") return { ok: false, record, retryAfterMs: response.retryAfterMs };
         // Missing/expired authentication is a resumable gate, not a durable empty result.
         if (["server_login_required", "login_expired", "login_busy", "session_changed", "login_conflict", "account_disabled", "device_restricted"].includes(record.status)) {
           record.finishedAt = new Date().toISOString();
