@@ -287,6 +287,11 @@
       const summary=can('overview'),statistics=can('statistics'),management=canOpenManagement();
       if(id==='alerts'&&summary){modal('全部待办事项',alerts(true));return;}
       if(id==='daily'&&summary){overviewDailyDetail('missing');return;}
+      if(id==='distribution'&&(summary||statistics||management)){
+        modal('人员分布',`<div class="wc-distribution-detail">${distribution()}</div>`);
+        dialog.setAttribute('aria-label','人员分布');
+        return;
+      }
       if(id==='teams'&&(summary||statistics||management)){
         const departments=management||(summary&&data.me.role==='总监');
         modal('部门与团队',`${departments?dashboardCard('部门工作情况',departmentTable(true)):''}${dashboardCard('团队执行情况',teamTable())}`);
@@ -313,7 +318,7 @@
           ${compactDaily()}
         </section>
         <section><div class="wc-overview-follow-heading"><h3>任务跟进</h3>${link('任务管理','tab','tasks')}</div>${compactTasks()}</section>
-        <section class="wc-compact-attention"><div class="wc-overview-follow-heading"><h3>待办事项 <span>${data.alerts.length}</span></h3>${data.alerts.length>2?compactLink('查看全部','alerts'):''}</div>${alerts(false,2)}</section>
+        <section class="wc-compact-attention"><div class="wc-overview-follow-heading"><h3>待办事项 <span>${data.alerts.length}</span></h3>${data.alerts.length?compactLink('查看明细','alerts'):''}</div>${alerts(false,2)}</section>
       </div>`;
       return compactCard('待办与跟进',rows,'','wc-overview-inbox');
     }
@@ -331,24 +336,28 @@
       const scopeLabel=scope||(filtered?'当前筛选范围':data.me.role==='总监'?'全公司':'当前可见范围');
       return `<div class="wc-dashboard wc-compact-dashboard">
         <header class="wc-overview-intro">
-          <div class="wc-overview-date">${esc(data.from===data.to?data.to:data.from+' 至 '+data.to)}</div>
+          <div class="wc-overview-meta">
+            <div class="wc-overview-date">${esc(data.from===data.to?data.to:data.from+' 至 '+data.to)}</div>
+            <div class="wc-compact-scope">当前视角 <strong>${esc(scopeLabel)}</strong>${filtered?link('清除筛选','dashboardScope',''):''}</div>
+          </div>
           <h1>工作中心</h1>
           <p class="wc-overview-description">查看待办事项，跟进任务进度和日报提交。</p>
-          <div class="wc-compact-scope">当前视角 <strong>${esc(scopeLabel)}</strong>${filtered?link('清除筛选','dashboardScope',''):''}</div>
         </header>
         ${navigation}
         <div class="wc-dash-control-row wc-overview-tools">${toolbar(false,true)}
           <div class="wc-compact-heading-actions">${tools}${statistics&&can('export')?btn('导出 Excel','export'):''}${btn('刷新','refresh')}</div></div>
         ${summary?dashboardSummary(data.counts):''}
-        ${summary||statistics?`<div class="wc-overview-main-grid">
-          ${statistics?chart():''}
-          ${summary?overviewFollowing(data.counts):''}
-        </div>`:''}
-        ${execution||management?`<div class="wc-overview-insights">
-          ${compactCard('人员分布',distribution(),dashboardSwitch('distribution','分布维度',[['team','团队'],['board','部门']],distributionMode))}
-          ${compactCard('团队到期完成率',compactRankings(),compactLink('查看全部','teams'))}
-          ${execution?performanceCards(data.counts,summary,statistics):''}
-        </div>`:''}
+        <div class="wc-overview-panels">
+          ${execution?`<div class="wc-overview-main-grid">
+            ${statistics?chart():''}
+            ${summary?overviewFollowing(data.counts):''}
+          </div>`:''}
+          <div class="wc-overview-insights">
+            ${compactCard('人员分布',distribution(),`<div class="wc-compact-card-actions">${compactLink('查看全部','distribution')}${dashboardSwitch('distribution','分布维度',[['team','团队'],['board','部门']],distributionMode)}</div>`,'wc-overview-distribution')}
+            ${compactCard('团队到期完成率',compactRankings(),compactLink('查看全部','teams'),'wc-overview-ranking')}
+            ${execution?performanceCards(data.counts,summary,statistics):''}
+          </div>
+        </div>
       </div>`;
     }
     function tasksForMode(){let rows=data.tasks;if(taskView==='acceptance')rows=rows.filter(t=>mode==='all'?t.state==='待验收':mode==='processed'?(t.events||[]).some(e=>e.actor===data.me.id&&['检查通过','退回修改'].includes(e.action)):t.reviewer===data.me.id&&t.state==='待验收');else if(mode==='mine')rows=rows.filter(t=>t.assignee===data.me.id||(t.collaborators||[]).includes(data.me.id));else if(mode==='published')rows=rows.filter(t=>t.publisher===data.me.id);else if(mode==='overdue')rows=rows.filter(t=>t.overdue);else if(mode==='completed')rows=rows.filter(t=>t.state==='已完成');else if(mode==='pending')rows=rows.filter(t=>t.state==='待验收');if(search)rows=rows.filter(t=>[t.title,t.assigneeName,t.publisherName,t.shop_name,t.category].join(' ').toLowerCase().includes(search.toLowerCase()));return rows;}
@@ -469,7 +478,7 @@
           ['本期验收工作量',c.completedEvents,'completed']
         ]:[])
       ];
-      return compactCard('执行指标',`<div class="wc-dash-rates">${metrics.map(([label,value,action])=>dashboardMetric(label,value,action)).join('')}</div>`);
+      return compactCard('执行指标',`<div class="wc-dash-rates">${metrics.map(([label,value,action])=>dashboardMetric(label,value,action)).join('')}</div>`,'','wc-overview-performance');
     }
     function analysisCards() {
       const byRole=data.options.roles.map(role=>({
@@ -524,10 +533,13 @@
       if(dashboardAvailable())tabs.unshift(['overview','工作总览']);
       if(!tabs.some(([id])=>id===tab))tab=tabs[0]?.[0]||'';
       if(tab==='tasks'&&!can(taskView==='acceptance'?'acceptance':'tasks')){taskView=can('tasks')?'list':'acceptance';mode='all';page=1;}
-      const navigation=`<nav class="wc-nav" aria-label="工作中心导航">${tabs.map(([id,label])=>`<button data-action="tab" data-id="${id}" class="${tab===id?'active':''}" aria-current="${tab===id?'page':'false'}">${label}${tabBadgeLabels[id]?`<span class="wc-nav-count" data-wc-tab-count="${id}" hidden></span>`:''}</button>`).join('')}</nav>`;
+      const tabsMarkup=tabs.map(([id,label])=>`<button data-action="tab" data-id="${id}" class="${tab===id?'active':''}" aria-current="${tab===id?'page':'false'}">${label}${tabBadgeLabels[id]?`<span class="wc-nav-count" data-wc-tab-count="${id}" hidden></span>`:''}</button>`).join('');
+      const actions=`<div class="wc-actions wc-page-actions">${badge(data.me.name+' · '+data.me.role,'blue')}${btn('消息 '+(data.notices.filter(n=>!n.readAt).length+data.alerts.length),'notifications')}${btn('登记工作','newWork')}${data.canPublish?btn('发布任务','publish','primary'):btn('写日报','writeDaily','primary')}</div>`;
+      const navigation=`<div class="wc-navigation-row"><nav class="wc-nav" aria-label="工作中心导航">${tabsMarkup}</nav>${actions}</div>`;
       const body=!tab?empty('尚未开放工作功能','请在组织中心配置工作中心的功能与操作权限。')
         :tab==='overview'?overview(navigation):tab==='tasks'?tasks():tab==='reports'?reports():settingsPage();
-      root.innerHTML=`<main class="wc${tab==='overview'?' wc-overview-page':''}"><header class="wc-head">${tab==='overview'?'':`<div><div class="wc-eyebrow">甄选未来 · WORK CENTER</div><h1>工作中心</h1><p class="wc-muted">${data.me.role==='总监'?'掌握全公司工作，覆盖各部门与团队。':'查看管理范围与个人任务，跟进工作结果。'}</p></div>`}<div class="wc-actions">${badge(data.me.name+' · '+data.me.role,'blue')}${btn('消息 '+(data.notices.filter(n=>!n.readAt).length+data.alerts.length),'notifications')}${btn('登记工作','newWork')}${data.canPublish?btn('发布任务','publish','primary'):btn('写日报','writeDaily','primary')}</div></header>${tab==='overview'?'':navigation}${tab==='settings'||tab==='overview'||!tab?'':toolbar()}<div data-wc-body>${body}</div><footer class="wc-foot"><span>北京时间 · 数据来自组织、任务及工作记录</span>${tab==='overview'?'':btn('刷新数据','refresh')}</footer></main>`;
+      const header=tab==='overview'?'':`<header class="wc-head"><div><div class="wc-eyebrow">甄选未来 · WORK CENTER</div><h1>工作中心</h1><p class="wc-muted">${data.me.role==='总监'?'掌握全公司工作，覆盖各部门与团队。':'查看管理范围与个人任务，跟进工作结果。'}</p></div></header>${navigation}`;
+      root.innerHTML=`<main class="wc${tab==='overview'?' wc-overview-page':''}">${header}${tab==='settings'||tab==='overview'||!tab?'':toolbar()}<div data-wc-body>${body}</div><footer class="wc-foot"><span>北京时间 · 数据来自组织、任务及工作记录</span>${tab==='overview'?'':btn('刷新数据','refresh')}</footer></main>`;
       root.querySelectorAll('form').forEach(form=>window.XmWorkRich.upgrade(form));
       applyPermissions();
       paintTabBadges();
@@ -667,6 +679,7 @@ const start=filters.to===data.today?new Date(Date.now()+8*3600000).toISOString()
         return;
       }
       if(action==='dashboardScope'){
+        closeDialog();
         if(el.dataset.kind==='board'){filters.board=id;filters.team='';}
         else if(el.dataset.kind==='team')filters.team=id;
         else {for(const key of ['board','team','role','shop'])filters[key]='';}
