@@ -30,7 +30,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "home-jzt-total-spend";
+export const LIVE2_RUNTIME_MARK = "home-jzt-ads-alignment";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
@@ -223,13 +223,16 @@ export function createLive2Collector(deps = {}) {
 
   function applyView(row, nowStamp) {
     const copy = publicRecord(row);
-    // Old snapshots contain non-sitewide spend. Preserve their ROI input, but
-    // only show today's observations from the total-spend query in this column.
-    if (copy.spendScope !== "jzt-total") copy.roiSpend = copy.paidAmount;
-    if (copy.spendScope !== "jzt-total" || dayOf(copy.adsCapturedAt) !== dayOf(nowStamp)) {
+    const today = dayOf(nowStamp);
+    if (copy.spendScope !== "jzt-total" || dayOf(copy.adsCapturedAt) !== today) {
       copy.paidAmount = null;
       copy.feeRate = null;
       copy.adsCapturedAt = "";
+    }
+    if (!(copy.adsAccountCount > 0) || dayOf(copy.adsReportCapturedAt) !== today) {
+      copy.roi = null;
+      copy.roiSpend = null;
+      copy.paidDeal = null;
     }
     if (copy.pendingCollect) {
       return copy;
@@ -345,7 +348,8 @@ export function createLive2Collector(deps = {}) {
       result = await persistSample({
         store: shop.store, day: dayOf(capturedAt).replace(/\//g, "-"),
         capturedAt: capturedAt.replace(/\//g, "-"), ok: true, ...sampleFields(metrics),
-        totalSpend: metrics.totalSpend, totalSpendCapturedAt: metrics.totalSpendCapturedAt
+        totalSpend: metrics.totalSpend, totalSpendCapturedAt: metrics.totalSpendCapturedAt,
+        adsAccountCount: metrics.adsAccountCount, adsReportCapturedAt: metrics.adsReportCapturedAt
       }, writeOptions(shop, phase));
     } catch {
       phase.storageError = new Error("采集数据保存失败，等待下一轮重试");
@@ -502,6 +506,8 @@ export function createLive2Collector(deps = {}) {
       dealRateLabel: sample.dealRateLabel,
       platformUpdatedAt: sample.platformUpdatedAt,
       paidAmount: sample.paidAmount,
+      adsAccountCount: sample.adsAccountCount,
+      adsReportCapturedAt: stampOf(sample.adsReportCapturedAt),
       totalSpend: sample.totalSpend,
       totalSpendCapturedAt: stampOf(sample.totalSpendCapturedAt),
       paidRoi: sample.paidRoi,

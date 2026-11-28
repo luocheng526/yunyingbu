@@ -2,7 +2,7 @@ import "./_memory-env.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
-import { beijingParts, paidQuery, pinsForJztTotalSpend } from "../src/modules/home/jingmai.js";
+import { beijingParts, collectPinRecords, paidQuery, pinsForJztTotalSpend, pinsForLoggedInShop, readJztPaidScopes } from "../src/modules/home/jingmai.js";
 import { readJztTotalSpend } from "../src/modules/home/jingmai-client.js";
 import { createWeekJztReader, readWeekJztSpend } from "../src/modules/home/week-jzt.js";
 import { registerWeekManagement } from "../src/modules/home/week-management.js";
@@ -75,6 +75,35 @@ test("total spend includes JD's own account groups for a verified shop without u
   assert.deepEqual(pinsForJztTotalSpend(user, auth, shop).map(row => row.pinId), [22]);
   const conflicting = { ...user, value: [{ userId: 12, shopId: "999" }] };
   assert.deepEqual(pinsForJztTotalSpend(conflicting, auth, expected).map(row => row.pinId), [22]);
+});
+
+test("homepage uses the 35 verified shop accounts in both reports even when the ad-account nicknames differ", async () => {
+  const expected = { store: "HYEGIIR健康器械旗舰店", shopId: "123", verifiedShopSession: true };
+  const user = {
+    own: Array.from({ length: 21 }, (_, i) => ({ userId: i + 1, name: "HYEGIIR健康器械投放" + (i + 1) })),
+    value: Array.from({ length: 14 }, (_, i) => ({ userId: i + 22, name: "运营小组" + (i + 1) }))
+  };
+  const auth = { value: [{ userId: 100, name: "代运营其他店" }] };
+  assert.equal(pinsForLoggedInShop(collectPinRecords(user, auth), expected).length, 21);
+
+  const day = beijingParts().day;
+  const metrics = await readJztPaidScopes(user, auth, expected, day, { includeTotalSpend: true }, (query, total) => {
+    assert.deepEqual(query.pinIdList, Array.from({ length: 35 }, (_, i) => i + 1));
+    assert.equal(query.startDate, day);
+    assert.equal(query.endDate, day);
+    assert.equal(query.basicRange, 1);
+    assert.deepEqual(query.businessType, total ? [-5] : [-4, 256]);
+    return { code: 1, data: { summary: total
+      ? [{ index: "cost", value: 8400 }]
+      : [{ index: "cost", value: 8389.27 }, { index: "ROI", value: 3.02 }, { index: "totalOrderSum", value: 25340 }]
+    } };
+  });
+  assert.equal(metrics.totalSpend, 8400);
+  assert.equal(metrics.paidAmount, 8389.27);
+  assert.equal(metrics.paidDeal, 25340);
+  assert.equal(metrics.paidRoi, 3.02);
+  assert.equal(metrics.adsAccountCount, 35);
+  assert.equal(metrics.adsReportCapturedAt.slice(0, 10).replaceAll("/", "-"), day);
 });
 
 test("history respects existing locks and holds its lock until interrupted transport settles", async () => {

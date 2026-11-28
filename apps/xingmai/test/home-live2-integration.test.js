@@ -69,7 +69,8 @@ test("46 simulated shops: full collection and next round survive DSM 601 using t
     }
     if (href.includes("summary/overview")) {
       assert.deepEqual(req.body.pinIdList, [id]);
-      if (req.body.basicRange === 1) {
+      assert.equal(req.body.basicRange, 1);
+      if (req.body.businessType[0] === -5) {
         assert.deepEqual(req.body.businessType, [-5]);
         assert.equal(req.body.startDate, req.body.endDate);
         return res.json(totalFail ? { code: 501 } : { code: 1, data: { summary: [
@@ -149,6 +150,7 @@ test("46 simulated shops: full collection and next round survive DSM 601 using t
   assert.equal(samples.find((row) => row.store === "本地测试店46").totalSpend, 575);
   assert.equal(board.records.find((row) => row.shop === "本地测试店46").paidAmount, 575);
   assert.equal(board.records.find((row) => row.shop === "本地测试店46").roiSpend, 460);
+  assert.equal(board.records.find((row) => row.shop === "本地测试店46").adsAccountCount, 1);
   const oldView = await readJingmaiLive(beijingParts(new Date(clock)));
   assert.equal(oldView.shops.find((row) => row.shop === "本地测试店46").paidAmount, 460);
 
@@ -220,9 +222,9 @@ test("background roster rejects corrupt data and excludes non-operating shops", 
 test("home excludes old spend and prior-day totals while preserving true zero and like-for-like history", async () => {
   const now = "2026/11/28 14:00:00";
   const records = [
-    { shop: "旧口径店", liveAmount: 200, paidAmount: 35, capturedAt: now, adsCapturedAt: now, online: true },
-    { shop: "跨日店", liveAmount: 200, paidAmount: 60, capturedAt: now, adsCapturedAt: "2026/11/27 23:59:00", spendScope: "jzt-total", online: true },
-    { shop: "零花费店", liveAmount: 200, paidAmount: 0, capturedAt: now, adsCapturedAt: now, spendScope: "jzt-total", online: true, feeRate: 0 }
+    { shop: "旧口径店", liveAmount: 200, paidAmount: 35, paidDeal: 70, roi: 2, roiSpend: 35, capturedAt: now, adsCapturedAt: now, online: true },
+    { shop: "跨日店", liveAmount: 200, paidAmount: 60, paidDeal: 120, roi: 2, roiSpend: 60, adsAccountCount: 35, adsReportCapturedAt: "2026/11/27 23:59:00", capturedAt: now, adsCapturedAt: "2026/11/27 23:59:00", spendScope: "jzt-total", online: true },
+    { shop: "零花费店", liveAmount: 200, paidAmount: 0, paidDeal: 0, roi: 0, roiSpend: 0, adsAccountCount: 12, adsReportCapturedAt: now, capturedAt: now, adsCapturedAt: now, spendScope: "jzt-total", online: true, feeRate: 0 }
   ];
   const collector = createLive2Collector({
     now: () => now, storePath: "", published: records,
@@ -232,7 +234,9 @@ test("home excludes old spend and prior-day totals while preserving true zero an
   const board = await collector.board("");
   assert.deepEqual(board.records.map(record => record.paidAmount), [null, null, 0]);
   assert.deepEqual(board.records.map(record => record.feeRate), [null, null, 0]);
-  assert.equal(board.records[0].roiSpend, 35);
+  assert.deepEqual(board.records.map(record => record.roiSpend), [null, null, 0]);
+  assert.deepEqual(board.records.map(record => record.paidDeal), [null, null, 0]);
+  assert.deepEqual(board.records.map(record => record.roi), [null, null, 0]);
 
   const samples = [
     { store: "零花费店", capturedAt: "2026/11/27 12:41:00", paidAmount: 99, dealAmount: 171 },

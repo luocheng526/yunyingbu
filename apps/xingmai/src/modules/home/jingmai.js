@@ -564,7 +564,7 @@ export function pinsForJztTotalSpend(userData, authData, expected) {
   return [...pins.values()];
 }
 
-export function paidQuery(day, pinIds, { total = false } = {}) {
+export function paidQuery(day, pinIds, { total = false, compareByDay = false } = {}) {
   return {
     pinIdList: pinIds || [],
     businessType: total ? [-5] : [-4, 256],
@@ -577,19 +577,22 @@ export function paidQuery(day, pinIds, { total = false } = {}) {
     startDate: day,
     endDate: day,
     basic: 0,
-    basicRange: total ? 1 : 0,
+    basicRange: total || compareByDay ? 1 : 0,
     userTypes: [],
     ...(total ? {} : { marketingObjectives: [], marketingScenarios: [], marketingTargetingTypes: [] })
   };
 }
 
 export async function readJztPaidScopes(userData, authData, expected, date, options, readOverview) {
-  const records = collectPinRecords(userData, authData);
-  const missing = () => jingmaiError("paid", "待核验：无本店广告账号证据");
+  // Match both homepage queries to the verified shop account selection. The
+  // nickname heuristic can drop legitimate self-owned advertising subaccounts.
+  const pins = options.total || options.includeTotalSpend
+    ? pinsForJztTotalSpend(userData, authData, expected)
+    : pinsForLoggedInShop(collectPinRecords(userData, authData), expected);
+  if (!pins.length) throw jingmaiError("paid", "待核验：无本店广告账号证据");
+  const ids = pins.map(row => row.pinId);
   async function readScope(total) {
-    const pins = total ? pinsForJztTotalSpend(userData, authData, expected) : pinsForLoggedInShop(records, expected);
-    if (!pins.length) throw missing();
-    const body = await readOverview(paidQuery(date, pins.map(row => row.pinId), { total }), total);
+    const body = await readOverview(paidQuery(date, ids, { total, compareByDay: options.includeTotalSpend }), total);
     const valid = body && (body.code == null || Number(body.code) === 1);
     const paid = valid && extractPaid(Number(body.code) === 1 ? body.data : body);
     if (!paid) throw jingmaiError("paid", "京准通没有返回付费数据");
@@ -598,17 +601,20 @@ export async function readJztPaidScopes(userData, authData, expected, date, opti
   if (!options.includeTotalSpend) return readScope(options.total);
 
   const [ads, total] = await Promise.allSettled([
-    readScope(false),
+    readScope(false).then(paid => ({ paid, captured: beijingParts() })),
     readScope(true).then(paid => ({
       amount: paid.paidAmount,
       captured: beijingParts()
     }))
   ]);
   if (ads.status === "rejected" && total.status === "rejected") throw total.reason;
+  const hasAds = ads.status === "fulfilled" && ads.value.captured.day === date;
   const verified = total.status === "fulfilled" && Number.isFinite(total.value.amount) &&
     total.value.amount >= 0 && total.value.captured.day === date;
   return {
-    ...(ads.status === "fulfilled" ? ads.value : {}),
+    ...(hasAds ? ads.value.paid : {}),
+    adsAccountCount: hasAds ? ids.length : 0,
+    adsReportCapturedAt: hasAds ? displayStamp(ads.value.captured.stamp) : "",
     totalSpend: verified ? total.value.amount : null,
     totalSpendCapturedAt: verified ? displayStamp(total.value.captured.stamp) : "",
     totalSpendNote: verified ? "" : total.status === "rejected" ? String(total.reason?.message || "京准通没有返回总花费") : "京准通没有返回当天总花费"

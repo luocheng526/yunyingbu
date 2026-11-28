@@ -73,6 +73,8 @@ export function live2RecordFromMetrics(shop, metrics, capturedAt) {
   row.paidAmount = numbers.paidAmount;
   row.spendScope = "jzt-total";
   row.roiSpend = asNumber(metrics.paidAmount);
+  row.adsAccountCount = metrics.adsAccountCount || 0;
+  row.adsReportCapturedAt = metrics.adsReportCapturedAt || "";
   row.roi = numbers.roi;
   row.paidDeal = numbers.paidDeal;
   row.feeRate = numbers.feeRate;

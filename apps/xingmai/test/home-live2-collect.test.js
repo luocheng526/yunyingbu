@@ -55,7 +55,8 @@ test("a shop logs in on the server and maps 京麦成交 plus 京准通花费、
         return [{ name: "thor", value: "1" }];
       },
       fetchHome: async function () {
-        return { dealAmount: 3009, paidAmount: 1000, totalSpend: 1841.39, paidRoi: 1.43, paidDeal: 2638 };
+        return { dealAmount: 3009, paidAmount: 1000, totalSpend: 1841.39, paidRoi: 1.43, paidDeal: 2638,
+          adsAccountCount: 35, adsReportCapturedAt: "2026/11/19 14:43:00" };
       }
     }
   });
@@ -107,7 +108,8 @@ test("an existing server session is read and not written back", async () => {
       },
       fetchHome: async function (jar) {
         assert.equal(jar[0].value, "old");
-        return { dealAmount: 100, paidAmount: 10, totalSpend: 25, paidRoi: 2, paidDeal: 50 };
+        return { dealAmount: 100, paidAmount: 10, totalSpend: 25, paidRoi: 2, paidDeal: 50,
+          adsAccountCount: 1, adsReportCapturedAt: "2026/11/19 14:43:00" };
       }
     }
   });
