@@ -72,10 +72,14 @@
     async function reload(){const id=++request;try{const next=await api('center?'+new URLSearchParams(Object.entries(filters).filter(([,v])=>v)));if(!alive||id!==request)return;data=next;filters.from=next.from;filters.to=next.to;paint();}catch(error){if(!alive)return;if(!data)root.innerHTML=`<main class="wc">${card('工作中心',`<div class="wc-error">${esc(error.message)}</div>`,btn('重新加载','refresh'))}</main>`;else notify(error.message,true);}}
     function paintTabBadges(){
       root.querySelectorAll('[data-wc-tab-count]').forEach(el=>{
-        const tab=el.dataset.wcTabCount,count=data.badges?.[tab]||0;
+        const tab=el.dataset.wcTabCount,ownCount=data.badges?.[tab]||0;
+        const acceptance=tab==='tasks'?(data.badges?.acceptance||0):0;
+        const count=ownCount+acceptance;
+        const label=[ownCount&&ownCount+' '+tabBadgeLabels[tab],acceptance&&acceptance+' 项任务待你验收'].filter(Boolean).join('，');
         el.hidden=!count;
         el.textContent=count||'';
-        el.setAttribute('aria-label',count+' '+tabBadgeLabels[tab]);
+        el.title=label;
+        el.setAttribute('aria-label',label);
       });
     }
     async function refreshTabBadges(){

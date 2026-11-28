@@ -25,9 +25,10 @@ function range(query={}) {
 }
 async function navigationBadges(ctx,rows,today,report,absence) {
   const tasks=ctx.permissions.can('tasks')?rows.filter(t=>t.assignee===ctx.me.id&&t.status==='待执行').length:0;
-  if(!ctx.permissions.can('reports')||report?.submittedAt)return {tasks,reports:0};
+  const acceptance=ctx.permissions.can('acceptance')?rows.filter(t=>t.reviewer===ctx.me.id&&t.status==='待检查').length:0;
+  if(!ctx.permissions.can('reports')||report?.submittedAt)return {tasks,acceptance,reports:0};
   const obligations=absence??await eligibility(ctx,today,[ctx.me]);
-  return {tasks,reports:obligations.get(ctx.me.id)?.required?1:0};
+  return {tasks,acceptance,reports:obligations.get(ctx.me.id)?.required?1:0};
 }
 export async function centerBadges(user) {
   const today=day(),{ctx,rows}=await visibleTasks(user);

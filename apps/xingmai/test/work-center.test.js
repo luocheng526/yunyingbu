@@ -263,24 +263,33 @@ test('files respect team visibility and reject unsafe extensions',async()=>{
   assert.equal((await readTaskFile(users.lead,t.files[0].id)).ok,true);assert.equal((await readTaskFile(users.leadB,t.files[0].id)).statusCode,404);
   assert.equal((await publishTask(users.manager,draft({files:[{name:'payload.html',data:Buffer.from('<script>').toString('base64')}]}))).ok,false);
 });
-test('work tab badges follow personal pending tasks and today’s report independently of filters',async()=>{
+test('work tab badges follow personal starts, reviews and today’s report independently of filters',async()=>{
   const first=await create(),second=await create();
   await create(users.manager,{assignee:'4'});
   const oldDate=day(new Date(Date.now()-86400000));
-  assert.deepEqual((await centerData(users.assistant,{date:oldDate,person:'4'})).badges,{tasks:2,reports:1});
+  assert.deepEqual((await centerData(users.assistant,{date:oldDate,person:'4'})).badges,{tasks:2,acceptance:0,reports:1});
   assert.equal((await centerBadges(users.manager)).badges.tasks,0);
 
   const draftReport=await saveDaily(users.assistant,{date:today(),submit:false,notes:{'今日工作':'日报草稿'}});
-  assert.deepEqual((await centerBadges(users.assistant)).badges,{tasks:2,reports:1});
-  await act(users.assistant,first,'start');
-  assert.deepEqual((await centerBadges(users.assistant)).badges,{tasks:1,reports:1});
+  assert.deepEqual((await centerBadges(users.assistant)).badges,{tasks:2,acceptance:0,reports:1});
+  const started=await act(users.assistant,first,'start');
+  assert.deepEqual((await centerBadges(users.assistant)).badges,{tasks:1,acceptance:0,reports:1});
   await act(users.manager,second,'cancel');
   await saveDaily(users.assistant,{date:today(),revision:draftReport.revision,submit:true});
-  assert.deepEqual((await centerBadges(users.assistant)).badges,{tasks:0,reports:0});
+  assert.deepEqual((await centerBadges(users.assistant)).badges,{tasks:0,acceptance:0,reports:0});
+
+  const submitted=await act(users.assistant,started,'submit');
+  const managerView=await centerData(users.manager,{date:oldDate,person:'4'});
+  assert.equal(managerView.counts.pending,0);
+  assert.equal(managerView.badges.acceptance,1);
+  assert.equal((await centerBadges(users.manager)).badges.acceptance,1);
+  assert.equal((await centerBadges(users.director)).badges.acceptance,0);
+  await act(users.manager,submitted,'approve');
+  assert.equal((await centerBadges(users.manager)).badges.acceptance,0);
 
   const cfg=await settings();
   await saveSettings(users.director,{revision:cfg.revision,restDays:[today()]});
-  assert.deepEqual((await centerBadges(users.op)).badges,{tasks:1,reports:0});
+  assert.deepEqual((await centerBadges(users.op)).badges,{tasks:1,acceptance:0,reports:0});
 });
 test('daily snapshot is server generated, versioned and independent from live task',async()=>{
   let t=await create();await saveWork(users.assistant,{title:'主动优化',date:today(),result:'完成一项优化'});

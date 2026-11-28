@@ -10,7 +10,7 @@ import { resetPeopleStore, patchPerson } from '../src/modules/people/store.js';
 import { resetWorkStore } from '../src/modules/work/store.js';
 import { resetOrgMemo } from '../src/modules/work/diary.js';
 import { resetCenterRecords, day } from '../src/modules/work/center-db.js';
-import { centerData, saveDaily, saveWork } from '../src/modules/work/center.js';
+import { centerBadges, centerData, saveDaily, saveWork } from '../src/modules/work/center.js';
 import { publishTask, actTask, resetTaskStore, setTaskNotifier } from '../src/modules/work/tasks.js';
 import { workRouter } from '../src/modules/work/router.js';
 import { filterMeetingBoard, permissionsFor } from '../src/modules/people/feature-policy.js';
@@ -61,10 +61,13 @@ test('read-only manager cannot publish or approve through direct domain calls',a
   assert.ok(task);
   task=(await actTask(assistant,{id:task.id,revision:task.revision,action:'submit',note:'已完成'})).task;
   assert.ok(task);
+  await grant('沈子晗','work',{'work.tasks':read},read);
+  assert.equal((await centerBadges(manager)).badges.acceptance,0);
   await grant('沈子晗','work',{'work.tasks':read,'work.acceptance':read},read);
   assert.equal((await publishTask(manager,{title:'不允许发布'})).statusCode,403);
   assert.equal((await actTask(manager,{id:task.id,revision:task.revision,action:'approve'})).statusCode,403);
   await grant('沈子晗','work',{'work.acceptance':on});
+  assert.equal((await centerBadges(manager)).badges.acceptance,1);
   assert.equal((await actTask(manager,{id:task.id,revision:task.revision,action:'approve'})).ok,true);
 });
 test('legacy submission status does not newly grant approval and salary view needs both old gates',async()=>{
