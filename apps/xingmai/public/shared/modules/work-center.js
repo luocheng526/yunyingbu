@@ -271,17 +271,20 @@
           ${status(t.overdue?'已逾期':t.state)}
         </button></li>`).join('')}</ul>`:empty('暂无待跟进任务');
     }
-    function compactDaily(mode=dailyMode,limit=2){
+    function compactDaily(mode,scrollable=false){
       const pending=mode==='missing';
-      const rows=(pending?data.people.filter(p=>p.reportStatus==='未提交'):data.dailies.filter(r=>r.submittedAt&&r.date===filters.to)).slice(0,limit);
-      return rows.length?`<ul class="wc-compact-list">${rows.map(row=>{
+      const rows=pending?data.people.filter(p=>p.reportStatus==='未提交'):data.dailies.filter(r=>r.submittedAt&&r.date===filters.to);
+      if(!rows.length)return empty(pending?'暂无未交人员':'暂无已交日报');
+      const scrollAttrs=scrollable?` aria-label="${pending?'未交人员名单':'已交人员名单'}"${rows.length>2?' tabindex="0"':''}`:'';
+      const list=`<ul class="wc-compact-list${scrollable?' wc-overview-daily-list':''}"${scrollAttrs}>${rows.map(row=>{
         const personName=pending?row.name:row.personName;
         return `<li><button type="button" data-action="${pending?'person':'daily'}" data-id="${esc(row.id)}">
           <span class="wc-avatar" aria-hidden="true">${esc(personName.slice(-2))}</span>
           <span><strong>${esc(personName)}</strong><small>${esc(row.teamName||'')}</small></span>
           ${status(pending?'未提交':row.late?'迟交':'已提交')}
         </button></li>`;
-      }).join('')}</ul>`:empty(pending?'暂无未交人员':'暂无已交日报');
+      }).join('')}</ul>`;
+      return scrollable?`<div>${list}${rows.length>2?`<p class="wc-overview-daily-count">共 ${rows.length} 人</p>`:''}</div>`:list;
     }
     function dashboardDetail(id){
       const summary=can('overview'),statistics=can('statistics'),management=canOpenManagement();
@@ -305,7 +308,7 @@
         `<button type="button" data-action="dashboardSwitch" data-kind="${kind}" data-id="${id}" aria-pressed="${id===selected}">${text}</button>`).join('')}</div>`;
     }
     function overviewDailyDetail(mode){
-      modal('日报提交明细',`<section data-overview-daily><div class="wc-card-head"><span class="wc-muted">${esc(data.to)}</span>${dashboardSwitch('daily-detail','日报状态',[['submitted','已交'],['missing','未交']],mode)}</div>${compactDaily(mode,Infinity)}<div class="wc-foot">${link('查看日报','tab','reports')}</div></section>`);
+      modal('日报提交明细',`<section data-overview-daily><div class="wc-card-head"><span class="wc-muted">${esc(data.to)}</span>${dashboardSwitch('daily-detail','日报状态',[['submitted','已交'],['missing','未交']],mode)}</div>${compactDaily(mode)}<div class="wc-foot">${link('查看日报','tab','reports')}</div></section>`);
       dialog.setAttribute('aria-label','日报提交明细');
     }
     function overviewFollowing(c){
@@ -315,7 +318,7 @@
             ${overviewIcon('daily')}<span><strong>日报提交跟进</strong><small>${c.reported} / ${c.should} 已交</small></span>${badge('未交 '+c.missing,c.missing?'orange':'green')}
           </button>
           <div class="wc-overview-follow-heading"><h3>日报提交</h3>${dashboardSwitch('daily','日报状态',[['submitted','已交'],['missing','未交']],dailyMode)}</div>
-          ${compactDaily()}
+          ${compactDaily(dailyMode,true)}
         </section>
         <section><div class="wc-overview-follow-heading"><h3>任务跟进</h3>${link('任务管理','tab','tasks')}</div>${compactTasks()}</section>
         <section class="wc-compact-attention"><div class="wc-overview-follow-heading"><h3>待办事项 <span>${data.alerts.length}</span></h3>${data.alerts.length?compactLink('查看明细','alerts'):''}</div>${alerts(false,2)}</section>
