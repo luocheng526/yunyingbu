@@ -144,7 +144,7 @@
     function teamTable(){return table(['管理团队 / 部门','成员','任务 / 子任务','到期完成','待验收','逾期','日报提交率'],data.teams.map(t=>[link(t.name,'team',t.id),t.members,`${t.metrics.roots} / ${t.metrics.children}`,`${t.metrics.completed} / ${t.metrics.due} ${progress(t.metrics.completionRate||0,percent(t.metrics.completionRate))}`,status(String(t.metrics.pending)),t.metrics.overdue?badge(t.metrics.overdue,'red'):'0',percent(t.reportRate)]));}
     function peopleTable(rows=data.people){return table(['员工','所属团队 / 店铺','任务','已完成','待验收','逾期','日报','操作'],rows.map(p=>[personCell(p),`<div>${esc(p.teamName)}</div><div class="wc-small">${esc(p.boardName)} · ${esc(p.department)}</div><div class="wc-small" title="${esc(p.visibleShops.join('、'))}">${esc(p.visibleShops.slice(0,2).join('、')||'暂未关联店铺')}${p.visibleShops.length>2?' 等'+p.visibleShops.length+'家':''}</div>`,p.received,p.metrics.completedEvents,p.metrics.pending,p.metrics.overdue?badge(p.metrics.overdue,'red'):'0',status(p.reportStatus),link('查看工作','person',p.id)]));}
     function alerts(all=false) {
-      if(!data.alerts.length)return `<p class="wc-dash-no-alert">暂无异常提醒</p>`;
+      if(!data.alerts.length)return empty('暂无异常提醒');
       const rows=data.alerts.map(a=>{
         const action=a.type==='task'?'task':a.type==='person'?'person':'issue';
         const urgent=a.reason.includes('逾期')||a.type==='issue';
@@ -199,18 +199,19 @@
       return link(label,'dashboardDetail',id);
     }
     function distribution(){
+      const total=data.people.length;
+      if(!total)return empty('当前范围暂无人员');
       const byTeam=distributionMode==='team';
       const groups=byTeam?data.teams:data.departments;
       const rows=groups.filter(group=>group.members>0);
       const assigned=rows.reduce((sum,group)=>sum+group.members,0);
-      const total=data.people.length;
       const other=total-assigned;
       if(other>0)rows.push({name:byTeam?'未归属团队':'其他',members:other});
       const colors=['#2677ed','#14a787','#e8a335','#8e70e0','#d75582','#8499b4'];
       let filled=0;
       const trends=rows.map((row,i)=>{
         const color=colors[i%colors.length];
-        const share=total?row.members/total*100:0;
+        const share=row.members/total*100;
         const arc=`${color} ${filled}% ${filled+share}%`;
         filled+=share;
         return {...row,color,share,arc};
@@ -221,9 +222,9 @@
           ?`<button type="button" class="wc-dist-row" data-action="dashboardScope" data-kind="${byTeam?'team':'board'}" data-id="${esc(r.id)}">${content}</button>`
           :`<span class="wc-dist-row">${content}</span>`}</li>`;
       }).join('');
-      const fill=trends.length?`conic-gradient(${trends.map(row=>row.arc).join(',')})`:'var(--wc-dash-field)';
+      const fill=`conic-gradient(${trends.map(row=>row.arc).join(',')})`;
       return `<div class="wc-compact-distribution"><div class="wc-donut" style="background:${fill}"><div><span>在职人员</span><strong>${total}</strong></div></div>
-        ${legend?`<ul>${legend}</ul>`:'<p class="wc-small">当前范围暂无人员</p>'}</div>`;
+        <ul>${legend}</ul></div>`;
     }
     function compactRankings(){
       const rows=data.teams.filter(t=>t.metrics.completionRate!=null)
@@ -287,17 +288,20 @@
           <div class="wc-compact-heading-actions">${tools}${statistics&&can('export')?btn('导出 Excel','export'):''}${btn('刷新','refresh')}</div></div>
         <div class="wc-dash-control-row">${toolbar(false,true)}</div>
         ${summary?dashboardSummary(data.counts):''}
-        <div class="wc-compact-grid wc-compact-grid-main">
-          ${statistics?`<section class="wc-card wc-compact-card wc-compact-chart">${chart()}</section>`:''}
-          ${execution||management?compactCard('人员分布',distribution(),dashboardSwitch('distribution','分布维度',[['team','团队'],['board','部门']],distributionMode),'wc-compact-distribution-card'):''}
-          ${summary?compactCard(`待办事项 <span>${data.alerts.length}</span>`,alerts(),data.alerts.length>3?compactLink('查看全部','alerts'):'','wc-compact-attention'):''}
-        </div>
-        <div class="wc-compact-grid wc-compact-grid-bottom">
-          ${execution||management?compactCard('团队到期完成率',compactRankings(),compactLink('查看全部','teams')):''}
+        ${summary?`<div class="wc-compact-grid">
+          ${compactCard(`待办事项 <span>${data.alerts.length}</span>`,alerts(),data.alerts.length>3?compactLink('查看全部','alerts'):'','wc-compact-attention')}
+          ${compactCard('任务跟进',compactTasks(),link('任务管理','tab','tasks'))}
+          ${compactCard('日报提交',compactDaily(),`<div class="wc-compact-card-actions">
+            ${dashboardSwitch('daily','日报状态',[['submitted','已交'],['missing','未交']],dailyMode)}
+            ${link('查看日报','tab','reports')}
+          </div>`)}
+        </div>`:''}
+        ${execution||management?`<div class="wc-compact-grid wc-compact-grid-insights">
+          ${statistics?chart():''}
+          ${compactCard('人员分布',distribution(),dashboardSwitch('distribution','分布维度',[['team','团队'],['board','部门']],distributionMode))}
+          ${compactCard('团队到期完成率',compactRankings(),compactLink('查看全部','teams'))}
           ${execution?performanceCards(data.counts,summary,statistics):''}
-          ${summary?compactCard('任务跟进',compactTasks(),link('任务管理','tab','tasks')):''}
-          ${summary?compactCard('日报提交',dashboardSwitch('daily','日报状态',[['submitted','已交'],['missing','未交']],dailyMode)+compactDaily(),link('查看日报','tab','reports'),'wc-compact-daily'):''}
-        </div>
+        </div>`:''}
       </div>`;
     }
     function tasksForMode(){let rows=data.tasks;if(taskView==='acceptance')rows=rows.filter(t=>mode==='all'?t.state==='待验收':mode==='processed'?(t.events||[]).some(e=>e.actor===data.me.id&&['检查通过','退回修改'].includes(e.action)):t.reviewer===data.me.id&&t.state==='待验收');else if(mode==='mine')rows=rows.filter(t=>t.assignee===data.me.id||(t.collaborators||[]).includes(data.me.id));else if(mode==='published')rows=rows.filter(t=>t.publisher===data.me.id);else if(mode==='overdue')rows=rows.filter(t=>t.overdue);else if(mode==='completed')rows=rows.filter(t=>t.state==='已完成');else if(mode==='pending')rows=rows.filter(t=>t.state==='待验收');if(search)rows=rows.filter(t=>[t.title,t.assigneeName,t.publisherName,t.shop_name,t.category].join(' ').toLowerCase().includes(search.toLowerCase()));return rows;}
@@ -327,10 +331,10 @@
     function issueTable(rows){return table(['问题','提出人','团队','状态','升级','操作'],rows.map(i=>[esc(i.title),esc(i.personName),esc(i.teamName),status(i.status),i.escalated?badge('上级协调','orange'):'—',link('查看处理','issue',i.id)]));}
     function chart() {
       const rows=data.trend;
+      if(!rows.some(row=>row.created||row.completed))return compactCard('任务趋势',empty('本期暂无新增或验收完成的任务'));
       const header=`<div class="wc-dash-chart-head"><div><h3>任务趋势</h3><span class="wc-dash-chart-sub">按日期查看新增与验收完成</span></div><div class="wc-dash-chart-tools"><div class="wc-dash-chart-legend">
         <span><i></i>新增任务</span><span><i class="completed"></i>验收完成</span>
       </div><div class="wc-dash-chart-switch">${btn('柱状图','chartMode',chartMode==='bar'?'is-selected':'','data-mode="bar" aria-pressed="'+(chartMode==='bar')+'"')}${btn('折线图','chartMode',chartMode==='line'?'is-selected':'','data-mode="line" aria-pressed="'+(chartMode==='line')+'"')}</div></div></div>`;
-      if(!rows.length)return `<div class="wc-dash-chart-body">${header}${empty('暂无趋势数据')}</div>`;
       const max=Math.max(4,Math.ceil(Math.max(...rows.map(r=>Math.max(r.created,r.completed)))/4)*4);
       const left=39,right=880,top=14,bottom=177;
       const step=(right-left)/rows.length;
@@ -351,11 +355,11 @@
       const labelStep=Math.max(1,Math.ceil((rows.length-1)/7));
       const labelIndices=rows.map((row,i)=>i).filter(i=>(i%labelStep===0&&i+labelStep<rows.length)||i===rows.length-1);
       const labels=labelIndices.map((i,j)=>`<text class="${j%2&&j<labelIndices.length-1?'wc-dash-chart-date-secondary':''}" x="${x(i)}" y="201" text-anchor="middle">${esc(rows[i].date.slice(5))}</text>`).join('');
-      return `<div class="wc-dash-chart-body">${header}
+      return `<section class="wc-card wc-compact-card wc-compact-chart"><div class="wc-dash-chart-body">${header}
         <svg class="wc-chart wc-dash-chart" viewBox="0 0 900 211" role="img" aria-label="按创建和验收日期统计的任务趋势">
           ${axes}${chartMode==='line'?lines:bars}${labels}
         </svg>
-      </div>`;
+      </div></section>`;
     }
     function performanceCards(c,summary,statistics) {
       const metrics=[
