@@ -3,7 +3,7 @@ import { permissionsFor } from '../people/feature-policy.js';
 import { saveComposerImages, containsComposerImage, DAILY_IMAGE_LIMIT } from './composer-images.js';
 import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
-import { access, canAssign, canEditTask, canReviewTask, allowedReviewers, reviewerOptions, recordVisible, managedRecord, scopeSnapshot, WORK_ROLES, normalizedRole, roleLevel } from './center-access.js';
+import { access, canAssign, canEditTask, canReviewTask, isDirectAssistant, allowedReviewers, reviewerOptions, recordVisible, managedRecord, scopeSnapshot, WORK_ROLES, normalizedRole, roleLevel } from './center-access.js';
 import { visibleTasks } from './tasks.js';
 import { records, record, writeRecord, fault, copy, stamp, day, validDay } from './center-db.js';
 import { eligibility } from './center-reporting.js';
@@ -37,6 +37,13 @@ export async function centerBadges(user) {
 }
 function visibleRecord(ctx,r) {
   return recordVisible(ctx,r);
+}
+function dailyForViewer(ctx,report) {
+  if(visibleRecord(ctx,report))return report;
+  if(!report.submittedAt||!ctx.permissions.can('reports'))return null;
+  const assistant=ctx.byId.get(report.personId);
+  if(!isDirectAssistant(ctx,assistant)||report.teamId!==assistant.teamId)return null;
+  return {...report,history:(report.history||[]).filter(version=>version.submittedAt&&version.teamId===report.teamId)};
 }
 function personSnapshot(p) {return {personId:p.id,personName:p.name,role:p.role,teamId:p.teamId,teamName:p.teamName,supervisorId:p.supervisorId,...scopeSnapshot(p)};}
 function actionOptions(ctx,t) {
@@ -97,7 +104,7 @@ export async function centerData(user,query={}) {
   tasks=tasks.filter(t=>relevant(t));
   const filteredPeople=ctx.visiblePeople.filter(p=>(!query.team||p.teamId===query.team)&&(!query.person||p.id===query.person)&&(!query.role||p.role===query.role)&&(!query.department||p.department===query.department)&&(!query.board||p.board===query.board)&&(!query.shop||p.visibleShops.includes(ctx.bundle.shops.find(s=>String(s.id)===query.shop)?.name)));
   const recordMatches=r=>(!query.team||r.teamId===query.team)&&(!query.person||r.personId===query.person)&&(!query.role||normalizedRole(r.role||ctx.byId.get(r.personId)?.role)===query.role)&&(!query.department||(r.department||ctx.byId.get(r.personId)?.department)===query.department)&&(!query.board||(r.board||ctx.byId.get(r.personId)?.board)===query.board)&&(!query.shop||r.shopId===query.shop||r.snapshot?.tasks?.some(t=>t.shopId===query.shop)||r.taskId&&tasks.some(t=>t.id===r.taskId&&t.shop_id===query.shop));
-  const visibleDaily=daily.filter(r=>visibleRecord(ctx,r)&&recordMatches(r)&&r.date>=from&&r.date<=to);
+  const visibleDaily=daily.filter(r=>recordMatches(r)&&r.date>=from&&r.date<=to).map(r=>dailyForViewer(ctx,r)).filter(Boolean);
   const visibleWork=works.filter(r=>visibleRecord(ctx,r)&&recordMatches(r)&&r.date>=from&&r.date<=to);
   const visibleIssues=issues.filter(r=>visibleRecord(ctx,r)&&recordMatches(r)&&r.date<=to);
   const people=filteredPeople.map(p=>{
@@ -232,7 +239,11 @@ export async function readComposerImage(user,id,parentId,taskId) {
   const ctx=await access(user);let parent;
   if(taskId) { const {rows}=await visibleTasks(user);parent=rows.find(t=>t.id===taskId); }
   else if(parentId==='settings') parent=ctx.director?ctx.config:{taskTemplates:ctx.config.taskTemplates};
-  else {parent=await record(String(parentId||''));if(!parent||!['work','daily','issue'].includes(parent.kind)||!visibleRecord(ctx,parent))parent=null;}
+  else {
+    const candidate=await record(String(parentId||''));
+    if(candidate?.kind==='daily')parent=dailyForViewer(ctx,candidate);
+    else if(['work','issue'].includes(candidate?.kind)&&visibleRecord(ctx,candidate))parent=candidate;
+  }
   if(!parent||!containsComposerImage(parent,id))fault('没有这张图片',404);
   const image=await record(id);if(image?.kind!=='compose-image')fault('没有这张图片',404);
   return image;

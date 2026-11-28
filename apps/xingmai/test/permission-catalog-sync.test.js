@@ -10,7 +10,7 @@ import { resetPeopleStore, patchPerson } from '../src/modules/people/store.js';
 import { resetWorkStore } from '../src/modules/work/store.js';
 import { resetOrgMemo } from '../src/modules/work/diary.js';
 import { resetCenterRecords, day } from '../src/modules/work/center-db.js';
-import { centerBadges, centerData, saveDaily, saveWork } from '../src/modules/work/center.js';
+import { centerBadges, centerData, readComposerImage, saveDaily, saveWork } from '../src/modules/work/center.js';
 import { publishTask, actTask, resetTaskStore, setTaskNotifier } from '../src/modules/work/tasks.js';
 import { workRouter } from '../src/modules/work/router.js';
 import { filterMeetingBoard, permissionsFor } from '../src/modules/people/feature-policy.js';
@@ -47,6 +47,21 @@ test('saving then revoking a migrated feature does not revive it',async()=>{
 test('task-only permission loads work center without old today permission',async()=>{
   await grant('陈明婧','work',{'work.tasks':read},read);
   const result=await centerData(assistant);assert.equal(result.ok,true);assert.equal(result.permissions['work.tasks'].enter,true);assert.equal(result.permissions['work.reports'].enter,false);assert.deepEqual(result.dailies,[]);assert.equal(result.canPublish,false);
+});
+test('direct assistant daily visibility requires only the existing report entry grant',async()=>{
+  const operator={username:'张文静'};
+  await patchPerson(4,{role:'运营'});
+  await patchPerson(5,{role:'助理',operator:'张文静'});
+  resetOrgMemo();
+  const field='今日工作',data='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
+  const report=await saveDaily(assistant,{date:day(),submit:true,notes:{[field]:'日报'},composerImages:[{field,mime:'image/png',data}]});
+  const imageId=report.composerImages[0].id;
+  await grant(operator.username,'work',{'work.overview':read},read);
+  assert.equal((await centerData(operator)).dailies.length,0);
+  await assert.rejects(readComposerImage(operator,imageId,report.id),/没有这张图片/);
+  await grant(operator.username,'work',{'work.reports':read},read);
+  assert.deepEqual((await centerData(operator)).dailies.map(d=>d.id),[report.id]);
+  assert.equal((await readComposerImage(operator,imageId,report.id)).data,data);
 });
 test('assistant execution, daily and work record rights are independent',async()=>{
   const task=(await publishTask(owner,{title:'权限回归',assignee:'5',start_at:day()+'T00:00',due_at:day()+'T23:59'})).task;assert.ok(task);

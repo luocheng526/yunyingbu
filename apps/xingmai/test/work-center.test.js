@@ -7,7 +7,7 @@ import { resetOrgMemo } from '../src/modules/work/diary.js';
 import { resetCenterRecords, day, record, settings, writeRecord } from '../src/modules/work/center-db.js';
 import { access, normalizedRole } from '../src/modules/work/center-access.js';
 import { publishTask,listTasks,actTask,readTaskFile,resetTaskStore,setTaskNotifier,exportTasks,importTasks } from '../src/modules/work/tasks.js';
-import { centerBadges,centerData,saveDaily,saveWork,saveIssue,saveSettings } from '../src/modules/work/center.js';
+import { centerBadges,centerData,readComposerImage,saveDaily,saveWork,saveIssue,saveSettings } from '../src/modules/work/center.js';
 import { workRouter } from '../src/modules/work/router.js';
 const users={director:{username:'罗成'},managerB:{username:'韩梦凯'},manager:{username:'沈子晗'},lead:{username:'杨润泽'},leadB:{username:'高丽男'},op:{username:'张文静'},assistant:{username:'陈明婧'},opB:{username:'郭桂良'},assistantB:{username:'王博'}};
 const today=()=>day();
@@ -181,6 +181,46 @@ test('operator can assign a direct assistant through the organization reporting 
   assert.equal((await centerData(users.op)).canPublish,false);
   assert.equal((await publishTask(users.op,draft())).statusCode,403);
   assert.equal((await centerData(users.opB)).canPublish,true);
+});
+test('an operator can read submitted daily reports and images from a direct assistant',async()=>{
+  await patchPerson(5,{operator:'张文静'});
+  await patchPerson(6,{supervisor:'杨润泽'});
+  resetOrgMemo();
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64');
+  const image=data=>({field:'今日工作',mime:'image/png',data:data.toString('base64')});
+  const date=today(),notes={'今日工作':'更新商品'};
+  const draft=await saveDaily(users.assistant,{date,notes,composerImages:[image(png)]});
+  const draftImage=draft.composerImages[0].id;
+  assert.equal((await centerData(users.op)).dailies.length,0);
+  await assert.rejects(readComposerImage(users.op,draftImage,draft.id),/没有这张图片/);
+
+  const report=await saveDaily(users.assistant,{date,notes,submit:true,revision:draft.revision,composerImages:[image(Buffer.concat([png,Buffer.from([1])]))]});
+  const reportImage=report.composerImages[0].id;
+  const later=await saveDaily(users.assistant,{date,notes,submit:true,revision:report.revision});
+  await saveWork(users.assistant,{date,title:'助理自主工作'});
+  const view=await centerData(users.op);
+  assert.deepEqual(view.dailies.map(d=>d.id),[report.id]);
+  assert.deepEqual(view.dailies[0].history.map(d=>d.revision),[report.revision]);
+  assert.equal(view.works.length,0);
+  assert.equal((await centerData(users.op,{person:'5'})).dailies[0].revision,later.revision);
+  assert.equal((await centerData(users.opB)).dailies.length,0);
+  assert.equal((await readComposerImage(users.op,reportImage,report.id)).id,reportImage);
+  await assert.rejects(readComposerImage(users.op,draftImage,report.id),/没有这张图片/);
+  await assert.rejects(readComposerImage(users.opB,reportImage,report.id),/没有这张图片/);
+
+  await patchPerson(6,{supervisor:'高丽男'});
+  await patchPerson(5,{operator:'郭桂良',supervisor:'高丽男'});
+  resetOrgMemo();
+  assert.equal((await centerData(users.op)).dailies.length,0);
+  assert.equal((await centerData(users.opB)).dailies.length,0);
+  assert.equal((await centerData(users.lead)).dailies[0].history.length,2);
+
+  await saveDaily(users.assistant,{date,notes,submit:true,revision:later.revision,composerImages:[]});
+  assert.equal((await centerData(users.op)).dailies.length,0);
+  const newTeamReport=(await centerData(users.opB)).dailies[0];
+  assert.equal(newTeamReport.id,report.id);
+  assert.deepEqual(newTeamReport.history,[]);
+  await assert.rejects(readComposerImage(users.opB,reportImage,report.id),/没有这张图片/);
 });
 test('legacy collaborations no longer grant dispatch and cannot be added through settings',async()=>{
   const config=await settings();

@@ -67,9 +67,12 @@ export async function access(user){
   ctx.visiblePeople=active.filter(p=>canSeePerson(ctx,p));ctx.boards=ORG_BOARDS.filter(b=>ctx.director||ctx.visiblePeople.some(p=>p.board===b.code));return ctx;
 }
 export function canSeePerson(ctx,p){return Boolean(p)&&(ctx.director||p.id===ctx.me.id||(ctx.management&&p.ancestorIds.includes(ctx.me.id)));}
+export function isDirectAssistant(ctx,person){
+  return ctx.me.role==='运营'&&person?.role==='运营助理'&&person.status!=='离职'&&person.parentId===ctx.me.id;
+}
 export function canAssign(ctx,target){
   if(!target||target.status==='离职'||target.id===ctx.me.id)return false;
-  if(ctx.me.role==='运营')return target.role==='运营助理'&&target.parentId===ctx.me.id;
+  if(ctx.me.role==='运营')return isDirectAssistant(ctx,target);
   return (ctx.management||ctx.me.orgRole==='储备')&&target.ancestorIds.includes(ctx.me.id);
 }
 // Saved scopes remain authoritative after a person changes team or manager.
