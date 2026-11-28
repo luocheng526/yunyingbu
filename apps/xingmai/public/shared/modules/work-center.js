@@ -50,7 +50,7 @@
     const dashboardAvailable=()=>can('overview')||canOpenManagement()||can('statistics');
     const tabBadgeLabels={tasks:'项任务待开始',reports:'份今日日报未提交'};
     let refreshingBadges=false;
-    let filters={from:'',to:'',team:'',person:'',role:'',department:'',shop:'',board:''},organizationOpen=false;let chartMode='bar',distributionMode='team',dailyMode='submitted';const drafts={},taskCache=new Map(),workCache=new Map(),dailyCache=new Map();
+    let filters={from:'',to:'',team:'',person:'',role:'',department:'',shop:'',board:''},organizationOpen=false;let chartMode='line',distributionMode='team',dailyMode='submitted',overviewTrend=null;const drafts={},taskCache=new Map(),workCache=new Map(),dailyCache=new Map();
     const can=(feature,right='enter')=>Boolean(data?.permissions?.['work.'+feature]?.[right]);
     const actionFeature={newWork:'records',newIssue:'records',writeDaily:'reports',publish:'publish',export:'export',notifications:'messages',readNotice:'messages',newTemplate:'settings',removeTemplate:'settings',reminderStatus:'settings'};
     const readActions=new Set(['export','notifications','reminderStatus']);
@@ -69,7 +69,24 @@
     function applyPermissions(){root.querySelectorAll('[data-action]').forEach(el=>{if(!actionAllowed(el.dataset.action,el.dataset.id,el.dataset.kind)){el.hidden=true;el.style.display='none';}});if(tab==='settings'&&!can('settings','edit'))root.querySelectorAll('[data-wc-body] input,[data-wc-body] select,[data-wc-body] textarea,[data-wc-body] button[type="submit"]').forEach(el=>el.disabled=true);}
     const deep=new URLSearchParams(location.search);if(deep.get('tab')==='taskMine'){tab='tasks';mode='mine';}if(['reports','people'].includes(deep.get('tab'))){tab='reports';const date=deep.get('date');if(/^\d{4}-\d{2}-\d{2}$/.test(date||''))filters.from=filters.to=date;}if(['taskReview','acceptance'].includes(deep.get('tab'))){tab='tasks';taskView='acceptance';}if(deep.get('tab')==='taskPublish'){tab='tasks';mode='published';}if(deep.get('tab')==='tasks'){tab='tasks';if(deep.get('view')==='acceptance')taskView='acceptance';}
     const notify=(message,error=false)=>{document.querySelectorAll('.wc-toast').forEach(n=>n.remove());const node=document.createElement('div');node.className='wc-toast'+(error?' error':'');node.textContent=message;node.setAttribute('role','status');document.body.appendChild(node);setTimeout(()=>node.remove(),5000);};
-    async function reload(){const id=++request;try{const next=await api('center?'+new URLSearchParams(Object.entries(filters).filter(([,v])=>v)));if(!alive||id!==request)return;data=next;filters.from=next.from;filters.to=next.to;paint();}catch(error){if(!alive)return;if(!data)root.innerHTML=`<main class="wc">${card('工作中心',`<div class="wc-error">${esc(error.message)}</div>`,btn('重新加载','refresh'))}</main>`;else notify(error.message,true);}}
+    async function reload({chartRows=null}={}){
+      const id=++request;
+      try{
+        const next=await api('center?'+new URLSearchParams(Object.entries(filters).filter(([,v])=>v)));
+        if(!alive||id!==request)return;
+        data=next;filters.from=next.from;filters.to=next.to;
+        overviewTrend=chartRows?{source:next,rows:chartRows}:null;
+        paint();
+        if(chartRows&&tab==='overview')root.querySelector('.wc-trend-day[aria-pressed="true"],[data-wc-trend-select]')?.focus({preventScroll:true});
+      }catch(error){
+        if(!alive||id!==request)return;
+        if(!data)root.innerHTML=`<main class="wc">${card('工作中心',`<div class="wc-error">${esc(error.message)}</div>`,btn('重新加载','refresh'))}</main>`;
+        else {
+          if(chartRows){filters.from=data.from;filters.to=data.to;}
+          notify(error.message,true);
+        }
+      }
+    }
     function paintTabBadges(){
       root.querySelectorAll('[data-wc-tab-count]').forEach(el=>{
         const tab=el.dataset.wcTabCount,ownCount=data.badges?.[tab]||0;
@@ -143,7 +160,7 @@
     }
     function teamTable(){return table(['管理团队 / 部门','成员','任务 / 子任务','到期完成','待验收','逾期','日报提交率'],data.teams.map(t=>[link(t.name,'team',t.id),t.members,`${t.metrics.roots} / ${t.metrics.children}`,`${t.metrics.completed} / ${t.metrics.due} ${progress(t.metrics.completionRate||0,percent(t.metrics.completionRate))}`,status(String(t.metrics.pending)),t.metrics.overdue?badge(t.metrics.overdue,'red'):'0',percent(t.reportRate)]));}
     function peopleTable(rows=data.people){return table(['员工','所属团队 / 店铺','任务','已完成','待验收','逾期','日报','操作'],rows.map(p=>[personCell(p),`<div>${esc(p.teamName)}</div><div class="wc-small">${esc(p.boardName)} · ${esc(p.department)}</div><div class="wc-small" title="${esc(p.visibleShops.join('、'))}">${esc(p.visibleShops.slice(0,2).join('、')||'暂未关联店铺')}${p.visibleShops.length>2?' 等'+p.visibleShops.length+'家':''}</div>`,p.received,p.metrics.completedEvents,p.metrics.pending,p.metrics.overdue?badge(p.metrics.overdue,'red'):'0',status(p.reportStatus),link('查看工作','person',p.id)]));}
-    function alerts(all=false) {
+    function alerts(all=false,limit=3) {
       if(!data.alerts.length)return empty('暂无异常提醒');
       const rows=data.alerts.map(a=>{
         const action=a.type==='task'?'task':a.type==='person'?'person':'issue';
@@ -152,38 +169,48 @@
           <i aria-hidden="true"></i><span><strong>${esc(a.title)}</strong><small>${esc(a.reason)}</small></span><span class="wc-dash-alert-arrow" aria-hidden="true">›</span>
         </button></li>`;
       });
-      const visible=all?rows.length:3;
+      const visible=all?rows.length:limit;
       return `<ul class="wc-dash-alerts">${rows.slice(0,visible).join('')}</ul>`;
     }
-    function dashboardMetric(label,value,action,tone='') {
+    function dashboardMetric(label,value,action,tone='',id='') {
       const contents=`<span>${label}</span><strong>${value}</strong>`;
-      return action&&actionAllowed(action)
-        ? `<button type="button" class="wc-dash-metric ${tone}" data-action="${action}">${contents}</button>`
+      return action&&actionAllowed(action,id)
+        ? `<button type="button" class="wc-dash-metric ${tone}" data-action="${action}" ${id?`data-id="${id}"`:''}>${contents}</button>`
         : `<div class="wc-dash-metric ${tone}">${contents}</div>`;
     }
     function dashboardCount(label,value,action) {
       return actionAllowed(action)?link(label+' '+value,action):`<span>${label} <b>${value}</b></span>`;
     }
+    function overviewIcon(kind){
+      const paths={
+        task:'M3 7h18v13H3zM8 7V4h8v3M3 11a19 19 0 0 0 18 0M10 12h4',
+        done:'M21 12a9 9 0 1 1-5.3-8.2M8 11.5l3 3L21 5',
+        review:'M9 4H5v17h14V4h-4M9 3h6v4H9zM8.5 13l2 2 4-4',
+        late:'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
+        daily:'M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6'
+      };
+      return `<span class="wc-overview-icon wc-overview-icon-${kind}" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"><path d="${paths[kind]}"/></svg></span>`;
+    }
     function dashboardSummary(c) {
       return `<div class="wc-dash-kpis">
         <section class="wc-dash-tile">
-          ${dashboardMetric('独立任务',c.roots,'tasks')}
+          ${overviewIcon('task')}${dashboardMetric('独立任务',c.roots,'tasks')}
           <div class="wc-dash-tile-details"><span>子任务 <b>${c.children}</b></span>${dashboardCount('本期到期',c.due,'tasks')}</div>
         </section>
         <section class="wc-dash-tile">
-          ${dashboardMetric('本期到期 · 已验收完成',c.completed,'completed','green')}
-          <div class="wc-dash-tile-details"><span>任务完成率 <b>${percent(c.completionRate)}</b></span></div>
+          ${overviewIcon('done')}${dashboardMetric('已完成工作量',c.completedEvents,'completed')}
+          <div class="wc-dash-tile-details"><span>到期已验收 <b>${c.completed}</b></span><span>完成率 <b>${percent(c.completionRate)}</b></span></div>
         </section>
         <section class="wc-dash-tile">
-          ${dashboardMetric('待验收任务',c.pending,'acceptance','amber')}
+          ${overviewIcon('review')}${dashboardMetric('待验收任务',c.pending,'acceptance')}
           <div class="wc-dash-tile-details"><span>提交成果后待审核</span></div>
         </section>
         <section class="wc-dash-tile">
-          ${dashboardMetric('逾期任务',c.overdue,'overdue','red')}
+          ${overviewIcon('late')}${dashboardMetric('逾期任务',c.overdue,'overdue','red')}
           <div class="wc-dash-tile-details"><span>当前未验收完成</span></div>
         </section>
         <section class="wc-dash-tile">
-          ${dashboardMetric('日报已交 / 应交',`${c.reported} <small>/ ${c.should}</small>`,'reports')}
+          ${overviewIcon('daily')}${dashboardMetric('日报已交 / 应交',`${c.reported} <small>/ ${c.should}</small>`,'dashboardDetail','','daily')}
           <div class="wc-dash-tile-details"><span>未交 <b>${c.missing}</b></span><span>提交率 <b>${percent(c.reportRate)}</b></span></div>
         </section>
       </div>`;
@@ -237,16 +264,16 @@
     }
     function compactTasks(){
       const rows=[...data.tasks].filter(t=>!['已完成','已取消'].includes(t.state))
-        .sort((a,b)=>Number(b.overdue)-Number(a.overdue)||String(a.due_at).localeCompare(String(b.due_at))).slice(0,4);
+        .sort((a,b)=>Number(b.overdue)-Number(a.overdue)||String(a.due_at).localeCompare(String(b.due_at))).slice(0,2);
       return rows.length?`<ul class="wc-compact-list">${rows.map(t=>
         `<li><button type="button" data-action="task" data-id="${esc(t.id)}"><i class="wc-list-dot ${t.overdue?'urgent':''}" aria-hidden="true"></i>
           <span><strong>${esc(t.title)}</strong><small>${esc(t.assigneeName||'未分配')} · ${esc(when(t.due_at))}</small></span>
           ${status(t.overdue?'已逾期':t.state)}
         </button></li>`).join('')}</ul>`:empty('暂无待跟进任务');
     }
-    function compactDaily(){
-      const pending=dailyMode==='missing';
-      const rows=(pending?data.people.filter(p=>p.reportStatus==='未提交'):data.dailies.filter(r=>r.submittedAt&&r.date===filters.to)).slice(0,4);
+    function compactDaily(mode=dailyMode,limit=2){
+      const pending=mode==='missing';
+      const rows=(pending?data.people.filter(p=>p.reportStatus==='未提交'):data.dailies.filter(r=>r.submittedAt&&r.date===filters.to)).slice(0,limit);
       return rows.length?`<ul class="wc-compact-list">${rows.map(row=>{
         const personName=pending?row.name:row.personName;
         return `<li><button type="button" data-action="${pending?'person':'daily'}" data-id="${esc(row.id)}">
@@ -259,6 +286,7 @@
     function dashboardDetail(id){
       const summary=can('overview'),statistics=can('statistics'),management=canOpenManagement();
       if(id==='alerts'&&summary){modal('全部待办事项',alerts(true));return;}
+      if(id==='daily'&&summary){overviewDailyDetail('missing');return;}
       if(id==='teams'&&(summary||statistics||management)){
         const departments=management||(summary&&data.me.role==='总监');
         modal('部门与团队',`${departments?dashboardCard('部门工作情况',departmentTable(true)):''}${dashboardCard('团队执行情况',teamTable())}`);
@@ -270,6 +298,24 @@
     function dashboardSwitch(kind,label,choices,selected){
       return `<div class="wc-compact-switch" role="group" aria-label="${label}">${choices.map(([id,text])=>
         `<button type="button" data-action="dashboardSwitch" data-kind="${kind}" data-id="${id}" aria-pressed="${id===selected}">${text}</button>`).join('')}</div>`;
+    }
+    function overviewDailyDetail(mode){
+      modal('日报提交明细',`<section data-overview-daily><div class="wc-card-head"><span class="wc-muted">${esc(data.to)}</span>${dashboardSwitch('daily-detail','日报状态',[['submitted','已交'],['missing','未交']],mode)}</div>${compactDaily(mode,Infinity)}<div class="wc-foot">${link('查看日报','tab','reports')}</div></section>`);
+      dialog.setAttribute('aria-label','日报提交明细');
+    }
+    function overviewFollowing(c){
+      const rows=`<div class="wc-overview-follow">
+        <section class="wc-overview-follow-daily">
+          <button type="button" class="wc-overview-daily-link" data-action="dashboardDetail" data-id="daily">
+            ${overviewIcon('daily')}<span><strong>日报提交跟进</strong><small>${c.reported} / ${c.should} 已交</small></span>${badge('未交 '+c.missing,c.missing?'orange':'green')}
+          </button>
+          <div class="wc-overview-follow-heading"><h3>日报提交</h3>${dashboardSwitch('daily','日报状态',[['submitted','已交'],['missing','未交']],dailyMode)}</div>
+          ${compactDaily()}
+        </section>
+        <section><div class="wc-overview-follow-heading"><h3>任务跟进</h3>${link('任务管理','tab','tasks')}</div>${compactTasks()}</section>
+        <section class="wc-compact-attention"><div class="wc-overview-follow-heading"><h3>待办事项 <span>${data.alerts.length}</span></h3>${data.alerts.length>2?compactLink('查看全部','alerts'):''}</div>${alerts(false,2)}</section>
+      </div>`;
+      return compactCard('待办与跟进',rows,'','wc-overview-inbox');
     }
     function overview(){
       const summary=can('overview'),statistics=can('statistics'),management=canOpenManagement();
@@ -284,20 +330,19 @@
       const filtered=Object.entries(filters).some(([key,value])=>key!=='from'&&key!=='to'&&value);
       const scopeLabel=scope||(filtered?'当前筛选范围':data.me.role==='总监'?'全公司':'当前可见范围');
       return `<div class="wc-dashboard wc-compact-dashboard">
-        <div class="wc-compact-heading"><div><h1>工作总览</h1><div class="wc-compact-scope">当前视角 <strong>${esc(scopeLabel)}</strong>${filtered?link('清除筛选','dashboardScope',''):''}</div></div>
+        <header class="wc-overview-intro">
+          <div class="wc-overview-date">${esc(data.from===data.to?data.to:data.from+' 至 '+data.to)}</div>
+          <h1>工作总览</h1>
+          <div class="wc-compact-scope">当前视角 <strong>${esc(scopeLabel)}</strong>${filtered?link('清除筛选','dashboardScope',''):''}</div>
+        </header>
+        <div class="wc-dash-control-row wc-overview-tools">${toolbar(false,true)}
           <div class="wc-compact-heading-actions">${tools}${statistics&&can('export')?btn('导出 Excel','export'):''}${btn('刷新','refresh')}</div></div>
-        <div class="wc-dash-control-row">${toolbar(false,true)}</div>
         ${summary?dashboardSummary(data.counts):''}
-        ${summary?`<div class="wc-compact-grid">
-          ${compactCard(`待办事项 <span>${data.alerts.length}</span>`,alerts(),data.alerts.length>3?compactLink('查看全部','alerts'):'','wc-compact-attention')}
-          ${compactCard('任务跟进',compactTasks(),link('任务管理','tab','tasks'))}
-          ${compactCard('日报提交',compactDaily(),`<div class="wc-compact-card-actions">
-            ${dashboardSwitch('daily','日报状态',[['submitted','已交'],['missing','未交']],dailyMode)}
-            ${link('查看日报','tab','reports')}
-          </div>`)}
-        </div>`:''}
-        ${execution||management?`<div class="wc-compact-grid wc-compact-grid-insights">
+        ${summary||statistics?`<div class="wc-overview-main-grid">
           ${statistics?chart():''}
+          ${summary?overviewFollowing(data.counts):''}
+        </div>`:''}
+        ${execution||management?`<div class="wc-overview-insights">
           ${compactCard('人员分布',distribution(),dashboardSwitch('distribution','分布维度',[['team','团队'],['board','部门']],distributionMode))}
           ${compactCard('团队到期完成率',compactRankings(),compactLink('查看全部','teams'))}
           ${execution?performanceCards(data.counts,summary,statistics):''}
@@ -328,37 +373,87 @@
     function workTable(rows){return table(['日期','员工','自主工作','店铺','成果','操作'],rows.map(w=>[esc(w.date),esc(w.personName),esc(w.title),esc(w.shopName||'—'),`<span title="${esc(w.result)}">${esc(w.result||'—')}</span>`,link('查看','work',w.id)]));}
     function reports(){const current=data.currentDaily;return card('我的日报',`<div class="wc-statusline"><b>${esc(filters.to)}</b>${status(current?.submittedAt?(current.late?'迟交':'已提交'):'未提交')}<span class="wc-muted">任务 ${data.draft.tasks.length} 项 · 自主工作 ${data.draft.work.length} 项已自动关联</span></div><p class="wc-small">经理和主管日报包含管理范围日结；提交时保存当时的任务快照，修改保留版本。</p>`,btn('填写日报','writeDaily','primary')+btn('登记自主工作','newWork')+btn('店铺 / 部门填报','legacy','',`data-id="today"`))+card('日报提交情况',peopleTable())+card('日报与团队日结',dailyTable(data.dailies))+card('自主工作记录',workTable(data.works),btn('查看原有汇总','legacy','',`data-id="summary"`)+btn('原有待办事项','legacy','',`data-id="todo"`)+btn('原有提交情况','legacy','',`data-id="duty"`));}
     function issueTable(rows){return table(['问题','提出人','团队','状态','升级','操作'],rows.map(i=>[esc(i.title),esc(i.personName),esc(i.teamName),status(i.status),i.escalated?badge('上级协调','orange'):'—',link('查看处理','issue',i.id)]));}
+    const overviewTrendRows=()=>overviewTrend?.source===data&&overviewTrend.rows?.length?overviewTrend.rows:data.trend||[];
+    const daysBefore=(date,count)=>new Date(Date.parse(date)-count*86400000).toISOString().slice(0,10);
+    async function loadOverviewTrend(){
+      if(tab!=='overview'||!can('statistics')||data.from!==data.to||!data.trend?.length||overviewTrend?.source===data)return;
+      const since=daysBefore(data.today,6);
+      const to=data.to>=since&&data.to<=data.today?data.today:data.to;
+      const params=new URLSearchParams(Object.entries({...filters,from:daysBefore(to,6),to}).filter(([,value])=>value));
+      const active={source:data,rows:null};
+      const requestId=request;
+      overviewTrend=active;
+      try{
+        const result=await api('center?'+params);
+        if(!alive||requestId!==request||overviewTrend!==active||!result.trend?.length)return;
+        active.rows=result.trend;
+        const section=tab==='overview'&&root.querySelector('[data-wc-overview-chart]');
+        if(!section)return;
+        const focus=document.activeElement;
+        const focusSelector=section.contains(focus)&&(focus.dataset.mode?'[data-action="chartMode"][aria-pressed="true"]':focus.dataset.id?'.wc-trend-day[aria-pressed="true"]':'');
+        section.outerHTML=chart();
+        if(focusSelector)root.querySelector(focusSelector)?.focus({preventScroll:true});
+      }catch{
+        // Keep displaying the selected date if the historical data is unavailable.
+      }
+    }
+    async function selectOverviewDay(date){
+      if(tab!=='overview'||!can('statistics')||data.from===date&&data.to===date)return;
+      const rows=overviewTrendRows();
+      if(!rows.some(row=>row.date===date))return;
+      filters.from=filters.to=date;
+      await reload({chartRows:rows});
+    }
     function chart() {
-      const rows=data.trend;
-      if(!rows.some(row=>row.created||row.completed))return compactCard('任务趋势',empty('本期暂无新增或验收完成的任务'));
-      const header=`<div class="wc-dash-chart-head"><div><h3>任务趋势</h3><span class="wc-dash-chart-sub">按日期查看新增与验收完成</span></div><div class="wc-dash-chart-tools"><div class="wc-dash-chart-legend">
-        <span><i></i>新增任务</span><span><i class="completed"></i>验收完成</span>
-      </div><div class="wc-dash-chart-switch">${btn('柱状图','chartMode',chartMode==='bar'?'is-selected':'','data-mode="bar" aria-pressed="'+(chartMode==='bar')+'"')}${btn('折线图','chartMode',chartMode==='line'?'is-selected':'','data-mode="line" aria-pressed="'+(chartMode==='line')+'"')}</div></div></div>`;
-      const max=Math.max(4,Math.ceil(Math.max(...rows.map(r=>Math.max(r.created,r.completed)))/4)*4);
-      const left=39,right=880,top=14,bottom=177;
-      const step=(right-left)/rows.length;
-      const x=i=>left+step*(i+.5);
-      const y=n=>bottom-(bottom-top)*n/max;
-      const axes=[0,1,2,3,4].map(i=>{
-        const value=i*max/4;
-        return `<path class="wc-dash-chart-grid" d="M${left} ${y(value)}H${right}"/><text x="${left-12}" y="${y(value)+4}" text-anchor="end">${value}</text>`;
-      }).join('');
-      const width=Math.min(28,step*.27);
-      const gap=Math.min(6,step*.085);
-      const bars=rows.map((row,i)=>['created','completed'].map((key,j)=>{
-        const value=row[key];
-        return `<rect class="wc-dash-bar ${key}" x="${x(i)+(j?gap/2:-width-gap/2)}" y="${y(value)}" width="${width}" height="${bottom-y(value)}" rx="${Math.min(3,width/4)}">
-          <title>${esc(row.date)} ${j?'验收完成':'新增任务'} ${value}</title></rect>`;
+      const rows=overviewTrendRows();
+      const switcher=[['line','折线图'],['bar','柱状图']].map(([mode,label])=>
+        btn(label,'chartMode',chartMode===mode?'is-selected':'',`data-mode="${mode}" aria-pressed="${chartMode===mode}"`)).join('');
+      const spanLabel=rows.length===7?(rows.at(-1).date===data.today?'近 7 天':'7 天'):'';
+      const header=`<div class="wc-dash-chart-head"><div class="wc-overview-chart-title"><h2>任务趋势</h2>${spanLabel?`<span>${spanLabel}</span>`:''}</div><div class="wc-dash-chart-tools">
+        <div class="wc-dash-chart-legend"><span><i></i>新增任务</span><span><i class="completed"></i>验收完成</span></div>
+        <div class="wc-dash-chart-switch">${switcher}</div></div></div>`;
+      const wrap=body=>`<section class="wc-card wc-compact-card wc-overview-chart" data-wc-overview-chart>${header}${body}</section>`;
+      if(!rows.length)return wrap(empty('当前范围暂无趋势数据'));
+      const max=Math.max(4,Math.ceil(Math.max(...rows.map(row=>Math.max(row.created,row.completed)))/4)*4);
+      const step=720/rows.length;
+      const x=i=>step*(i+.5);
+      const y=value=>144-value/max*144;
+      const ticks=Array.from({length:5},(_,i)=>max-i*max/4);
+      const selected=data.from===data.to?rows.find(row=>row.date===data.to):null;
+      const description=row=>`${row.date} · 新增 ${row.created} 项 · 验收完成 ${row.completed} 项`;
+      const columns=rows.length<=14;
+      const labelStep=Math.max(1,Math.ceil(rows.length/7));
+      const showLabel=i=>i===rows.length-1||i%labelStep===0&&i+labelStep<rows.length;
+      const guides=ticks.map(value=>`<line x1="0" y1="${y(value)}" x2="720" y2="${y(value)}" class="wc-overview-chart-grid"/>`).join('');
+      const bars=()=>rows.map((row,i)=>['created','completed'].map((key,j)=>{
+        const value=row[key],width=Math.min(24,step*.32);
+        return `<rect class="wc-dash-bar ${key}" x="${x(i)+(j?2:-width-2)}" y="${y(value)}" width="${width}" height="${144-y(value)}" rx="${Math.min(3,width/3)}"/>`;
       }).join('')).join('');
-      const lines=chartMode==='line'?['created','completed'].map((key,j)=>{const points=rows.map((row,i)=>`${x(i)},${y(row[key])}`).join(' ');return `<polyline class="wc-dash-line ${key}" points="${points}"/><g class="wc-dash-points ${key}">${rows.map((row,i)=>`<circle cx="${x(i)}" cy="${y(row[key])}" r="3"><title>${esc(row.date)} ${j?'验收完成':'新增任务'} ${row[key]}</title></circle>`).join('')}</g>`}).join(''):'';
-      const labelStep=Math.max(1,Math.ceil((rows.length-1)/7));
-      const labelIndices=rows.map((row,i)=>i).filter(i=>(i%labelStep===0&&i+labelStep<rows.length)||i===rows.length-1);
-      const labels=labelIndices.map((i,j)=>`<text class="${j%2&&j<labelIndices.length-1?'wc-dash-chart-date-secondary':''}" x="${x(i)}" y="201" text-anchor="middle">${esc(rows[i].date.slice(5))}</text>`).join('');
-      return `<section class="wc-card wc-compact-card wc-compact-chart"><div class="wc-dash-chart-body">${header}
-        <svg class="wc-chart wc-dash-chart" viewBox="0 0 900 211" role="img" aria-label="按创建和验收日期统计的任务趋势">
-          ${axes}${chartMode==='line'?lines:bars}${labels}
-        </svg>
-      </div></section>`;
+      const lines=()=>{
+        const curve=key=>rows.map((row,i)=>{
+          const point=`${x(i)} ${y(row[key])}`;
+          if(!i)return 'M'+point;
+          const mid=(x(i-1)+x(i))/2;
+          return `C${mid} ${y(rows[i-1][key])},${mid} ${y(row[key])},${point}`;
+        }).join(' ');
+        const created=curve('created');
+        return `<path class="wc-overview-chart-area" d="${created} L${x(rows.length-1)} 144 H${x(0)} Z"/>
+          <path class="wc-overview-chart-line created" d="${created}"/><path class="wc-overview-chart-line completed" d="${curve('completed')}"/>`;
+      };
+      const controls=columns?`<div class="wc-trend-days" style="--wc-trend-days:${rows.length}">${rows.map((row,i)=>{
+        const label=esc(description(row));
+        return `<button type="button" class="wc-trend-day" data-action="chartDate" data-id="${esc(row.date)}" aria-label="${label}" aria-pressed="${row===selected}" title="${label}"><i style="--wc-point:${row.created/max*100}%" aria-hidden="true"></i><i class="completed" style="--wc-point:${row.completed/max*100}%" aria-hidden="true"></i><span aria-hidden="true">${showLabel(i)?esc(row.date.slice(5)):''}</span></button>`;
+      }).join('')}</div>`:`<div class="wc-trend-wide-dates">${rows.map((row,i)=>showLabel(i)?`<span style="left:${x(i)/720*100}%">${esc(row.date.slice(5))}</span>`:'').join('')}</div>`;
+      const dateSelect=columns?'':`<select data-wc-trend-select aria-label="查看指定日期的任务">${opts(rows.map(row=>({id:row.date,name:description(row)})),selected?.date,'选择日期')}</select>`;
+      const period=selected?description(selected):rows[0].date+' 至 '+rows.at(-1).date;
+      const summary=!rows.some(row=>row.created||row.completed)?period+' · 暂无新增或验收完成':period;
+      return wrap(`<div class="wc-overview-plot">
+        <div class="wc-trend-axis" aria-hidden="true">${ticks.map(value=>`<span>${value}</span>`).join('')}</div>
+        <div class="wc-trend-graph"><svg aria-hidden="true" viewBox="0 0 720 144" preserveAspectRatio="none">
+          <defs><linearGradient id="wc-overview-trend-fill" x2="0" y2="1"><stop stop-color="var(--wc-dash-chart-new)" stop-opacity=".19"/><stop offset="1" stop-color="var(--wc-dash-chart-new)" stop-opacity=".018"/></linearGradient></defs>
+          ${guides}${chartMode==='bar'||rows.length===1?bars():lines()}
+        </svg>${controls}</div>
+      </div><div class="wc-trend-caption"><span>${esc(summary)}</span>${dateSelect}</div>`);
     }
     function performanceCards(c,summary,statistics) {
       const metrics=[
@@ -433,6 +528,7 @@
       root.querySelectorAll('form').forEach(form=>window.XmWorkRich.upgrade(form));
       applyPermissions();
       paintTabBadges();
+      void loadOverviewTrend();
     }
     function fileInput(label='其他附件（与正文图片合计最多 3 个、3 MB）'){return `<label class="wc-field full"><span>${label}</span><input type="file" name="files" multiple accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,.pdf,.txt,.csv,.xls,.xlsx,.doc,.docx,.ppt,.pptx,.zip"><small class="wc-small">任务说明、验收要求中可直接粘贴图片；这里添加其他附件。</small><div data-file-previews></div></label>`;}
     function formEnd(label='保存'){return `<div class="wc-field full"><div data-form-error role="alert"></div><div class="wc-actions"><button class="wc-btn primary" type="submit">${label}</button>${btn('取消','close')}</div></div></form>`;}
@@ -553,7 +649,14 @@ const start=filters.to===data.today?new Date(Date.now()+8*3600000).toISOString()
         return;
       }
       if(action==='dashboardDetail'){dashboardDetail(id);return;}
+      if(action==='chartDate'){await selectOverviewDay(id);return;}
       if(action==='dashboardSwitch'){
+        if(el.dataset.kind==='daily-detail'){
+          if(!can('overview'))return;
+          overviewDailyDetail(id==='missing'?'missing':'submitted');
+          dialog?.querySelector('[data-kind="daily-detail"][aria-pressed="true"]')?.focus({preventScroll:true});
+          return;
+        }
         if(el.dataset.kind==='distribution')distributionMode=id==='board'?'board':'team';
         else dailyMode=id==='missing'?'missing':'submitted';
         paint();
@@ -577,6 +680,7 @@ const start=filters.to===data.today?new Date(Date.now()+8*3600000).toISOString()
         return;
       }if(action==='taskView'){closeDialog();tab='tasks';taskView=id;mode='all';page=1;search='';paint();return;}if(action==='tab'){closeDialog();tab=id==='acceptance'?'tasks':id;taskView=id==='acceptance'?'acceptance':'list';mode='all';page=1;search='';paint();return;}if(['overview','tasks','reports','acceptance'].includes(action)){tab=action==='acceptance'?'tasks':action;taskView=action==='acceptance'?'acceptance':'list';mode='all';page=1;search='';paint();return;}if(['overdue','completed'].includes(action)){tab='tasks';taskView='list';mode=action;page=1;search='';paint();return;}if(action==='today'||action==='week'){const end=data.today;filters.to=end;filters.from=action==='today'?end:new Date(Date.parse(end)-6*86400000).toISOString().slice(0,10);await reload();return;}if(action==='mode'){mode=id;page=1;paint();return;}if(action==='prev'||action==='next'){page=Math.max(1,page+(action==='prev'?-1:1));paint();return;}if(action==='task')await taskDetail(id);if(action==='person')await personDetail(id);if(action==='publish')publish();if(action==='taskAction')taskAction(id,el.dataset.kind);if(action==='writeDaily')writeDaily();if(action==='daily')dailyDetail(id);if(action==='newWork')newWork();if(action==='work'){const w=workCache.get(id)||data.works.find(w=>w.id===id);if(w?.personId===data.me.id&&can('records','edit'))newWork(w);else if(w)modal(w.title,`<p>${esc(w.personName)} · ${esc(w.date)}</p><h3>执行内容</h3><p class="wc-text">${esc(w.content)}</p><h3>工作成果</h3><p class="wc-text">${esc(w.result)}</p>${imageCards(w.composerImages,w.id)}`);}if(action==='newIssue')newIssue(id||'');if(action==='issue')issueDetail(id);if(action==='newTemplate')newTemplate();if(action==='removeTemplate'){const list=data.settings.taskTemplates.filter((_,i)=>i!==Number(id));await mutate('center/settings',{revision:data.settings.revision||0,taskTemplates:list,reason:'停用任务模板'},'PUT');}if(action==='audit'){const h=data.settings.history[Number(id)];modal('设置变更记录',`<p>${esc(when(h.at))} · ${esc(name(h.actor))}</p><p>${esc(h.reason)}</p>${imageCards(h.composerImages,'settings')}<h3>修改前</h3><pre class="wc-text">${esc(JSON.stringify(h.before,null,2))}</pre><h3>修改后</h3><pre class="wc-text">${esc(JSON.stringify(h.after,null,2))}</pre>`);}if(action==='reminderStatus')await showReminderStatus();if(action==='notifications')notifications();if(action==='readNotice')await mutate('center/notices/read',{id});if(action==='legacy')legacy(id);if(action==='file')await file(id);if(action==='export'){const a=document.createElement('a');a.href='/api/work/center/export?'+new URLSearchParams(filters);a.download='工作统计.xlsx';a.click();}}, {signal:abort.signal});
     root.addEventListener('change',async e=>{
+      if(e.target.matches('[data-wc-trend-select]')){await selectOverviewDay(e.target.value);return;}
       if(!e.target.matches('[data-quick-range]')||!e.target.value)return;const end=data.today,value=e.target.value;let from=end,to=end;if(value==='yesterday')from=to=new Date(Date.parse(end)-86400000).toISOString().slice(0,10);if(value==='30days')from=new Date(Date.parse(end)-29*86400000).toISOString().slice(0,10);if(value==='month')from=end.slice(0,8)+'01';if(value==='lastmonth'){to=new Date(Date.parse(end.slice(0,8)+'01')-86400000).toISOString().slice(0,10);from=to.slice(0,8)+'01';}filters.from=from;filters.to=to;page=1;await reload();},{signal:abort.signal});
     root.addEventListener('submit',async e=>{const form=e.target.closest('[data-form]');if(!form)return;e.preventDefault();const kind=form.dataset.form,fd=new FormData(form),values=Object.fromEntries(fd),submitter=e.submitter;if(kind==='filter'){for(const key of Object.keys(filters))if(fd.has(key))filters[key]=values[key];page=1;await reload();return;}if(kind==='search'){search=values.search;page=1;paint();return;}const buttons=[...form.querySelectorAll('button[type=submit]')];buttons.forEach(b=>b.disabled=true);const error=form.querySelector('[data-form-error]');if(error)error.innerHTML='';try{let path,body,method='POST';if(kind==='publish'){path='tasks/publish';body={...values,id:form.dataset.key,parent_id:form.dataset.parent,collaborators:fd.getAll('collaborators')};delete body.files;delete body.template;}if(kind==='taskAction'){path='tasks/action';body={...values,id:form.dataset.id,revision:Number(form.dataset.revision),action:form.dataset.kind,blocked:values.blocked==='true',links:String(values.links||'').split('\n').map(s=>s.trim()).filter(Boolean)};delete body.files;}if(kind==='daily'){path='center/daily';body={date:filters.to,revision:Number(form.dataset.revision),submit:submitter?.value==='submit',notes:Object.fromEntries([...form.querySelectorAll('[data-label]')].map(el=>[el.dataset.label,el.value]))};}if(kind==='work'){path='center/work';body={...values,id:form.dataset.id,revision:Number(form.dataset.revision)};}if(kind==='issue'){path='center/issue';body={...values,taskId:form.dataset.task,escalated:values.escalated==='true'};}if(kind==='resolveIssue'){path='center/issue';body={...values,id:form.dataset.id,revision:Number(form.dataset.revision)};}if(['policy','categories','template','reportTemplates','reminders'].includes(kind)){path='center/settings';method='PUT';body={revision:data.settings.revision||0};if(kind==='reminders')Object.assign(body,{taskReminders:values.taskReminders==='true',dailyReminders:values.dailyReminders==='true',dueSoonMinutes:Number(values.dueSoonMinutes),repeatReminderAt:values.repeatReminderAt,reason:'调整自动钉钉提醒'});if(kind==='policy')Object.assign(body,{deadline:values.deadline,reviewHours:Number(values.reviewHours),staleHours:Number(values.staleHours),allowLate:values.allowLate==='true',reportRoles:fd.getAll('reportRoles'),weekdays:fd.getAll('weekdays').map(Number),restDays:values.restDays.split(/[,，\s]+/).filter(Boolean)});if(kind==='categories'){body.categories=values.categories.split('\n').map(s=>s.trim()).filter(Boolean);body.requiredAttachmentCategories=values.requiredAttachmentCategories.split('\n').map(s=>s.trim()).filter(Boolean);}if(kind==='template')body.taskTemplates=[...data.settings.taskTemplates,values];if(kind==='reportTemplates')body.reportFields=Object.fromEntries(Object.entries(values).map(([k,v])=>[k.replace('fields_',''),v.split('\n').map(s=>s.trim()).filter(Boolean)]));}
       if(form._wtComposerPayload&&kind!=='publish'){const images=form._wtComposerPayload();if(kind==='template')body.taskTemplates.at(-1).composerImages=images;else body.composerImages=images;}
