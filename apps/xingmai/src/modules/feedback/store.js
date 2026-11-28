@@ -4,6 +4,7 @@ import { permissionsFor, feedbackFeature } from "../people/feature-policy.js";
 
 const KINDS = new Set(["request", "feedback"]);
 const STATUSES = new Set(["review", "doing", "accept", "closed", "mine", "rejected"]);
+const REVIEW_FEATURES = ["open", "doing", "closed", "reject"];
 const TYPES = new Set(["feature", "suggest", "issue", "other"]);
 const PRIORITIES = new Set(["P0", "P1", "P2"]);
 const TITLE_MAX = 80;
@@ -37,17 +38,20 @@ function namesOf(user) {
     .filter(Boolean);
 }
 
-export function isFeedbackAdmin(user) {
-  const policy = permissionsFor(user, "feedback");
-  if (policy.configured) return policy.any("edit");
+export function isFeedbackAdmin(user, policy = permissionsFor(user, "feedback")) {
+  if (policy.configured) return REVIEW_FEATURES.some(feature => policy.can(feature, "edit"));
   return namesOf(user).some((name) => name === "罗成" || name.toLowerCase() === "luocheng");
 }
 
-function denied(user) {
+function canSubmitFeedback(policy) {
+  return policy.configured && policy.can("submit", "edit");
+}
+
+function denied(user, policy) {
   if (!user) {
     return { ok: false, statusCode: 401, error: "未登录" };
   }
-  if (!permissionsFor(user, "feedback").configured && !isFeedbackAdmin(user) && text(user.desk) === "hr") {
+  if (!policy.configured && !isFeedbackAdmin(user, policy) && text(user.desk) === "hr") {
     return { ok: false, statusCode: 403, error: "人事账号只使用智能人事和个人中心" };
   }
   return null;
@@ -60,7 +64,8 @@ function actor(user) {
 }
 
 function owns(item, user) {
-  return namesOf(user).includes(item.author);
+  const author = typeof user === "string" ? text(user) : actor(user).author;
+  return Boolean(author) && author === item.author;
 }
 
 function cloneItem(item) {
@@ -85,16 +90,18 @@ function cloneItem(item) {
   };
 }
 
-function visibleItems(user) {
-  const list = [...items.values()];
-  const mine = isFeedbackAdmin(user) ? list : list.filter((item) => owns(item, user));
-  mine.sort((a, b) => {
+function visibleItems(user, policy, admin, canSubmit) {
+  const visible = [...items.values()].filter(item => {
+    const own = owns(item, user);
+    return (own && canSubmit) || ((own || admin) && policy.can(feedbackFeature(item.status)));
+  });
+  visible.sort((a, b) => {
     if (a.updatedAt !== b.updatedAt) {
       return a.updatedAt < b.updatedAt ? 1 : -1;
     }
     return b.id - a.id;
   });
-  return mine;
+  return visible;
 }
 
 export function resetFeedbackStore() {
@@ -277,7 +284,8 @@ async function managerNameOf(authorName) {
 }
 
 export async function listItems(user, query) {
-  const block = denied(user);
+  const policy = permissionsFor(user, "feedback");
+  const block = denied(user, policy);
   if (block) {
     return block;
   }
@@ -285,20 +293,22 @@ export async function listItems(user, query) {
   const kind = text(query && query.kind);
   const rawStatus = text(query && query.status);
   const status = rawStatus ? normalizeStatus(rawStatus) : "";
-  const itemsOut = visibleItems(user)
-    .filter(item => permissionsFor(user, "feedback").can(feedbackFeature(item.status)))
+  const admin = isFeedbackAdmin(user, policy);
+  const canSubmit = canSubmitFeedback(policy);
+  const itemsOut = visibleItems(user, policy, admin, canSubmit)
     .filter((item) => !kind || item.kind === kind)
     .filter((item) => !status || item.status === status)
     .map(cloneItem);
-  return { ok: true, admin: isFeedbackAdmin(user), items: itemsOut };
+  return { ok: true, admin, canSubmit, items: itemsOut };
 }
 
 export async function createItem(user, body) {
-  if (!permissionsFor(user, "feedback").can("open", "edit")) return { ok: false, statusCode: 403, error: "未授予需求创建权限" };
-  const block = denied(user);
+  const policy = permissionsFor(user, "feedback");
+  const block = denied(user, policy);
   if (block) {
     return block;
   }
+  if (!canSubmitFeedback(policy)) return { ok: false, statusCode: 403, error: "未授予提交需求权限" };
   const reqType = TYPES.has(text(body && body.reqType)) ? text(body.reqType) : "";
   let kind = text(body && body.kind);
   if (!KINDS.has(kind)) {
@@ -342,7 +352,9 @@ export async function createItem(user, body) {
   if (dueOn == null) {
     return { ok: false, statusCode: 400, error: "计划完成请写成日期" };
   }
-  const progress = cleanProgress(body && body.progress, "review");
+  const progress = policy.can("open", "edit")
+    ? cleanProgress(body?.progress, "review")
+    : defaultProgress("review");
   if (progress == null) {
     return { ok: false, statusCode: 400, error: "进度请填 0 到 100" };
   }
@@ -400,16 +412,17 @@ export async function createItem(user, body) {
     item.id = nextId();
   }
   items.set(item.id, item);
-  return { ok: true, admin: isFeedbackAdmin(user), item: cloneItem(item) };
+  return { ok: true, admin: isFeedbackAdmin(user, policy), item: cloneItem(item) };
 }
 
 export async function updateItem(user, rawId, body) {
-  const block = denied(user);
+  const policy = permissionsFor(user, "feedback");
+  const block = denied(user, policy);
   if (block) {
     return block;
   }
-  if (!isFeedbackAdmin(user)) {
-    return { ok: false, statusCode: 403, error: "只有罗成能处理或关闭" };
+  if (!isFeedbackAdmin(user, policy)) {
+    return { ok: false, statusCode: 403, error: "未授予需求处理权限" };
   }
   const id = Number(rawId);
   if (!Number.isInteger(id) || id <= 0) {
@@ -434,7 +447,6 @@ export async function updateItem(user, rawId, body) {
   if (!current) {
     return { ok: false, statusCode: 404, error: "记录不存在" };
   }
-  const policy = permissionsFor(user, "feedback");
   if (!policy.can(feedbackFeature(current.status), "edit") || !policy.can(feedbackFeature(status), "edit")) return { ok: false, statusCode: 403, error: "未授予此状态的处理权限" };
   const stamp = nowStamp();
   const next = {

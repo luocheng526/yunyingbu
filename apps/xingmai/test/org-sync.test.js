@@ -11,7 +11,7 @@ import { navMarkup, isHrDesk } from "../src/modules/home/nav-items.js";
 import { meetingRouter } from "../src/modules/meeting/router.js";
 import { resetMeetingStore } from "../src/modules/meeting/store.js";
 import { feedbackRouter } from "../src/modules/feedback/router.js";
-import { resetFeedbackStore } from "../src/modules/feedback/store.js";
+import { listItems, resetFeedbackStore } from "../src/modules/feedback/store.js";
 import { SITE_MODULES, SITE_NAV } from "../src/modules/people/site-acl.js";
 import { listRightsBoard } from "../src/modules/people/org-board.js";
 import { stateSync } from "../src/modules/people/state-sync.js";
@@ -131,13 +131,75 @@ test("monthly meeting grants permit only the selected sections and preserve the 
  data=await (await request("/api/meeting?month=2026-11",admin)).json();assert.equal(data.board.intros[0].name,"新人二");assert.equal(data.board.stars[0].name,"保留员工");
 });
 
-test("HR-board members can use explicitly granted feedback and status transitions are enforced",async()=>{
- const p=await member(),cookie=await login();await savePersonSiteAcl("罗成",p.name,{modules:modules("feedback","feedback.open")});
- const made=await request("/api/feedback/items",cookie,"POST",{kind:"request",title:"测试需求",body:"描述"});assert.equal(made.status,201);
- const id=(await made.json()).item.id;
- assert.equal((await request("/api/feedback/items/"+id,cookie,"PATCH",{status:"closed"})).status,403);
- await savePersonSiteAcl("罗成",p.name,{modules:{feedback:{...cap(),features:{"feedback.open":cap(),"feedback.closed":cap()}}}});
- assert.equal((await request("/api/feedback/items/"+id,cookie,"PATCH",{status:"closed"})).status,200);
+test("bulk submit-only feedback grants expose each employee's own progress without allowing review", async () => {
+  const employee = await member();
+  const other = (await createPerson({
+    name: "另一名员工", username: "other-feedback", password: "Valid123!", role: "运营"
+  })).person;
+  const employeeSession = await login();
+  const otherSession = await login(other.username);
+  const adminSession = await login("罗成");
+  const collection = "/api/feedback/items";
+  const draft = { kind: "request", title: "测试需求", body: "描述", progress: 80 };
+  assert.equal((await request(collection, employeeSession, "POST", draft)).status, 403);
+
+  const grant = await request("/api/people/org/site-acl/batch", adminSession, "POST", {
+    targetIds: [String(employee.id), String(other.id)],
+    modules: { feedback: { features: { "feedback.submit": cap() } } }
+  });
+  assert.equal(grant.status, 200, await grant.text());
+  assert.equal(navVisibility(employee.username).paths["/feedback"].enter, true);
+  assert.equal(effectiveSiteAcl(employee.username).modules.feedback.features["feedback.open"].edit, false);
+
+  const made = await request(collection, employeeSession, "POST", draft);
+  assert.equal(made.status, 201);
+  const item = (await made.json()).item;
+  assert.equal(item.progress, 0);
+  const otherMade = await request(collection, otherSession, "POST", { ...draft, kind: "feedback" });
+  assert.equal(otherMade.status, 201);
+  const otherId = (await otherMade.json()).item.id;
+
+  const list = async (session, query = "") => (await (await request(collection + query, session)).json());
+  const initial = await list(employeeSession);
+  assert.equal(initial.canSubmit, true);
+  assert.equal(initial.admin, false);
+  assert.deepEqual(initial.items.map(row => row.id), [item.id]);
+  assert.deepEqual((await list(otherSession)).items.map(row => row.id), [otherId]);
+  assert.deepEqual(new Set((await list(adminSession)).items.map(row => row.id)), new Set([item.id, otherId]));
+  assert.deepEqual((await listItems({ username: other.username, displayName: employee.username })).items.map(row => row.id), [otherId]);
+  for (const id of [item.id, otherId]) {
+    assert.equal((await request(collection + "/" + id, employeeSession, "PATCH", { status: "review", progress: 90 })).status, 403);
+  }
+  for (const status of ["doing", "accept", "closed"]) {
+    assert.equal((await request(collection + "/" + item.id, adminSession, "PATCH", { status })).status, 200);
+    assert.deepEqual((await list(employeeSession, "?status=" + status)).items.map(row => row.id), [item.id]);
+  }
+  await savePersonSiteAcl("罗成", employee.name, { modules: modules("feedback", "feedback.submit", cap(true, true, false)) });
+  const revoked = await list(employeeSession);
+  assert.equal(revoked.canSubmit, false);
+  assert.equal((await request(collection, employeeSession, "POST", draft)).status, 403);
+});
+
+test("existing reviewers retain status-scoped handling with independent submit permission", async () => {
+  const reviewer = await member();
+  const reviewerSession = await login();
+  const adminSession = await login("罗成");
+  const collection = "/api/feedback/items";
+  const draft = { kind: "request", title: "待评审需求", body: "描述" };
+  const made = await request(collection, adminSession, "POST", draft);
+  assert.equal(made.status, 201);
+  const { item } = await made.json();
+  await savePersonSiteAcl("罗成", reviewer.name, { modules: modules("feedback", "feedback.open") });
+  const list = await (await request(collection, reviewerSession)).json();
+  assert.equal(list.admin, true);
+  assert.equal(list.canSubmit, false);
+  assert.deepEqual(list.items.map(row => row.id), [item.id]);
+  assert.equal((await request(collection, reviewerSession, "POST", draft)).status, 403);
+  assert.equal((await request(collection + "/" + item.id, reviewerSession, "PATCH", { status: "closed" })).status, 403);
+  await savePersonSiteAcl("罗成", reviewer.name, {
+    modules: { feedback: { ...cap(), features: { "feedback.open": cap(), "feedback.closed": cap() } } }
+  });
+  assert.equal((await request(collection + "/" + item.id, reviewerSession, "PATCH", { status: "closed" })).status, 200);
 });
 
 test("editing roster role after pinning updates the responsibility board",async()=>{

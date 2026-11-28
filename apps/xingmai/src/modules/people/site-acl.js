@@ -117,6 +117,7 @@ export const SITE_MODULES = [
     id: "feedback",
     name: "需求与反馈",
     features: [
+      { id: "feedback.submit", name: "提交需求" },
       { id: "feedback.open", name: "需求与任务" },
       { id: "feedback.doing", name: "开发中任务" },
       { id: "feedback.closed", name: "已完成任务" },

@@ -41,6 +41,7 @@
     shotLabel: "",
     readingShot: false,
     admin: false,
+    canSubmit: false,
     items: [],
     openId: 0,
     notes: {},
@@ -461,7 +462,7 @@
     if (previous) previous.close();
     root.innerHTML =
       `<div class="fb-overview"><header class="fb-intro"><div><h1>需求与反馈</h1><p>提交需求、反馈问题，查看处理进度</p></div><div class="fb-actions">
-        ${ui().button({label:"使用说明",variant:"secondary",id:"fb-help"})}${ui().button({label:"提交需求/反馈",id:"fb-open-form"})}
+        ${ui().button({label:"使用说明",variant:"secondary",id:"fb-help"})}${state.canSubmit ? ui().button({label:"提交需求/反馈",id:"fb-open-form"}) : ""}
       </div></header>${dialog ? "" : message()}${kpis()}<div class="fb-layout">${table()}<aside class="fb-side" aria-label="类型与流程">${distribution()}${flow()}</aside></div>${dialog}</div>`;
     syncPicked(root);
     var current = root.querySelector("dialog");
@@ -500,12 +501,15 @@
       state.loaded = true;
       if (!result.httpOk || !result.data || result.data.ok === false) {
         state.loadError = true;
+        state.admin = false;
+        state.canSubmit = false;
         state.items = [];
         state.error = true;
         state.msg = (result.data && result.data.error) || "列表加载失败";
       } else {
         state.loadError = false;
         state.admin = Boolean(result.data.admin);
+        state.canSubmit = Boolean(result.data.canSubmit);
         state.items = result.data.items || [];
         if (!keepMsg) {
           state.error = false;
@@ -553,7 +557,7 @@
   }
 
   function submit(root) {
-    if (state.saving || state.readingShot) return;
+    if (!state.canSubmit || state.saving || state.readingShot) return;
     var mount = activeMount;
     snapshot(root);
     if (!state.title.trim() || !state.body.trim()) {
@@ -687,7 +691,7 @@
       openOverlay(root,"guide",target.closest("#fb-help") ? "#fb-help" : "[data-fb-help]");
       return;
     }
-    if (target.closest("#fb-open-form")) {
+    if (state.canSubmit && target.closest("#fb-open-form")) {
       openOverlay(root,"compose","#fb-open-form");
       return;
     }
@@ -778,7 +782,7 @@
       activeMount = mount;
       var events = {signal:mount.controller.signal};
       Object.assign(state,{help:false,composing:false,openId:0,msg:"",error:false,saving:false,
-        readingShot:false,loaded:false,loadError:false,admin:false,items:[],picked:{}});
+        readingShot:false,loaded:false,loadError:false,admin:false,canSubmit:false,items:[],picked:{}});
       root.classList.add("xm-ui-scope","fb-page-active");
       paint(root);
       root.addEventListener("click",function (event) { onClick(root,event); },events);
