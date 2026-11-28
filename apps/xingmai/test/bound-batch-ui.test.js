@@ -89,12 +89,14 @@ test('连接旧站后展示日报补采进度和日期，旧商品任务不会�
     await h.refresh();
     assert.match(h.root.innerHTML, /等待下一轮日报补采/);
     assert.doesNotMatch(h.root.innerHTML, /请先连接旧站/);
-    h.setCoverage({ ok: true, running: true, days: [
+    h.setCoverage({ ok: true, running: true, current: { date: '2026-11-26', reportId: 'qdzl_lb', dim: 'all', stage: 'request', page: 2 }, days: [
       { ...latest, verified: 19, pending: [{ failure: { reason: 'pagination_identity_mismatch' } }] },
       earlier
     ] });
     await h.refresh();
     assert.match(h.root.innerHTML, /日报补采中<\/strong> · 日报已核验 19\/52 项 · 1 项待重试/);
+    assert.match(h.root.innerHTML, /当前任务 2026-11-26 · .*正在读取第 2 页/);
+    assert.match(h.root.innerHTML, /待重试（商品或店铺标识不一致）/);
     assert.match(h.root.innerHTML, /2026-11-24 · 已核验 0\/26 项/);
     assert.match(h.root.innerHTML, /商品自动采集 · 已完成/);
   } finally { h.stop(); }

@@ -100,6 +100,8 @@
     account_disabled: '旧站账号已停用', device_restricted: '旧站限制了当前设备', permission_denied: '旧站接口权限不足',
     upstream_unavailable: '旧站接口连续异常', timeout: '请求超时', request_failed: '请求失败',
     collector_busy: '已有采集任务运行', local_archive_error: '数据保存失败', upstream_pending: '旧站结果尚未就绪',
+    upstream_cooldown: '等待旧站限流结束', archive_timeout: '归档超时',
+    upstream_rejected: '旧站接口返回错误', unrecognized_report: '旧站返回格式无法识别',
     pagination_total_changed: '分页总数不一致', pagination_identity_mismatch: '商品或店铺标识不一致',
     pagination_incomplete: '商品分页尚未收齐', pause_legacy_batch_first: '旧采集任务仍在运行',
     invalid_scope: '店铺或日期范围有误', unknown_shop: '旧站账号目前看不到任务店铺'
@@ -148,15 +150,32 @@
     if (reason === 'server_login_required' && state.link?.batchLoginReady) reason = '';
     var status = daily.running ? '日报补采中' : tally.verified === tally.required ? '日报已采齐'
       : reason ? goodsReason(reason) : '等待下一轮日报补采';
+    var current = daily.current, runningDetail = '';
+    if (daily.running && current) {
+      var label = current.reportId;
+      (state.catalog?.modules || []).forEach(function (mod) {
+        mod.pages.forEach(function (page) {
+          var tab = (page.tabs || []).find(function (item) { return item.id === current.reportId; });
+          if (tab) label = page.label + ' · ' + tab.label;
+        });
+      });
+      runningDetail = '<p class="bd-status">当前任务 ' + esc(current.date) + ' · ' + esc(label)
+        + (current.dim === 'all' ? '' : ' · ' + esc(current.dim.toUpperCase()))
+        + ' · ' + (current.stage === 'archive' ? '正在归档' : '正在读取第 ' + esc(current.page) + ' 页') + '</p>';
+    }
     return '<p role="status"><strong>' + esc(status) + '</strong> · 日报已核验 '
       + esc(tally.verified) + '/' + esc(tally.required) + ' 项'
       + (tally.retry ? ' · ' + esc(tally.retry) + ' 项待重试' : '') + '</p>'
+      + runningDetail
       + '<p class="bd-status">' + esc(latest.date) + ' · 日报已核验 '
       + esc(latest.verified) + '/' + esc(latest.required) + ' 项 · 商品已核验 '
       + esc(latest.goods.verified) + '/' + esc(latest.goods.required) + ' 家 · ' + (latest.complete ? '已采齐' : '待补齐') + '</p>'
       + '<details data-daily-dates><summary>按日期查看日报进度</summary><ul>'
       + daily.days.map(function (day) {
-        return '<li>' + esc(day.date) + ' · 已核验 ' + esc(day.verified) + '/' + esc(day.required) + ' 项</li>';
+        var reasons = Array.from(new Set((day.pending || []).filter(function (item) { return item.failure; })
+          .map(function (item) { return goodsReason(item.failure.reason); })));
+        return '<li>' + esc(day.date) + ' · 已核验 ' + esc(day.verified) + '/' + esc(day.required) + ' 项'
+          + (reasons.length ? ' · 待重试（' + esc(reasons.join('、')) + '）' : '') + '</li>';
       }).join('') + '</ul></details>';
   }
   function renderGoodsProgress(detail) {

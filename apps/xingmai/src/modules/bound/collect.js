@@ -110,18 +110,18 @@ function blankSession() {
 }
 
 async function session() {
-  const saved = await readState("session", null);
+  const saved = await readState("session", null, AbortSignal.timeout(20000));
   const next = { ...blankSession(), ...(saved || {}) };
   next.cookies = { ...next.cookies };
   if (!next.deviceId) {
     next.deviceId = randomBytes(16).toString("hex");
-    await writeState("session", next);
+    await saveSession(next);
   }
   return next;
 }
 
 async function saveSession(next) {
-  await writeState("session", next);
+  await writeState("session", next, AbortSignal.timeout(20000));
   return next;
 }
 
@@ -245,7 +245,7 @@ export async function requestDailyPerformance(scope, owner) {
   return batchPacer.run(() => requestScopedRead({ ...spec, ownerHash: owner, parallelLimit: GOODS_BACKFILL_CONCURRENCY }));
 }
 
-export async function requestDailyReport({ reportId, dim }, date, page, pageSize) {
+export async function requestDailyReport({ reportId, dim }, date, page, pageSize, signal) {
   const planned = DAILY_REPORTS.find(report => report.reportId === reportId && report.dim === dim);
   const today = shanghaiToday();
   if (!planned || date < FIRST_DAILY_REPORT_DATE || (planned.snapshot ? date !== today : date >= today) || collectionStatus().batchEnabled) return { blocked: 'invalid_scope' };
@@ -261,8 +261,10 @@ export async function requestDailyReport({ reportId, dim }, date, page, pageSize
   const result = await batchPacer.run(() => requestScopedRead({
     path, method: report.method, access: report.access, body, query: report.method === 'get' ? body : undefined,
     referer: ORIGIN + pageById(report.pageId).route,
-    ownerHash: owner, exclusive: true
-  }));
+    ownerHash: owner, exclusive: true, signal
+  }), { signal, deferCooldown: true });
+  if (result.blocked) return result;
+  signal?.throwIfAborted();
   if (ownerOf(await session()) !== owner) return { blocked: 'identity_changed' };
   if ([-7, 9901, 1011].includes(result.payload?.code)) return { blocked: 'login_conflict' };
   if (result.httpStatus === 401 || result.payload?.code === -1) return { blocked: 'login_expired' };
@@ -282,7 +284,10 @@ async function requestScopedRead(spec, onRequest = () => {}) {
 }
 
 async function performScopedRead(spec, onRequest) {
+  const { signal } = spec;
+  signal?.throwIfAborted();
   await scopedWrites;
+  signal?.throwIfAborted();
   let current = await session();
   let originalCookies = { ...current.cookies };
   if (spec.ownerHash && ownerOf(current) !== spec.ownerHash) return { blocked: "identity_changed" };
@@ -295,12 +300,14 @@ async function performScopedRead(spec, onRequest) {
     return { blocked: "permission_denied" };
   }
   const send = async () => {
+    signal?.throwIfAborted();
     if (spec.ownerHash && ownerOf(current) !== spec.ownerHash) return { blocked: "identity_changed" };
     if (spec.access && Array.isArray(current.allowed) && !current.allowed.includes(spec.access)) return { blocked: "permission_denied" };
     onRequest();
+    const timeout = AbortSignal.timeout(15000);
     return callUpstream(current, {
       ...spec,
-      signal: globalThis.AbortSignal.timeout(15000), redirect: "error", withHttpStatus: true
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout, redirect: "error", withHttpStatus: true
     });
   };
   let result = await send();
@@ -309,7 +316,9 @@ async function performScopedRead(spec, onRequest) {
   if (!invalid(result) && expired(result) && current.provider === "PASSWORD") {
     const reloginTrigger = { httpStatus: result.httpStatus || result.status || null, upstreamCode: typeof result.payload?.code === "number" ? result.payload.code : null };
     const renewed = await withScopedWrite(async () => {
+      signal?.throwIfAborted();
       const latest = await session();
+      signal?.throwIfAborted();
       if (latest.authGeneration !== current.authGeneration) {
         // A sibling already refreshed this same session. Never sign in twice.
         return refreshedSession?.from === current.authGeneration && refreshedSession.to === latest.authGeneration
@@ -335,7 +344,9 @@ async function performScopedRead(spec, onRequest) {
     }
   }
   return withScopedWrite(async () => {
+    signal?.throwIfAborted();
     const latest = await session();
+    signal?.throwIfAborted();
     if (latest.authGeneration !== current.authGeneration) {
       // An authenticated success from before our own refresh is still valid data,
       // but its cookies must never overwrite the renewed session.
@@ -351,8 +362,8 @@ async function performScopedRead(spec, onRequest) {
         message: invalid(result) ? "旧站登录发生冲突、账号禁用或设备限制，已停止自动重登。" : "服务器会话已失效，请重新登录。" });
     } else {
       const cookies = { ...latest.cookies };
-      for (const [key, value] of Object.entries(current.cookies)) if (originalCookies[key] !== value) cookies[key] = value;
-      await saveSession({ ...latest, cookies });
+      const changed = Object.entries(current.cookies).filter(([key, value]) => originalCookies[key] !== value && cookies[key] !== value);
+      if (changed.length) await saveSession({ ...latest, cookies: Object.assign(cookies, Object.fromEntries(changed)) });
     }
     return result;
   });

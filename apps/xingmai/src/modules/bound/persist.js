@@ -95,29 +95,64 @@ async function ensure() {
   ready = true;
 }
 
-export async function readState(id, fallback) {
+async function withBoundConnection(operation, signal) {
+  const pool = await getPool();
+  signal?.throwIfAborted();
+  let connection, abort, discarded = false;
+  const work = pool.getConnection().then(claimed => {
+    if (signal?.aborted) {
+      claimed.release();
+      signal.throwIfAborted();
+    }
+    connection = claimed;
+    return operation(connection);
+  });
+  const expired = signal && new Promise((_, reject) => {
+    abort = () => {
+      if (connection) {
+        discarded = true;
+        connection.destroy();
+      }
+      reject(signal.reason);
+    };
+    signal.addEventListener('abort', abort, { once: true });
+  });
+  try { return await (expired ? Promise.race([work, expired]) : work); }
+  finally {
+    signal?.removeEventListener('abort', abort);
+    if (!discarded) connection?.release();
+  }
+}
+
+function boundQuery(sql, params, signal) {
+  return signal ? withBoundConnection(connection => connection.query(sql, params), signal) : query(sql, params);
+}
+
+export async function readState(id, fallback, signal) {
   await ensure();
+  signal?.throwIfAborted();
   if (dbMode() !== "mysql") {
     return memory.state.has(id) ? memory.state.get(id) : fallback;
   }
-  const [rows] = await query("SELECT payload FROM bound_state WHERE id = ?", [id]);
+  const [rows] = await boundQuery("SELECT payload FROM bound_state WHERE id = ?", [id], signal);
   if (!rows.length) {
     return fallback;
   }
   return parse(rows[0].payload, fallback);
 }
 
-export async function writeState(id, value) {
+export async function writeState(id, value, signal) {
   await ensure();
+  signal?.throwIfAborted();
   const payload = JSON.stringify(value == null ? null : value);
   if (dbMode() !== "mysql") {
     memory.state.set(id, value);
     return;
   }
-  await query(
+  await boundQuery(
     `INSERT INTO bound_state (id, payload, updated_at) VALUES (?, ?, ?)
      ON DUPLICATE KEY UPDATE payload = VALUES(payload), updated_at = VALUES(updated_at)`,
-    [id, payload, stamp()]
+    [id, payload, stamp()], signal
   );
 }
 
@@ -170,24 +205,28 @@ export async function writeSheet(row, write = query) {
   return saved;
 }
 
-export async function writeVerifiedDailySheets(sheets) {
+export async function writeVerifiedDailySheets(sheets, signal) {
   await ensure();
+  signal?.throwIfAborted();
   if (dbMode() !== 'mysql') {
     await Promise.all(sheets.map(row => writeSheet(row)));
     return;
   }
-  const pool = await getPool();
-  const connection = await pool.getConnection();
-  try {
+  return withBoundConnection(async connection => {
     await connection.beginTransaction();
-    for (const sheet of sheets) await writeSheet(sheet, connection.execute.bind(connection));
-    await connection.commit();
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
+    try {
+      const execute = connection.execute.bind(connection);
+      for (const sheet of sheets) {
+        signal?.throwIfAborted();
+        await writeSheet(sheet, execute);
+      }
+      signal?.throwIfAborted();
+      await connection.commit();
+    } catch (error) {
+      if (!signal?.aborted) await connection.rollback();
+      throw error;
+    }
+  }, signal);
 }
 
 function mapSheet(row) {
@@ -209,14 +248,15 @@ function mapSheet(row) {
   };
 }
 
-export async function listSheetHeads(filter = {}) {
+export async function listSheetHeads(filter = {}, signal) {
   await ensure();
+  signal?.throwIfAborted();
   if (dbMode() !== "mysql") {
     return [...memory.sheets.values()].filter(row => sheetMatches(row, filter)).map((row) => ({ ...row, payload: undefined }));
   }
   const { where, params } = sheetWhere(filter);
-  const [found] = await query(
-    `SELECT report_id, dim, start_on, end_on, page_no, status, kind, total_rows, page_size, attempts, row_count, error_text, updated_at FROM bound_sheet${where.length ? ` WHERE ${where.join(' AND ')}` : ''}`, params
+  const [found] = await boundQuery(
+    `SELECT report_id, dim, start_on, end_on, page_no, status, kind, total_rows, page_size, attempts, row_count, error_text, updated_at FROM bound_sheet${where.length ? ` WHERE ${where.join(' AND ')}` : ''}`, params, signal
   );
   return found.map((row) => mapSheet({ ...row, payload: "{}" }));
 }

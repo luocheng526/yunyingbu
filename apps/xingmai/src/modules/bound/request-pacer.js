@@ -4,14 +4,30 @@ import { setTimeout as delay } from "node:timers/promises";
 export function createRequestPacer({ intervalMs = 750, now = Date.now, sleep = delay } = {}) {
   let turn = Promise.resolve(), lastStart = -Infinity, holdUntil = 0, spacing = intervalMs, healthy = 0;
   return {
-    async run(send) {
+    async run(send, { signal, deferCooldown = false } = {}) {
+      const cooldown = () => {
+        const retryAfterMs = holdUntil - now();
+        return retryAfterMs > 0 ? { blocked: "upstream_cooldown", retryAfterMs } : null;
+      };
+      signal?.throwIfAborted();
+      const deferredAtEntry = deferCooldown && cooldown();
+      if (deferredAtEntry) return deferredAtEntry;
       const ready = turn.then(async () => {
         // An in-flight response can extend the hold while this caller is waiting.
-        for (let wait; (wait = Math.max(lastStart + spacing, holdUntil) - now()) > 0;) await sleep(wait);
+        for (;;) {
+          signal?.throwIfAborted();
+          const deferred = deferCooldown && cooldown();
+          if (deferred) return deferred;
+          const wait = Math.max(lastStart + spacing, holdUntil) - now();
+          if (wait <= 0) break;
+          await sleep(Math.min(wait, 2 ** 31 - 1), undefined, { signal });
+        }
         lastStart = now();
       });
       turn = ready.catch(() => {});
-      await ready;
+      const deferred = await ready;
+      if (deferred) return deferred;
+      signal?.throwIfAborted();
       try {
         const result = await send();
         if (result.httpStatus === 429 || result.httpStatus >= 500) {

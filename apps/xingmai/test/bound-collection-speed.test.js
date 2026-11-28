@@ -32,6 +32,17 @@ test("请求启动间隔统一控制，限流按 Retry-After 退避，恢复后�
   assert.equal(time - failedAt, 15000);
 });
 
+test("日报退避时立即返回，保留旧站要求的等待时间", async () => {
+  let time = 0;
+  const pacer = createRequestPacer({ now: () => time, sleep: async ms => { time += ms; } });
+  await pacer.run(async () => ({ httpStatus: 429, retryAfterMs: 300000 }));
+  const send = async () => success;
+  assert.deepEqual(await pacer.run(send, { deferCooldown: true }), { blocked: "upstream_cooldown", retryAfterMs: 300000 });
+  assert.equal(time, 0);
+  time = 300000;
+  assert.deepEqual(await pacer.run(send, { deferCooldown: true }), success);
+});
+
 test("并行任务保留所有分页、分类卡和指标依赖；复用缓存不增加上游请求", async () => {
   const directory = await temp();
   let inflight = 0, peak = 0, calls = 0;
