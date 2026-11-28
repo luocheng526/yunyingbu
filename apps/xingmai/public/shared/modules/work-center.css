@@ -349,13 +349,13 @@ html[data-theme=dark] .wc-overview-page .wc-dash-filter-date input { background:
 .wc-compact-switch { display:inline-flex; gap:2px; padding:2px; background:var(--wc-dash-field); border-radius:6px; }
 .wc-compact-switch button { border:0; background:none; color:var(--wc-muted); font-size:11px; padding:3px 7px; border-radius:4px; }
 .wc-compact-switch button[aria-pressed=true] { color:#fff; background:#166df0; }
-.wc-compact-distribution { min-height:100%; display:flex; align-items:center; gap:14px; }
+.wc-compact-distribution { height:100%; display:flex; align-items:center; gap:14px; }
 .wc-donut { width:clamp(82px,9vw,135px); aspect-ratio:1; flex:none; display:grid; place-items:center; border-radius:50%; position:relative; }
 .wc-donut::before { content:""; position:absolute; inset:17%; border-radius:50%; background:var(--wc-dash-surface); }
 .wc-donut>div { z-index:1; display:grid; justify-items:center; gap:2px; }
 .wc-donut strong { color:var(--wc-dash-heading); font-size:25px; line-height:1; font-variant-numeric:tabular-nums; }
 .wc-donut span { color:var(--wc-muted); font-size:11px; }
-.wc-compact-distribution ul { flex:1; min-width:0; list-style:none; margin:0; padding:0; }
+.wc-compact-distribution ul { flex:1; min-width:0; max-height:100%; overflow-y:auto; scrollbar-width:thin; list-style:none; margin:0; padding:0; }
 .wc-dist-row { display:grid; grid-template-columns:7px minmax(0,1fr) 22px 40px; align-items:center; width:100%; gap:6px; padding:4px 3px; color:var(--wc-dash-text); font-size:11px; }
 button.wc-dist-row { border:0; border-radius:4px; background:none; text-align:left; }
 button.wc-dist-row:hover { background:var(--wc-dash-field); }

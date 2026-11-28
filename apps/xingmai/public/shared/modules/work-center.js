@@ -39,6 +39,7 @@
   const progress=(n,label='')=>`<span class="wc-small">${esc(label||n+'%')}</span><div class="wc-progress"><span style="width:${Math.max(0,Math.min(100,Number(n)||0))}%"></span></div>`;
   async function api(path,body,method='POST'){
     const res=await fetch('/api/work/'+path,{credentials:'same-origin',method:body===undefined?'GET':method,headers:body instanceof FormData?{}:{'Content-Type':'application/vnd.xm-work+json'},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)});
+    if(path==='center/daily'&&res.status===413)throw new Error('本次日报上传内容过大，请缩小图片或移除部分图片后重试');
     let data;try{data=await res.json();}catch{throw new Error('服务暂不可用，请稍后重试');}
     if(!res.ok||data.ok===false)throw new Error(data.error||'操作失败');return data;
   }
@@ -71,10 +72,14 @@
     async function reload(){const id=++request;try{const next=await api('center?'+new URLSearchParams(Object.entries(filters).filter(([,v])=>v)));if(!alive||id!==request)return;data=next;filters.from=next.from;filters.to=next.to;paint();}catch(error){if(!alive)return;if(!data)root.innerHTML=`<main class="wc">${card('工作中心',`<div class="wc-error">${esc(error.message)}</div>`,btn('重新加载','refresh'))}</main>`;else notify(error.message,true);}}
     function paintTabBadges(){
       root.querySelectorAll('[data-wc-tab-count]').forEach(el=>{
-        const tab=el.dataset.wcTabCount,count=data.badges?.[tab]||0;
+        const tab=el.dataset.wcTabCount,ownCount=data.badges?.[tab]||0;
+        const acceptance=tab==='tasks'?(data.badges?.acceptance||0):0;
+        const count=ownCount+acceptance;
+        const label=[ownCount&&ownCount+' '+tabBadgeLabels[tab],acceptance&&acceptance+' 项任务待你验收'].filter(Boolean).join('，');
         el.hidden=!count;
         el.textContent=count||'';
-        el.setAttribute('aria-label',count+' '+tabBadgeLabels[tab]);
+        el.title=label;
+        el.setAttribute('aria-label',label);
       });
     }
     async function refreshTabBadges(){
