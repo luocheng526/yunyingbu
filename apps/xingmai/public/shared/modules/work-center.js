@@ -332,7 +332,8 @@
       return `<div class="wc-dashboard wc-compact-dashboard">
         <header class="wc-overview-intro">
           <div class="wc-overview-date">${esc(data.from===data.to?data.to:data.from+' 至 '+data.to)}</div>
-          <h1>工作总览</h1>
+          <h1>工作中心</h1>
+          <p class="wc-overview-description">查看待办事项，跟进任务进度和日报提交。</p>
           <div class="wc-compact-scope">当前视角 <strong>${esc(scopeLabel)}</strong>${filtered?link('清除筛选','dashboardScope',''):''}</div>
         </header>
         ${navigation}

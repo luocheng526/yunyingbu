@@ -428,6 +428,7 @@ button.wc-dist-row:hover { background:var(--wc-dash-field); }
 }
 .wc-overview-intro>* { max-width:63%; }
 .wc-overview-intro .wc-overview-date { color:var(--wc-blue); font-size:12px; font-weight:650; font-variant-numeric:tabular-nums; }
+.wc-overview-description { margin:0; color:var(--wc-muted); font-size:13px; line-height:1.5; }
 .wc-overview-intro .wc-compact-scope { font-size:13px; }
 .wc-overview-page .wc-overview-intro h1 { font-size:34px; line-height:1.18; }
 .wc-overview-tools { flex-wrap:wrap; gap:6px 13px; }
