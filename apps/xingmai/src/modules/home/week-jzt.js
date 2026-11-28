@@ -34,17 +34,17 @@ export function createWeekJztReader({
     const done = Promise.resolve().then(async () => {
       const session = await sessionOf(name);
       if (signal.aborted) throw signal.reason;
-      if (session?.store !== name || session.enabled === false || !session.cookies?.length) {
+      if (session?.store !== name || session.enabled === false || session.authState !== "ok" || !session.cookies?.length) {
         throw queryError(409, "该店铺没有可用的服务器登录会话");
       }
 
       const jar = session.cookies.map(cookie => ({ ...cookie }));
-      const spend = await readSpend(jar, { store: name, shopId: session.shopId }, date, signal);
+      const spend = await readSpend(jar, { store: name, shopId: session.shopId, verifiedShopSession: true }, date, signal);
       const checkedAt = new Date().toISOString();
       const latest = await sessionOf(name);
       if (signal.aborted) throw signal.reason;
       if (date !== today()) throw queryError(409, "查询期间已跨日，请按新业务日期重试");
-      if (latest?.store !== name || latest.enabled === false || humanProtectsShop(name) ||
+      if (latest?.store !== name || latest.enabled === false || latest.authState !== "ok" || humanProtectsShop(name) ||
           sessionVersionOf(latest) !== sessionVersionOf(session) || latest.shopId !== session.shopId) {
         throw queryError(409, "查询期间店铺登录会话已变更，请稍后重试");
       }

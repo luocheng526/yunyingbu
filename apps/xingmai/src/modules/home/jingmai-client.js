@@ -6,7 +6,7 @@ import {
   classifyTransportError,
   collectPinIds,
   collectPinRecords,
-  filterPinsBelongingToShop,
+  pinsForJztTotalSpend,
   pinsForLoggedInShop,
   extractPaid,
   describeShopPayload,
@@ -977,7 +977,7 @@ async function fetchPaid(jar, fetchImpl, signal, expected, { date = beijingParts
   const wantName = String((expected && (expected.shopName || expected.store)) || "").trim();
   let matched = records;
   if (wantId || wantName) {
-    matched = total ? filterPinsBelongingToShop(records, expected) : pinsForLoggedInShop(records, expected);
+    matched = total ? pinsForJztTotalSpend(userData, authData, expected) : pinsForLoggedInShop(records, expected);
     if (!matched.length) {
       // Real shop ids on the pins belong to a different shop. Do not mix them in.
       throw jingmaiError("paid", "待核验：无本店广告账号证据");

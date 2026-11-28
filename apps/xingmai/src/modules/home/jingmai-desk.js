@@ -8,7 +8,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
 import { recoverPasswordSession } from "./session-recovery.js";
 import { nativeMerchantMatches, watchNativeAccount } from "./browser-identity.js";
-import { beijingParts, collectPinRecords, extractPaid, filterPinsBelongingToShop, extractShopDeal, homeDealUnavailable, shopDealUnavailable, jingmaiAccessLimit, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
+import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, homeDealUnavailable, shopDealUnavailable, jingmaiAccessLimit, pinsForJztTotalSpend, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
 
 const LOGIN_URL =
   "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
@@ -4076,9 +4076,11 @@ export async function readJztOverview(cookies, signal, expected, { date = beijin
       err.code = "paid";
       throw err;
     }
-    const records = collectPinRecords(user.code === 1 ? user.data : null, lists.auth && Number(lists.auth.code) === 1 ? lists.auth.data : null);
+    const userData = Number(user.code) === 1 ? user.data : null;
+    const authData = lists.auth && Number(lists.auth.code) === 1 ? lists.auth.data : null;
+    const records = collectPinRecords(userData, authData);
     const wanted = expected || {};
-    const matched = total ? filterPinsBelongingToShop(records, wanted) : pinsForLoggedInShop(records, wanted);
+    const matched = total ? pinsForJztTotalSpend(userData, authData, wanted) : pinsForLoggedInShop(records, wanted);
     if (!matched.length) {
       const err = new Error(records.length ? "待核验：无本店广告账号证据" : "京准通没有可用账号");
       err.code = "paid";

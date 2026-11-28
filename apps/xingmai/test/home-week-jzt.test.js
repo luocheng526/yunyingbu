@@ -2,7 +2,7 @@ import "./_memory-env.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
-import { beijingParts, paidQuery } from "../src/modules/home/jingmai.js";
+import { beijingParts, paidQuery, pinsForJztTotalSpend } from "../src/modules/home/jingmai.js";
 import { readJztTotalSpend } from "../src/modules/home/jingmai-client.js";
 import { createWeekJztReader, readWeekJztSpend } from "../src/modules/home/week-jzt.js";
 import { registerWeekManagement } from "../src/modules/home/week-management.js";
@@ -52,10 +52,35 @@ test("total spend sends the requested day and only accounts verified for the sho
   await assert.rejects(readJztTotalSpend([], shop, date, undefined, fetchImpl), /未返回总花费/);
 });
 
+test("total spend includes JD's own account groups for a verified shop without using other authorizations", async () => {
+  const expected = { ...shop, verifiedShopSession: true };
+  const user = { own: [{ userId: 11, userDisplayName: "主推广账号" }], value: [{ userId: 12 }] };
+  const auth = { value: [
+    { userId: 21, userDisplayName: "RASW另一个店铺" },
+    { userId: 22, shopId: shop.shopId },
+    { userId: 23, shopId: "999", shopName: store }
+  ] };
+  const fetchImpl = async (url, options) => {
+    if (url.includes("/user/pinlist?")) return Response.json({ code: 1, data: user });
+    if (url.includes("/auth/pinlist?")) return Response.json({ code: 1, data: auth });
+    if (url.includes("/summary/overview?")) {
+      const ids = JSON.parse(options.body).pinIdList;
+      assert.deepEqual(ids.sort((a, b) => a - b), [11, 12, 22]);
+      return Response.json({ code: 1, data: { summary: [{ index: "cost", value: 7935.32 }] } });
+    }
+    return new Response("");
+  };
+  assert.equal(await readJztTotalSpend([], expected, date, undefined, fetchImpl), 7935.32);
+
+  assert.deepEqual(pinsForJztTotalSpend(user, auth, shop).map(row => row.pinId), [22]);
+  const conflicting = { ...user, value: [{ userId: 12, shopId: "999" }] };
+  assert.deepEqual(pinsForJztTotalSpend(conflicting, auth, expected).map(row => row.pinId), [22]);
+});
+
 test("history respects existing locks and holds its lock until interrupted transport settles", async () => {
   const inflight = new Set([store]);
   const gate = { inflight, humanProtectsShop: () => false };
-  const session = { ...shop, enabled: true, sessionGen: 1, cookies: [{ name: "fixture", value: "original" }] };
+  const session = { ...shop, enabled: true, authState: "ok", sessionGen: 1, cookies: [{ name: "fixture", value: "original" }] };
   const started = deferred();
   const cancelled = deferred();
   const drained = deferred();
@@ -64,7 +89,7 @@ test("history respects existing locks and holds its lock until interrupted trans
     gate, today: () => date, sessionOf: async () => session,
     readSpend: async (jar, identity, day, signal) => {
       attempts++;
-      assert.deepEqual(identity, shop);
+      assert.deepEqual(identity, { ...shop, verifiedShopSession: true });
       assert.equal(day, date);
       jar[0].value = "refreshed in copy";
       if (attempts === 1) {

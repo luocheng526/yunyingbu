@@ -545,6 +545,25 @@ export function pinsForLoggedInShop(records, expected) {
   return pinsOfThisLogin(list, expected);
 }
 
+export function pinsForJztTotalSpend(userData, authData, expected) {
+  const exact = filterPinsBelongingToShop(collectPinRecords(userData, authData), expected);
+  if (expected?.verifiedShopSession !== true) return exact;
+
+  // JD displays user.own and user.value under 自有账户. The auth and agency
+  // groups can cover other shops and require independent ownership evidence.
+  const own = collectPinRecords({ own: userData?.own, value: userData?.value });
+  const knownIds = new Set([expected.shopId, expected.merchantId].map(shopIdText).filter(Boolean));
+  const conflicting = own.some(row => {
+    const ids = pinShopIds(row);
+    return ids.size > 0 && ![...ids].some(id => knownIds.has(id));
+  });
+  if (conflicting) return exact;
+
+  const pins = new Map(exact.map(row => [String(row.pinId), row]));
+  own.forEach(row => pins.set(String(row.pinId), row));
+  return [...pins.values()];
+}
+
 export function paidQuery(day, pinIds, { total = false } = {}) {
   return {
     pinIdList: pinIds || [],
