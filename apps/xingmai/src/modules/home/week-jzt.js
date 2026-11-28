@@ -18,16 +18,15 @@ export function createWeekJztReader({
     if (!name || typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw queryError(400, "请选择店铺和业务日期");
     }
-    const parsed = new Date(date + "T00:00:00Z");
-    if (!Number.isFinite(+parsed) || parsed.toISOString().slice(0, 10) !== date || date >= today()) {
-      throw queryError(400, "业务日期须早于北京时间今天");
+    if (date !== today()) {
+      throw queryError(400, "仅可核对北京时间今天的总花费");
     }
 
     const { inflight, humanProtectsShop } = gate;
     if (inflight.has(name) || humanProtectsShop(name)) {
       throw queryError(409, "店铺正在实时采集或处理登录，请稍后重试");
     }
-    if (jobs.size) throw queryError(409, "已有京准通历史查询，请稍后重试");
+    if (jobs.size) throw queryError(409, "已有京准通总花费查询，请稍后重试");
 
     const controller = new AbortController();
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
@@ -35,22 +34,27 @@ export function createWeekJztReader({
     const done = Promise.resolve().then(async () => {
       const session = await sessionOf(name);
       if (signal.aborted) throw signal.reason;
-      if (session?.enabled === false || !session?.cookies?.length) {
+      if (session?.store !== name || session.enabled === false || !session.cookies?.length) {
         throw queryError(409, "该店铺没有可用的服务器登录会话");
       }
 
       const jar = session.cookies.map(cookie => ({ ...cookie }));
       const spend = await readSpend(jar, { store: name, shopId: session.shopId }, date, signal);
+      const checkedAt = new Date().toISOString();
       const latest = await sessionOf(name);
       if (signal.aborted) throw signal.reason;
-      if (!latest || latest.enabled === false || humanProtectsShop(name) ||
+      if (date !== today()) throw queryError(409, "查询期间已跨日，请按新业务日期重试");
+      if (latest?.store !== name || latest.enabled === false || humanProtectsShop(name) ||
           sessionVersionOf(latest) !== sessionVersionOf(session) || latest.shopId !== session.shopId) {
         throw queryError(409, "查询期间店铺登录会话已变更，请稍后重试");
       }
-      return { store: name, date, spend };
+      return { store: name, date, spend, checkedAt };
     }).catch(error => {
       if (controller.signal.aborted) throw queryError(409, "店铺正在进行实时采集，请稍后重试");
       if (signal.aborted) throw queryError(504, "京准通总花费查询超时，请稍后重试");
+      if (error.code === "paid" && error.message === "待核验：无本店广告账号证据") {
+        throw queryError(422, error.message);
+      }
       throw error;
     }).finally(() => {
       jobs.delete(name);

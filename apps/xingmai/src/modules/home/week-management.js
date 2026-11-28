@@ -34,12 +34,11 @@ export function registerWeekManagement(router, {
   router.post("/week-ding/check/:channel", login, admin, run(async (req, res) => res.json(await ding.check(req.params.channel))));
   router.get("/week-schedule", login, admin, run(async (_req, res) => res.json({ ok: true, config: schedule.config() })));
   router.post("/week-schedule", login, admin, run(async (req, res) => res.json({ ok: true, config: schedule.saveConfig(req.body) })));
-  router.post("/week-jzt/verify", login, admin, async (req, res) => {
-    const { store, date, gmv } = req.body || {};
-    if (!Number.isFinite(gmv) || gmv < 0) return res.status(400).json({ ok: false, error: "请输入当日成交金额" });
+  router.post("/jzt-spend-audit", login, admin, async (req, res) => {
+    const { store, date } = req.body || {};
     try {
       const result = await readJztSpend(store, date);
-      return res.json({ ok: true, ...result, gmv, feeRate: gmv > 0 ? result.spend / gmv : null });
+      return res.json({ ok: true, ...result });
     } catch (error) {
       return res.status(error.statusCode || 502).json({ ok: false, error: error.statusCode ? error.message : "京准通总花费查询失败" });
     }

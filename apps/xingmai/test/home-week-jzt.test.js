@@ -2,7 +2,7 @@ import "./_memory-env.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
-import { paidQuery } from "../src/modules/home/jingmai.js";
+import { beijingParts, paidQuery } from "../src/modules/home/jingmai.js";
 import { readJztTotalSpend } from "../src/modules/home/jingmai-client.js";
 import { createWeekJztReader, readWeekJztSpend } from "../src/modules/home/week-jzt.js";
 import { registerWeekManagement } from "../src/modules/home/week-management.js";
@@ -61,7 +61,7 @@ test("history respects existing locks and holds its lock until interrupted trans
   const drained = deferred();
   let attempts = 0;
   const reader = createWeekJztReader({
-    gate, today: () => "2026-11-27", sessionOf: async () => session,
+    gate, today: () => date, sessionOf: async () => session,
     readSpend: async (jar, identity, day, signal) => {
       attempts++;
       assert.deepEqual(identity, shop);
@@ -89,8 +89,9 @@ test("history respects existing locks and holds its lock until interrupted trans
   await Promise.all([yielding, historical]);
   assert.equal(inflight.has(store), false);
 
-  const result = await reader.read(store, date);
+  const { checkedAt, ...result } = await reader.read(store, date);
   assert.deepEqual(result, { store, date, spend: 1002 });
+  assert.ok(Number.isFinite(Date.parse(checkedAt)));
   assert.equal(session.cookies[0].value, "original");
   assert.equal(inflight.has(store), false);
   await assert.rejects(reader.read(store, "2026-11-27"), { statusCode: 400 });
@@ -98,7 +99,7 @@ test("history respects existing locks and holds its lock until interrupted trans
 
 
 
-test("the administrator verification route uses the provided transaction overview amount", async t => {
+test("the administrator audit route only returns the selected store's total spend and timestamp", async t => {
   const app = express();
   app.use(express.json());
   const router = express.Router();
@@ -110,7 +111,7 @@ test("the administrator verification route uses the provided transaction overvie
       reads++;
       assert.equal(name, store);
       assert.equal(day, date);
-      return { store, date, spend: 1002 };
+      return { store, date, spend: 1002, checkedAt: "2026-11-24T06:05:01.000Z" };
     }
   });
   app.use("/api/home", router);
@@ -119,20 +120,19 @@ test("the administrator verification route uses the provided transaction overvie
   });
   t.after(() => new Promise(resolve => server.close(resolve)));
 
-  const url = "http://127.0.0.1:" + server.address().port + "/api/home/week-jzt/verify";
-  const request = (gmv, headers = {}) => fetch(url, {
+  const url = "http://127.0.0.1:" + server.address().port + "/api/home/jzt-spend-audit";
+  const request = (headers = {}) => fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
-    body: JSON.stringify({ store, date, gmv })
+    body: JSON.stringify({ store, date })
   });
-  assert.equal((await request(3340)).status, 401);
-  assert.equal((await request(3340, { "x-test-role": "staff" })).status, 403);
+  assert.equal((await request()).status, 401);
+  assert.equal((await request({ "x-test-role": "staff" })).status, 403);
   const admin = { "x-test-role": "admin" };
-  assert.equal((await request(3340, { ...admin, "sec-fetch-site": "cross-site" })).status, 403);
-  assert.equal((await request("3340", admin)).status, 400);
-  const response = await request(3340, admin);
+  assert.equal((await request({ ...admin, "sec-fetch-site": "cross-site" })).status, 403);
+  const response = await request(admin);
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { ok: true, store, date, spend: 1002, gmv: 3340, feeRate: 0.3 });
+  assert.deepEqual(await response.json(), { ok: true, store, date, spend: 1002, checkedAt: "2026-11-24T06:05:01.000Z" });
   assert.equal(reads, 1);
 });
 
@@ -172,7 +172,7 @@ test("a real-time round preempts a delayed historical request on the shared stor
     track: task => { round = task; }
   });
 
-  const historical = assert.rejects(readWeekJztSpend(store, date), { statusCode: 409 });
+  const historical = assert.rejects(readWeekJztSpend(store, beijingParts().day), { statusCode: 409 });
   await started.promise;
   await collector.start("");
   await interrupted.promise;
