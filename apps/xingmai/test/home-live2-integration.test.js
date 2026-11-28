@@ -10,6 +10,7 @@ import express from "express";
 import { homeRouter } from "../src/modules/home/router.js";
 import { createLive2Collector, LIVE2_INTERVAL_MS } from "../src/modules/home/live2-collect.js";
 import { readServerOrgShops } from "../src/modules/home/org-roster.js";
+import { buildShopOverviewHistory } from "../src/modules/home/live2-overview-history.js";
 import { fetchAccountIdentity, fetchHome } from "../src/modules/home/jingmai-client.js";
 import { beijingParts, displayStamp } from "../src/modules/home/jingmai.js";
 import { getSession, listSamples, readJingmaiLive, resetJingmaiStore, saveSession } from "../src/modules/home/jingmai-store.js";
@@ -33,7 +34,7 @@ test("46 simulated shops: full collection and next round survive DSM 601 using t
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const rosterFile = path.join(dir, "org-stores.json");
   const storeFile = path.join(dir, "live2.json");
-  let clock = Date.now(), round = 1, adsFail = false, identityBlocked = false, browserReads = 0;
+  let clock = Date.now(), round = 1, adsFail = false, totalFail = false, identityBlocked = false, browserReads = 0;
   let active = 0, maximum = 0, fetches = 0, logins = 0, task;
   const rows = Array.from({ length: 46 }, (_, i) => ({
     storeName: `本地测试店${i + 1}`, shopId: String(i + 1), statusKey: "operating",
@@ -67,6 +68,15 @@ test("46 simulated shops: full collection and next round survive DSM 601 using t
       return res.json(adsFail ? { code: -100 } : { code: 1, data: { own: [{ userId: id, shopId: String(id), shopName: `本地测试店${id}` }] } });
     }
     if (href.includes("summary/overview")) {
+      assert.deepEqual(req.body.pinIdList, [id]);
+      if (req.body.basicRange === 1) {
+        assert.deepEqual(req.body.businessType, [-5]);
+        assert.equal(req.body.startDate, req.body.endDate);
+        return res.json(totalFail ? { code: 501 } : { code: 1, data: { summary: [
+          { index: "cost", value: id * 12.5 * round }
+        ] } });
+      }
+      assert.deepEqual(req.body.businessType, [-4, 256]);
       return res.json({ code: 1, data: { summary: [
         { index: "cost", value: id * 10 * round },
         { index: "totalOrderSum", value: id * 20 * round },
@@ -136,21 +146,26 @@ test("46 simulated shops: full collection and next round survive DSM 601 using t
   let samples = await listSamples(today, today);
   assert.equal(samples.length, 46, "partial and full metrics upsert the same sample");
   assert.equal(samples.find((row) => row.store === "本地测试店46").paidAmount, 460);
+  assert.equal(samples.find((row) => row.store === "本地测试店46").totalSpend, 575);
+  assert.equal(board.records.find((row) => row.shop === "本地测试店46").paidAmount, 575);
+  assert.equal(board.records.find((row) => row.shop === "本地测试店46").roiSpend, 460);
   const oldView = await readJingmaiLive(beijingParts(new Date(clock)));
   assert.equal(oldView.shops.find((row) => row.shop === "本地测试店46").paidAmount, 460);
 
   const source = fs.readFileSync(new URL("../public/shared/modules/home.js", import.meta.url), "utf8");
-  const functions = ["applyLive2Pack", "live2Sums", "asNum", "fmtMoney", "fmtInt", "fmtRate"].map((name) => {
+  const functions = ["applyLive2Pack", "live2Sums", "asNum", "fmtMoney", "fmtSpend", "fmtInt", "fmtRate"].map((name) => {
     const start = source.indexOf(`  function ${name}(`);
     assert.ok(start >= 0);
     return source.slice(start, source.indexOf("\n  function ", start + 1));
   }).join("\n");
   const context = vm.createContext({ rows: rows.map((row) => ({ shop: row.storeName })), pack: board });
-  const total = vm.runInContext(functions + "\nlive2Sums(applyLive2Pack(rows, pack))", context);
+  const total = vm.runInContext(functions + "\nvar sums = live2Sums(applyLive2Pack(rows, pack)); ({...sums, display: fmtSpend(sums.spend)})", context);
   assert.equal(total.deal, 108100);
-  assert.equal(total.spend, 10810);
+  assert.equal(total.spend, 13512.5);
+  assert.equal(total.display, "13,512.50");
+  assert.equal(total.roiSpend, 10810);
   assert.equal(total.shops, 46);
-  assert.equal(total.fee, 0.1);
+  assert.equal(total.fee, 0.125);
   const restarted = createLive2Collector(options);
   assert.deepEqual((await restarted.board("fixture=authorized")).records, board.records);
 
@@ -177,6 +192,17 @@ test("46 simulated shops: full collection and next round survive DSM 601 using t
   assert.equal(partial.loginExpired, false);
   assert.equal((await getSession("本地测试店1")).authState, "ok");
   assert.equal(logins, 0);
+
+  adsFail = false;
+  totalFail = true;
+  await restarted.start("fixture=authorized", "本地测试店1");
+  await task;
+  const missingTotal = (await restarted.board("fixture=authorized")).records.find(row => row.shop === "本地测试店1");
+  assert.equal(missingTotal.paidAmount, null);
+  assert.equal(missingTotal.feeRate, null);
+  assert.equal(missingTotal.roi, 2);
+  assert.equal(missingTotal.roiSpend, 20);
+  assert.equal(missingTotal.adsFailed, true);
 });
 
 test("background roster rejects corrupt data and excludes non-operating shops", async (t) => {
@@ -189,4 +215,36 @@ test("background roster rejects corrupt data and excludes non-operating shops", 
   assert.deepEqual((await readServerOrgShops(file)).map((row) => row.store), ["开业"]);
   fs.writeFileSync(file, "{}");
   await assert.rejects(readServerOrgShops(file), /配置格式/);
+});
+
+test("home excludes old spend and prior-day totals while preserving true zero and like-for-like history", async () => {
+  const now = "2026/11/28 14:00:00";
+  const records = [
+    { shop: "旧口径店", liveAmount: 200, paidAmount: 35, capturedAt: now, adsCapturedAt: now, online: true },
+    { shop: "跨日店", liveAmount: 200, paidAmount: 60, capturedAt: now, adsCapturedAt: "2026/11/27 23:59:00", spendScope: "jzt-total", online: true },
+    { shop: "零花费店", liveAmount: 200, paidAmount: 0, capturedAt: now, adsCapturedAt: now, spendScope: "jzt-total", online: true, feeRate: 0 }
+  ];
+  const collector = createLive2Collector({
+    now: () => now, storePath: "", published: records,
+    loadOrg: async () => records.map(record => ({ store: record.shop })),
+    listSamples: async () => []
+  });
+  const board = await collector.board("");
+  assert.deepEqual(board.records.map(record => record.paidAmount), [null, null, 0]);
+  assert.deepEqual(board.records.map(record => record.feeRate), [null, null, 0]);
+  assert.equal(board.records[0].roiSpend, 35);
+
+  const samples = [
+    { store: "零花费店", capturedAt: "2026/11/27 12:41:00", paidAmount: 99, dealAmount: 171 },
+    { store: "零花费店", capturedAt: "2026/11/27 10:40:00", totalSpendCapturedAt: "2026/11/27 10:41:00", totalSpend: 15 },
+    { store: "零花费店", capturedAt: "2026/11/28 12:57:00", totalSpendCapturedAt: "2026/11/28 13:01:00", totalSpend: 0 }
+  ];
+  const history = buildShopOverviewHistory(records[2], samples, now);
+  assert.equal(history.yesterday.spend[10], 15);
+  assert.equal(history.yesterday.spend[12], null);
+  assert.equal(history.yesterday.deal[12], 171);
+  assert.equal(history.comparison.spend, 15);
+  assert.equal(history.today.spend[12], null);
+  assert.equal(history.today.spend[13], 0);
+  assert.equal(history.today.spend[14], 0);
 });

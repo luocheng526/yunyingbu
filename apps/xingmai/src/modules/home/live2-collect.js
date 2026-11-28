@@ -1,7 +1,7 @@
 /**
  * 实时（新版）采集。
  * 组织中心提供账号和密码。每家店在服务器登录后：
- * 京麦经营数据接口取成交金额，京准通 custom-report 当天总览取花费、投产比、总订单金额。
+ * 京麦经营数据接口取成交金额，京准通当天总花费用于实时付费金额。
  * 采集失败但登录还在（超时、网络）：会话记 offline，cookie 留下，下一轮继续抓。
  * 登录失效：分批自动重登，失败后持久化退避；仅明确的人工验证暂停自动重登。
  * 后台每 10 分钟开一轮；上一轮还在跑时不叠第二轮。
@@ -30,7 +30,7 @@ function shopBudgetMs() {
   return Number.isFinite(value) && value >= 1000 ? value : 90000;
 }
 
-export const LIVE2_RUNTIME_MARK = "0.1.1347-home-auto-relogin";
+export const LIVE2_RUNTIME_MARK = "home-jzt-total-spend";
 export const LIVE2_INTERVAL_MS = 10 * 60 * 1000;
 export const LIVE2_STALE_MS = 15 * 60 * 1000;
 
@@ -223,6 +223,14 @@ export function createLive2Collector(deps = {}) {
 
   function applyView(row, nowStamp) {
     const copy = publicRecord(row);
+    // Old snapshots contain non-sitewide spend. Preserve their ROI input, but
+    // only show today's observations from the total-spend query in this column.
+    if (copy.spendScope !== "jzt-total") copy.roiSpend = copy.paidAmount;
+    if (copy.spendScope !== "jzt-total" || dayOf(copy.adsCapturedAt) !== dayOf(nowStamp)) {
+      copy.paidAmount = null;
+      copy.feeRate = null;
+      copy.adsCapturedAt = "";
+    }
     if (copy.pendingCollect) {
       return copy;
     }
@@ -255,7 +263,7 @@ export function createLive2Collector(deps = {}) {
       copy.dealFailed = copy.liveAmount == null && copy.paidAmount != null;
       copy.dealReason = copy.dealFailed ? copy.dealReason || "京麦没有返回成交金额" : "";
       copy.adsFailed = copy.liveAmount != null && copy.paidAmount == null;
-      copy.adsReason = copy.adsFailed ? copy.adsReason || "京准通没有返回广告金额" : "";
+      copy.adsReason = copy.adsFailed ? copy.adsReason || "等待京准通当天总花费" : "";
     }
     return copy;
   }
@@ -330,13 +338,14 @@ export function createLive2Collector(deps = {}) {
 
   async function persistMetrics(shop, metrics, phase) {
     if (inactive(shop, phase)) return false;
-    if (metrics.dealAmount == null && metrics.paidAmount == null) return true;
+    if (metrics.dealAmount == null && metrics.paidAmount == null && metrics.totalSpend == null) return true;
     const capturedAt = phase.capturedAt || (phase.capturedAt = now());
     let result;
     try {
       result = await persistSample({
         store: shop.store, day: dayOf(capturedAt).replace(/\//g, "-"),
-        capturedAt: capturedAt.replace(/\//g, "-"), ok: true, ...sampleFields(metrics)
+        capturedAt: capturedAt.replace(/\//g, "-"), ok: true, ...sampleFields(metrics),
+        totalSpend: metrics.totalSpend, totalSpendCapturedAt: metrics.totalSpendCapturedAt
       }, writeOptions(shop, phase));
     } catch {
       phase.storageError = new Error("采集数据保存失败，等待下一轮重试");
@@ -493,6 +502,8 @@ export function createLive2Collector(deps = {}) {
       dealRateLabel: sample.dealRateLabel,
       platformUpdatedAt: sample.platformUpdatedAt,
       paidAmount: sample.paidAmount,
+      totalSpend: sample.totalSpend,
+      totalSpendCapturedAt: stampOf(sample.totalSpendCapturedAt),
       paidRoi: sample.paidRoi,
       paidDeal: sample.paidDeal
     }, stampOf(sample.capturedAt));
@@ -515,7 +526,7 @@ export function createLive2Collector(deps = {}) {
         if (!name || !sample || sample.ok === false || dayOf(at) !== today) {
           return;
         }
-        if (sample.dealAmount == null && sample.paidAmount == null) {
+        if (sample.dealAmount == null && sample.totalSpend == null) {
           return;
         }
         const prev = map.get(name);
@@ -819,6 +830,8 @@ export function createLive2Collector(deps = {}) {
         merchantId: shop.merchantId,
         ambiguousMerchant: shop.ambiguousMerchant,
         requireIdentity: true,
+        includeTotalSpend: true,
+        verifiedShopSession: true,
         browserDeal: phase.browserDeal,
         shopName: shop.store,
         onDeal: async function (deal) {

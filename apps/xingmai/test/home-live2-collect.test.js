@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import "./_memory-env.js";
 import { live2FeeRate } from "../src/modules/home/live2.js";
-import { armLive2Schedule, createLive2Collector, LIVE2_INTERVAL_MS, LIVE2_STALE_MS } from "../src/modules/home/live2-collect.js";
+import { armLive2Schedule, createLive2Collector, LIVE2_INTERVAL_MS, LIVE2_RUNTIME_MARK, LIVE2_STALE_MS } from "../src/modules/home/live2-collect.js";
 
 test("实时费比 is 付费金额 divided by 成交金额", () => {
   assert.equal(Math.round(live2FeeRate(1841.39, 3009) * 100), 61);
@@ -55,7 +55,7 @@ test("a shop logs in on the server and maps 京麦成交 plus 京准通花费、
         return [{ name: "thor", value: "1" }];
       },
       fetchHome: async function () {
-        return { dealAmount: 3009, paidAmount: 1841.39, paidRoi: 1.43, paidDeal: 2638 };
+        return { dealAmount: 3009, paidAmount: 1000, totalSpend: 1841.39, paidRoi: 1.43, paidDeal: 2638 };
       }
     }
   });
@@ -65,7 +65,7 @@ test("a shop logs in on the server and maps 京麦成交 plus 京准通花费、
   assert.equal(started.records[0].password, undefined);
   await gate;
   const view = await collector.board("cookie");
-  assert.equal(view.runtimeMark, "0.1.1332-home-native-cadence");
+  assert.equal(view.runtimeMark, LIVE2_RUNTIME_MARK);
   assert.equal(logins, 1);
   assert.equal(view.running, false);
   assert.equal(view.records[0].liveAmount, 3009);
@@ -107,7 +107,7 @@ test("an existing server session is read and not written back", async () => {
       },
       fetchHome: async function (jar) {
         assert.equal(jar[0].value, "old");
-        return { dealAmount: 100, paidAmount: 25, paidRoi: 2, paidDeal: 50 };
+        return { dealAmount: 100, paidAmount: 10, totalSpend: 25, paidRoi: 2, paidDeal: 50 };
       }
     }
   });
@@ -154,7 +154,7 @@ test("opening the board keeps the last published round until the new round finis
       },
       fetchHome: async function () {
         await hold;
-        return { dealAmount: 120, paidAmount: 30, paidRoi: 2, paidDeal: 60 };
+        return { dealAmount: 120, paidAmount: 30, totalSpend: 30, paidRoi: 2, paidDeal: 60 };
       }
     }
   });
@@ -265,7 +265,7 @@ test("登录失效的店跳过旧会话，有账号时静默再登一次就能�
       },
       fetchHome: async function (jar) {
         fetched.push(jar[0].value);
-        return { dealAmount: 99, paidAmount: 9, paidRoi: 1, paidDeal: 9 };
+        return { dealAmount: 99, paidAmount: 9, totalSpend: 9, paidRoi: 1, paidDeal: 9 };
       }
     }
   });
@@ -403,6 +403,8 @@ test("成交金额是空的且报错没有成交字段时不按掉线算", async
       shop: "空成交店",
       liveAmount: null,
       paidAmount: 1,
+      spendScope: "jzt-total",
+      adsCapturedAt: "2026/11/20 11:38:00",
       capturedAt: "2026/11/20 11:38:00",
       online: true,
       pendingCollect: false
@@ -613,7 +615,7 @@ test("a new process reads the last published round in one board", async () => {
         return [{ name: "thor", value: "1" }];
       },
       fetchHome: async function () {
-        return { dealAmount: 120, paidAmount: 30, paidRoi: 2, paidDeal: 60 };
+        return { dealAmount: 120, paidAmount: 30, totalSpend: 30, paidRoi: 2, paidDeal: 60 };
       }
     }
   });

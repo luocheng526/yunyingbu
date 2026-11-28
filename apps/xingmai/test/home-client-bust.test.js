@@ -13,7 +13,7 @@ test("rewrites immutable homepage script url to no-store client.js", () => {
   assert.equal(out.includes("/shared/modules/home.js"), false);
   assert.equal(out.includes(HOME_CLIENT_JS), true);
     assert.equal(HOME_CLIENT_JS, `/api/home/client.js?v=${HOME_JS_STAMP}`);
-    assert.equal(HOME_JS_STAMP, "0.1.1315-smslogin");
+    assert.equal(HOME_JS_STAMP, "home-jzt-total-spend");
 });
 
 test("serves /api/home/client.js from current homepage module", async () => {
@@ -107,7 +107,7 @@ test("serves /api/home/client.js from current homepage module", async () => {
     assert.match(text, /function applyFeeBook/);
     assert.match(text, /function ensureFreshHome/);
     assert.match(text, /applyFeeBook\(live\.shops, local && local\.feeTargets\)/);
-    assert.match(text, /var HOME_JS_STAMP = "0\.1\.1315-smslogin"/);
+    assert.ok(text.includes(`var HOME_JS_STAMP = "${HOME_JS_STAMP}"`));
     assert.match(text, /label: "数据总揽"/);
     assert.match(text, /label: "团队概括"/);
     assert.match(text, /data-over-open/);

@@ -452,7 +452,7 @@ test("persistent Chrome gets a graceful close and cancels the forced-close timer
 });
 
 test("a paid-only result is visibly incomplete, with an independent timestamp", () => {
-  const row = live2RecordFromMetrics({ store: "本店" }, { paidAmount: 0, dealNote: "成交接口未返回金额" }, "2026/11/20 19:00:00");
+  const row = live2RecordFromMetrics({ store: "本店" }, { totalSpend: 0, dealNote: "成交接口未返回金额" }, "2026/11/20 19:00:00");
   assert.equal(row.online, false);
   assert.equal(row.dealFailed, true);
   assert.equal(row.dealCapturedAt, "");

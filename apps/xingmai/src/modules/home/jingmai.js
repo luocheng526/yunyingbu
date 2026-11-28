@@ -583,6 +583,38 @@ export function paidQuery(day, pinIds, { total = false } = {}) {
   };
 }
 
+export async function readJztPaidScopes(userData, authData, expected, date, options, readOverview) {
+  const records = collectPinRecords(userData, authData);
+  const missing = () => jingmaiError("paid", "待核验：无本店广告账号证据");
+  async function readScope(total) {
+    const pins = total ? pinsForJztTotalSpend(userData, authData, expected) : pinsForLoggedInShop(records, expected);
+    if (!pins.length) throw missing();
+    const body = await readOverview(paidQuery(date, pins.map(row => row.pinId), { total }), total);
+    const valid = body && (body.code == null || Number(body.code) === 1);
+    const paid = valid && extractPaid(Number(body.code) === 1 ? body.data : body);
+    if (!paid) throw jingmaiError("paid", "京准通没有返回付费数据");
+    return paid;
+  }
+  if (!options.includeTotalSpend) return readScope(options.total);
+
+  const [ads, total] = await Promise.allSettled([
+    readScope(false),
+    readScope(true).then(paid => ({
+      amount: paid.paidAmount,
+      captured: beijingParts()
+    }))
+  ]);
+  if (ads.status === "rejected" && total.status === "rejected") throw total.reason;
+  const verified = total.status === "fulfilled" && Number.isFinite(total.value.amount) &&
+    total.value.amount >= 0 && total.value.captured.day === date;
+  return {
+    ...(ads.status === "fulfilled" ? ads.value : {}),
+    totalSpend: verified ? total.value.amount : null,
+    totalSpendCapturedAt: verified ? displayStamp(total.value.captured.stamp) : "",
+    totalSpendNote: verified ? "" : total.status === "rejected" ? String(total.reason?.message || "京准通没有返回总花费") : "京准通没有返回当天总花费"
+  };
+}
+
 export function extractPaid(body) {
   const data = body && body.summary ? body : body && body.data ? body.data : body;
   const summary = data && data.summary;

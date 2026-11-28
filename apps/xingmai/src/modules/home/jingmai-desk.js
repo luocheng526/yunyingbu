@@ -8,7 +8,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import zlib from "node:zlib";
 import { recoverPasswordSession } from "./session-recovery.js";
 import { nativeMerchantMatches, watchNativeAccount } from "./browser-identity.js";
-import { beijingParts, collectPinRecords, extractPaid, extractShopDeal, homeDealUnavailable, shopDealUnavailable, jingmaiAccessLimit, pinsForJztTotalSpend, pinsForLoggedInShop, paidQuery, parseHomeCard, withDeadline } from "./jingmai.js";
+import { beijingParts, collectPinRecords, extractShopDeal, homeDealUnavailable, shopDealUnavailable, jingmaiAccessLimit, readJztPaidScopes, parseHomeCard, withDeadline } from "./jingmai.js";
 
 const LOGIN_URL =
   "https://passport.shop.jd.com/login/index.action/jdm?ReturnUrl=" + encodeURIComponent("https://shop.jd.com/");
@@ -4036,11 +4036,11 @@ async function readHomeDealNow(cookies, signal, shopKeyOrExpected, savedOnly = f
   }
 }
 
-export async function readJztOverview(cookies, signal, expected, { date = beijingParts().day, total = false } = {}) {
+export async function readJztOverview(cookies, signal, expected, { date = beijingParts().day, total = false, includeTotalSpend = false } = {}) {
   if (signal && signal.aborted) {
     throw Object.assign(new Error("广告采集超时"), { code: "timeout", name: "AbortError" });
   }
-  const querySignal = total ? signal : undefined;
+  const querySignal = total || includeTotalSpend ? signal : undefined;
   let desk = null;
   try {
     desk = await launchChrome(signal, { ephemeral: true, profileKey: "" });
@@ -4078,27 +4078,16 @@ export async function readJztOverview(cookies, signal, expected, { date = beijin
     }
     const userData = Number(user.code) === 1 ? user.data : null;
     const authData = lists.auth && Number(lists.auth.code) === 1 ? lists.auth.data : null;
-    const records = collectPinRecords(userData, authData);
-    const wanted = expected || {};
-    const matched = total ? pinsForJztTotalSpend(userData, authData, wanted) : pinsForLoggedInShop(records, wanted);
-    if (!matched.length) {
-      const err = new Error(records.length ? "待核验：无本店广告账号证据" : "京准通没有可用账号");
+    if (!collectPinRecords(userData, authData).length) {
+      const err = new Error("京准通没有可用账号");
       err.code = "paid";
       throw err;
     }
-    const query = paidQuery(date, matched.map(function (row) { return row.pinId; }), { total });
-    const overview = await evaluate(
+    return await readJztPaidScopes(userData, authData, expected, date, { total, includeTotalSpend }, query => evaluate(
       ws,
       `fetch("https://jzt-api.jd.com/dataCenter/index/v2/summary/overview?requestFrom=0",{method:"POST",credentials:"include",headers:{accept:"application/json, text/plain, */*","content-type":"application/json",siteId:"0"},body:${JSON.stringify(JSON.stringify(query))}}).then(r=>r.json()).catch(e=>({error:String(e&&e.message||e)}))`,
       15000, querySignal
-    );
-    const paid = extractPaid(overview && overview.code === 1 ? overview.data : overview);
-    if (!paid) {
-      const err = new Error("京准通没有返回付费数据");
-      err.code = "paid";
-      throw err;
-    }
-    return paid;
+    ));
   } finally {
     if (desk) {
       discard(desk);

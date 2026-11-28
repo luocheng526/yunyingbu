@@ -1,6 +1,6 @@
 /* xm-module-home 0.1.1315-smslogin */
 (function () {
-  var HOME_JS_STAMP = "0.1.1315-smslogin";
+  var HOME_JS_STAMP = "home-jzt-total-spend";
   var VIEWS = [
     { key: "company", label: "数据总揽" },
     { key: "overview", label: "团队概括" },
@@ -3111,7 +3111,8 @@
       return '<td class="xm-hm-num">' + escapeHtml(row.liveAmount == null ? "—" : row.liveAmount) + "</td>";
     }
     if (key === "paidAmount") {
-      return '<td class="xm-hm-num">' + escapeHtml(row.paidAmount == null ? "—" : row.paidAmount) + "</td>";
+      var spend = typeof row.paidAmount === "number" ? fmtSpend(row.paidAmount) : row.paidAmount;
+      return '<td class="xm-hm-num">' + escapeHtml(spend == null ? "—" : spend) + "</td>";
     }
     if (key === "roi") {
       return '<td class="xm-hm-num">' + escapeHtml(row.roi == null ? "—" : row.roi) + "</td>";
@@ -3837,7 +3838,8 @@
         liveAmount: hit.liveAmount == null ? null : fmtMoney(hit.liveAmount),
         salesTrend: hit.salesTrend || null,
         overviewHistory: hit.overviewHistory || null,
-        paidAmount: hit.paidAmount == null ? null : fmtMoney(hit.paidAmount),
+        paidAmount: asNum(hit.paidAmount),
+        roiSpend: asNum(hit.roiSpend),
         roi: hit.roi == null ? null : asNum(hit.roi).toFixed(2),
         paidDeal: hit.paidDeal == null ? null : fmtMoney(hit.paidDeal),
         feeRate: fee,
@@ -3951,7 +3953,7 @@
     var any = sums.paidDeal != null || sums.spend != null || sums.shops;
     return [
       { key: "livePay", label: "实时付费成交额", value: sums.paidDeal != null ? fmtMoney(sums.paidDeal) : "—" },
-      { key: "roi", label: "付费成交ROI", value: sums.paidDeal != null && sums.spend ? fmtRoi(sums.paidDeal, sums.spend) : "—" },
+      { key: "roi", label: "付费成交ROI", value: sums.roiSpend > 0 ? fmtRoi(sums.roiDeal, sums.roiSpend) : "—" },
       { key: "livePaid", label: "实时付费接入店铺数量", value: any ? fmtInt(sums.shops) : "—" },
       { key: "feeHot", label: "实时付费超标店铺", value: any ? String(hot) : "—" },
       { key: "feeCold", label: "实时费比低店铺", value: any ? String(cold) : "—" },
@@ -3973,6 +3975,10 @@
     var deal = 0;
     var spend = 0;
     var paidDeal = 0;
+    var roiDeal = 0;
+    var roiSpend = 0;
+    var feeDeal = 0;
+    var feeSpend = 0;
     var hasDeal = false;
     var hasSpend = false;
     var hasPay = false;
@@ -3984,6 +3990,7 @@
       var gmv = asNum(row.liveAmount);
       var ad = asNum(row.paidAmount);
       var pay = asNum(row.paidDeal);
+      var roiCost = asNum(row.roiSpend);
       if (gmv != null) {
         deal += gmv;
         hasDeal = true;
@@ -3996,6 +4003,14 @@
         paidDeal += pay;
         hasPay = true;
       }
+      if (pay != null && roiCost != null) {
+        roiDeal += pay;
+        roiSpend += roiCost;
+      }
+      if (gmv != null && ad != null) {
+        feeDeal += gmv;
+        feeSpend += ad;
+      }
       if (gmv != null || ad != null) {
         shops += 1;
       }
@@ -4004,8 +4019,10 @@
       deal: hasDeal ? deal : null,
       spend: hasSpend ? spend : null,
       paidDeal: hasPay ? paidDeal : null,
+      roiDeal: roiDeal,
+      roiSpend: roiSpend,
       shops: shops,
-      fee: hasDeal && hasSpend && deal ? spend / deal : null
+      fee: feeDeal > 0 ? feeSpend / feeDeal : null
     };
   }
   function live2ScopeShops(shops, state) {
@@ -4032,7 +4049,9 @@
     var sums = live2Sums(rows), today = live2HistoryTotals(rows, "today"), yesterday = live2HistoryTotals(rows, "yesterday");
     function card(key, label, metric, value) {
       var pair = live2Comparison(rows, metric), prior = pair.yesterday;
-      function format(number) { return metric === "fee" ? fmtRate(number, "ratio") : fmtMoney(number); }
+      function format(number) {
+        return metric === "fee" ? fmtRate(number, "ratio") : metric === "spend" ? fmtSpend(number) : fmtMoney(number);
+      }
       var notes = [pair.count ? "环比按相同" + pair.count + "家店铺计算，今日 " + format(pair.today) : "等待昨日可比数据"];
       if (pair.maxAge > 900) notes.push("昨日采样最多提前" + Math.ceil(pair.maxAge / 60) + "分钟");
       if (pair.cached) notes.push("历史刷新失败，沿用已读取记录");
@@ -4281,7 +4300,7 @@
       : state.view === "live"
         ? "实时按付费中心的方式，用组织中心账号在服务器登录京麦，抓京麦成交和京准通付费。点掉线的店，在页面中间弹出这一家的登录画面。连接京麦登录还没有会话的店。在线只算 15 分钟内还在采集的店。"
         : state.view === "live2"
-          ? state.live2Hint || "实时用组织中心账号在服务器登录。实时成交金额取京麦经营数据的成交金额；实时付费金额、实时付费ROI、实时付费成交额取京准通当天的花费、投产比、总订单金额。实时费比 =（实时付费金额 / 实时成交金额）× 100%。还没有读到的格子显示—或待接入。"
+          ? state.live2Hint || "实时成交金额取京麦。实时付费金额取京准通当天的「总花费」，推广总花费按店铺汇总。实时付费ROI和付费成交额取京准通「非全站营销」。实时费比 =（实时付费金额 / 实时成交金额）× 100%。"
         : state.view === "week"
           ? "近七天业绩汇总：爬虫填店铺和当天数字，其余可手填；一键发送图片发到钉钉。"
           : "数字来自星脉 ERP。";
@@ -4433,6 +4452,10 @@
   }
   function fmtMoney(value) {
     return fmtInt(value);
+  }
+  function fmtSpend(value) {
+    var n = asNum(value);
+    return n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   function fmtInt(value) {
     var n = asNum(value);

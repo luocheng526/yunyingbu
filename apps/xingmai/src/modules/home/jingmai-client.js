@@ -6,13 +6,10 @@ import {
   classifyTransportError,
   collectPinIds,
   collectPinRecords,
-  pinsForJztTotalSpend,
-  pinsForLoggedInShop,
-  extractPaid,
   describeShopPayload,
   extractShopDeal,
   jingmaiError,
-  paidQuery,
+  readJztPaidScopes,
   parseRealtime,
   beijingParts,
   withDeadline
@@ -923,7 +920,8 @@ async function warmJzt(jar, fetchImpl, signal) {
   }
 }
 
-async function fetchPaid(jar, fetchImpl, signal, expected, { date = beijingParts().day, total = false } = {}) {
+async function fetchPaid(jar, fetchImpl, signal, expected, options = {}) {
+  const { date = beijingParts().day, total = false, includeTotalSpend = false } = options;
   const headers = jztHeaders();
   await warmJzt(jar, fetchImpl, signal);
   if (signal && signal.aborted) {
@@ -968,40 +966,15 @@ async function fetchPaid(jar, fetchImpl, signal, expected, { date = beijingParts
   if (!records.length) {
     const payload = user && user.code != null ? user : auth;
     if (fetchImpl === fetch && payload && Number(payload.code) !== 1) {
-      return readJztOverview(jar, signal, expected, { date, total });
+      return readJztOverview(jar, signal, expected, { date, total, includeTotalSpend });
     }
     throw jingmaiError("paid", paidAccountError(payload));
   }
-  // Ownership must come from JZT pin metadata belonging to this shop — not Jingmai DSM identity.
-  const wantId = String((expected && expected.shopId) || "").trim();
-  const wantName = String((expected && (expected.shopName || expected.store)) || "").trim();
-  let matched = records;
-  if (wantId || wantName) {
-    matched = total ? pinsForJztTotalSpend(userData, authData, expected) : pinsForLoggedInShop(records, expected);
-    if (!matched.length) {
-      // Real shop ids on the pins belong to a different shop. Do not mix them in.
-      throw jingmaiError("paid", "待核验：无本店广告账号证据");
-    }
-  }
-  const pinIds = matched.map(function (row) {
-    return row.pinId;
-  });
-  const overview = await postJson(
-    fetchImpl,
-    jar,
-    JZT_ORIGIN + "/dataCenter/index/v2/summary/overview?requestFrom=0",
-    paidQuery(date, pinIds, { total }),
-    Object.assign({ "content-type": "application/json" }, headers),
-    signal
+  return readJztPaidScopes(userData, authData, expected, date, { total, includeTotalSpend }, (query, isTotal) =>
+    postJson(fetchImpl, includeTotalSpend && isTotal ? jar.slice() : jar,
+      JZT_ORIGIN + "/dataCenter/index/v2/summary/overview?requestFrom=0", query,
+      { ...headers, "content-type": "application/json" }, signal)
   );
-  if (overview && overview.code != null && Number(overview.code) !== 1) {
-    throw jingmaiError("paid", "京准通没有返回付费数据");
-  }
-  const paid = extractPaid(overview && overview.code === 1 ? overview.data : overview);
-  if (!paid) {
-    throw jingmaiError("paid", "京准通没有返回付费数据");
-  }
-  return paid;
 }
 
 export async function readJztTotalSpend(jar, shop, date, signal, fetchImpl = fetch) {
@@ -1019,7 +992,7 @@ function hasDealFields(metrics) {
 }
 
 function hasCollected(metrics) {
-  return ["dealAmount", "orderCount", "customerCount", "paidAmount", "paidDeal", "paidRoi"].some(function (key) {
+  return ["dealAmount", "orderCount", "customerCount", "paidAmount", "paidDeal", "paidRoi", "totalSpend"].some(function (key) {
     return metrics[key] != null;
   });
 }
@@ -1132,7 +1105,9 @@ export async function fetchHome(jar, fetchImpl = fetch, readCard, signal, expect
   try {
     const value = await withDeadline(
       function (inner) {
-        return fetchPaid(jar, fetchImpl, inner || paidSignal, expected);
+        return fetchPaid(jar, fetchImpl, inner || paidSignal, expected, {
+          includeTotalSpend: expected?.includeTotalSpend === true
+        });
       },
       paidBudgetMs(),
       "广告采集超时",

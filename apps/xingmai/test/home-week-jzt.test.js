@@ -193,7 +193,7 @@ test("a real-time round preempts a delayed historical request on the shared stor
   const collector = createLive2Collector({
     ...homeCollectionGate(), storePath: "", listSessions, listSamples: async () => [],
     loadOrg: async () => [{ ...shop, enabled: true }],
-    client: { fetchHome: async () => { liveFetches++; return { dealAmount: 100, paidAmount: 10 }; } },
+    client: { fetchHome: async () => { liveFetches++; return { dealAmount: 100, paidAmount: 6, totalSpend: 10 }; } },
     track: task => { round = task; }
   });
 

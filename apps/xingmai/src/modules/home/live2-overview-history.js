@@ -20,12 +20,12 @@ export function buildShopOverviewHistory(record, samples, nowStamp) {
     today: blank(), yesterday: blank(), comparison: { deal: null, spend: null },
     comparisonAgeSeconds: { deal: null, spend: null } };
   const latest = { today: blank(), yesterday: blank() };
-  for (const [metric, field, currentField, stampField] of [
-    ["deal", "dealAmount", "liveAmount", "dealCapturedAt"],
-    ["spend", "paidAmount", "paidAmount", "adsCapturedAt"]
+  for (const [metric, field, currentField, stampField, sampleStampField] of [
+    ["deal", "dealAmount", "liveAmount", "dealCapturedAt", "capturedAt"],
+    ["spend", "totalSpend", "paidAmount", "adsCapturedAt", "totalSpendCapturedAt"]
   ]) {
     const captured = parts(record[stampField] || record.capturedAt);
-    const current = number(record[currentField]);
+    const current = metric === "spend" && record.spendScope !== "jzt-total" ? null : number(record[currentField]);
     const valid = current != null && captured?.day === now.day && captured.second <= now.second;
     const cutoff = valid ? captured.second : now.second;
     let comparisonSecond = -1;
@@ -37,7 +37,7 @@ export function buildShopOverviewHistory(record, samples, nowStamp) {
     }
     for (const sample of samples || []) {
       if (sample.store !== record.shop || sample.ok === false) continue;
-      const at = parts(sample.capturedAt), value = number(sample[field]);
+      const at = parts(sample[sampleStampField]), value = number(sample[field]);
       if (!at || value == null) continue;
       if (at.day === now.day && at.second <= cutoff) add("today", at.second, value);
       if (at.day === yesterdayDate) {
